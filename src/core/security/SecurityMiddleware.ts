@@ -138,9 +138,8 @@ export class SecurityMiddleware {
         return true;
       }
       
-      // AIDEV-NOTE: Usar a função set_tenant_context_simple que existe no banco
-      // A função set_tenant_context original não existe ou tem problemas de assinatura
-      const { error } = await this.supabase.rpc('set_tenant_context_simple', {
+      // Definir contexto no banco via RPC
+      const { error } = await this.supabase.rpc('set_tenant_context', {
         p_tenant_id: actualTenantId,
         p_user_id: userId || null
       });

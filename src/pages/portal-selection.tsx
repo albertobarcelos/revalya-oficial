@@ -436,12 +436,12 @@ export default function PortalSelectionPage() {
               Bem-vindo, <span className="text-accent-foreground animate-pulse">preparando acesso...</span>
             </h1>
             
-            <div className="text-muted-foreground flex items-center justify-center gap-2">
+            <p className="text-muted-foreground flex items-center justify-center gap-2">
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce [animation-delay:-0.3s]"></div>
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce [animation-delay:-0.15s]"></div>
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce"></div>
               <span className="ml-2">Carregando seus portais...</span>
-            </div>
+            </p>
           </div>
 
           {/* Tabs de navegação */}
@@ -599,9 +599,9 @@ export default function PortalSelectionPage() {
                             <CardContent className="pb-4">
                               {/* Lista de recursos */}
                               <div className="space-y-3">
-                                <div className="text-xs font-medium uppercase text-slate-500">
+                                <p className="text-xs font-medium uppercase text-slate-500">
                                   Funcionalidades
-                                </div>
+                                </p>
                                 <ul className="space-y-2 text-sm text-slate-300">
                                   {features.map((feature, idx) => (
                                     <li key={idx} className="flex items-center">

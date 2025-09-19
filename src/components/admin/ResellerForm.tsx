@@ -49,18 +49,15 @@ type ResellerFormProps = {
 
 export function ResellerForm({ reseller, onSuccess }: ResellerFormProps) {
   // AIDEV-NOTE: CAMADA 1 - Validação de acesso global para admin
-  const { hasAccess, isLoading: accessLoading } = useTenantAccessGuard({
-    requireTenant: false,
-    requiredRole: 'ADMIN'
-  });
+  const { hasAccess, accessError } = useTenantAccessGuard('ADMIN', false);
 
   // AIDEV-NOTE: Bloqueio imediato se acesso negado
-  if (!accessLoading && !hasAccess) {
+  if (!hasAccess) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <h3 className="text-lg font-medium text-gray-900">Acesso Negado</h3>
-          <p className="text-gray-500">Você não tem permissão para acessar esta área.</p>
+          <p className="text-gray-500">{accessError || 'Você não tem permissão para acessar esta área.'}</p>
         </div>
       </div>
     );

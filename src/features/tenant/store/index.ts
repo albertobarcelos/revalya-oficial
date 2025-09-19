@@ -21,7 +21,7 @@ export async function switchTenantBySlug(slug: string) {
 export { useSimpleTenantManager } from './tenantManager';
 
 // Provider
-export { TenantProvider, useTenant } from '@/core/tenant/UnifiedTenantProvider';
+export { TenantProvider, useTenant } from './TenantProvider';
 
 // Types
 export * from './types';

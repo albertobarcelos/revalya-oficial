@@ -1,4 +1,4 @@
-import { useTenant } from '@/core/tenant/UnifiedTenantProvider';
+import { useTenant } from '@/core/tenant/TenantProvider';
 import { useToast } from '@/components/ui/use-toast';
 import { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 import { useSupabase } from '@/hooks/useSupabase';

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { usePortal } from '../contexts/PortalContext';
-import { useTenant } from '@/core/tenant';
+import { useTenant } from '@/features/tenant';
 import { useLocation } from 'react-router-dom';
 
 interface ContextState {

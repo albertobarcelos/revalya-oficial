@@ -42,13 +42,10 @@ interface TenantFormProps {
 
 export function TenantForm({ initialData, onSuccess, onCancel }: TenantFormProps) {
   // AIDEV-NOTE: CAMADA 1 - Validação de acesso global para admin
-  const { hasAccess, isLoading: accessLoading } = useTenantAccessGuard({
-    requireTenant: false,
-    requiredRole: 'ADMIN'
-  });
+  const { hasAccess, accessError } = useTenantAccessGuard('ADMIN', false);
 
   // AIDEV-NOTE: Bloqueio imediato se acesso negado
-  if (!accessLoading && !hasAccess) {
+  if (!hasAccess) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">

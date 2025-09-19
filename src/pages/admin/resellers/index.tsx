@@ -35,7 +35,7 @@ type Reseller = {
 export default function ResellersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const location = useLocation()
-  const supabase = useSupabase()
+  const { supabase } = useSupabase()
 
   // 🛡️ CAMADA 1: Validação de acesso obrigatória
   const { hasAccess, accessError } = useTenantAccessGuard({
@@ -43,24 +43,8 @@ export default function ResellersPage() {
     requiredRole: 'ADMIN'
   })
 
-  // 🚨 BLOQUEIO IMEDIATO se não tiver acesso
-  if (!hasAccess) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center min-h-[400px] space-y-4"
-      >
-        <Shield className="h-16 w-16 text-red-500" />
-        <h2 className="text-2xl font-bold text-red-600">Acesso Negado</h2>
-        <p className="text-muted-foreground text-center max-w-md">
-          {accessError || 'Você não tem permissão para gerenciar revendedores.'}
-        </p>
-      </motion.div>
-    )
-  }
-
   // 🔍 CAMADA 2: Consulta global de revendedores para admin
+  // AIDEV-NOTE: Hook movido para antes do early return para evitar erro "Rendered fewer hooks than expected"
   const { data: resellers, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-resellers'],
     queryFn: async () => {
@@ -98,6 +82,23 @@ export default function ResellersPage() {
     staleTime: 2 * 60 * 1000, // 2 minutos de cache
     refetchOnWindowFocus: false
   })
+
+  // 🚨 BLOQUEIO IMEDIATO se não tiver acesso (após todos os hooks)
+  if (!hasAccess) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center justify-center min-h-[400px] space-y-4"
+      >
+        <Shield className="h-16 w-16 text-red-500" />
+        <h2 className="text-2xl font-bold text-red-600">Acesso Negado</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          {accessError || 'Você não tem permissão para gerenciar revendedores.'}
+        </p>
+      </motion.div>
+    )
+  }
 
   // 🚨 TRATAMENTO DE ERRO SEGURO
   if (error) {
@@ -148,9 +149,9 @@ export default function ResellersPage() {
             <Shield className="h-8 w-8 text-green-600" />
             Revendedores
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             Modo: <Badge variant="outline">Admin Global</Badge>
-          </p>
+          </div>
         </div>
         <Button asChild>
           <Link to="/admin/resellers/new">

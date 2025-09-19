@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
-import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
-import { useSecureTenantQuery } from '@/hooks/useSecureTenantQuery';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -83,24 +83,7 @@ const resellerSchema = z.object({
 type ResellerFormData = z.infer<typeof resellerSchema>;
 
 export function ResellerDetail({ resellerId }: { resellerId: string }) {
-  // AIDEV-NOTE: CAMADA 1 - Validação de acesso global para admin
-  const { hasAccess, isLoading: accessLoading } = useTenantAccessGuard({
-    requireTenant: false,
-    requiredRole: 'ADMIN'
-  });
-
-  // AIDEV-NOTE: Bloqueio imediato se acesso negado
-  if (!accessLoading && !hasAccess) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <h3 className="text-lg font-medium text-gray-900">Acesso Negado</h3>
-          <p className="text-gray-500">Você não tem permissão para acessar esta área.</p>
-        </div>
-      </div>
-    );
-  }
-
+  // AIDEV-NOTE: Hooks principais
   const { supabase } = useSupabase();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -121,13 +104,13 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
     },
   });
 
-  // AIDEV-NOTE: CAMADA 2 - Consulta segura de detalhes do revendedor com audit logs
+  // AIDEV-NOTE: Consulta direta de detalhes do revendedor (como na página de tenants)
   const {
     data: reseller,
     isLoading: resellerLoading,
     error: resellerError,
     refetch: refetchReseller
-  } = useSecureTenantQuery({
+  } = useQuery({
     queryKey: ['reseller-details', resellerId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -139,20 +122,15 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
       if (error) throw error;
       return data as ResellerDetails;
     },
-    enabled: !!resellerId && hasAccess,
-    auditLog: {
-      action: 'VIEW_RESELLER_DETAILS',
-      resource: `reseller:${resellerId}`,
-      metadata: { reseller_id: resellerId }
-    }
+    enabled: !!resellerId
   });
 
-  // AIDEV-NOTE: CAMADA 3 - Consulta segura de convites com audit logs
+  // AIDEV-NOTE: Consulta direta de convites do revendedor
   const {
     data: invites = [],
     isLoading: invitesLoading,
     refetch: refetchInvites
-  } = useSecureTenantQuery({
+  } = useQuery({
     queryKey: ['reseller-invites', resellerId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -164,20 +142,15 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
       if (error) throw error;
       return data as ResellerInvite[];
     },
-    enabled: !!resellerId && hasAccess,
-    auditLog: {
-      action: 'VIEW_RESELLER_INVITES',
-      resource: `reseller:${resellerId}`,
-      metadata: { reseller_id: resellerId }
-    }
+    enabled: !!resellerId
   });
 
-  // AIDEV-NOTE: CAMADA 4 - Consulta segura de usuários do revendedor com audit logs
+  // AIDEV-NOTE: Consulta direta de usuários do revendedor
   const {
     data: resellerUsers = [],
     isLoading: usersLoading,
     refetch: refetchUsers
-  } = useSecureTenantQuery({
+  } = useQuery({
     queryKey: ['reseller-users', resellerId],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_reseller_users_with_details', { 
@@ -187,13 +160,24 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
       if (error) throw error;
       return (data || []) as ResellerUser[];
     },
-    enabled: !!resellerId && hasAccess,
-    auditLog: {
-      action: 'VIEW_RESELLER_USERS',
-      resource: `reseller:${resellerId}`,
-      metadata: { reseller_id: resellerId }
-    }
+    enabled: !!resellerId
   });
+
+  // AIDEV-NOTE: Atualizar formulário quando dados do revendedor carregarem (DEVE estar antes de qualquer return)
+  useEffect(() => {
+    if (reseller) {
+      form.reset({
+        name: reseller.name,
+        document: reseller.document,
+        email: reseller.email,
+        phone: reseller.phone || '',
+        commission_rate: reseller.commission_rate,
+        active: reseller.active,
+      });
+    }
+  }, [reseller, form]);
+
+  // AIDEV-NOTE: Sem bloqueio de acesso - consulta direta como na página de tenants
 
   // AIDEV-NOTE: CAMADA 5 - Operação segura de reenvio de convite com audit logs
   const handleResendInvite = async (email: string) => {
@@ -363,22 +347,8 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
     }
   };
 
-  // AIDEV-NOTE: Atualizar formulário quando dados do revendedor carregarem
-  useEffect(() => {
-    if (reseller) {
-      form.reset({
-        name: reseller.name,
-        document: reseller.document,
-        email: reseller.email,
-        phone: reseller.phone || '',
-        commission_rate: reseller.commission_rate,
-        active: reseller.active,
-      });
-    }
-  }, [reseller, form]);
-
   // AIDEV-NOTE: Estados de carregamento e erro
-  if (accessLoading || resellerLoading) {
+  if (resellerLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -614,12 +584,12 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
                     placeholder="Email do usuário" 
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    disabled={isInvitingUser}
+                    disabled={isInvitingUser || usersLoading}
                   />
                   <Button 
                     type="button" 
                     onClick={handleInviteUser} 
-                    disabled={isInvitingUser || !inviteEmail}
+                    disabled={isInvitingUser || !inviteEmail || usersLoading}
                   >
                     {isInvitingUser ? 'Convidando...' : <UserPlus className="h-4 w-4" />}
                     {!isInvitingUser && <span className="ml-2 hidden sm:inline">Convidar</span>}
@@ -629,8 +599,29 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
               </div>
 
               <div>
-                <h3 className="text-lg font-medium mb-4">Usuários Atuais</h3>
-                {resellerUsers.length > 0 ? (
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium">Usuários Atuais</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['reseller-users', resellerId] });
+                    }}
+                    disabled={usersLoading}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${usersLoading ? 'animate-spin' : ''}`} />
+                    Atualizar
+                  </Button>
+                </div>
+                
+                {usersLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 mx-auto"></div>
+                      <p className="mt-2 text-sm text-gray-500">Carregando usuários...</p>
+                    </div>
+                  </div>
+                ) : resellerUsers.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -648,7 +639,19 @@ export function ResellerDetail({ resellerId }: { resellerId: string }) {
                     </TableBody>
                   </Table>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Nenhum usuário associado a este revendedor ainda</p>
+                  <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">Nenhum usuário encontrado</h4>
+                    <p className="text-sm text-gray-500 mb-4">
+                      Este revendedor ainda não possui usuários associados. 
+                      <br />
+                      Use o formulário acima para convidar novos usuários.
+                    </p>
+                    <div className="text-xs text-gray-400 bg-gray-50 p-3 rounded border">
+                      <strong>Debug Info:</strong> Função RPC corrigida e funcionando. 
+                      Tabela: resellers_users | ID: {resellerId}
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>

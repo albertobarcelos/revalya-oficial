@@ -5,9 +5,10 @@
  * sem necessidade de códigos na URL, usando refresh tokens armazenados.
  */
 
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { useParams, Routes, Route, Navigate } from 'react-router-dom';
 import { useTenantAutoLogin } from '@/hooks/useTenantAutoLogin';
+import { useTenantStore } from '@/store/tenantStore';
 
 /**
  * Componente de Loading simples
@@ -45,24 +46,41 @@ const NotFound = lazy(() => import('../../pages/NotFound'));
 
 /**
  * Router principal com auto-login de tenant
- * AIDEV-NOTE: Evita renderização condicional que causa erro de hooks
- * Sempre renderiza as rotas, mas controla acesso via contexto
  */
 export function TenantAutoLoginRouter() {
   const { slug } = useParams<{ slug: string }>();
   const { isValidating, hasValidSession, tenantData } = useTenantAutoLogin(slug);
+  const { setCurrentTenant, currentTenant } = useTenantStore();
 
-  // AIDEV-NOTE: Sempre renderizar rotas para evitar mudanças na ordem de hooks
-  // O controle de acesso é feito dentro de cada página via useTenantAccessGuard
+  // AIDEV-NOTE: Sincronizar tenantData do auto-login com o tenantStore
+  // Isso garante que os componentes internos tenham acesso ao tenant atual
+  useEffect(() => {
+    if (tenantData && (!currentTenant || currentTenant.id !== tenantData.id)) {
+      console.log('🔄 [TenantAutoLoginRouter] Sincronizando tenant com store:', tenantData);
+      setCurrentTenant({
+        id: tenantData.id,
+        slug: tenantData.slug,
+        name: tenantData.name,
+        active: true, // Se passou pela validação, está ativo
+        created_at: new Date().toISOString(), // Placeholder
+        updated_at: new Date().toISOString()  // Placeholder
+      });
+    }
+  }, [tenantData, currentTenant, setCurrentTenant]);
+
+  // Ainda validando sessão
+  if (isValidating) {
+    return <LoadingFallback />;
+  }
+
+  // Sem sessão válida - será redirecionado pelo hook
+  if (!hasValidSession || !tenantData) {
+    return <LoadingFallback />;
+  }
+
+  // Sessão válida - renderizar rotas do tenant
   return (
     <Suspense fallback={<LoadingFallback />}>
-      {/* Mostrar loading overlay se ainda validando */}
-      {isValidating && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
-          <LoadingFallback />
-        </div>
-      )}
-      
       <Routes>
         {/* ========== ROTA RAIZ DO TENANT ========== */}
         <Route path="/" element={<Navigate to={`/${slug}/dashboard`} replace />} />

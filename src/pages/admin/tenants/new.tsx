@@ -97,11 +97,36 @@ export default function NewTenantPage() {
 
       if (authError) throw authError
 
-      // 2. Criar tenant no banco
-      const { error: dbError } = await supabase
+      if (!authData.user?.id) {
+        throw new Error('Falha ao criar usuário - ID não encontrado')
+      }
+
+      // 2. AIDEV-NOTE: Sincronizar usuário para public.users primeiro
+      // Garantir que o usuário exista em public.users antes de criar o tenant
+      // para que o trigger auto_create_tenant_admin funcione corretamente
+      const { error: userSyncError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: authData.user.email,
+          user_role: 'TENANT_ADMIN', // Usuário criador do tenant é admin
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      // Se o usuário já existir, ignoramos o erro (ON CONFLICT DO NOTHING equivalente)
+      if (userSyncError && !userSyncError.message.includes('duplicate key')) {
+        throw new Error(`Erro ao sincronizar usuário: ${userSyncError.message}`)
+      }
+
+      // 3. AIDEV-NOTE: Criar tenant no banco com UUID próprio
+      // O trigger auto_create_tenant_admin será executado automaticamente
+      // e criará a associação tenant_users com role TENANT_ADMIN
+      const { data: tenantData, error: dbError } = await supabase
         .from('tenants')
         .insert({
-          id: authData.user?.id,
+          // Removido: id: authData.user.id (deixar o banco gerar UUID próprio)
           name: data.name,
           document: data.document,
           email: data.email,
@@ -109,12 +134,18 @@ export default function NewTenantPage() {
           reseller_id: data.reseller_id || null,
           active: data.active,
         })
+        .select()
+        .single()
 
       if (dbError) throw dbError
 
+      // 4. AIDEV-NOTE: Não é mais necessário criar associação manual
+      // O trigger auto_create_tenant_admin já fez isso automaticamente
+      // quando o tenant foi inserido na etapa anterior
+
       toast({
         title: 'Tenant criado com sucesso',
-        description: 'O tenant foi criado e já pode acessar o sistema com o email e senha cadastrados.',
+        description: 'O tenant foi criado e o usuário administrador foi associado automaticamente pelo sistema.',
       })
 
       navigate('/admin/tenants')
@@ -286,4 +317,4 @@ export default function NewTenantPage() {
       </Card>
     </div>
   )
-} 
+}

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
-import { useSecureTenantQuery } from '@/hooks/useSecureTenantQuery';
+import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { SecurityStats, AuthEventType, getRiskLevel } from '../../types/auth';
 
 /**
@@ -238,19 +238,16 @@ const EventsTable: React.FC<{
  */
 export const SecurityDashboard: React.FC = () => {
   // AIDEV-NOTE: CAMADA 1 - Validação de acesso global para admin
-  const { hasAccess, isLoading: accessLoading } = useTenantAccessGuard({
-    requireTenant: false,
-    requiredRole: 'ADMIN'
-  });
+  const { hasAccess, accessError } = useTenantAccessGuard('ADMIN', false);
 
   // AIDEV-NOTE: Bloqueio imediato se acesso negado
-  if (!accessLoading && !hasAccess) {
+  if (!hasAccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Acesso Negado</h2>
-          <p className="text-gray-600">Você não tem permissão para acessar o dashboard de segurança.</p>
+          <p className="text-gray-600">{accessError || 'Você não tem permissão para acessar o dashboard de segurança.'}</p>
         </div>
       </div>
     );

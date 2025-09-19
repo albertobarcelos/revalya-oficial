@@ -9,7 +9,6 @@ import { useEffect, useRef } from 'react';
 import { useTenantStore } from '@/store/tenantStore';
 import { useZustandAuth } from './useZustandAuth';
 import { useSupabase } from '@/hooks/useSupabase';
-import { throttledDebug, throttledAutoSelect } from '@/utils/logThrottle';
 
 /**
  * Hook principal para gerenciamento de tenant usando Zustand
@@ -37,39 +36,26 @@ export function useZustandTenant() {
     switchTenant,
   } = useTenantStore();
   
-  // AIDEV-NOTE: Carregar dados do portal automaticamente quando o usuário estiver autenticado
-  // Otimizado para evitar múltiplas execuções desnecessárias
+  // Carregar dados do portal automaticamente quando o usuário estiver autenticado
   const fetchLockRef = useRef(false);
-  const lastUserIdRef = useRef<string | null>(null);
-  
   useEffect(() => {
     // Evitar chamadas duplicadas: respeitar isLoading, hasLoaded e um lock local
     if (!userId || !supabase) {
-      throttledDebug('tenant_not_authenticated', 'Usuário não autenticado ou supabase não inicializado, não carregando dados do portal');
+      console.log('[useZustandTenant] Usuário não autenticado ou supabase não inicializado, não carregando dados do portal');
       return;
     }
-    
-    // Se o usuário mudou, permitir nova busca
-    if (lastUserIdRef.current !== userId) {
-      lastUserIdRef.current = userId;
-      fetchLockRef.current = false;
-    }
-    
-    if (hasLoaded && lastUserIdRef.current === userId) {
-      // Já carregado com sucesso para este usuário, não repetir
-      throttledDebug('tenant_already_loaded', 'Dados já carregados para este usuário, pulando fetch');
+    if (hasLoaded) {
+      // Já carregado com sucesso, não repetir
+      console.log('[useZustandTenant] Dados já carregados, pulando fetch');
       return;
     }
-    
     if (isLoading || fetchLockRef.current) {
       // Já em progresso
-      throttledDebug('tenant_fetch_in_progress', 'Fetch já em progresso, aguardando...');
+      console.log('[useZustandTenant] Fetch já em progresso, aguardando...');
       return;
     }
-    
-    throttledDebug('tenant_loading_portal', 'Usuário autenticado, carregando dados do portal (com guard otimizado)');
+    console.log('[useZustandTenant] Usuário autenticado, carregando dados do portal (com guard)');
     fetchLockRef.current = true;
-    
     // Pequeno atraso para garantir que a sessão está completamente estabelecida
     setTimeout(() => {
       fetchPortalData(supabase).finally(() => {
@@ -78,75 +64,39 @@ export function useZustandTenant() {
     }, 150);
   }, [userId, supabase, fetchPortalData, isLoading, hasLoaded]);
 
-  // 🔄 AUTO-SELEÇÃO DE TENANT BASEADA NA URL
-  // AIDEV-NOTE: Usar useRef para evitar loop de re-renderização ao trocar tenant
-  const lastProcessedSlugRef = useRef<string | null>(null);
-  const lastCurrentTenantIdRef = useRef<string | null>(null);
-  
+  // 🚨 NOVO: Auto-seleção de tenant baseado no slug da URL
   useEffect(() => {
-    const urlSlug = window.location.pathname.split('/')[1];
-    
-    // AIDEV-NOTE: Debug temporário para identificar problema de tenant
-    throttledDebug('tenant-url-debug', '[DEBUG] useZustandTenant - URL atual:', window.location.href);
-    throttledDebug('tenant-slug-debug', '[DEBUG] useZustandTenant - urlSlug extraído:', urlSlug);
-    throttledDebug('tenant-current-debug', '[DEBUG] useZustandTenant - currentTenant:', currentTenant);
-    throttledDebug('tenant-available-debug', '[DEBUG] useZustandTenant - availableTenants:', availableTenants);
-    throttledDebug('tenant-loaded-debug', '[DEBUG] useZustandTenant - hasLoaded:', hasLoaded);
+    // Obter slug da URL atual
+    const currentPath = window.location.pathname;
+    const slugMatch = currentPath.match(/^\/([^\/]+)/);
+    const urlSlug = slugMatch ? slugMatch[1] : null;
     
     // Lista de rotas que NÃO são tenants (ignorar auto-seleção)
     const nonTenantRoutes = ['login', 'portal', 'meus-aplicativos', 'admin', 'api', 'auth'];
     
-    throttledAutoSelect('auto-select-url', `🔍 [TENANT AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
-    throttledAutoSelect('auto-select-status', `🔍 [TENANT AUTO-SELECT] hasLoaded: ${hasLoaded}, availableTenants: ${availableTenants.length}`);
-    throttledAutoSelect('auto-select-tenants', `🔍 [TENANT AUTO-SELECT] availableTenants:`, availableTenants.map(t => ({ id: t.id, name: t.name, slug: t.slug, active: t.active })));
+    console.log(`🔍 [TENANT AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
     
     // Se o slug é uma rota não-tenant, não tentar auto-seleção
     if (urlSlug && nonTenantRoutes.includes(urlSlug)) {
-      throttledAutoSelect('auto-select-skip', `🚫 [TENANT AUTO-SELECT] Slug '${urlSlug}' é uma rota não-tenant, ignorando auto-seleção`);
+      console.log(`🚫 [TENANT AUTO-SELECT] Slug '${urlSlug}' é uma rota não-tenant, ignorando auto-seleção`);
       return;
     }
-    
-    // AIDEV-NOTE: Evitar execução desnecessária na página de seleção de portais
-    // Só executar auto-seleção se estivermos em uma rota de tenant válida
-    if (!urlSlug || !hasLoaded || availableTenants.length === 0) {
-      throttledAutoSelect('auto-select-conditions', `🚫 [TENANT AUTO-SELECT] Condições não atendidas: urlSlug=${urlSlug}, hasLoaded=${hasLoaded}, availableTenants=${availableTenants.length}`);
-      return;
-    }
-    
-    // AIDEV-NOTE: Evitar loop de re-renderização - só processar se slug ou tenant mudaram
-    const currentTenantId = currentTenant?.id || null;
-    if (lastProcessedSlugRef.current === urlSlug && lastCurrentTenantIdRef.current === currentTenantId) {
-      throttledAutoSelect('auto-select-skip-same', `🔄 [TENANT AUTO-SELECT] Slug e tenant não mudaram, ignorando processamento`);
-      return;
-    }
-    
-    // Atualizar refs para controle de mudanças
-    lastProcessedSlugRef.current = urlSlug;
-    lastCurrentTenantIdRef.current = currentTenantId;
     
     // Se há um slug na URL e dados carregados, mas o tenant atual não corresponde
-    if (!currentTenant || currentTenant.slug !== urlSlug) {
-      throttledAutoSelect('auto-select-switch', `🔄 [TENANT AUTO-SELECT] Tentando trocar para tenant com slug: ${urlSlug}`);
-      
-      const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
-      if (targetTenant) {
-        throttledAutoSelect('auto-select-success', `✅ [TENANT AUTO-SELECT] Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
-        switchTenant(targetTenant.id);
-      } else {
-        throttledAutoSelect('auto-select-error', `🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
-        throttledAutoSelect('auto-select-available', `🚨 [TENANT AUTO-SELECT] Tenants disponíveis:`, availableTenants.map(t => `${t.slug} (${t.active ? 'ativo' : 'inativo'})`));
+    if (urlSlug && hasLoaded && availableTenants.length > 0) {
+      if (!currentTenant || currentTenant.slug !== urlSlug) {
+        console.log(`🔄 [TENANT AUTO-SELECT] Tentando trocar para tenant com slug: ${urlSlug}`);
         
-        // 🚨 CORREÇÃO: Se não encontrou o tenant exato, tentar o primeiro tenant ativo disponível
-        const firstActiveTenant = availableTenants.find(t => t.active);
-        if (firstActiveTenant && !currentTenant) {
-          throttledAutoSelect('auto-select-fallback', `🔄 [TENANT AUTO-SELECT] Fallback: usando primeiro tenant ativo: ${firstActiveTenant.name} (${firstActiveTenant.slug})`);
-          switchTenant(firstActiveTenant.id);
+        const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
+        if (targetTenant) {
+          console.log(`✅ [TENANT AUTO-SELECT] Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
+          switchTenant(targetTenant.id);
+        } else {
+          console.error(`🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
         }
       }
-    } else {
-      throttledAutoSelect('auto-select-correct', `✅ [TENANT AUTO-SELECT] Tenant já está correto: ${currentTenant.name} (${currentTenant.slug})`);
     }
-  }, [hasLoaded, availableTenants, switchTenant]); // AIDEV-NOTE: Removido currentTenant das dependências para evitar loop
+  }, [hasLoaded, availableTenants, currentTenant, switchTenant]);
   
   /**
    * Troca para um tenant específico com validação aprimorada

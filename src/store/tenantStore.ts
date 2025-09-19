@@ -213,7 +213,25 @@ export const useTenantStore = create<TenantState>((set, get) => ({
       
       // Se não há cache válido, buscar do servidor
       set({ isLoading: true, error: null });
-      const userRole = user?.user_metadata?.user_role || null;
+      
+      // AIDEV-NOTE: Buscar user_role da tabela public.users em vez de user_metadata
+      // Isso corrige o problema onde admin aparecia como service_role
+      let userRole = null;
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('user_role')
+        .eq('id', userId)
+        .single();
+      
+      if (userError) {
+        console.warn('⚠️ [DEBUG] Erro ao buscar user_role da tabela users:', userError);
+        // Fallback para user_metadata se a consulta falhar
+        userRole = user?.user_metadata?.user_role || null;
+      } else {
+        userRole = userData?.user_role || null;
+      }
+      
+      console.log('🔍 [DEBUG] User role obtido:', userRole);
       
       // Buscar tenants do usuário
       console.log('🔍 [DEBUG] Buscando tenants do usuário...');
@@ -232,6 +250,7 @@ export const useTenantStore = create<TenantState>((set, get) => ({
             updated_at
           )
         `)
+        .eq('user_id', userId) // 🔒 CORREÇÃO CRÍTICA: Filtrar apenas tenants do usuário atual
         .eq('active', true);
 
       console.log('🔍 [DEBUG] Resultado tenant_users:', { userTenants, tenantsError });

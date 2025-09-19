@@ -3,7 +3,7 @@ import { dashboardService } from "@/services/dashboardService";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import { Calendar, Download, TrendingUp } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
 import { formatInstallmentDisplay, getInstallmentBadgeVariant } from "@/utils/installmentUtils";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
@@ -297,26 +297,7 @@ export default function Dashboard() {
     setShowDetail(true);
   };
 
-  // AIDEV-NOTE: Função para formatar CPF/CNPJ com validação de tipo segura
-  const formatCpfCnpj = (value: string | null | undefined | number) => {
-    if (!value) return "-";
-    
-    // Garantir que value é uma string antes de usar .replace()
-    const stringValue = typeof value === 'string' ? value : String(value);
-    const numericValue = stringValue.replace(/\D/g, '');
-    
-    if (numericValue.length > 11) {
-      return numericValue.replace(
-        /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
-        '$1.$2.$3/$4-$5'
-      );
-    }
-    
-    return numericValue.replace(
-      /^(\d{3})(\d{3})(\d{3})(\d{2})$/,
-      '$1.$2.$3-$4'
-    );
-  };
+  // AIDEV-NOTE: Removida função duplicada - usando utilitária do utils.ts
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

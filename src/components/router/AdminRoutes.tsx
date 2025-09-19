@@ -35,17 +35,15 @@ import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { motion } from 'framer-motion';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// Importação dinâmica para evitar problemas de importação circular
-const importPage = (path: string) => lazy(() => import(/* @vite-ignore */ path));
-
-// Importação lazy de páginas para melhorar performance usando importação dinâmica
-const AdminDashboard = importPage('@/pages/admin/dashboard');
-const ResellersPage = importPage('@/pages/admin/resellers');
-const NewResellerPage = importPage('@/pages/admin/resellers/new');
-const ResellerDetailPage = importPage('@/pages/admin/resellers/[id]');
-const TenantsPage = importPage('@/pages/admin/tenants');
-const NewTenantPage = importPage('@/pages/admin/tenants/new');
-const TenantDetailPage = importPage('@/pages/admin/tenants/[id]');
+// Importação lazy de páginas para melhorar performance
+const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'));
+const ResellersPage = lazy(() => import('@/pages/admin/resellers'));
+const NewResellerPage = lazy(() => import('@/pages/admin/resellers/new'));
+const ResellerDetailPage = lazy(() => import('@/pages/admin/resellers/[id]'));
+const TenantsPage = lazy(() => import('@/pages/admin/tenants'));
+const NewTenantPage = lazy(() => import('@/pages/admin/tenants/new'));
+const TenantDetailPage = lazy(() => import('@/pages/admin/tenants/[id]'));
+const AdminSettingsPage = lazy(() => import('@/pages/admin/settings'));
 
 // 🎨 AIDEV-NOTE: Loading Screen com Design System Atualizado
 // Componente de loading para importações lazy com microinterações
@@ -224,7 +222,6 @@ export function AdminRoutes({ userRole }: AdminRoutesProps) {
   // - Indicador visual do tenant ativo é exibido
   return (
     <QueryClientProvider client={adminQueryClient}>
-      <AdminLayout>
       {/* AIDEV-NOTE: Indicador Visual do Tenant Ativo (UI/UX Segura)
           Este componente serve múltiplos propósitos de segurança:
           - Confirma visualmente qual tenant está ativo
@@ -261,6 +258,7 @@ export function AdminRoutes({ userRole }: AdminRoutesProps) {
               - Cache isolado por tenant_id obrigatório
               - Logs de auditoria em operações críticas */}
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="settings" element={<AdminSettingsPage />} />
           <Route path="resellers" element={<ResellersPage />} />
           <Route path="resellers/new" element={<NewResellerPage />} />
           <Route path="resellers/:id" element={<ResellerDetailPage />} />
@@ -272,7 +270,6 @@ export function AdminRoutes({ userRole }: AdminRoutesProps) {
           <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
         </Routes>
       </Suspense>
-      </AdminLayout>
     </QueryClientProvider>
   );
 }

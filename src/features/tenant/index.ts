@@ -11,7 +11,7 @@
 // Re-exportar da nova arquitetura em src/core/tenant/
 export { 
   TenantProvider
-} from '@/core/tenant/UnifiedTenantProvider';
+} from '@/core/tenant/TenantProvider';
 
 export type {
   SimpleTenant,

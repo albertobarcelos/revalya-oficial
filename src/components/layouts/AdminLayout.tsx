@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useSupabase } from '@/hooks/useSupabase';
 import {
   LayoutDashboard,
@@ -44,7 +44,11 @@ const menuItems = [
   },
 ]
 
-export function AdminLayout() {
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+export function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const { supabase, user } = useSupabase()
@@ -187,7 +191,7 @@ export function AdminLayout() {
 
         {/* Page Content */}
         <main className="min-h-[calc(100vh-4rem)] p-6">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

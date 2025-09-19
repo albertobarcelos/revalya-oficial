@@ -42,7 +42,7 @@ export default function TenantsPage() {
     requireTenant: false,
     requiredRole: 'ADMIN'
   })
-  const supabase = useSupabase()
+  const { supabase } = useSupabase()
 
   // 🚨 BLOQUEIO IMEDIATO se não tiver acesso
   if (!hasAccess) {
@@ -146,9 +146,9 @@ export default function TenantsPage() {
             <Shield className="h-8 w-8 text-green-600" />
             Tenants
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             Modo: <Badge variant="outline">Administração Global</Badge>
-          </p>
+          </div>
         </div>
         <Button asChild>
           <Link to="/admin/tenants/new">

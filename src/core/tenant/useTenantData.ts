@@ -12,7 +12,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useTenant } from './UnifiedTenantProvider';
+import { useTenant } from './TenantProvider';
 import { useAuth } from '../auth/AuthProvider';
 import { securityMiddleware, OperationType } from '../security/SecurityMiddleware';
 import { globalCache } from '../cache/CacheSystem';

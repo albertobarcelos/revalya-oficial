@@ -16,6 +16,7 @@ import { Loader2 } from 'lucide-react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { TenantAutoLoginRouter } from './TenantAutoLoginRouter';
 import { AdminRoutes } from './AdminRoutes';
+import { AdminLayout } from '@/components/layouts/AdminLayout';
 /**
  * Estrutura de Rotas Robusta Multi-Tenant
  * 
@@ -137,7 +138,11 @@ export function AppRouter() {
         {/* ========== ROTAS ADMINISTRATIVAS ========== */}
         <Route 
           path={`${ROUTES.ADMIN.ROOT}/*`} 
-          element={user ? <AdminRoutes userRole={userRole} /> : <Navigate to={ROUTES.PUBLIC.LOGIN} replace />} 
+          element={user ? (
+            <AdminLayout>
+              <AdminRoutes userRole={userRole} />
+            </AdminLayout>
+          ) : <Navigate to={ROUTES.PUBLIC.LOGIN} replace />} 
         />
         
         {/* ========== ROTAS DE TENANT MULTI-TENANT COM AUTO-LOGIN ========== */}

@@ -18,11 +18,11 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, ArrowLeft, Users, Building2 } from 'lucide-react'
+import { Loader2, ArrowLeft, Building2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserManagement } from '@/components/users/UserManagement'
 
 // Schema de validação para o formulário de edição do tenant
 const tenantSchema = z.object({
@@ -34,20 +34,6 @@ const tenantSchema = z.object({
 })
 
 type TenantFormValues = z.infer<typeof tenantSchema>
-
-// Tipo para os dados da tabela tenant_users, incluindo dados do usuário relacionado
-type TenantUser = {
-  id: string; // ID da relação tenant_user
-  tenant_id: string;
-  user_id: string;
-  role: string; // Papel do usuário NESTE tenant (TENANT_USER, TENANT_ADMIN)
-  created_at: string;
-  users: { // Dados do usuário relacionado (da tabela users)
-    id: string;
-    email: string;
-    // Inclua outros campos de users se necessário
-  } | null; // Pode ser null se a relação falhar ou user for deletado
-}
 
 export default function TenantDetailPage() {
   const { id: tenantId } = useParams()
@@ -81,45 +67,22 @@ export default function TenantDetailPage() {
       return data
     },
     enabled: !!tenantId,
-    onSuccess: (data) => {
-      if (data) {
-        form.reset({
-          name: data.name,
-          document: data.document || '',
-          email: data.email,
-          phone: data.phone || '',
-          active: data.active,
-        })
-      }
-    }
   })
 
-  // Buscar usuários do tenant via tabela tenant_users
-  const { data: tenantUsers, isLoading: isLoadingUsers } = useQuery<TenantUser[]>({
-    queryKey: ['tenantUsers', tenantId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tenant_users') // Busca na tabela de junção
-        .select(`
-          id,
-          tenant_id,
-          user_id,
-          role, 
-          created_at,
-          users ( 
-            id,
-            email
-          )
-        `)
-        .eq('tenant_id', tenantId || '') // Filtra pelo tenant_id
-      if (error) {
-        console.error("Erro ao buscar usuários do tenant (tenant_users):", error);
-        throw error;
-      }
-      return data || []; // Retorna array vazio se data for null
-    },
-    enabled: !!tenantId,
-  })
+  // AIDEV-NOTE: Atualizar o formulário quando os dados do tenant forem carregados
+  useEffect(() => {
+    if (tenant) {
+      form.reset({
+        name: tenant.name || '',
+        document: tenant.document || '',
+        email: tenant.email || '',
+        phone: tenant.phone || '',
+        active: tenant.active ?? true,
+      })
+    }
+  }, [tenant, form])
+
+
 
   // Mutação para atualizar o tenant
   const mutation = useMutation({
@@ -159,17 +122,7 @@ export default function TenantDetailPage() {
     mutation.mutate(values)
   }
 
-  // Usa o 'role' da tabela tenant_users
-  const getRoleBadge = (role: string | null) => {
-    switch (role) {
-      case 'TENANT_ADMIN':
-        return <Badge variant="outline" className="bg-primary/10 text-primary hover:bg-primary/10">Administrador</Badge>;
-      case 'TENANT_USER':
-        return <Badge variant="outline" className="bg-muted text-muted-foreground hover:bg-muted">Usuário</Badge>;
-      default:
-        return <Badge variant="outline">{role || 'Papel não definido'}</Badge>;
-    }
-  };
+
 
   if (isLoadingTenant) {
     return (
@@ -315,53 +268,8 @@ export default function TenantDetailPage() {
         </TabsContent>
 
         <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <CardTitle>Usuários do Tenant</CardTitle>
-              <CardDescription>
-                Lista de usuários com acesso a este tenant.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingUsers ? (
-                <div className="flex h-40 items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="ml-2">Carregando usuários...</span>
-                </div>
-              ) : tenantUsers?.length === 0 ? (
-                <div className="rounded-lg border border-dashed p-8 text-center">
-                  <Users className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <h3 className="mt-2 text-lg font-medium">Nenhum usuário encontrado</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Este tenant ainda não possui usuários associados.
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Papel no Tenant</TableHead>
-                        <TableHead>Data de Acesso</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tenantUsers?.map((tu) => (
-                        <TableRow key={tu.id}> {/* Usa o ID da relação tenant_user */}
-                          <TableCell>{tu.users?.email ?? 'Email não disponível'}</TableCell>
-                          <TableCell>{getRoleBadge(tu.role)}</TableCell> 
-                          <TableCell>
-                            {new Date(tu.created_at).toLocaleDateString('pt-BR')}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* AIDEV-NOTE: Usando o componente UserManagement para gerenciar usuários do tenant */}
+          <UserManagement tenantId={tenantId || ''} />
         </TabsContent>
       </Tabs>
     </div>
