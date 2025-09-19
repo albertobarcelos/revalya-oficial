@@ -1,0 +1,31 @@
+/* Adicionar estas regras aos estilos globais */
+.prevent-horizontal-overflow {
+  max-width: 100%;
+  overflow-x: hidden;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Para textos muito longos sem espaços */
+.long-text-wrapper {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  -ms-word-break: break-all;
+  word-break: break-word;
+}
+
+/* Adicionar essas regras */
+.text-ellipsis {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.word-break-all {
+  word-break: break-all;
+}
+
+.no-horizontal-overflow {
+  max-width: 100%;
+  overflow-x: hidden;
+} 

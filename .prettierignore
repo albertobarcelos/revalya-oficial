@@ -1,0 +1,3483 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Vite cache
+.vite
+
+# Rollup cache
+.rollup.cache
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Supabase
+.supabase/
+
+# Generated files
+src/types/supabase.ts
+
+# Documentation
+docs/api/
+
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Storybook
+storybook-static/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated documentation
+*.md.backup
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Image files (if not part of the project)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.ico
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+
+# Font files
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.eot
+
+# Binary files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Compiled files
+*.class
+*.o
+*.obj
+*.pyc
+*.pyo
+*.pyd
+
+# Package files
+*.deb
+*.rpm
+*.msi
+*.dmg
+*.pkg
+
+# Configuration files that might contain sensitive data
+config/production.json
+config/staging.json
+.env.production
+.env.staging
+
+# Generated API documentation
+api-docs/
+openapi.json
+swagger.json
+
+# Minified files
+*.min.js
+*.min.css
+
+# Source maps
+*.map
+
+# Editor directories and files
+.vscode/
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local development
+.local
+
+# Husky
+.husky/_/
+
+# Commitizen
+.cz-config.js
+
+# ESLint
+.eslintcache
+
+# Stylelint
+.stylelintcache
+
+# Prettier
+.prettierignore
+
+# EditorConfig
+.editorconfig
+
+# Git
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# GitHub
+.github/
+
+# GitLab
+.gitlab-ci.yml
+
+# Bitbucket
+bitbucket-pipelines.yml
+
+# Travis CI
+.travis.yml
+
+# CircleCI
+.circleci/
+
+# Jenkins
+Jenkinsfile
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Kubernetes
+*.yaml
+*.yml
+
+# Terraform
+*.tf
+*.tfvars
+*.tfstate
+*.tfstate.backup
+
+# Ansible
+*.yml
+*.yaml
+
+# Vagrant
+Vagrantfile
+
+# Makefile
+Makefile
+
+# CMake
+CMakeLists.txt
+
+# Gradle
+build.gradle
+settings.gradle
+gradlew
+gradlew.bat
+gradle/
+
+# Maven
+pom.xml
+
+# SBT
+build.sbt
+
+# Leiningen
+project.clj
+
+# Cargo
+Cargo.toml
+Cargo.lock
+
+# Go
+go.mod
+go.sum
+
+# Rust
+Cargo.toml
+Cargo.lock
+
+# Python
+requirements.txt
+setup.py
+setup.cfg
+pyproject.toml
+Pipfile
+Pipfile.lock
+
+# Ruby
+Gemfile
+Gemfile.lock
+
+# PHP
+composer.json
+composer.lock
+
+# Java
+*.jar
+*.war
+*.ear
+
+# Scala
+*.jar
+
+# Kotlin
+*.jar
+
+# C#
+*.dll
+*.exe
+
+# C/C++
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Objective-C
+*.a
+*.dylib
+
+# Swift
+*.framework
+*.dylib
+
+# Dart
+pubspec.yaml
+pubspec.lock
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# React Native
+metro.config.js
+
+# Expo
+app.json
+app.config.js
+
+# Ionic
+ionic.config.json
+
+# Cordova
+config.xml
+
+# Electron
+electron-builder.yml
+
+# Tauri
+src-tauri/
+
+# Capacitor
+capacitor.config.json
+
+# NativeScript
+nsconfig.json
+
+# Xamarin
+*.csproj
+*.sln
+
+# Unity
+*.unity
+*.prefab
+*.asset
+*.meta
+
+# Unreal Engine
+*.uproject
+*.uasset
+*.umap
+
+# Godot
+*.godot
+*.tscn
+*.tres
+
+# Blender
+*.blend
+*.blend1
+
+# 3ds Max
+*.max
+
+# Maya
+*.ma
+*.mb
+
+# Cinema 4D
+*.c4d
+
+# SketchUp
+*.skp
+
+# AutoCAD
+*.dwg
+*.dxf
+
+# SolidWorks
+*.sldprt
+*.sldasm
+*.slddrw
+
+# Inventor
+*.ipt
+*.iam
+*.idw
+
+# Fusion 360
+*.f3d
+
+# Rhino
+*.3dm
+
+# KeyShot
+*.ksp
+
+# Substance
+*.sbsar
+*.sbs
+
+# Photoshop
+*.psd
+
+# Illustrator
+*.ai
+
+# InDesign
+*.indd
+
+# Sketch
+*.sketch
+
+# Figma
+*.fig
+
+# Adobe XD
+*.xd
+
+# Zeplin
+*.zpl
+
+# InVision
+*.invision
+
+# Marvel
+*.marvel
+
+# Principle
+*.prd
+
+# Framer
+*.framer
+
+# ProtoPie
+*.pie
+
+# Axure
+*.rp
+
+# Balsamiq
+*.bmpr
+
+# Wireframe
+*.wireframe
+
+# Mockup
+*.mockup
+
+# Prototype
+*.prototype
+
+# Design
+*.design
+
+# UI
+*.ui
+
+# UX
+*.ux
+
+# Style guide
+*.styleguide
+
+# Brand guide
+*.brandguide
+
+# Logo
+*.logo
+
+# Icon
+*.icon
+
+# Favicon
+*.favicon
+
+# Sprite
+*.sprite
+
+# Texture
+*.texture
+
+# Material
+*.material
+
+# Shader
+*.shader
+
+# Animation
+*.animation
+
+# Video
+*.video
+
+# Audio
+*.audio
+
+# Music
+*.music
+
+# Sound
+*.sound
+
+# Voice
+*.voice
+
+# Speech
+*.speech
+
+# Podcast
+*.podcast
+
+# Radio
+*.radio
+
+# TV
+*.tv
+
+# Movie
+*.movie
+
+# Film
+*.film
+
+# Documentary
+*.documentary
+
+# Commercial
+*.commercial
+
+# Advertisement
+*.advertisement
+
+# Marketing
+*.marketing
+
+# Promotion
+*.promotion
+
+# Campaign
+*.campaign
+
+# Event
+*.event
+
+# Conference
+*.conference
+
+# Workshop
+*.workshop
+
+# Seminar
+*.seminar
+
+# Webinar
+*.webinar
+
+# Training
+*.training
+
+# Course
+*.course
+
+# Tutorial
+*.tutorial
+
+# Guide
+*.guide
+
+# Manual
+*.manual
+
+# Documentation
+*.documentation
+
+# Help
+*.help
+
+# FAQ
+*.faq
+
+# Support
+*.support
+
+# Contact
+*.contact
+
+# About
+*.about
+
+# Terms
+*.terms
+
+# Privacy
+*.privacy
+
+# Policy
+*.policy
+
+# Legal
+*.legal
+
+# License
+*.license
+
+# Copyright
+*.copyright
+
+# Trademark
+*.trademark
+
+# Patent
+*.patent
+
+# Intellectual property
+*.ip
+
+# Trade secret
+*.tradesecret
+
+# Confidential
+*.confidential
+
+# Proprietary
+*.proprietary
+
+# Internal
+*.internal
+
+# External
+*.external
+
+# Public
+*.public
+
+# Private
+*.private
+
+# Secure
+*.secure
+
+# Encrypted
+*.encrypted
+
+# Decrypted
+*.decrypted
+
+# Signed
+*.signed
+
+# Unsigned
+*.unsigned
+
+# Verified
+*.verified
+
+# Unverified
+*.unverified
+
+# Authenticated
+*.authenticated
+
+# Unauthenticated
+*.unauthenticated
+
+# Authorized
+*.authorized
+
+# Unauthorized
+*.unauthorized
+
+# Approved
+*.approved
+
+# Unapproved
+*.unapproved
+
+# Accepted
+*.accepted
+
+# Rejected
+*.rejected
+
+# Pending
+*.pending
+
+# Processing
+*.processing
+
+# Processed
+*.processed
+
+# Unprocessed
+*.unprocessed
+
+# Complete
+*.complete
+
+# Incomplete
+*.incomplete
+
+# Finished
+*.finished
+
+# Unfinished
+*.unfinished
+
+# Done
+*.done
+
+# Undone
+*.undone
+
+# Success
+*.success
+
+# Failure
+*.failure
+
+# Error
+*.error
+
+# Warning
+*.warning
+
+# Info
+*.info
+
+# Debug
+*.debug
+
+# Trace
+*.trace
+
+# Log
+*.log
+
+# Report
+*.report
+
+# Summary
+*.summary
+
+# Detail
+*.detail
+
+# Overview
+*.overview
+
+# Analysis
+*.analysis
+
+# Statistics
+*.statistics
+
+# Metrics
+*.metrics
+
+# Performance
+*.performance
+
+# Benchmark
+*.benchmark
+
+# Test
+*.test
+
+# Spec
+*.spec
+
+# Example
+*.example
+
+# Sample
+*.sample
+
+# Demo
+*.demo
+
+# Prototype
+*.prototype
+
+# Mock
+*.mock
+
+# Stub
+*.stub
+
+# Fake
+*.fake
+
+# Dummy
+*.dummy
+
+# Placeholder
+*.placeholder
+
+# Template
+*.template
+
+# Boilerplate
+*.boilerplate
+
+# Scaffold
+*.scaffold
+
+# Generator
+*.generator
+
+# Builder
+*.builder
+
+# Compiler
+*.compiler
+
+# Transpiler
+*.transpiler
+
+# Bundler
+*.bundler
+
+# Minifier
+*.minifier
+
+# Optimizer
+*.optimizer
+
+# Linter
+*.linter
+
+# Formatter
+*.formatter
+
+# Validator
+*.validator
+
+# Parser
+*.parser
+
+# Lexer
+*.lexer
+
+# Tokenizer
+*.tokenizer
+
+# Analyzer
+*.analyzer
+
+# Transformer
+*.transformer
+
+# Converter
+*.converter
+
+# Serializer
+*.serializer
+
+# Deserializer
+*.deserializer
+
+# Encoder
+*.encoder
+
+# Decoder
+*.decoder
+
+# Compressor
+*.compressor
+
+# Decompressor
+*.decompressor
+
+# Archiver
+*.archiver
+
+# Extractor
+*.extractor
+
+# Installer
+*.installer
+
+# Uninstaller
+*.uninstaller
+
+# Updater
+*.updater
+
+# Patcher
+*.patcher
+
+# Migrator
+*.migrator
+
+# Importer
+*.importer
+
+# Exporter
+*.exporter
+
+# Synchronizer
+*.synchronizer
+
+# Backup
+*.backup
+
+# Restore
+*.restore
+
+# Recovery
+*.recovery
+
+# Cleanup
+*.cleanup
+
+# Maintenance
+*.maintenance
+
+# Monitor
+*.monitor
+
+# Watcher
+*.watcher
+
+# Observer
+*.observer
+
+# Listener
+*.listener
+
+# Handler
+*.handler
+
+# Processor
+*.processor
+
+# Worker
+*.worker
+
+# Service
+*.service
+
+# Daemon
+*.daemon
+
+# Agent
+*.agent
+
+# Client
+*.client
+
+# Server
+*.server
+
+# Proxy
+*.proxy
+
+# Gateway
+*.gateway
+
+# Router
+*.router
+
+# Load balancer
+*.loadbalancer
+
+# Firewall
+*.firewall
+
+# VPN
+*.vpn
+
+# CDN
+*.cdn
+
+# Cache
+*.cache
+
+# Database
+*.database
+
+# Storage
+*.storage
+
+# File system
+*.filesystem
+
+# Network
+*.network
+
+# Protocol
+*.protocol
+
+# API
+*.api
+
+# SDK
+*.sdk
+
+# Library
+*.library
+
+# Framework
+*.framework
+
+# Platform
+*.platform
+
+# Engine
+*.engine
+
+# Runtime
+*.runtime
+
+# Virtual machine
+*.vm
+
+# Container
+*.container
+
+# Image
+*.image
+
+# Package
+*.package
+
+# Module
+*.module
+
+# Component
+*.component
+
+# Widget
+*.widget
+
+# Plugin
+*.plugin
+
+# Extension
+*.extension
+
+# Add-on
+*.addon
+
+# Theme
+*.theme
+
+# Skin
+*.skin
+
+# Layout
+*.layout
+
+# View
+*.view
+
+# Model
+*.model
+
+# Controller
+*.controller
+
+# Middleware
+*.middleware
+
+# Filter
+*.filter
+
+# Interceptor
+*.interceptor
+
+# Decorator
+*.decorator
+
+# Adapter
+*.adapter
+
+# Bridge
+*.bridge
+
+# Facade
+*.facade
+
+# Factory
+*.factory
+
+# Builder
+*.builder
+
+# Singleton
+*.singleton
+
+# Observer
+*.observer
+
+# Strategy
+*.strategy
+
+# Command
+*.command
+
+# State
+*.state
+
+# Visitor
+*.visitor
+
+# Iterator
+*.iterator
+
+# Composite
+*.composite
+
+# Proxy
+*.proxy
+
+# Chain
+*.chain
+
+# Template
+*.template
+
+# Method
+*.method
+
+# Memento
+*.memento
+
+# Mediator
+*.mediator
+
+# Interpreter
+*.interpreter
+
+# Flyweight
+*.flyweight
+
+# Abstract factory
+*.abstractfactory
+
+# Prototype
+*.prototype
+
+# Repository
+*.repository
+
+# Unit of work
+*.unitofwork
+
+# Data mapper
+*.datamapper
+
+# Active record
+*.activerecord
+
+# Table data gateway
+*.tabledatagateway
+
+# Row data gateway
+*.rowdatagateway
+
+# Data access object
+*.dao
+
+# Data transfer object
+*.dto
+
+# Value object
+*.valueobject
+
+# Entity
+*.entity
+
+# Aggregate
+*.aggregate
+
+# Domain service
+*.domainservice
+
+# Application service
+*.applicationservice
+
+# Infrastructure service
+*.infrastructureservice
+
+# Domain event
+*.domainevent
+
+# Event handler
+*.eventhandler
+
+# Event store
+*.eventstore
+
+# Event sourcing
+*.eventsourcing
+
+# CQRS
+*.cqrs
+
+# Command
+*.command
+
+# Query
+*.query
+
+# Projection
+*.projection
+
+# Read model
+*.readmodel
+
+# Write model
+*.writemodel
+
+# Saga
+*.saga
+
+# Process manager
+*.processmanager
+
+# Workflow
+*.workflow
+
+# State machine
+*.statemachine
+
+# Business rule
+*.businessrule
+
+# Policy
+*.policy
+
+# Specification
+*.specification
+
+# Criteria
+*.criteria
+
+# Filter
+*.filter
+
+# Sorter
+*.sorter
+
+# Paginator
+*.paginator
+
+# Validator
+*.validator
+
+# Sanitizer
+*.sanitizer
+
+# Normalizer
+*.normalizer
+
+# Denormalizer
+*.denormalizer
+
+# Serializer
+*.serializer
+
+# Deserializer
+*.deserializer
+
+# Mapper
+*.mapper
+
+# Converter
+*.converter
+
+# Transformer
+*.transformer
+
+# Adapter
+*.adapter
+
+# Wrapper
+*.wrapper
+
+# Decorator
+*.decorator
+
+# Proxy
+*.proxy
+
+# Facade
+*.facade
+
+# Gateway
+*.gateway
+
+# Client
+*.client
+
+# Service
+*.service
+
+# Provider
+*.provider
+
+# Factory
+*.factory
+
+# Builder
+*.builder
+
+# Manager
+*.manager
+
+# Handler
+*.handler
+
+# Processor
+*.processor
+
+# Worker
+*.worker
+
+# Job
+*.job
+
+# Task
+*.task
+
+# Queue
+*.queue
+
+# Scheduler
+*.scheduler
+
+# Timer
+*.timer
+
+# Clock
+*.clock
+
+# Calendar
+*.calendar
+
+# Date
+*.date
+
+# Time
+*.time
+
+# Timestamp
+*.timestamp
+
+# Duration
+*.duration
+
+# Period
+*.period
+
+# Interval
+*.interval
+
+# Range
+*.range
+
+# Span
+*.span
+
+# Zone
+*.zone
+
+# Locale
+*.locale
+
+# Language
+*.language
+
+# Translation
+*.translation
+
+# Localization
+*.localization
+
+# Internationalization
+*.internationalization
+
+# Globalization
+*.globalization
+
+# Culture
+*.culture
+
+# Region
+*.region
+
+# Country
+*.country
+
+# Currency
+*.currency
+
+# Money
+*.money
+
+# Amount
+*.amount
+
+# Price
+*.price
+
+# Cost
+*.cost
+
+# Fee
+*.fee
+
+# Tax
+*.tax
+
+# Discount
+*.discount
+
+# Coupon
+*.coupon
+
+# Voucher
+*.voucher
+
+# Gift card
+*.giftcard
+
+# Loyalty
+*.loyalty
+
+# Reward
+*.reward
+
+# Point
+*.point
+
+# Credit
+*.credit
+
+# Debit
+*.debit
+
+# Balance
+*.balance
+
+# Account
+*.account
+
+# Transaction
+*.transaction
+
+# Payment
+*.payment
+
+# Invoice
+*.invoice
+
+# Receipt
+*.receipt
+
+# Order
+*.order
+
+# Cart
+*.cart
+
+# Basket
+*.basket
+
+# Wishlist
+*.wishlist
+
+# Favorite
+*.favorite
+
+# Bookmark
+*.bookmark
+
+# Tag
+*.tag
+
+# Category
+*.category
+
+# Collection
+*.collection
+
+# Group
+*.group
+
+# Set
+*.set
+
+# List
+*.list
+
+# Array
+*.array
+
+# Vector
+*.vector
+
+# Matrix
+*.matrix
+
+# Table
+*.table
+
+# Grid
+*.grid
+
+# Tree
+*.tree
+
+# Graph
+*.graph
+
+# Network
+*.network
+
+# Node
+*.node
+
+# Edge
+*.edge
+
+# Vertex
+*.vertex
+
+# Path
+*.path
+
+# Route
+*.route
+
+# Link
+*.link
+
+# Connection
+*.connection
+
+# Relationship
+*.relationship
+
+# Association
+*.association
+
+# Reference
+*.reference
+
+# Pointer
+*.pointer
+
+# Index
+*.index
+
+# Key
+*.key
+
+# Value
+*.value
+
+# Pair
+*.pair
+
+# Tuple
+*.tuple
+
+# Record
+*.record
+
+# Row
+*.row
+
+# Column
+*.column
+
+# Field
+*.field
+
+# Property
+*.property
+
+# Attribute
+*.attribute
+
+# Parameter
+*.parameter
+
+# Argument
+*.argument
+
+# Variable
+*.variable
+
+# Constant
+*.constant
+
+# Literal
+*.literal
+
+# Expression
+*.expression
+
+# Statement
+*.statement
+
+# Declaration
+*.declaration
+
+# Definition
+*.definition
+
+# Implementation
+*.implementation
+
+# Interface
+*.interface
+
+# Contract
+*.contract
+
+# Protocol
+*.protocol
+
+# Specification
+*.specification
+
+# Standard
+*.standard
+
+# Convention
+*.convention
+
+# Guideline
+*.guideline
+
+# Best practice
+*.bestpractice
+
+# Pattern
+*.pattern
+
+# Anti-pattern
+*.antipattern
+
+# Code smell
+*.codesmell
+
+# Refactoring
+*.refactoring
+
+# Optimization
+*.optimization
+
+# Performance
+*.performance
+
+# Scalability
+*.scalability
+
+# Reliability
+*.reliability
+
+# Availability
+*.availability
+
+# Durability
+*.durability
+
+# Consistency
+*.consistency
+
+# Integrity
+*.integrity
+
+# Security
+*.security
+
+# Privacy
+*.privacy
+
+# Compliance
+*.compliance
+
+# Audit
+*.audit
+
+# Monitoring
+*.monitoring
+
+# Logging
+*.logging
+
+# Tracing
+*.tracing
+
+# Profiling
+*.profiling
+
+# Debugging
+*.debugging
+
+# Testing
+*.testing
+
+# Quality assurance
+*.qa
+
+# Quality control
+*.qc
+
+# Code review
+*.codereview
+
+# Peer review
+*.peerreview
+
+# Static analysis
+*.staticanalysis
+
+# Dynamic analysis
+*.dynamicanalysis
+
+# Code coverage
+*.codecoverage
+
+# Test coverage
+*.testcoverage
+
+# Mutation testing
+*.mutationtesting
+
+# Property testing
+*.propertytesting
+
+# Fuzz testing
+*.fuzztesting
+
+# Load testing
+*.loadtesting
+
+# Stress testing
+*.stresstesting
+
+# Performance testing
+*.performancetesting
+
+# Security testing
+*.securitytesting
+
+# Penetration testing
+*.penetrationtesting
+
+# Vulnerability testing
+*.vulnerabilitytesting
+
+# Usability testing
+*.usabilitytesting
+
+# Accessibility testing
+*.accessibilitytesting
+
+# Compatibility testing
+*.compatibilitytesting
+
+# Regression testing
+*.regressiontesting
+
+# Smoke testing
+*.smoketesting
+
+# Sanity testing
+*.sanitytesting
+
+# Integration testing
+*.integrationtesting
+
+# System testing
+*.systemtesting
+
+# Acceptance testing
+*.acceptancetesting
+
+# User acceptance testing
+*.uat
+
+# Alpha testing
+*.alphatesting
+
+# Beta testing
+*.betatesting
+
+# Gamma testing
+*.gammatesting
+
+# Release testing
+*.releasetesting
+
+# Production testing
+*.productiontesting
+
+# Canary testing
+*.canarytesting
+
+# A/B testing
+*.abtesting
+
+# Blue-green testing
+*.bluegreentesting
+
+# Shadow testing
+*.shadowtesting
+
+# Chaos testing
+*.chaostesting
+
+# Disaster recovery testing
+*.disasterrecoverytesting
+
+# Business continuity testing
+*.businesscontinuitytesting
+
+# Backup testing
+*.backuptesting
+
+# Restore testing
+*.restoretesting
+
+# Migration testing
+*.migrationtesting
+
+# Upgrade testing
+*.upgradetesting
+
+# Downgrade testing
+*.downgradetesting
+
+# Rollback testing
+*.rollbacktesting
+
+# Deployment testing
+*.deploymenttesting
+
+# Installation testing
+*.installationtesting
+
+# Configuration testing
+*.configurationtesting
+
+# Environment testing
+*.environmenttesting
+
+# Infrastructure testing
+*.infrastructuretesting
+
+# Network testing
+*.networktesting
+
+# Database testing
+*.databasetesting
+
+# API testing
+*.apitesting
+
+# Service testing
+*.servicetesting
+
+# Component testing
+*.componenttesting
+
+# Module testing
+*.moduletesting
+
+# Class testing
+*.classtesting
+
+# Method testing
+*.methodtesting
+
+# Function testing
+*.functiontesting
+
+# Unit testing
+*.unittesting
+
+# Mock testing
+*.mocktesting
+
+# Stub testing
+*.stubtesting
+
+# Fake testing
+*.faketesting
+
+# Dummy testing
+*.dummytesting
+
+# Spy testing
+*.spytesting
+
+# Double testing
+*.doubletesting
+
+# Test double
+*.testdouble
+
+# Test fixture
+*.testfixture
+
+# Test data
+*.testdata
+
+# Test case
+*.testcase
+
+# Test suite
+*.testsuite
+
+# Test plan
+*.testplan
+
+# Test strategy
+*.teststrategy
+
+# Test approach
+*.testapproach
+
+# Test methodology
+*.testmethodology
+
+# Test framework
+*.testframework
+
+# Test harness
+*.testharness
+
+# Test runner
+*.testrunner
+
+# Test executor
+*.testexecutor
+
+# Test scheduler
+*.testscheduler
+
+# Test manager
+*.testmanager
+
+# Test coordinator
+*.testcoordinator
+
+# Test lead
+*.testlead
+
+# Test engineer
+*.testengineer
+
+# Test analyst
+*.testanalyst
+
+# Test architect
+*.testarchitect
+
+# Test consultant
+*.testconsultant
+
+# Test specialist
+*.testspecialist
+
+# Test expert
+*.testexpert
+
+# Test guru
+*.testguru
+
+# Test ninja
+*.testninja
+
+# Test rockstar
+*.testrockstar
+
+# Test hero
+*.testhero
+
+# Test champion
+*.testchampion
+
+# Test advocate
+*.testadvocate
+
+# Test evangelist
+*.testevangelist
+
+# Test ambassador
+*.testambassador
+
+# Test mentor
+*.testmentor
+
+# Test coach
+*.testcoach
+
+# Test trainer
+*.testtrainer
+
+# Test instructor
+*.testinstructor
+
+# Test teacher
+*.testteacher
+
+# Test professor
+*.testprofessor
+
+# Test researcher
+*.testresearcher
+
+# Test scientist
+*.testscientist
+
+# Test practitioner
+*.testpractitioner
+
+# Test professional
+*.testprofessional
+
+# Test community
+*.testcommunity
+
+# Test culture
+*.testculture
+
+# Test mindset
+*.testmindset
+
+# Test philosophy
+*.testphilosophy
+
+# Test principle
+*.testprinciple
+
+# Test value
+*.testvalue
+
+# Test belief
+*.testbelief
+
+# Test practice
+*.testpractice
+
+# Test habit
+*.testhabit
+
+# Test routine
+*.testroutine
+
+# Test ritual
+*.testritual
+
+# Test ceremony
+*.testceremony
+
+# Test tradition
+*.testtradition
+
+# Test custom
+*.testcustom
+
+# Test norm
+*.testnorm
+
+# Test standard
+*.teststandard
+
+# Test guideline
+*.testguideline
+
+# Test rule
+*.testrule
+
+# Test policy
+*.testpolicy
+
+# Test procedure
+*.testprocedure
+
+# Test process
+*.testprocess
+
+# Test workflow
+*.testworkflow
+
+# Test pipeline
+*.testpipeline
+
+# Test automation
+*.testautomation
+
+# Test tool
+*.testtool
+
+# Test utility
+*.testutility
+
+# Test helper
+*.testhelper
+
+# Test library
+*.testlibrary
+
+# Test framework
+*.testframework
+
+# Test platform
+*.testplatform
+
+# Test environment
+*.testenvironment
+
+# Test infrastructure
+*.testinfrastructure
+
+# Test setup
+*.testsetup
+
+# Test configuration
+*.testconfiguration
+
+# Test deployment
+*.testdeployment
+
+# Test execution
+*.testexecution
+
+# Test run
+*.testrun
+
+# Test session
+*.testsession
+
+# Test cycle
+*.testcycle
+
+# Test phase
+*.testphase
+
+# Test stage
+*.teststage
+
+# Test milestone
+*.testmilestone
+
+# Test deliverable
+*.testdeliverable
+
+# Test artifact
+*.testartifact
+
+# Test output
+*.testoutput
+
+# Test result
+*.testresult
+
+# Test report
+*.testreport
+
+# Test summary
+*.testsummary
+
+# Test analysis
+*.testanalysis
+
+# Test evaluation
+*.testevaluation
+
+# Test assessment
+*.testassessment
+
+# Test review
+*.testreview
+
+# Test feedback
+*.testfeedback
+
+# Test recommendation
+*.testrecommendation
+
+# Test improvement
+*.testimprovement
+
+# Test optimization
+*.testoptimization
+
+# Test enhancement
+*.testenhancement
+
+# Test refinement
+*.testrefinement
+
+# Test evolution
+*.testevolution
+
+# Test maturity
+*.testmaturity
+
+# Test capability
+*.testcapability
+
+# Test competency
+*.testcompetency
+
+# Test skill
+*.testskill
+
+# Test knowledge
+*.testknowledge
+
+# Test expertise
+*.testexpertise
+
+# Test experience
+*.testexperience
+
+# Test wisdom
+*.testwisdom
+
+# Test insight
+*.testinsight
+
+# Test understanding
+*.testunderstanding
+
+# Test awareness
+*.testawareness
+
+# Test consciousness
+*.testconsciousness
+
+# Test enlightenment
+*.testenlightenment
+
+# Test mastery
+*.testmastery
+
+# Test excellence
+*.testexcellence
+
+# Test quality
+*.testquality
+
+# Test perfection
+*.testperfection
+
+# Test ideal
+*.testideal
+
+# Test vision
+*.testvision
+
+# Test mission
+*.testmission
+
+# Test purpose
+*.testpurpose
+
+# Test goal
+*.testgoal
+
+# Test objective
+*.testobjective
+
+# Test target
+*.testtarget
+
+# Test aim
+*.testaim
+
+# Test intention
+*.testintention
+
+# Test desire
+*.testdesire
+
+# Test wish
+*.testwish
+
+# Test hope
+*.testhope
+
+# Test dream
+*.testdream
+
+# Test aspiration
+*.testaspiration
+
+# Test ambition
+*.testambition
+
+# Test passion
+*.testpassion
+
+# Test love
+*.testlove
+
+# Test dedication
+*.testdedication
+
+# Test commitment
+*.testcommitment
+
+# Test devotion
+*.testdevotion
+
+# Test loyalty
+*.testloyalty
+
+# Test faith
+*.testfaith
+
+# Test trust
+*.testtrust
+
+# Test confidence
+*.testconfidence
+
+# Test belief
+*.testbelief
+
+# Test conviction
+*.testconviction
+
+# Test certainty
+*.testcertainty
+
+# Test assurance
+*.testassurance
+
+# Test guarantee
+*.testguarantee
+
+# Test promise
+*.testpromise
+
+# Test commitment
+*.testcommitment
+
+# Test pledge
+*.testpledge
+
+# Test vow
+*.testvow
+
+# Test oath
+*.testoath
+
+# Test covenant
+*.testcovenant
+
+# Test agreement
+*.testagreement
+
+# Test contract
+*.testcontract
+
+# Test deal
+*.testdeal
+
+# Test bargain
+*.testbargain
+
+# Test negotiation
+*.testnegotiation
+
+# Test compromise
+*.testcompromise
+
+# Test settlement
+*.testsettlement
+
+# Test resolution
+*.testresolution
+
+# Test solution
+*.testsolution
+
+# Test answer
+*.testanswer
+
+# Test response
+*.testresponse
+
+# Test reply
+*.testreply
+
+# Test feedback
+*.testfeedback
+
+# Test comment
+*.testcomment
+
+# Test remark
+*.testremark
+
+# Test observation
+*.testobservation
+
+# Test note
+*.testnote
+
+# Test memo
+*.testmemo
+
+# Test message
+*.testmessage
+
+# Test communication
+*.testcommunication
+
+# Test conversation
+*.testconversation
+
+# Test dialogue
+*.testdialogue
+
+# Test discussion
+*.testdiscussion
+
+# Test debate
+*.testdebate
+
+# Test argument
+*.testargument
+
+# Test dispute
+*.testdispute
+
+# Test conflict
+*.testconflict
+
+# Test disagreement
+*.testdisagreement
+
+# Test difference
+*.testdifference
+
+# Test variation
+*.testvariation
+
+# Test deviation
+*.testdeviation
+
+# Test divergence
+*.testdivergence
+
+# Test discrepancy
+*.testdiscrepancy
+
+# Test inconsistency
+*.testinconsistency
+
+# Test contradiction
+*.testcontradiction
+
+# Test paradox
+*.testparadox
+
+# Test anomaly
+*.testanomaly
+
+# Test irregularity
+*.testirregularity
+
+# Test abnormality
+*.testabnormality
+
+# Test exception
+*.testexception
+
+# Test outlier
+*.testoutlier
+
+# Test edge case
+*.testedgecase
+
+# Test corner case
+*.testcornercase
+
+# Test boundary case
+*.testboundarycase
+
+# Test limit case
+*.testlimitcase
+
+# Test extreme case
+*.testextremecase
+
+# Test worst case
+*.testworstcase
+
+# Test best case
+*.testbestcase
+
+# Test average case
+*.testaveragecase
+
+# Test typical case
+*.testtypicalcase
+
+# Test normal case
+*.testnormalcase
+
+# Test standard case
+*.teststandardcase
+
+# Test common case
+*.testcommoncase
+
+# Test usual case
+*.testusualcase
+
+# Test regular case
+*.testregularcase
+
+# Test ordinary case
+*.testordinarycase
+
+# Test routine case
+*.testroutinecase
+
+# Test everyday case
+*.testeverydaycase
+
+# Test mundane case
+*.testmundanecase
+
+# Test trivial case
+*.testtrivialcase
+
+# Test simple case
+*.testsimplecase
+
+# Test basic case
+*.testbasiccase
+
+# Test fundamental case
+*.testfundamentalcase
+
+# Test elementary case
+*.testelementarycase
+
+# Test primary case
+*.testprimarycase
+
+# Test main case
+*.testmaincase
+
+# Test core case
+*.testcorecase
+
+# Test central case
+*.testcentralcase
+
+# Test key case
+*.testkeycase
+
+# Test critical case
+*.testcriticalcase
+
+# Test important case
+*.testimportantcase
+
+# Test significant case
+*.testsignificantcase
+
+# Test major case
+*.testmajorcase
+
+# Test minor case
+*.testminorcase
+
+# Test secondary case
+*.testsecondarycase
+
+# Test tertiary case
+*.testtertiarycase
+
+# Test auxiliary case
+*.testauxiliarycase
+
+# Test supplementary case
+*.testsupplementarycase
+
+# Test additional case
+*.testadditionalcase
+
+# Test extra case
+*.testextracase
+
+# Test bonus case
+*.testbonuscase
+
+# Test special case
+*.testspecialcase
+
+# Test unique case
+*.testuniquecase
+
+# Test rare case
+*.testrarecase
+
+# Test uncommon case
+*.testuncommoncase
+
+# Test unusual case
+*.testunusualcase
+
+# Test strange case
+*.teststrangecase
+
+# Test odd case
+*.testoddcase
+
+# Test weird case
+*.testweirdcase
+
+# Test bizarre case
+*.testbizarrecase
+
+# Test peculiar case
+*.testpeculiarcase
+
+# Test curious case
+*.testcuriouscase
+
+# Test interesting case
+*.testinterestingcase
+
+# Test fascinating case
+*.testfascinatingcase
+
+# Test intriguing case
+*.testintriguingcase
+
+# Test compelling case
+*.testcompellingcase
+
+# Test captivating case
+*.testcaptivatingcase
+
+# Test engaging case
+*.testengagingcase
+
+# Test absorbing case
+*.testabsorbingcase
+
+# Test gripping case
+*.testgrippingcase
+
+# Test riveting case
+*.testrivetingcase
+
+# Test thrilling case
+*.testthrillingcase
+
+# Test exciting case
+*.testexcitingcase
+
+# Test stimulating case
+*.teststimulatingcase
+
+# Test inspiring case
+*.testinspiringcase
+
+# Test motivating case
+*.testmotivatingcase
+
+# Test encouraging case
+*.testencouragingcase
+
+# Test uplifting case
+*.testupliftingcase
+
+# Test positive case
+*.testpositivecase
+
+# Test negative case
+*.testnegativecase
+
+# Test neutral case
+*.testneutralcase
+
+# Test balanced case
+*.testbalancedcase
+
+# Test fair case
+*.testfaircase
+
+# Test just case
+*.testjustcase
+
+# Test right case
+*.testrightcase
+
+# Test correct case
+*.testcorrectcase
+
+# Test accurate case
+*.testaccuratecase
+
+# Test precise case
+*.testprecisecase
+
+# Test exact case
+*.testexactcase
+
+# Test perfect case
+*.testperfectcase
+
+# Test ideal case
+*.testidealcase
+
+# Test optimal case
+*.testoptimalcase
+
+# Test maximum case
+*.testmaximumcase
+
+# Test minimum case
+*.testminimumcase
+
+# Test zero case
+*.testzerocase
+
+# Test null case
+*.testnullcase
+
+# Test empty case
+*.testemptycase
+
+# Test blank case
+*.testblankcase
+
+# Test void case
+*.testvoidcase
+
+# Test missing case
+*.testmissingcase
+
+# Test absent case
+*.testabsentcase
+
+# Test unavailable case
+*.testunavailablecase
+
+# Test inaccessible case
+*.testinaccessiblecase
+
+# Test unreachable case
+*.testunreachablecase
+
+# Test impossible case
+*.testimpossiblecase
+
+# Test infeasible case
+*.testinfeasiblecase
+
+# Test impractical case
+*.testimpracticalcase
+
+# Test unrealistic case
+*.testunrealisticcase
+
+# Test unreasonable case
+*.testunreasonablecase
+
+# Test illogical case
+*.testillogicalcase
+
+# Test irrational case
+*.testirrationalcase
+
+# Test nonsensical case
+*.testnonsensicalcase
+
+# Test absurd case
+*.testabsurdcase
+
+# Test ridiculous case
+*.testridiculouscase
+
+# Test silly case
+*.testsillycase
+
+# Test foolish case
+*.testfoolishcase
+
+# Test stupid case
+*.teststupidcase
+
+# Test dumb case
+*.testdumbcase
+
+# Test idiotic case
+*.testidioticcase
+
+# Test moronic case
+*.testmoroniccase
+
+# Test imbecilic case
+*.testimbeciliccase
+
+# Test asinine case
+*.testasininecase
+
+# Test ludicrous case
+*.testludicrouscase
+
+# Test preposterous case
+*.testpreposterouscase
+
+# Test outrageous case
+*.testoutrageouscase
+
+# Test scandalous case
+*.testscandalouscase
+
+# Test shocking case
+*.testshockingcase
+
+# Test appalling case
+*.testappallingcase
+
+# Test horrifying case
+*.testhorrifyingcase
+
+# Test terrifying case
+*.testterrifyingcase
+
+# Test frightening case
+*.testfrighteningcase
+
+# Test scary case
+*.testscarycase
+
+# Test creepy case
+*.testcreepycase
+
+# Test spooky case
+*.testspookycase
+
+# Test eerie case
+*.testeeriecase
+
+# Test mysterious case
+*.testmysteriouscase
+
+# Test enigmatic case
+*.testenigmaticcase
+
+# Test puzzling case
+*.testpuzzlingcase
+
+# Test confusing case
+*.testconfusingcase
+
+# Test perplexing case
+*.testperplexingcase
+
+# Test baffling case
+*.testbafflingcase
+
+# Test bewildering case
+*.testbewilderingcase
+
+# Test mystifying case
+*.testmystifyingcase
+
+# Test incomprehensible case
+*.testincomprehensiblecase
+
+# Test unfathomable case
+*.testunfathomablecase
+
+# Test inscrutable case
+*.testinscrutiblecase
+
+# Test impenetrable case
+*.testimpenetrablecase
+
+# Test opaque case
+*.testopaquecase
+
+# Test obscure case
+*.testobscurecase
+
+# Test unclear case
+*.testunclearcase
+
+# Test ambiguous case
+*.testambiguouscase
+
+# Test vague case
+*.testvaguecase
+
+# Test indefinite case
+*.testindefinitecase
+
+# Test uncertain case
+*.testuncertaincase
+
+# Test doubtful case
+*.testdoubtfulcase
+
+# Test questionable case
+*.testquestionablecase
+
+# Test dubious case
+*.testdubiouscase
+
+# Test suspicious case
+*.testsuspiciouscase
+
+# Test fishy case
+*.testfishycase
+
+# Test shady case
+*.testshadycase
+
+# Test sketchy case
+*.testsketchycase
+
+# Test dodgy case
+*.testdodgycase
+
+# Test risky case
+*.testriskycase
+
+# Test dangerous case
+*.testdangerouscase
+
+# Test hazardous case
+*.testhazardouscase
+
+# Test perilous case
+*.testperilouscase
+
+# Test treacherous case
+*.testtreacherouscase
+
+# Test precarious case
+*.testprecariouscase
+
+# Test unstable case
+*.testunstablecase
+
+# Test volatile case
+*.testvolatilecase
+
+# Test unpredictable case
+*.testunpredictablecase
+
+# Test erratic case
+*.testerraticcase
+
+# Test inconsistent case
+*.testinconsistentcase
+
+# Test unreliable case
+*.testunreliablecase
+
+# Test untrustworthy case
+*.testuntrustworthycase
+
+# Test undependable case
+*.testundependablecase
+
+# Test unreliable case
+*.testunreliablecase
+
+# Test faulty case
+*.testfaultycase
+
+# Test defective case
+*.testdefectivecase
+
+# Test flawed case
+*.testflawedcase
+
+# Test imperfect case
+*.testimperfectcase
+
+# Test broken case
+*.testbrokencase
+
+# Test damaged case
+*.testdamagedcase
+
+# Test corrupted case
+*.testcorruptedcase
+
+# Test compromised case
+*.testcompromisedcase
+
+# Test tainted case
+*.testtaintedcase
+
+# Test contaminated case
+*.testcontaminatedcase
+
+# Test polluted case
+*.testpollutedcase
+
+# Test infected case
+*.testinfectedcase
+
+# Test diseased case
+*.testdiseasedcase
+
+# Test sick case
+*.testsickcase
+
+# Test ill case
+*.testillcase
+
+# Test unhealthy case
+*.testunhealthycase
+
+# Test toxic case
+*.testtoxiccase
+
+# Test poisonous case
+*.testpoisonouscase
+
+# Test venomous case
+*.testvenomouscase
+
+# Test deadly case
+*.testdeadlycase
+
+# Test lethal case
+*.testlethalcase
+
+# Test fatal case
+*.testfatalcase
+
+# Test terminal case
+*.testterminalcase
+
+# Test final case
+*.testfinalcase
+
+# Test last case
+*.testlastcase
+
+# Test end case
+*.testendcase
+
+# Test conclusion case
+*.testconclusioncase
+
+# Test finish case
+*.testfinishcase
+
+# Test completion case
+*.testcompletioncase
+
+# Test closure case
+*.testclosurecase
+
+# Test termination case
+*.testterminationcase
+
+# Test cessation case
+*.testcessationcase
+
+# Test halt case
+*.testhaltcase
+
+# Test stop case
+*.teststopcase
+
+# Test pause case
+*.testpausecase
+
+# Test break case
+*.testbreakcase
+
+# Test interruption case
+*.testinterruptioncase
+
+# Test suspension case
+*.testsuspensioncase
+
+# Test delay case
+*.testdelaycase
+
+# Test postponement case
+*.testpostponementcase
+
+# Test deferment case
+*.testdefermentcase
+
+# Test adjournment case
+*.testadjournmentcase
+
+# Test recess case
+*.testrecesscase
+
+# Test hiatus case
+*.testhiatuscase
+
+# Test gap case
+*.testgapcase
+
+# Test interval case
+*.testintervalcase
+
+# Test space case
+*.testspacecase
+
+# Test distance case
+*.testdistancecase
+
+# Test separation case
+*.testseparationcase
+
+# Test division case
+*.testdivisioncase
+
+# Test split case
+*.testsplitcase
+
+# Test partition case
+*.testpartitioncase
+
+# Test segment case
+*.testsegmentcase
+
+# Test section case
+*.testsectioncase
+
+# Test part case
+*.testpartcase
+
+# Test piece case
+*.testpiececase
+
+# Test fragment case
+*.testfragmentcase
+
+# Test portion case
+*.testportioncase
+
+# Test share case
+*.testsharecase
+
+# Test fraction case
+*.testfractioncase
+
+# Test percentage case
+*.testpercentagecase
+
+# Test ratio case
+*.testratiocase
+
+# Test proportion case
+*.testproportioncase
+
+# Test scale case
+*.testscalecase
+
+# Test size case
+*.testsizecase
+
+# Test dimension case
+*.testdimensioncase
+
+# Test measurement case
+*.testmeasurementcase
+
+# Test quantity case
+*.testquantitycase
+
+# Test amount case
+*.testamountcase
+
+# Test volume case
+*.testvolumecase
+
+# Test capacity case
+*.testcapacitycase
+
+# Test weight case
+*.testweightcase
+
+# Test mass case
+*.testmasscase
+
+# Test density case
+*.testdensitycase
+
+# Test pressure case
+*.testpressurecase
+
+# Test force case
+*.testforcecase
+
+# Test energy case
+*.testenergycase
+
+# Test power case
+*.testpowercase
+
+# Test speed case
+*.testspeedcase
+
+# Test velocity case
+*.testvelocitycase
+
+# Test acceleration case
+*.testaccelerationcase
+
+# Test momentum case
+*.testmomentumcase
+
+# Test impulse case
+*.testimpulsecase
+
+# Test frequency case
+*.testfrequencycase
+
+# Test wavelength case
+*.testwavelengthcase
+
+# Test amplitude case
+*.testamplitudecase
+
+# Test phase case
+*.testphasecase
+
+# Test period case
+*.testperiodcase
+
+# Test cycle case
+*.testcyclecase
+
+# Test oscillation case
+*.testoscillationcase
+
+# Test vibration case
+*.testvibrationcase
+
+# Test wave case
+*.testwavecase
+
+# Test signal case
+*.testsignalcase
+
+# Test noise case
+*.testnoisecase
+
+# Test interference case
+*.testinterferencecase
+
+# Test distortion case
+*.testdistortioncase
+
+# Test attenuation case
+*.testattenuationcase
+
+# Test amplification case
+*.testamplificationcase
+
+# Test gain case
+*.testgaincase
+
+# Test loss case
+*.testlosscase
+
+# Test efficiency case
+*.testefficiencycase
+
+# Test performance case
+*.testperformancecase
+
+# Test throughput case
+*.testthroughputcase
+
+# Test bandwidth case
+*.testbandwidthcase
+
+# Test latency case
+*.testlatencycase
+
+# Test delay case
+*.testdelaycase
+
+# Test jitter case
+*.testjittercase
+
+# Test packet loss case
+*.testpacketlosscase
+
+# Test error rate case
+*.testerrorratecase
+
+# Test bit error rate case
+*.testbiterrorratecase
+
+# Test signal-to-noise ratio case
+*.testsignaltonoiseratiocase
+
+# Test dynamic range case
+*.testdynamicrangecase
+
+# Test contrast ratio case
+*.testcontrastratiocase
+
+# Test brightness case
+*.testbrightnesscase
+
+# Test luminance case
+*.testluminancecase
+
+# Test illuminance case
+*.testilluminancecase
+
+# Test color temperature case
+*.testcolortemperaturecase
+
+# Test color gamut case
+*.testcolorgamutcase
+
+# Test color accuracy case
+*.testcoloraccuracycase
+
+# Test color reproduction case
+*.testcolorreproductioncase
+
+# Test color fidelity case
+*.testcolorfidelitycase
+
+# Test color consistency case
+*.testcolorconsistencycase
+
+# Test color uniformity case
+*.testcoloruniformitycase
+
+# Test color stability case
+*.testcolorstabilitycase
+
+# Test color drift case
+*.testcolordriftcase
+
+# Test color shift case
+*.testcolorshiftcase
+
+# Test color cast case
+*.testcolorcastcase
+
+# Test color balance case
+*.testcolorbalancecase
+
+# Test white balance case
+*.testwhitebalancecase
+
+# Test exposure case
+*.testexposurecase
+
+# Test aperture case
+*.testaperturecase
+
+# Test shutter speed case
+*.testshutterspeedcase
+
+# Test ISO case
+*.testisocase
+
+# Test focus case
+*.testfocuscase
+
+# Test depth of field case
+*.testdepthoffieldcase
+
+# Test bokeh case
+*.testbokehcase
+
+# Test distortion case
+*.testdistortioncase
+
+# Test vignetting case
+*.testvignettingcase
+
+# Test chromatic aberration case
+*.testchromaticaberrationcase

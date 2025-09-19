@@ -1,0 +1,61 @@
+name: Deploy Manual
+
+on:
+  workflow_dispatch: 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Baixar o código do repositório
+    - name: Baixa Código Atualizado
+      uses: actions/checkout@v3
+
+    # 2. Configurar o Node.js
+    - name: Configura Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    # 3. Limpar e Instalar Dependências
+    - name: Limpa e Instala Dependências
+      run: |
+        rm -rf node_modules package-lock.json
+        npm install
+
+    # 4. Build da aplicação
+    - name: Builda a Aplicação
+      run: npm run build
+
+    # 5. Copiar arquivos para a VPS
+    - name: Copia Arquivos para a VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        port: ${{ secrets.VPS_PORT }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_PRIVATE_KEY }}
+        source: ./dist/
+        target: /var/www/html/financeiro-nexsyn/
+
+    # 6. Copiar todos os arquivos para financeiro-nexsyn
+    - name: Copia todos os arquivos para financeiro-nexsyn
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        port: ${{ secrets.VPS_PORT }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_PRIVATE_KEY }}
+        script: |
+          cp -r /var/www/html/financeiro-nexsyn/dist/* /var/www/html/financeiro-nexsyn/
+
+    # 7. Reiniciar o Nginx
+    - name: Reinicia Proxy reverso
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        port: ${{ secrets.VPS_PORT }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_PRIVATE_KEY }}
+        script: sudo systemctl restart nginx

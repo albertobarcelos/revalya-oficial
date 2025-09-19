@@ -1,0 +1,273 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging
+.env.production
+
+# Build outputs
+/dist
+/build
+/out
+.next/
+.nuxt
+storybook-static/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Vite cache
+.vite
+
+# Rollup cache
+.rollup.cache
+
+# Temporary folders
+tmp/
+temp/
+.temp/
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# IDE and Editor files
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.atom/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs
+logs
+*.log
+
+# Supabase
+.supabase/
+/supabase/.temp/
+
+# Generated files
+src/types/supabase.ts
+
+# Test results
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Documentation
+docs/api/
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# Configuration files that might contain sensitive data
+config/production.json
+config/staging.json
+
+# Generated API documentation
+api-docs/
+openapi.json
+swagger.json
+
+# Minified files
+*.min.js
+*.min.css
+
+# Source maps
+*.map
+
+# Lock files (uncomment the one you're NOT using)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Husky
+.husky/_/
+
+# Local development
+.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# Editor directories and files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Financial system specific
+/uploads/
+/exports/
+/reports/
+/backups/
+*.financial
+*.contract
+*.invoice
+*.receipt
+
+# Sensitive data
+*.jks
+*.keystore
+*.truststore
+
+# Performance and profiling
+*.prof
+*.trace
+*.heap
+*.cpuprofile
+*.memprofile
+
+# Monitoring and logging
+logs/
+*.log.*
+*.out.*
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/cache/
+.nuxt/cache/
+
+# Package manager files (choose one)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Runtime files
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.lcov
+*.clover
+
+# Storybook
+storybook-static/
+.storybook/public/
+
+# Linting and formatting
+.eslintcache
+.stylelintcache
+
+# Commitizen
+.cz-config.js
+
+# Release
+CHANGELOG.md
+
+# Miscellaneous
+*.tsbuildinfo
+*.map
+*.min.js
+*.min.css

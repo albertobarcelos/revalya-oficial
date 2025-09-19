@@ -1,0 +1,206 @@
+/**
+ * Utilitário de autenticação alternativa para o Supabase
+ * Esta solução contorna problemas estruturais no banco de dados Supabase
+ * quando ocorre o erro "Database error granting user"
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import { supabase as supabaseGlobal } from '../lib/supabase';
+import { clearAuthStorage, saveSessionData } from '@/utils/authTokenManager';
+
+// Usar client global para evitar múltiplas instâncias do GoTrueClient
+const supabaseAdmin = supabaseGlobal;
+
+/**
+ * Função para login que contorna o erro do Supabase
+ * Usa JWT diretamente em vez de depender das funções que causam o erro
+ */
+export async function loginWithBypass(email: string, password: string) {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    // Usa a chave anônima do Supabase
+    const clientKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    // Chamar API REST diretamente
+    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': clientKey,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Erro no login',
+        details: data
+      };
+    }
+
+    // Se autenticação teve sucesso, set a sessão manualmente
+    if (data.access_token) {
+      // Salvar usando a função centralizada
+      const authData = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_in: data.expires_in,
+        expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+        token_type: data.token_type || 'bearer',
+        user: data.user
+      };
+      
+      saveSessionData(authData);
+      localStorage.setItem('supabase.auth.token', JSON.stringify({
+        currentSession: {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_in: data.expires_in,
+          expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+          user: data.user
+        },
+        expiresAt: Math.floor(Date.now() / 1000) + data.expires_in
+      }));
+      
+      // Atualizar o cliente Supabase com a nova sessão
+      await supabaseAdmin.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      
+      // Tentar criar usuário imediatamente após login
+      try {
+        await ensureUserExists(data.user.id, data.user.email);
+      } catch (userError: any) {
+        console.warn('Aviso: Erro ao sincronizar usuário, mas login continua válido:', userError);
+      }
+      
+      return {
+        success: true,
+        user: data.user,
+        session: {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+          expires_in: data.expires_in
+        }
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Erro ao processar autenticação',
+      details: data
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Erro desconhecido ao processar login',
+      details: error
+    };
+  }
+}
+
+/**
+ * Verificar se o usuário existe na tabela public.users
+ * e criar se não existir
+ */
+export async function ensureUserExists(userId: string, email: string) {
+  try {
+    // Método 1: Tentar criar usuário diretamente com a função RPC admin_create_user_bypass_rls
+    try {
+      const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+        'admin_create_user_bypass_rls',
+        {
+          user_id: userId,
+          user_email: email,
+          user_role_value: 'USER',
+          user_name: email.split('@')[0],
+          user_status: 'ACTIVE'
+        }
+      );
+      
+      if (!rpcError) {
+        console.log('Usuário garantido via RPC:', rpcResult);
+        return { success: true };
+      }
+      
+      console.warn('Erro na função RPC, tentando método alternativo:', rpcError);
+    } catch (rpcFailure) {
+      console.warn('Falha ao chamar RPC:', rpcFailure);
+    }
+    
+    // Método 2: Verificar se usuário existe
+    const { data: existingUser, error: checkError } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+    
+    if (!checkError && existingUser) {
+      // Usuário já existe
+      console.log('Usuário já existe na tabela public.users');
+      return { success: true };
+    }
+    
+    // Método 3: Última tentativa com INSERT direto
+    const { error: insertError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: userId,
+        email: email,
+        user_role: 'USER',
+        role: 'authenticated', // Adicionar coluna role para compatibility
+        name: email.split('@')[0],
+        status: 'ACTIVE',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+    if (insertError) {
+      console.error('Erro ao criar usuário:', insertError);
+      return {
+        success: false,
+        error: insertError
+      };
+    }
+    
+    return {
+      success: true
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Função segura para logout que limpa o localStorage
+ */
+export async function secureSignOut(supabase: any) {
+  try {
+    // Usar a função centralizada de limpeza
+    clearAuthStorage();
+    
+    // Tentar o signOut oficial do Supabase
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error('Erro ao fazer logout via API Supabase:', error);
+      // Mesmo com erro, já limpamos o token manualmente
+      return { success: true, message: 'Logout local realizado' };
+    }
+    
+    return { success: true, message: 'Logout completo realizado' };
+  } catch (error: any) {
+    console.error('Erro ao processar logout:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Erro desconhecido ao processar logout' 
+    };
+  }
+}

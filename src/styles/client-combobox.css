@@ -1,0 +1,20 @@
+.client-combobox-input {
+  width: 100% !important;
+  outline: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.client-combobox-list {
+  overflow-y: auto !important;
+  max-height: 250px !important;
+  scroll-behavior: smooth !important;
+}
+
+.client-combobox-item {
+  cursor: pointer !important;
+}
+
+.client-combobox-item:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+} 

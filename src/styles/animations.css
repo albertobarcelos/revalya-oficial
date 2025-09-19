@@ -1,0 +1,37 @@
+/* Animação de tremor para inputs com erro */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.6s ease-in-out;
+}
+
+/* Animação de pulse suave para mensagens de erro */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Transições suaves para estados de erro */
+.error-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Efeito de destaque para campos com erro */
+.field-error {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+  border-color: rgb(239, 68, 68);
+  background-color: rgb(254, 242, 242);
+}
+
+.field-error:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  border-color: rgb(220, 38, 38);
+}
