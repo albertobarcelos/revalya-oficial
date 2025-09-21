@@ -42,6 +42,20 @@ export interface AsaasPayment {
   subscription?: string;
   installment?: string;
   externalReference?: string;
+  
+  // AIDEV-NOTE: Campos específicos para conciliação ASAAS
+  identificationField?: string;      // Linha digitável do boleto
+  barCode?: string;                  // Código de barras do boleto
+  originalValue?: number;            // Valor original da cobrança
+  interestValue?: number;            // Valor de juros e multas
+  discountValue?: number;            // Valor de desconto aplicado
+  confirmedDate?: string;            // Data de confirmação do pagamento
+  clientPaymentDate?: string;        // Data de pagamento informada pelo cliente
+  installmentNumber?: number;        // Número da parcela (se parcelado)
+  installmentCount?: number;         // Total de parcelas
+  transactionReceiptUrl?: string;    // URL do comprovante de transação
+  canBeCancelled?: boolean;          // Se pode ser cancelada
+  refunds?: AsaasRefund[];           // Estornos relacionados
 }
 
 export interface AsaasListResponse<T> {
@@ -51,6 +65,40 @@ export interface AsaasListResponse<T> {
   limit: number;
   offset: number;
   data: T[];
+}
+
+// AIDEV-NOTE: Interface para estornos ASAAS
+export interface AsaasRefund {
+  id: string;
+  value: number;
+  status: string;
+  description?: string;
+  refundDate: string;
+}
+
+// AIDEV-NOTE: Interface para dados específicos de conciliação ASAAS
+export interface AsaasReconciliationData {
+  paymentId: string;
+  identificationField?: string;
+  barCode?: string;
+  nossoNumero?: string;
+  bankSlipUrl?: string;
+  pixQrCodeUrl?: string;
+  transactionReceiptUrl?: string;
+  originalValue: number;
+  paidValue: number;
+  interestValue?: number;
+  discountValue?: number;
+  netValue: number;
+  billingType: 'BOLETO' | 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'TRANSFER';
+  paymentStatus: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH' | 'REFUND_REQUESTED' | 'REFUND_IN_PROGRESS' | 'CHARGEBACK_REQUESTED' | 'CHARGEBACK_DISPUTE' | 'AWAITING_CHARGEBACK_REVERSAL' | 'DUNNING_REQUESTED' | 'DUNNING_RECEIVED' | 'AWAITING_RISK_ANALYSIS';
+  confirmedDate?: string;
+  clientPaymentDate?: string;
+  dueDate: string;
+  installmentNumber?: number;
+  installmentCount?: number;
+  canBeCancelled: boolean;
+  refunds?: AsaasRefund[];
 }
 
 export const mapAsaasCustomerToCustomer = (asaasCustomer: AsaasCustomer) => {
@@ -84,6 +132,33 @@ export const mapAsaasPaymentToCharge = (payment: AsaasPayment) => {
     paid_at: payment.paymentDate || null,
     priority: 'medium' as const,
     attempts: 0
+  };
+};
+
+// AIDEV-NOTE: Função para mapear pagamento ASAAS para dados de conciliação
+export const mapAsaasPaymentToReconciliation = (payment: AsaasPayment): AsaasReconciliationData => {
+  return {
+    paymentId: payment.id,
+    identificationField: payment.identificationField,
+    barCode: payment.barCode,
+    nossoNumero: payment.nossoNumero,
+    bankSlipUrl: payment.bankSlipUrl,
+    pixQrCodeUrl: payment.pixQrCodeUrl,
+    transactionReceiptUrl: payment.transactionReceiptUrl,
+    originalValue: payment.originalValue || payment.value,
+    paidValue: payment.netValue,
+    interestValue: payment.interestValue,
+    discountValue: payment.discountValue,
+    netValue: payment.netValue,
+    billingType: payment.billingType as 'BOLETO' | 'PIX' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'TRANSFER',
+    paymentStatus: payment.status as any,
+    confirmedDate: payment.confirmedDate,
+    clientPaymentDate: payment.clientPaymentDate,
+    dueDate: payment.dueDate,
+    installmentNumber: payment.installmentNumber,
+    installmentCount: payment.installmentCount,
+    canBeCancelled: payment.canBeCancelled || false,
+    refunds: payment.refunds
   };
 };
 

@@ -197,7 +197,7 @@ const DynamicField: React.FC<{
         
       case 'select':
         return (
-          <Select value={value || undefined} onValueChange={onChange}>
+          <Select value={value || ""} onValueChange={onChange}>
             <SelectTrigger>
               <SelectValue placeholder={field.placeholder} />
             </SelectTrigger>

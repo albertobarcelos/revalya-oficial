@@ -44,9 +44,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw } from "lucide-react";
+import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
+import { ImportModal } from "@/components/clients/ImportModal";
+import { ImportPreview } from "@/components/clients/ImportPreview";
 import { useToast } from "@/components/ui/use-toast";
 import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
 import type { Customer } from "@/types/database";
@@ -65,6 +67,13 @@ export default function Clients() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  
+  // Estados para importação
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [importType, setImportType] = useState<'asaas' | 'csv' | null>(null);
+  
   const { toast } = useToast();
 
   // TODOS OS HOOKS DEVEM VIR ANTES DE QUALQUER RETURN CONDICIONAL
@@ -264,15 +273,14 @@ export default function Clients() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => refetch(searchTerm, itemsPerPage, currentPage)}
-                    disabled={isLoading}
+                    onClick={() => setIsImportModalOpen(true)}
                   >
-                    <RotateCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline ml-2">Atualizar</span>
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">Importar</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Atualizar lista de clientes</p>
+                  <p>Importar clientes do Asaas ou planilha</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -508,6 +516,62 @@ export default function Clients() {
               setEditingCustomer(null);
               refetch(searchTerm, itemsPerPage, currentPage);
             }}
+          />
+        )}
+
+        {/* Modal de Importação */}
+        <ImportModal
+          open={isImportModalOpen}
+          onOpenChange={setIsImportModalOpen}
+          onImportData={(data, type) => {
+            setImportPreviewData(data);
+            setImportType(type);
+            setShowImportPreview(true);
+            setIsImportModalOpen(false);
+          }}
+        />
+
+        {/* Pré-visualização de Importação */}
+        {showImportPreview && (
+          <ImportPreview
+            open={showImportPreview}
+            onOpenChange={setShowImportPreview}
+            data={importPreviewData}
+            importType={importType}
+            onConfirm={async (selectedData) => {
+              try {
+                // AIDEV-NOTE: Implementação da lógica de inserção no banco usando clientsService
+                const { clientsService } = await import('@/services/clientsService');
+                const results = await clientsService.importClients(selectedData);
+                
+                if (results.errors.length > 0) {
+                  toast({
+                    title: "Importação parcialmente concluída",
+                    description: `${results.success.length} clientes importados com sucesso. ${results.errors.length} falharam.`,
+                    variant: "destructive",
+                  });
+                } else {
+                  toast({
+                    title: "Importação realizada com sucesso!",
+                    description: `${results.success.length} clientes foram importados.`,
+                  });
+                }
+                
+                setShowImportPreview(false);
+                setImportPreviewData([]);
+                setImportType(null);
+                
+                // Atualizar a lista de clientes
+                refetch(searchTerm, itemsPerPage, currentPage);
+              } catch (error) {
+                console.error('Erro na importação:', error);
+                toast({
+                  title: "Erro na importação",
+                  description: "Ocorreu um erro ao importar os clientes.",
+                  variant: "destructive",
+                });
+               }
+             }}
           />
         )}
       </div>

@@ -853,7 +853,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                 {/* Método de Pagamento */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Método de Pagamento</Label>
-                  <Select value={financialData.payment_method || undefined} onValueChange={(value) => setFinancialData(prev => ({ ...prev, payment_method: value }))}>
+                  <Select value={financialData.payment_method || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, payment_method: value }))}>
                        <SelectTrigger>
                          <SelectValue placeholder="Selecione o método" />
                        </SelectTrigger>
@@ -870,7 +870,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                 {financialData.payment_method === 'Cartão' && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Tipo de Cartão</Label>
-                    <Select value={financialData.card_type || undefined} onValueChange={(value) => setFinancialData(prev => ({ ...prev, card_type: value }))}>
+                    <Select value={financialData.card_type || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, card_type: value }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
@@ -886,7 +886,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                 {financialData.payment_method && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Tipo de Faturamento</Label>
-                    <Select value={financialData.billing_type || undefined} onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}>
+                    <Select value={financialData.billing_type || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
@@ -905,7 +905,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                 {financialData.payment_method && (financialData.billing_type === "Mensal" || financialData.billing_type === "Trimestral" || financialData.billing_type === "Semestral" || financialData.billing_type === "Anual") && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Frequência de Cobrança</Label>
-                    <Select value={financialData.recurrence_frequency || undefined} onValueChange={(value) => setFinancialData(prev => ({ ...prev, recurrence_frequency: value }))}>
+                    <Select value={financialData.recurrence_frequency || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, recurrence_frequency: value }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione a frequência" />
                       </SelectTrigger>

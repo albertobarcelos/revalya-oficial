@@ -5,7 +5,7 @@
  */
 
 import { NextApiRequest } from 'next';
-import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/supabase';
 

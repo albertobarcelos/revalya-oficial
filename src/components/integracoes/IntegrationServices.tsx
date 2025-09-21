@@ -101,11 +101,11 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
         <div className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer">
           <Badge className="absolute top-3 right-3 bg-amber-500">Em breve</Badge>
           
-          <div className="rounded-full bg-blue-100 p-3 mb-4">
+          <div className="w-16 h-16 mb-4">
             <img 
-              src="https://www.asaas.com/wp-content/uploads/2023/12/logo-asaas-colorido.svg" 
+              src="/logos/Integrações/asaas.png" 
               alt="AsaaS" 
-              className="w-6 h-6 object-contain"
+              className="w-full h-full object-cover rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://placehold.co/64x64/blue/white?text=A';
@@ -140,11 +140,11 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
         <div className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer">
           <Badge className="absolute top-3 right-3 bg-amber-500">Em breve</Badge>
           
-          <div className="rounded-full bg-purple-100 p-3 mb-4">
+          <div className="w-16 h-16 mb-4">
             <img 
-              src="https://cora.com.br/wp-content/uploads/2021/12/LogoCora.png" 
+              src="/logos/Integrações/cora.png" 
               alt="Cora" 
-              className="w-6 h-6 object-contain"
+              className="w-full h-full object-cover rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://placehold.co/64x64/purple/white?text=C';
@@ -255,4 +255,4 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
       </div>
     </div>
   );
-} 
+}

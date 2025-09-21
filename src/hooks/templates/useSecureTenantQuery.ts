@@ -32,11 +32,12 @@ export function useSecureTenantQuery<T>(
   // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido
   const isValidTenant = currentTenant?.id && currentTenant?.active;
   
-  // 🔍 DEBUG: Log do estado do tenant (com throttling)
-  throttledDebug('useSecureTenantQuery', `useSecureTenantQuery - Tenant: ${currentTenant?.name}`, {
-    currentTenant,
+  // 🔍 DEBUG: Log do estado do tenant (com throttling otimizado)
+  throttledDebug('useSecureTenantQuery_state', `useSecureTenantQuery - Tenant: ${currentTenant?.name}`, {
+    tenantId: currentTenant?.id,
+    tenantName: currentTenant?.name,
     isValidTenant,
-    queryKey,
+    queryKeyLength: queryKey.length,
     enabled: isValidTenant && (options?.enabled !== false)
   });
   

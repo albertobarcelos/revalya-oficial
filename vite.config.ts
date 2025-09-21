@@ -70,23 +70,8 @@ export default defineConfig(({ command, mode }) => {
         protocol: 'ws',
         host: 'localhost',
       },
-      // Proxy configuration for API calls
-      proxy: {
-        '/api': {
-          target: env.VITE_API_URL || 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path.replace(/^\/api/, ''),
-        },
-        // REMOVIDO: Proxy do Supabase que estava causando conflito
-        // O cliente Supabase deve fazer requisições diretas para a URL oficial
-        // '/supabase': {
-        //   target: env.VITE_SUPABASE_URL || 'https://your-project.supabase.co',
-        //   changeOrigin: true,
-        //   secure: true,
-        //   rewrite: (path) => path.replace(/^/supabase/, ''),
-        // },
-      },
+      // AIDEV-NOTE: Proxy removido - usando apenas Supabase
+      // Não precisamos mais de proxy para /api pois tudo está no Supabase
     },
 
     // Preview server configuration (for production builds)
