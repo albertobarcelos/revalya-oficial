@@ -138,8 +138,9 @@ export class SecurityMiddleware {
         return true;
       }
       
-      // Definir contexto no banco via RPC
-      const { error } = await this.supabase.rpc('set_tenant_context', {
+      // Definir contexto no banco via RPC usando a função segura
+      // AIDEV-NOTE: Usando set_tenant_context_simple que é a versão mantida após limpeza das funções RPC
+      const { error } = await this.supabase.rpc('set_tenant_context_simple', {
         p_tenant_id: actualTenantId,
         p_user_id: userId || null
       });
