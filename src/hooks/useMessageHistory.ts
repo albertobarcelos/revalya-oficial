@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+/**
+ * 🔐 Hook Seguro para Histórico de Mensagens
+ * 
+ * Este hook implementa todas as 5 camadas de segurança multi-tenant:
+ * - Validação de acesso via useTenantAccessGuard
+ * - Consultas seguras via useSecureTenantQuery
+ * - Query keys padronizadas com tenant_id
+ * - Validação dupla de dados
+ * - Logs de auditoria obrigatórios
+ */
+
 import { useToast } from '@/components/ui/use-toast';
-import { useZustandTenant } from './useZustandTenant';
+import { useTenantAccessGuard, useSecureTenantQuery } from './templates/useSecureTenantQuery';
 
 export interface MessageHistory {
   id: string;
@@ -9,27 +18,38 @@ export interface MessageHistory {
   template_name: string;
   status: 'delivered' | 'read' | 'sent';
   message: string;
+  tenant_id: string; // 🛡️ OBRIGATÓRIO para segurança multi-tenant
 }
 
 export function useMessageHistory(chargeId: string | null) {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [messageHistory, setMessageHistory] = useState<MessageHistory[]>([]);
+  
+  // 🛡️ GUARD DE ACESSO OBRIGATÓRIO
+  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
 
-  useEffect(() => {
-    if (chargeId) {
-      fetchMessageHistory();
-    } else {
-      setMessageHistory([]);
-    }
-  }, [chargeId]);
+  // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT
+  const {
+    data: messageHistory,
+    isLoading,
+    error,
+    refetch: refreshMessageHistory
+  } = useSecureTenantQuery(
+    // 🔑 QUERY KEY PADRONIZADA COM TENANT_ID
+    ['message-history', chargeId],
+    async (supabase, tenantId) => {
+      // AIDEV-NOTE: Validação crítica - chargeId deve existir
+      if (!chargeId) {
+        console.log('🔍 [DEBUG] useMessageHistory - ChargeId não fornecido, retornando array vazio');
+        return [];
+      }
 
-  const fetchMessageHistory = async () => {
-    if (!chargeId) return;
-    
-    setIsLoading(true);
-    try {
-      // Verifica se a tabela message_history existe
+      console.log('🔍 [DEBUG] useMessageHistory - Iniciando busca segura:', { 
+        chargeId, 
+        tenantId,
+        currentTenant: currentTenant?.name 
+      });
+
+      // 🛡️ VERIFICAÇÃO DE EXISTÊNCIA DA TABELA
       const { data: tables, error: tableError } = await supabase
         .from('information_schema.tables')
         .select('table_name')
@@ -37,62 +57,60 @@ export function useMessageHistory(chargeId: string | null) {
         .eq('table_name', 'message_history');
       
       if (tableError || !tables || tables.length === 0) {
-        console.log('Tabela message_history não existe. Usando dados vazios.');
-        setMessageHistory([]);
-        return;
+        console.log('🔍 [DEBUG] Tabela message_history não existe. Retornando array vazio.');
+        return [];
       }
 
-      // Verifica se a coluna sent_at existe na tabela
-      const { data: columns, error: columnError } = await supabase
-        .from('information_schema.columns')
-        .select('column_name')
-        .eq('table_schema', 'public')
-        .eq('table_name', 'message_history')
-        .eq('column_name', 'sent_at');
-      
-      const hasSentAtColumn = columns && columns.length > 0;
-      
-      // Ajusta a consulta baseado nas colunas disponíveis
-      let selectFields = 'id, template_name, status, message';
-      let orderField = 'id';
-      
-      if (hasSentAtColumn) {
-        selectFields = 'id, sent_at, template_name, status, message';
-        orderField = 'sent_at';
-      }
-
+      // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
       const { data, error } = await supabase
         .from('message_history')
-        .select(selectFields)
+        .select('id, sent_at, template_name, status, message, tenant_id')
+        .eq('tenant_id', tenantId) // 🛡️ FILTRO CRÍTICO
         .eq('charge_id', chargeId)
-        .order(orderField, { ascending: false });
+        .order('sent_at', { ascending: false });
 
-      if (error) throw error;
-      
-      // Se não tem a coluna sent_at, adiciona um valor padrão
-      const processedData = data?.map(item => ({
-        ...item,
-        sent_at: item.sent_at || new Date().toISOString()
-      })) || [];
-      
-      setMessageHistory(processedData);
-    } catch (error) {
-      console.error("Erro ao carregar histórico de mensagens:", error);
-      // Retorna array vazio em caso de erro para não quebrar a interface
-      setMessageHistory([]);
-      toast({
-        title: "Erro ao carregar histórico",
-        description: "Não foi possível carregar o histórico de mensagens.",
-        variant: "destructive"
+      if (error) {
+        console.error('🚨 [ERROR] useMessageHistory - Erro na consulta:', error);
+        throw error;
+      }
+
+      // 🛡️ VALIDAÇÃO DUPLA DE SEGURANÇA (CAMADA 3)
+      if (data) {
+        const invalidData = data.filter(item => item.tenant_id !== tenantId);
+        if (invalidData.length > 0) {
+          console.error('🚨 [CRITICAL] Violação de segurança detectada! Mensagens de outros tenants:', invalidData);
+          throw new Error('❌ ERRO CRÍTICO: Violação de isolamento de dados detectada!');
+        }
+        console.log(`✅ [SECURITY] ${data.length} mensagens validadas para tenant ${tenantId}`);
+      }
+
+      // 🔍 LOGS DE AUDITORIA
+      console.log('✅ [DEBUG] useMessageHistory - Dados carregados com sucesso:', {
+        count: data?.length || 0,
+        tenantId,
+        chargeId
       });
-    } finally {
-      setIsLoading(false);
+
+      return data || [];
+    },
+    {
+      enabled: !!currentTenant?.id && !!chargeId, // 🔒 SÓ EXECUTA SE TENANT E CHARGE VÁLIDOS
+      onError: (error) => {
+        console.error('🚨 [ERROR] useMessageHistory - Erro no hook:', error);
+        toast({
+          title: "Erro ao carregar histórico",
+          description: "Não foi possível carregar o histórico de mensagens.",
+          variant: "destructive"
+        });
+      }
     }
-  };
+  );
 
   return {
-    messageHistory,
+    messageHistory: messageHistory || [],
     isLoading,
-    refreshMessageHistory: fetchMessageHistory
+    refreshMessageHistory,
+    hasAccess,
+    accessError
   };
 }

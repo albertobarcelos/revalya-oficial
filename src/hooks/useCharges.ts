@@ -240,7 +240,7 @@ export function useCharges(params: UseChargesParams = {}) {
         })
         .eq('id', chargeId)
         .eq('tenant_id', tenantId) // FILTRO DUPLO
-        .select()
+        .select('*')
         .single()
 
       if (error) throw error
@@ -291,7 +291,7 @@ export function useCharges(params: UseChargesParams = {}) {
         })
         .eq('id', chargeId)
         .eq('tenant_id', tenantId) // FILTRO DUPLO
-        .select()
+        .select('*')
         .single()
 
       if (error) throw error
@@ -341,7 +341,7 @@ export function useCharges(params: UseChargesParams = {}) {
         })
         .eq('id', id)
         .eq('tenant_id', tenantId) // FILTRO DUPLO
-        .select()
+        .select('*')
         .single()
 
       if (error) throw error
@@ -362,7 +362,13 @@ export function useCharges(params: UseChargesParams = {}) {
           description: "Cobrança atualizada com sucesso!",
         })
       },
-      invalidateQueries: ['charges']
+      // AIDEV-NOTE: Invalidar TODAS as queries relacionadas à cobrança para garantir atualização completa
+      invalidateQueries: [
+        'charges',           // Lista de cobranças
+        'charge-details',    // Detalhes específicos da cobrança
+        'payment-history',   // Histórico de pagamentos
+        'message-history'    // Histórico de mensagens
+      ]
     }
   )
 
