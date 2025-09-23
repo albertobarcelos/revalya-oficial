@@ -324,7 +324,7 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
               
               const paidCharges = charges.filter(charge => {
                 const status = charge.status?.toLowerCase() || '';
-                return ['received', 'received_in_cash', 'confirmed'].includes(status);
+                return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
               });
               
               const receivedPercentage = charges.length > 0 

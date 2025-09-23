@@ -14,6 +14,7 @@ import { ChargeCustomerInfo } from './ChargeCustomerInfo';
 import { ChargePaymentDetails } from './ChargePaymentDetails';
 import { ChargeMessageHistory } from './ChargeMessageHistory';
 import { ChargePaymentHistory } from './ChargePaymentHistory';
+import { ChargeItemsList } from './ChargeItemsList';
 
 interface ChargeDetailsProps {
   charge: {
@@ -142,6 +143,8 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
       />
 
       <ChargePaymentDetails chargeDetails={chargeDetails} />
+
+      <ChargeItemsList description={chargeDetails?.descricao || ''} />
 
       <Tabs defaultValue="messages">
         <TabsList className="grid grid-cols-2 mb-4">

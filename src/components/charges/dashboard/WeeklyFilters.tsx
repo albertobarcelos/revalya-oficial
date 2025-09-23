@@ -44,11 +44,11 @@ export function WeeklyFilters({
         
         switch (statusFilter) {
           case 'pago':
-            return ['received', 'received_in_cash', 'confirmed'].includes(status);
+            return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
           case 'pendente':
-            return !['received', 'received_in_cash', 'confirmed'].includes(status) && !status.includes('overdue');
+            return !['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status) && !status.includes('overdue') && status !== 'late';
           case 'atrasado':
-            return status.includes('overdue') || status.includes('atraso');
+            return status.includes('overdue') || status.includes('atraso') || status === 'late';
           default:
             return true;
         }
