@@ -32,6 +32,15 @@ export interface Charge {
   contracts?: {
     id: string
     contract_number: string
+    services?: {
+      id: string
+      description?: string
+      service?: {
+        id: string
+        name: string
+        description?: string
+      }
+    }[]
   }
 }
 
@@ -105,7 +114,16 @@ export function useCharges(params: UseChargesParams = {}) {
           ),
           contracts(
             id,
-            contract_number
+            contract_number,
+            services:contract_services(
+              id,
+              description,
+              service:services(
+                id,
+                name,
+                description
+              )
+            )
           )
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO

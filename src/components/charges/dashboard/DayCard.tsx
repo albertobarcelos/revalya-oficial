@@ -42,24 +42,24 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
     return 'bg-red-500';
   };
 
-  // AIDEV-NOTE: Função para verificar se há cobranças pagas
+  // AIDEV-NOTE: Função para verificar se há cobranças pagas - corrigida para incluir todos os status de pagamento
   const hasPaidCharges = (charges: Cobranca[]) => {
     return charges.some(charge => {
       const status = charge.status?.toLowerCase() || '';
-      return ['received', 'received_in_cash', 'confirmed'].includes(status);
+      return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
     });
   };
 
-  // AIDEV-NOTE: Função para gerar badge de status
+  // AIDEV-NOTE: Função para gerar badge de status - corrigida para incluir todos os status de pagamento
   const getStatusBadge = (charges: Cobranca[]) => {
     const paidCount = charges.filter(charge => {
       const status = charge.status?.toLowerCase() || '';
-      return ['received', 'received_in_cash', 'confirmed'].includes(status);
+      return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
     }).length;
     
     const overdueCount = charges.filter(charge => {
       const status = charge.status?.toLowerCase() || '';
-      return status.includes('overdue') || status.includes('atraso');
+      return status.includes('overdue') || status.includes('atraso') || status === 'late';
     }).length;
 
     if (paidCount === charges.length && charges.length > 0) {

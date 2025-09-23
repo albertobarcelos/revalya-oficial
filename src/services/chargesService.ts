@@ -46,7 +46,16 @@ export const chargesService = {
             id,
             contract_number,
             customer_id,
-            status
+            status,
+            services:contract_services(
+              id,
+              description,
+              service:services(
+                id,
+                name,
+                description
+              )
+            )
           ),
           tipo
         `, { count: 'exact' });
@@ -185,7 +194,16 @@ export const chargesService = {
           id,
           contract_number,
           customer_id,
-          status
+          status,
+          services:contract_services(
+            id,
+            description,
+            service:services(
+              id,
+              name,
+              description
+            )
+          )
         )
       `)
       .eq('id', id)

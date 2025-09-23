@@ -66,15 +66,16 @@ export function DayDetailsDialog({
   const hasPaidCharges = (charges: Cobranca[]) => {
     return charges.some(charge => {
       const status = charge.status?.toLowerCase() || '';
-      return ['received', 'received_in_cash', 'confirmed'].includes(status);
+      return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
     });
   };
 
-  // AIDEV-NOTE: Função para gerar badge de status
+  // AIDEV-NOTE: Função para gerar badge de status - corrigida para incluir todos os status de pagamento
   const getStatusBadge = (status: string) => {
     const normalizedStatus = status?.toLowerCase() || '';
     
-    if (['received', 'received_in_cash', 'confirmed'].includes(normalizedStatus)) {
+    // Status de pagamento confirmado/recebido
+    if (['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(normalizedStatus)) {
       return (
         <Badge className="bg-green-50 text-green-700 border-green-100 text-xs font-medium px-2 py-0.5">
           Pago
@@ -82,7 +83,8 @@ export function DayDetailsDialog({
       );
     }
     
-    if (normalizedStatus.includes('overdue') || normalizedStatus.includes('atraso')) {
+    // Status de atraso
+    if (normalizedStatus.includes('overdue') || normalizedStatus.includes('atraso') || normalizedStatus === 'late') {
       return (
         <Badge className="bg-red-50 text-red-700 border-red-100 text-xs font-medium px-2 py-0.5">
           Atrasado
@@ -90,6 +92,7 @@ export function DayDetailsDialog({
       );
     }
     
+    // Status pendente (padrão)
     return (
       <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-xs font-medium px-2 py-0.5">
         Pendente
@@ -121,12 +124,23 @@ export function DayDetailsDialog({
   const paidValue = charges
     .filter(charge => {
       const status = charge.status?.toLowerCase() || '';
-      return ['received', 'received_in_cash', 'confirmed'].includes(status);
+      return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
     })
     .reduce((sum, charge) => sum + (charge.valor || 0), 0);
   
   const uniqueClients = new Set(charges.map(charge => charge.customer_id)).size;
   const receivedPercentage = totalValue > 0 ? (paidValue / totalValue) * 100 : 0;
+
+  // AIDEV-NOTE: Calculando contagens reais das cobranças por status - corrigido para incluir todos os status de pagamento
+  const allChargesCount = charges.length;
+  const pendingChargesCount = charges.filter(charge => {
+    const status = charge.status?.toLowerCase() || '';
+    return !['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
+  }).length;
+  const receivedChargesCount = charges.filter(charge => {
+    const status = charge.status?.toLowerCase() || '';
+    return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
+  }).length;
   
   const selectedDayCharges = charges.filter(charge => 
     selectedCharges.includes(charge.id)
@@ -192,9 +206,9 @@ export function DayDetailsDialog({
           {/* Abas de status */}
           <div className="border-b">
             <div className="flex space-x-4 -mb-px">
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 border-blue-500">Todas (5)</Button>
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Pendentes (5)</Button>
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Recebidas (0)</Button>
+              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 border-blue-500">Todas ({allChargesCount})</Button>
+              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Pendentes ({pendingChargesCount})</Button>
+              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Recebidas ({receivedChargesCount})</Button>
             </div>
           </div>
 
@@ -221,7 +235,11 @@ export function DayDetailsDialog({
                             {charge.customers?.name || 'Cliente não informado'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {charge.contract?.name || 'LICENÇA PDV LEGAL'}
+                            {/* AIDEV-NOTE: Exibindo o nome correto do serviço/produto da cobrança */}
+                            {charge.contract?.services?.[0]?.service?.name || 
+                             charge.contract?.services?.[0]?.description ||
+                             charge.descricao || 
+                             'Serviço não especificado'}
                           </p>
                         </div>
                         <p className="font-bold text-base">

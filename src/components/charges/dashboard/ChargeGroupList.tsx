@@ -262,7 +262,13 @@ export function ChargeGroupList({
                       {charge.tipo === 'BOLETO' && (
                         <span className="flex items-center space-x-1">
                           <FileText className="h-3 w-3" />
-                          <span>Licença PDV Legal</span>
+                          {/* AIDEV-NOTE: Exibindo o nome correto do serviço/produto da cobrança */}
+                          <span>
+                            {charge.contract?.services?.[0]?.service?.name || 
+                             charge.contract?.services?.[0]?.description ||
+                             charge.descricao || 
+                             'Serviço não especificado'}
+                          </span>
                         </span>
                       )}
                     </div>
