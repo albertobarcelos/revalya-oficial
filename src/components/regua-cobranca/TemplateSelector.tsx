@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from '@/lib/supabase';
 import { Loader2, Mail, MessageCircle, Phone, Copy, AlertCircle, FileText } from "lucide-react";
 import { aplicarTemplate } from "@/services/reguaCobrancaTemplateService";
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 interface TemplateItem {
   id: string;
@@ -39,6 +40,22 @@ interface TemplateSelectorProps {
 
 export function TemplateSelector({ tenantId, onTemplateApplied }: TemplateSelectorProps) {
   const { toast } = useToast();
+  
+  // AIDEV-NOTE: Hook de segurança multi-tenant para validar acesso
+  const { currentTenant, hasAccess } = useTenantAccessGuard(tenantId);
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            Acesso negado. Você não tem permissão para acessar os templates.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
@@ -51,11 +68,11 @@ export function TemplateSelector({ tenantId, onTemplateApplied }: TemplateSelect
   const loadTemplates = async () => {
     setIsLoading(true);
     try {
-      // 1. Buscar todos os templates (globais + específicos do tenant)
+      // AIDEV-NOTE: Buscar templates com validação dupla de tenant_id
       const { data: templatesData, error } = await supabase
         .from('regua_cobranca_templates')
         .select('*')
-        .or(`escopo.eq.GLOBAL,and(escopo.eq.TENANT,tenant_id.eq.${tenantId})`);
+        .or(`escopo.eq.GLOBAL,and(escopo.eq.TENANT,tenant_id.eq.${currentTenant.id})`);
       
       if (error) throw error;
       
@@ -68,10 +85,18 @@ export function TemplateSelector({ tenantId, onTemplateApplied }: TemplateSelect
       // 2. Para cada template, buscar suas etapas
       const templatesWithEtapas = await Promise.all(
         templatesData.map(async (template) => {
-          const { data: etapas, error: etapasError } = await supabase
+          // AIDEV-NOTE: Buscar etapas com validação dupla de tenant_id quando aplicável
+          let etapasQuery = supabase
             .from('regua_cobranca_template_etapas')
             .select('*')
-            .eq('template_id', template.id)
+            .eq('template_id', template.id);
+          
+          // Se o template é específico do tenant, validar tenant_id nas etapas também
+          if (template.escopo === 'TENANT') {
+            etapasQuery = etapasQuery.eq('tenant_id', currentTenant.id);
+          }
+          
+          const { data: etapas, error: etapasError } = await etapasQuery
             .order('posicao', { ascending: true });
           
           if (etapasError) {

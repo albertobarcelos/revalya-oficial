@@ -95,6 +95,15 @@ class GatewayService {
    * Cria uma cobrança usando o gateway especificado
    */
   async createCharge(provider: string, request: ChargeRequest): Promise<ChargeResponse> {
+    // AIDEV-NOTE: Validação de credenciais antes de criar cobrança
+    // Verifica se o gateway está configurado e tem credenciais válidas
+    const gateway = await this.getGatewayConfig(provider);
+    const validation = this.validateGatewayConfig(gateway);
+    
+    if (!validation.isValid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    }
+
     switch (provider.toLowerCase()) {
       case 'asaas':
         return await this.createAsaasCharge(request);
@@ -113,6 +122,14 @@ class GatewayService {
    * Processa webhook de pagamento
    */
   async processWebhook(provider: string, payload: any): Promise<WebhookData> {
+    // AIDEV-NOTE: Validação de credenciais antes de processar webhook
+    const gateway = await this.getGatewayConfig(provider);
+    const validation = this.validateGatewayConfig(gateway);
+    
+    if (!validation.isValid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    }
+
     switch (provider.toLowerCase()) {
       case 'asaas':
         return await this.processAsaasWebhook(payload);
@@ -131,6 +148,14 @@ class GatewayService {
    * Busca status de uma cobrança
    */
   async getChargeStatus(provider: string, external_id: string): Promise<ChargeResponse> {
+    // AIDEV-NOTE: Validação de credenciais antes de consultar status
+    const gateway = await this.getGatewayConfig(provider);
+    const validation = this.validateGatewayConfig(gateway);
+    
+    if (!validation.isValid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    }
+
     switch (provider.toLowerCase()) {
       case 'asaas':
         return await this.getAsaasChargeStatus(external_id);
@@ -506,18 +531,46 @@ class GatewayService {
 
   // ========== UTILITÁRIOS ==========
   private async getGatewayConfig(provider: string): Promise<PaymentGateway> {
-    const { data, error } = await supabase
-      .from('payment_gateways')
+    // AIDEV-NOTE: Buscar credenciais específicas do tenant na nova tabela tenant_integrations
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    // Buscar tenant_id do usuário
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('tenant_id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile?.tenant_id) {
+      throw new Error('Tenant não encontrado para o usuário');
+    }
+
+    // Buscar credenciais do tenant para o provider específico
+    const { data: integration, error } = await supabase
+      .from('tenant_integrations')
       .select('*')
-      .eq('provider', provider)
+      .eq('tenant_id', profile.tenant_id)
+      .eq('integration_type', provider.toLowerCase())
       .eq('is_active', true)
       .single();
 
-    if (error || !data) {
-      throw new Error(`Gateway ${provider} não encontrado ou inativo`);
+    if (error || !integration) {
+      throw new Error(`Integração ${provider} não configurada ou inativa para este tenant. Configure as credenciais em Configurações > Integrações.`);
     }
 
-    return data;
+    // Retornar no formato esperado pelo PaymentGateway
+    return {
+      id: integration.id,
+      provider: integration.integration_type,
+      api_key: integration.api_key,
+      api_url: integration.api_url,
+      is_active: integration.is_active,
+      created_at: integration.created_at,
+      updated_at: integration.updated_at
+    } as PaymentGateway;
   }
 
   /**

@@ -26,24 +26,111 @@ import {
   Upload,
   Users,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { asaasService } from '@/services/asaas';
+import { useToast } from '@/components/ui/use-toast';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 
 interface ImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImportAsaas: () => void;
-  onImportCSV: (file: File) => void;
+  onImportData: (data: any[], type: 'asaas' | 'csv') => void;
 }
 
 export function ImportModal({ 
   open, 
   onOpenChange, 
-  onImportAsaas, 
-  onImportCSV 
+  onImportData 
 }: ImportModalProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [isLoadingAsaas, setIsLoadingAsaas] = useState(false);
+  const { toast } = useToast();
+  
+  // Obter tenant atual para passar para o asaasService
+  const { currentTenant } = useTenantAccessGuard();
+
+  // AIDEV-NOTE: Handler para buscar clientes do Asaas
+  const handleAsaasImport = async () => {
+    try {
+      setIsLoadingAsaas(true);
+      
+      // Verificar se temos um tenant válido
+      if (!currentTenant?.id) {
+        toast({
+          title: "Erro de autenticação",
+          description: "Não foi possível identificar o tenant atual. Faça login novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('Buscando clientes do ASAAS para tenant:', currentTenant.id);
+      const customers = await asaasService.getAllCustomersWithPagination(currentTenant.id, 20);
+      
+      if (customers.length === 0) {
+        toast({
+          title: "Nenhum cliente encontrado",
+          description: "Não foram encontrados clientes no Asaas para importar.",
+          variant: "default",
+        });
+        return;
+      }
+
+      // Transformar dados do Asaas para o formato esperado
+      const formattedData = customers.map(customer => ({
+        name: customer.name || '',
+        email: customer.email || '',
+        phone: customer.phone || customer.mobilePhone || '',
+        cpfCnpj: customer.cpfCnpj || '',
+        address: customer.address || '',
+        addressNumber: customer.addressNumber || '',
+        complement: customer.complement || '',
+        province: customer.province || '',
+        city: customer.city || '',
+        state: customer.state || '',
+        postalCode: customer.postalCode || '',
+        externalReference: customer.externalReference || '',
+        observations: customer.observations || '',
+        additionalEmails: customer.additionalEmails || '',
+        municipalInscription: customer.municipalInscription || '',
+        stateInscription: customer.stateInscription || '',
+        groupName: customer.groupName || '',
+        company: customer.company || '',
+        personType: customer.personType || 'FISICA'
+      }));
+
+      onImportData(formattedData, 'asaas');
+      
+      toast({
+        title: "Clientes carregados com sucesso!",
+        description: `${customers.length} clientes foram carregados do Asaas.`,
+      });
+    } catch (error) {
+      console.error('Erro ao buscar clientes do Asaas:', error);
+      
+      // AIDEV-NOTE: Verificar se é erro de credenciais não configuradas
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      
+      if (errorMessage.includes('não configurada') || errorMessage.includes('inativa')) {
+        toast({
+          title: "Integração não configurada",
+          description: "Configure as credenciais do Asaas em Configurações > Integrações antes de importar clientes.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao buscar clientes",
+          description: "Ocorreu um erro ao conectar com o Asaas. Verifique sua conexão e tente novamente.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsLoadingAsaas(false);
+    }
+  };
 
   // AIDEV-NOTE: Handlers para drag and drop de arquivos CSV
   const handleDrag = (e: React.DragEvent) => {
@@ -64,14 +151,71 @@ export function ImportModal({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       if (file.type === 'text/csv' || file.name.endsWith('.csv') || file.name.endsWith('.xlsx')) {
-        onImportCSV(file);
+        handleFileUpload(file);
       }
     }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      onImportCSV(e.target.files[0]);
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  // AIDEV-NOTE: Handler para processar arquivo CSV/Excel
+  const handleFileUpload = async (file: File) => {
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast({
+          title: "Arquivo inválido",
+          description: "O arquivo deve conter pelo menos um cabeçalho e uma linha de dados.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Assumir que a primeira linha é o cabeçalho
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const data = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const row: any = {};
+        
+        headers.forEach((header, index) => {
+          row[header.toLowerCase()] = values[index] || '';
+        });
+        
+        return {
+          name: row.nome || row.name || '',
+          email: row.email || '',
+          phone: row.telefone || row.phone || '',
+          cpfCnpj: row.cpfcnpj || row.cpf || row.cnpj || '',
+          address: row.endereco || row.address || '',
+          addressNumber: row.numero || row.number || '',
+          complement: row.complemento || row.complement || '',
+          province: row.bairro || row.province || '',
+          city: row.cidade || row.city || '',
+          state: row.estado || row.state || '',
+          postalCode: row.cep || row.postalcode || '',
+          personType: row.tipo || row.persontype || 'FISICA'
+        };
+      });
+
+      onImportData(data, 'csv');
+      
+      toast({
+        title: "Arquivo processado com sucesso!",
+        description: `${data.length} registros foram carregados do arquivo.`,
+      });
+    } catch (error) {
+      console.error('Erro ao processar arquivo:', error);
+      toast({
+        title: "Erro ao processar arquivo",
+        description: "Ocorreu um erro ao ler o arquivo. Verifique se é um CSV válido.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -122,12 +266,22 @@ export function ImportModal({
                     <span>Dados atualizados em tempo real</span>
                   </div>
                   <Button 
-                    onClick={onImportAsaas}
+                    onClick={handleAsaasImport}
                     className="w-full"
                     size="lg"
+                    disabled={isLoadingAsaas}
                   >
-                    <Download className="h-4 w-4 mr-2" />
-                    Buscar Clientes do Asaas
+                    {isLoadingAsaas ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Buscando clientes...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Buscar Clientes do Asaas
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>

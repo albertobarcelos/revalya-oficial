@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSupabase } from '@/hooks/useSupabase';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard'; // AIDEV-NOTE: Hook obrigatório para segurança multi-tenant
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +22,9 @@ export function AgenteIAConfig({ tenantId, tenantSlug }: AgenteIAConfigProps) {
   const { supabase } = useSupabase();
   const { toast } = useToast();
   
+  // AIDEV-NOTE: Validação de acesso obrigatória para segurança multi-tenant
+  const { hasAccess, currentTenant } = useTenantAccessGuard(tenantId);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [agenteId, setAgenteId] = useState<string | null>(null);
@@ -29,6 +33,18 @@ export function AgenteIAConfig({ tenantId, tenantSlug }: AgenteIAConfigProps) {
   const [usaEmojis, setUsaEmojis] = useState(true);
   const [mensagens, setMensagens] = useState<string[]>(["", "", ""]);
   const [previewHtml, setPreviewHtml] = useState("");
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess || !currentTenant) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-destructive">Acesso Negado</h3>
+          <p className="text-sm text-muted-foreground">Você não tem permissão para acessar esta configuração.</p>
+        </div>
+      </div>
+    );
+  }
   
   // Carregar dados do agente ao iniciar
   useEffect(() => {

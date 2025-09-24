@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSupabase } from '@/hooks/useSupabase';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard'; // AIDEV-NOTE: Hook obrigatório para segurança multi-tenant
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,9 @@ export function AgenteIAReguaIntegracao({ tenantId, tenantSlug }: AgenteIAReguaI
   const { supabase } = useSupabase();
   const { toast } = useToast();
   
+  // AIDEV-NOTE: Validação de acesso obrigatória para segurança multi-tenant
+  const { hasAccess, currentTenant } = useTenantAccessGuard(tenantId);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [agenteIA, setAgenteIA] = useState<AgenteIA | null>(null);
@@ -32,6 +36,18 @@ export function AgenteIAReguaIntegracao({ tenantId, tenantSlug }: AgenteIAReguaI
   
   const [editandoMensagem, setEditandoMensagem] = useState<{etapa: EtapaReguaComAgente, mensagem: string, mensagemId?: string} | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess || !currentTenant) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-destructive">Acesso Negado</h3>
+          <p className="text-sm text-muted-foreground">Você não tem permissão para acessar esta configuração.</p>
+        </div>
+      </div>
+    );
+  }
   
   // Carregar dados iniciais
   useEffect(() => {
@@ -164,10 +180,12 @@ export function AgenteIAReguaIntegracao({ tenantId, tenantSlug }: AgenteIAReguaI
       );
       
       if (mensagem?.id) {
+        // AIDEV-NOTE: Delete com validação dupla de tenant_id para segurança
         const { error } = await supabase
           .from('agente_ia_mensagens_regua')
           .delete()
-          .eq('id', mensagem.id);
+          .eq('id', mensagem.id)
+          .eq('tenant_id', currentTenant.id); // Validação dupla obrigatória
           
         if (error) throw error;
         

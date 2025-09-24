@@ -7,6 +7,7 @@ import { AgenteIAReguaIntegracao } from "@/components/agente-ia/AgenteIAReguaInt
 import { FluxoCobrancaVisualizer } from "@/components/agente-ia/FluxoCobrancaVisualizer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, BarChart2, ArrowRightLeft, MessageCircle, Settings2, Eye } from "lucide-react";
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 interface CobrancaInteligenteProps {
   tenantId: string;
@@ -15,6 +16,22 @@ interface CobrancaInteligenteProps {
 
 export function CobrancaInteligente({ tenantId, tenantSlug }: CobrancaInteligenteProps) {
   const [activeTab, setActiveTab] = useState("visao-geral");
+  
+  // AIDEV-NOTE: Hook de segurança multi-tenant para validar acesso
+  const { currentTenant, hasAccess } = useTenantAccessGuard(tenantId);
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            Acesso negado. Você não tem permissão para acessar esta funcionalidade.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
