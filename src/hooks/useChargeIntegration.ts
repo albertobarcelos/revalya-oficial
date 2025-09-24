@@ -6,6 +6,7 @@ import type {
   CancellationResult
 } from '@/services/chargeIntegrationService';
 import { toast } from 'sonner';
+import { showGatewayError, showGatewaySuccess } from '@/utils/gatewayValidation';
 
 export interface UseChargeIntegrationReturn {
   // Estados de loading
@@ -83,17 +84,20 @@ export function useChargeIntegration(): UseChargeIntegrationReturn {
       setLastResult(result);
       
       if (result.success) {
-        toast.success('Cobrança criada com sucesso no gateway de pagamento');
+        showGatewaySuccess('Cobrança criada com sucesso no gateway de pagamento');
       } else {
         setError(result.error || 'Erro ao criar cobrança');
-        toast.error(result.error || 'Erro ao criar cobrança');
+        // AIDEV-NOTE: Usar utilitário para mostrar erro específico de gateway
+        if (result.error) {
+          showGatewayError(result.error);
+        }
       }
       
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMessage);
-      toast.error(errorMessage);
+      showGatewayError(errorMessage);
       
       return {
         success: false,

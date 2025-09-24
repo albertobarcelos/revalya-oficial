@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSupabase } from '@/hooks/useSupabase';
 import { useToast } from "@/components/ui/use-toast";
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 import AgenteIAService from "@/services/agenteIAService";
 import { AgenteIA, EtapaReguaComAgente } from "@/types/models/agente-ia";
@@ -19,6 +20,22 @@ interface Props {
 export function FluxoCobrancaVisualizer({ tenantId, tenantSlug }: Props) {
   const { supabase } = useSupabase();
   const { toast } = useToast();
+  
+  // AIDEV-NOTE: Hook de segurança multi-tenant para validar acesso
+  const { currentTenant, hasAccess } = useTenantAccessGuard(tenantId);
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            Acesso negado. Você não tem permissão para visualizar este fluxo.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   
   const [loading, setLoading] = useState(true);
   const [etapas, setEtapas] = useState<EtapaReguaComAgente[]>([]);

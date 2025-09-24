@@ -537,7 +537,12 @@ export default function Clients() {
             open={showImportPreview}
             onOpenChange={setShowImportPreview}
             data={importPreviewData}
-            importType={importType}
+            source={importType}
+            onCancel={() => {
+              setShowImportPreview(false);
+              setImportPreviewData([]);
+              setImportType(null);
+            }}
             onConfirm={async (selectedData) => {
               try {
                 // AIDEV-NOTE: Implementação da lógica de inserção no banco usando clientsService

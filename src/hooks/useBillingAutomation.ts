@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { billingAutomationService } from '@/services/billingAutomationService';
+import { showGatewayError, showGatewaySuccess } from '@/utils/gatewayValidation';
 import type {
   BillingGenerationResult,
   BillingProcessingOptions,
@@ -55,7 +56,7 @@ export function useBillingAutomation(): UseBillingAutomationReturn {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Gera faturamentos recorrentes
+   * Gera faturamentos recorrentes para contratos ativos
    */
   const generateRecurringBillings = useCallback(async (options: BillingProcessingOptions): Promise<BillingGenerationResult> => {
     setIsGenerating(true);
@@ -67,32 +68,31 @@ export function useBillingAutomation(): UseBillingAutomationReturn {
 
       if (result.success) {
         if (options.dry_run) {
-          toast.success(
-            `Simulação concluída: ${result.generated_count} faturamentos seriam gerados`,
-            { duration: 4000 }
+          showGatewaySuccess(
+            `Simulação concluída: ${result.generated_count} faturamentos seriam gerados`
           );
         } else {
-          toast.success(
-            `${result.generated_count} faturamentos gerados com sucesso!`,
-            { duration: 4000 }
+          showGatewaySuccess(
+            `${result.generated_count} faturamentos gerados com sucesso!`
           );
         }
 
         if (result.errors.length > 0) {
-          toast.error(
-            `${result.errors.length} contratos apresentaram erros`,
-            { duration: 6000 }
+          showGatewayError(
+            new Error(`${result.errors.length} contratos apresentaram erros`)
           );
         }
       } else {
-        toast.error('Erro na geração de faturamentos');
+        showGatewayError(new Error('Erro na geração de faturamentos'));
       }
 
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMessage);
-      toast.error(`Erro na geração: ${errorMessage}`);
+      
+      // AIDEV-NOTE: Usar showGatewayError para feedback consistente de erros de gateway
+      showGatewayError(err instanceof Error ? err : new Error(errorMessage));
       
       const errorResult: BillingGenerationResult = {
         success: false,

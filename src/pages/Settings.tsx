@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { whatsappService } from "@/services/whatsappService";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from '@/lib/supabase';
 import { UserManagement } from "@/components/users/UserManagement";
 import { CobrancaInteligente } from "@/components/cobranca-inteligente/CobrancaInteligente";
 import { ProductCategoriesManager } from "@/components/products/ProductCategoriesManager";
@@ -25,6 +24,8 @@ import {
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+// AIDEV-NOTE: Importando hooks de segurança multi-tenant obrigatórios
+import { useTenantAccessGuard, useSecureTenantQuery } from "@/hooks/templates/useSecureTenantQuery";
 
 const DEFAULT_EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolution.nexsyn.com.br/api';
 const DEFAULT_EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY;
@@ -36,13 +37,36 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState("usuarios");
   const [isSaving, setIsSaving] = useState(false);
   
+  // AIDEV-NOTE: Usando hook de segurança multi-tenant obrigatório
+  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+  
   // Estado para integrações
   const [asaasApiKey, setAsaasApiKey] = useState("");
   const [evolutionApiUrl, setEvolutionApiUrl] = useState("");
   const [evolutionApiKey, setEvolutionApiKey] = useState("");
-  
-  // Estado para o nome do tenant e outros dados contextuais
-  const [currentTenant, setCurrentTenant] = useState<{id: string; slug: string; name: string} | null>(null);
+
+  // AIDEV-NOTE: Query segura para buscar dados do tenant usando useSecureTenantQuery
+  const {
+    data: tenantData,
+    isLoading: isTenantLoading,
+    error: tenantError
+  } = useSecureTenantQuery(
+    ['tenant-settings'],
+    async (supabase, tenantId) => {
+      // Buscar dados do tenant pelo ID (já validado pelo hook)
+      const { data, error } = await supabase
+        .from('tenants')
+        .select('id, name, slug')
+        .eq('id', tenantId)
+        .single();
+        
+      if (error) throw error;
+      return data;
+    },
+    {
+      enabled: !!currentTenant?.id
+    }
+  );
 
   // AIDEV-NOTE: Função para carregar configurações específicas do tenant usando utilitário seguro
   const loadTenantSettings = (tenantId: string) => {
@@ -82,68 +106,20 @@ export default function Settings() {
     }
   };
 
-  // Carregar tenant atual ao inicializar a página
+  // AIDEV-NOTE: Carregar configurações quando o tenant for carregado com segurança
   useEffect(() => {
-    const loadCurrentTenant = async () => {
-      try {
-        let tenantSlug = '';
-        const path = window.location.pathname;
-        const urlMatches = path.match(/\/gestao\/([^/]+)/);
-        
-        if (urlMatches && urlMatches[1]) {
-          logService.info(MODULE_NAME, `Slug encontrado na URL: ${urlMatches[1]}`);
-          tenantSlug = urlMatches[1];
-        } else {
-          const tenantData = getStandardTenantData();
-          tenantSlug = tenantData.tenantSlug || 'nexsyn';
-        }
-        
-        logService.info(MODULE_NAME, `Usando tenant: ${tenantSlug}`);
-        
-        // Buscar o ID real do tenant pelo slug
-        const { data: tenantData, error: tenantError } = await supabase
-          .from('tenants')
-          .select('id, name')
-          .eq('slug', tenantSlug)
-          .single();
-          
-        if (tenantError || !tenantData) {
-          logService.error(MODULE_NAME, 'Erro ao buscar tenant por slug', { error: tenantError });
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar os dados do tenant.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Armazenar o ID real (UUID) do tenant usando chaves padronizadas
-        setStandardTenantData({
-          tenantId: tenantData.id,
-          tenantName: tenantData.name || 'Tenant',
-          tenantSlug: tenantSlug
-        });
-        
-        setCurrentTenant({
-          id: tenantData.id, // Usar o UUID real do tenant
-          slug: tenantSlug,
-          name: tenantData.name || 'Tenant'
-        });
-        
-        // AIDEV-NOTE: Carregar configurações específicas do tenant após definir o tenant atual
-        loadTenantSettings(tenantData.id);
-      } catch (error) {
-        logService.error(MODULE_NAME, 'Erro ao identificar tenant', { error });
-        toast({
-          title: "Erro",
-          description: "Não foi possível identificar o tenant atual.",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    loadCurrentTenant();
-  }, [toast]);
+    if (currentTenant?.id && tenantData) {
+      // Armazenar dados do tenant usando chaves padronizadas
+      setStandardTenantData({
+        tenantId: currentTenant.id,
+        tenantName: tenantData.name || 'Tenant',
+        tenantSlug: tenantData.slug || currentTenant.slug || 'default'
+      });
+      
+      // Carregar configurações específicas do tenant
+      loadTenantSettings(currentTenant.id);
+    }
+  }, [currentTenant?.id, tenantData]);
 
   const handleSaveSettings = async () => {
     try {
@@ -203,91 +179,85 @@ export default function Settings() {
           <h2 className="text-3xl font-bold tracking-tight">Configurações</h2>
         </div>
         
-        <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="overflow-auto">
-            <TabsList className="w-full justify-start">
-              <TabsTrigger value="usuarios" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Usuários
-              </TabsTrigger>
-              <TabsTrigger value="integracoes" className="flex items-center gap-2">
-                <Zap className="h-4 w-4" />
-                Integrações
-              </TabsTrigger>
-              <TabsTrigger value="categorias" className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Categorias
-              </TabsTrigger>
-              <TabsTrigger value="cobranca-inteligente" className="flex items-center gap-2">
-                <BrainCircuit className="h-4 w-4" />
-                Cobrança Inteligente
-              </TabsTrigger>
-            </TabsList>
-          </div>
-          
-          <div className="tab-content h-[calc(100vh-240px)] overflow-auto pr-2">
-            <TabsContent value="usuarios" className="space-y-4 mt-2 h-full">
-              {currentTenant ? (
+        {/* AIDEV-NOTE: Verificação de acesso obrigatória antes de renderizar conteúdo */}
+        {!hasAccess ? (
+          <Card>
+            <CardContent className="p-8">
+              <div className="flex items-center justify-center">
+                <p className="text-red-600">Acesso negado: {accessError}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : isTenantLoading ? (
+          <Card>
+            <CardContent className="p-8">
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                <p>Carregando informações do tenant...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <div className="overflow-auto">
+              <TabsList className="w-full justify-start">
+                <TabsTrigger value="usuarios" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Usuários
+                </TabsTrigger>
+                <TabsTrigger value="integracoes" className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Integrações
+                </TabsTrigger>
+                <TabsTrigger value="categorias" className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Categorias
+                </TabsTrigger>
+                <TabsTrigger value="cobranca-inteligente" className="flex items-center gap-2">
+                  <BrainCircuit className="h-4 w-4" />
+                  Cobrança Inteligente
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <div className="tab-content h-[calc(100vh-240px)] overflow-auto pr-2">
+              <TabsContent value="usuarios" className="space-y-4 mt-2 h-full">
                 <UserManagement tenantId={currentTenant.id} />
-              ) : (
-                <Card>
-                  <CardContent className="p-8">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin mr-2" />
-                      <p>Carregando informações do tenant...</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="integracoes" className="space-y-4 mt-2 overflow-y-auto">
-              {currentTenant && (
-                <>
-                  <CanalIntegration 
+              <TabsContent value="integracoes" className="space-y-4 mt-2 overflow-y-auto">
+                <CanalIntegration 
+                  tenantId={currentTenant.id}
+                  tenantSlug={tenantData?.slug || currentTenant.slug || 'default'}
+                  onToggle={(canal, enabled) => {
+                    logService.info(MODULE_NAME, `Canal ${canal} ${enabled ? 'ativado' : 'desativado'}`);
+                  }} 
+                />
+                
+                <div className="mt-8">
+                  <IntegrationServices
                     tenantId={currentTenant.id}
-                    tenantSlug={currentTenant.slug}
-                    onToggle={(canal, enabled) => {
-                      logService.info(MODULE_NAME, `Canal ${canal} ${enabled ? 'ativado' : 'desativado'}`);
-                    }} 
+                    tenantSlug={tenantData?.slug || currentTenant.slug || 'default'}
+                    onToggle={(service, enabled) => {
+                      logService.info(MODULE_NAME, `Serviço ${service} ${enabled ? 'ativado' : 'desativado'}`);
+                    }}
                   />
-                  
-                  <div className="mt-8">
-                    <IntegrationServices
-                      tenantId={currentTenant.id}
-                      tenantSlug={currentTenant.slug}
-                      onToggle={(service, enabled) => {
-                        logService.info(MODULE_NAME, `Serviço ${service} ${enabled ? 'ativado' : 'desativado'}`);
-                      }}
-                    />
-                  </div>
-                </>
-              )}
-            </TabsContent>
+                </div>
+              </TabsContent>
 
-            <TabsContent value="categorias" className="space-y-4 mt-2 overflow-y-auto">
-              <ProductCategoriesManager />
-            </TabsContent>
+              <TabsContent value="categorias" className="space-y-4 mt-2 overflow-y-auto">
+                <ProductCategoriesManager />
+              </TabsContent>
 
-            <TabsContent value="cobranca-inteligente" className="space-y-4 mt-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
-              {currentTenant ? (
+              <TabsContent value="cobranca-inteligente" className="space-y-4 mt-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
                 <CobrancaInteligente 
                   tenantId={currentTenant.id}
-                  tenantSlug={currentTenant.slug}
+                  tenantSlug={tenantData?.slug || currentTenant.slug || 'default'}
                 />
-              ) : (
-                <Card>
-                  <CardContent className="p-8">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 animate-spin mr-2" />
-                      <p>Carregando informações do tenant...</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          </div>
-        </Tabs>
+              </TabsContent>
+            </div>
+          </Tabs>
+        )}
       </div>
     </Layout>
   );

@@ -10,79 +10,73 @@ import { UserList } from "@/components/users/UserList";
 import { InviteUserDialog } from "@/components/users/InviteUserDialog";
 import { UserEmptyState } from "@/components/users/UserEmptyState";
 import { InviteEmptyState } from "@/components/users/InviteEmptyState";
-import { useSupabase } from '@/hooks/useSupabase';
+// AIDEV-NOTE: Substituindo useSupabase por hooks de segurança multi-tenant
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 
 interface UserManagementProps {
   tenantId: string;
 }
 
 export function UserManagement({ tenantId }: UserManagementProps) {
+  // AIDEV-NOTE: Implementando hooks de segurança multi-tenant
+  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  
+  // AIDEV-NOTE: Query segura para buscar convites pendentes
+  const { 
+    data: invites = [], 
+    isLoading: isLoadingInvites, 
+    refetch: refetchInvites 
+  } = useSecureTenantQuery(
+    ['tenant_invites', 'pending', tenantId],
+    async (supabase, tenantId) => {
+      // Tentar usar a nova função RPC
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_tenant_pending_invites_v2', { tenant_id_param: tenantId });
+        
+      if (!rpcError && rpcData) {
+        return rpcData;
+      }
+      
+      console.warn("Falha ao usar RPC para buscar convites:", rpcError);
+      
+      // Fallback para o método original
+      const { data, error } = await supabase
+        .from('tenant_invites')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'PENDING');
+        
+      if (error) throw error;
+      return data || [];
+    },
+    {
+      enabled: !!tenantId && hasAccess
+    }
+  );
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [invites, setInvites] = useState<any[]>([]);
-  const [isLoadingInvites, setIsLoadingInvites] = useState(true);
-  const { supabase } = useSupabase();
   const { toast } = useToast();
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeTab, setActiveTab] = useState('users');
   
-  // Buscar convites pendentes
-  useEffect(() => {
-    const fetchInvites = async () => {
-      if (!tenantId) return;
-      
-      try {
-        // Validar se o tenantId parece ser um UUID válido (formato básico)
-        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
-        
-        if (!isValidUUID) {
-          console.warn("TenantID não é um UUID válido:", tenantId);
-          setIsLoadingInvites(false);
-          return;
-        }
-      
-        setIsLoadingInvites(true);
-        
-        // Tentar usar a nova função RPC
-        const { data: rpcData, error: rpcError } = await supabase
-          .rpc('get_tenant_pending_invites_v2', { tenant_id_param: tenantId });
-          
-        if (!rpcError && rpcData) {
-          setInvites(rpcData);
-          setIsLoadingInvites(false);
-          return;
-        }
-        
-        console.warn("Falha ao usar RPC para buscar convites:", rpcError);
-        
-        // Fallback para o método original
-        const { data, error } = await supabase
-          .from('tenant_invites')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'PENDING');
-          
-        if (error) throw error;
-        setInvites(data || []);
-      } catch (err) {
-        console.error('Erro ao buscar convites:', err);
-        toast({
-          title: "Erro ao carregar convites",
-          description: "Não foi possível carregar a lista de convites pendentes.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoadingInvites(false);
-      }
-    };
-    
-    fetchInvites();
-  }, [tenantId, supabase, refreshTrigger]);
-  
-  // Reenviar convite
+  // AIDEV-NOTE: Função para reenviar convite usando hooks seguros
   const handleResendInvite = async (inviteId: string) => {
+    if (!hasAccess || !currentTenant) {
+      toast({
+        title: "Acesso negado",
+        description: "Você não tem permissão para realizar esta ação.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      // Usar o hook seguro para executar a operação
+      const { supabase } = await import('@/hooks/useSupabase');
+      const supabaseClient = supabase();
+      
       // Tentar usar a nova função RPC
-      const { data: rpcResult, error: rpcError } = await supabase
+      const { data: rpcResult, error: rpcError } = await supabaseClient
         .rpc('resend_tenant_invite_v2', { invite_id_param: inviteId });
       
       if (rpcError) {
@@ -96,7 +90,7 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       
       // Se RPC funcionou
       if (rpcResult && rpcResult.success) {
-        setRefreshTrigger(prev => prev + 1);
+        refetchInvites();
         
         toast({
           title: "Convite reenviado",
@@ -106,17 +100,18 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       }
       
       // Fallback para o método original
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('tenant_invites')
         .update({ 
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
-        .eq('id', inviteId);
+        .eq('id', inviteId)
+        .eq('tenant_id', tenantId); // AIDEV-NOTE: Validação adicional de tenant
         
       if (error) throw error;
       
-      setRefreshTrigger(prev => prev + 1);
+      refetchInvites();
       
       toast({
         title: "Convite reenviado",
@@ -132,11 +127,24 @@ export function UserManagement({ tenantId }: UserManagementProps) {
     }
   };
   
-  // Cancelar convite
+  // AIDEV-NOTE: Função para cancelar convite usando hooks seguros
   const handleCancelInvite = async (inviteId: string) => {
+    if (!hasAccess || !currentTenant) {
+      toast({
+        title: "Acesso negado",
+        description: "Você não tem permissão para realizar esta ação.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
+      // Usar o hook seguro para executar a operação
+      const { supabase } = await import('@/hooks/useSupabase');
+      const supabaseClient = supabase();
+      
       // Tentar usar a nova função RPC
-      const { data: rpcResult, error: rpcError } = await supabase
+      const { data: rpcResult, error: rpcError } = await supabaseClient
         .rpc('cancel_tenant_invite_v2', { invite_id_param: inviteId });
       
       if (rpcError) {
@@ -150,8 +158,7 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       
       // Se RPC funcionou
       if (rpcResult && rpcResult.success) {
-        // Atualizar a lista removendo o convite
-        setInvites(invites.filter(invite => invite.id !== inviteId));
+        refetchInvites();
         
         toast({
           title: "Convite cancelado",
@@ -161,15 +168,15 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       }
       
       // Fallback para o método original
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('tenant_invites')
         .update({ status: 'CANCELLED' })
-        .eq('id', inviteId);
+        .eq('id', inviteId)
+        .eq('tenant_id', tenantId); // AIDEV-NOTE: Validação adicional de tenant
         
       if (error) throw error;
       
-      // Atualizar a lista removendo o convite
-      setInvites(invites.filter(invite => invite.id !== inviteId));
+      refetchInvites();
       
       toast({
         title: "Convite cancelado",
@@ -186,14 +193,31 @@ export function UserManagement({ tenantId }: UserManagementProps) {
   };
 
   const handleInviteSuccess = () => {
-    // Atualizar a lista de convites
-    setRefreshTrigger(prev => prev + 1);
+    // AIDEV-NOTE: Atualizar a lista de convites usando refetch seguro
+    refetchInvites();
     setIsDialogOpen(false);
   };
   
   const openInviteDialog = () => {
     setIsDialogOpen(true);
   };
+  
+  // AIDEV-NOTE: Verificação de acesso obrigatória
+  if (!hasAccess) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center p-8">
+          <div className="text-center">
+            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Acesso Negado</h3>
+            <p className="text-muted-foreground">
+              Você não tem permissão para acessar o gerenciamento de usuários.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   
   return (
     <Card>
