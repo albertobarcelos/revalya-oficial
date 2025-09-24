@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { DashboardMetrics } from "@/types/database";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
 import { requireAuth } from "@/utils/apiAuth";

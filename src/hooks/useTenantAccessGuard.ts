@@ -7,6 +7,7 @@
 
 import { useMemo } from 'react';
 import { useZustandTenant } from '@/hooks/useZustandTenant';
+import { throttledTenantGuard, throttledDebug } from '@/utils/logThrottle';
 
 /**
  * Hook para validação de acesso a dados específicos
@@ -19,8 +20,8 @@ import { useZustandTenant } from '@/hooks/useZustandTenant';
 export function useTenantAccessGuard(requiredRole?: string, requireTenant: boolean = true) {
   const { currentTenant, userRole } = useZustandTenant();
   
-  // 🔍 DEBUG: Log detalhado do tenant access guard
-  console.log(`🔍 [TENANT ACCESS GUARD] Verificando acesso:`, {
+  // 🔍 DEBUG: Log detalhado do tenant access guard (com throttling)
+  throttledTenantGuard('tenant_access_verification', `🔍 [TENANT ACCESS GUARD] Verificando acesso:`, {
     currentTenant: currentTenant ? {
       id: currentTenant.id,
       name: currentTenant.name,
@@ -39,27 +40,27 @@ export function useTenantAccessGuard(requiredRole?: string, requireTenant: boole
   const hasAccess = useMemo(() => {
     // AIDEV-NOTE: Verificação de role primeiro (mais restritiva)
     if (requiredRole && userRole !== requiredRole) {
-      console.log(`🚨 [ACCESS DENIED] Permissão insuficiente: required=${requiredRole}, user=${userRole}`);
+      throttledTenantGuard('access_denied_role', `🚨 [ACCESS DENIED] Permissão insuficiente: required=${requiredRole}, user=${userRole}`);
       return false;
     }
     
     // AIDEV-NOTE: Se não requer tenant e usuário é ADMIN, permite acesso global
     if (!requireTenant && userRole === 'ADMIN') {
-      console.log(`✅ [ACCESS GRANTED] Acesso global liberado para ADMIN`);
+      throttledTenantGuard('access_granted_admin', `✅ [ACCESS GRANTED] Acesso global liberado para ADMIN`);
       return true;
     }
     
     // AIDEV-NOTE: Verificações de tenant (quando necessário)
     if (requireTenant) {
       if (!currentTenant?.id) {
-        console.log(`🚨 [ACCESS DENIED] Tenant não definido`);
+        throttledTenantGuard('access_denied_no_tenant', `🚨 [ACCESS DENIED] Tenant não definido`);
         return false;
       }
       if (!currentTenant.active) {
-        console.log(`🚨 [ACCESS DENIED] Tenant inativo: ${currentTenant.name}`);
+        throttledTenantGuard('access_denied_inactive', `🚨 [ACCESS DENIED] Tenant inativo: ${currentTenant.name}`);
         return false;
       }
-      console.log(`✅ [ACCESS GRANTED] Acesso liberado para tenant: ${currentTenant.name}`);
+      throttledTenantGuard('access_granted_tenant', `✅ [ACCESS GRANTED] Acesso liberado para tenant: ${currentTenant.name}`);
     }
     
     return true;

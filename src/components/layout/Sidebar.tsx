@@ -1,4 +1,4 @@
-import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid } from "lucide-react";
+import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -263,9 +263,9 @@ export default function Sidebar() {
       id: "financeiro",
       isSubmenu: true,
       children: [
-        { icon: DollarSign, label: "Painel", path: `/${tenantSlug}/cobrancas` },
-        { icon: DollarSign, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
-      ]
+              { icon: BarChart3, label: "Painel", path: `/${tenantSlug}/cobrancas` },
+              { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` }
+            ]
     },
     { icon: CheckSquare, label: "Tarefas", path: `/${tenantSlug}/tasks` },
     { icon: MessageSquare, label: "Mensagens", path: `/${tenantSlug}/templates` },

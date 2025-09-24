@@ -107,3 +107,76 @@ export async function validateUserTenantAccess(tenantId: string) {
     return { hasAccess: false, error: (error as Error).message };
   }
 }
+
+/**
+ * AIDEV-NOTE: Interface para representar um item extraído da descrição da cobrança
+ */
+export interface ChargeItem {
+  name: string;
+  quantity: number;
+  description?: string;
+}
+
+/**
+ * AIDEV-NOTE: Função para extrair itens da descrição da cobrança
+ * Analisa strings como "Melhor serviço desse mundo (1x), PDV Legal (1x)"
+ * e retorna um array de itens estruturados
+ */
+export function parseChargeDescription(description: string): ChargeItem[] {
+  if (!description) return [];
+
+  try {
+    console.log('Analisando descrição:', description);
+    
+    // Tentar diferentes padrões de extração
+    let itemsSection = '';
+    
+    // Padrão 1: Extrair a parte após o último " - " que contém os itens
+    const parts = description.split(' - ');
+    if (parts.length >= 3) {
+      itemsSection = parts[parts.length - 1];
+    } else if (parts.length === 2) {
+      // Padrão 2: Se só tem 2 partes, a segunda pode conter os itens
+      itemsSection = parts[1];
+    } else {
+      // Padrão 3: Tentar extrair itens da descrição completa
+      itemsSection = description;
+    }
+    
+    console.log('Seção de itens extraída:', itemsSection);
+    
+    // Dividir por vírgula para separar os itens
+    const itemStrings = itemsSection.split(',').map(item => item.trim());
+    
+    const items: ChargeItem[] = [];
+    
+    for (const itemString of itemStrings) {
+      // Regex para extrair nome e quantidade: "Nome do serviço (2x)" ou "Nome do serviço (1x)"
+      const match = itemString.match(/^(.+?)\s*\((\d+)x\)$/);
+      
+      if (match) {
+        const [, name, quantityStr] = match;
+        const quantity = parseInt(quantityStr, 10);
+        
+        items.push({
+          name: name.trim(),
+          quantity,
+          description: name.trim()
+        });
+      } else if (itemString.length > 0) {
+        // Se não conseguir extrair quantidade, mas tem conteúdo, assume 1
+        items.push({
+          name: itemString,
+          quantity: 1,
+          description: itemString
+        });
+      }
+    }
+    
+    console.log('Itens extraídos:', items);
+    return items;
+  } catch (error) {
+    console.error('Erro ao analisar descrição da cobrança:', error);
+    return [];
+  }
+}

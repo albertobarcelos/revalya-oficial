@@ -449,6 +449,100 @@ const clientsService = {
       }, 500);
       throw error;
     }
+  },
+
+  // AIDEV-NOTE: Método específico para importação em lote de clientes
+  async importClients(clientsData: CustomerFormData[]): Promise<{ success: Customer[], errors: any[] }> {
+    console.log('clientsService.importClients - dados recebidos:', clientsData);
+    
+    const results = {
+      success: [] as Customer[],
+      errors: [] as any[]
+    };
+
+    try {
+      // Verificar se o usuário está autenticado
+      const authResponse = await supabase.auth.getUser();
+      
+      if (!authResponse.data.user || !authResponse.data.user.id) {
+        throw new Error('Usuário não autenticado ou ID do usuário não disponível');
+      }
+      
+      const userId = authResponse.data.user.id;
+      
+      // Obter id do tenant atual do usuário
+      const { data: userTenants, error: tenantsError } = await supabase
+        .from('tenant_users')
+        .select('tenant_id')
+        .eq('user_id', userId)
+        .limit(1);
+        
+      if (tenantsError) {
+        throw tenantsError;
+      }
+      
+      if (!userTenants || userTenants.length === 0) {
+        throw new Error('Usuário não possui nenhum tenant associado');
+      }
+      
+      const currentTenantId = userTenants[0].tenant_id;
+      
+      // Processar cada cliente individualmente para capturar erros específicos
+      for (const clientData of clientsData) {
+        try {
+          const formattedClientData = {
+            name: clientData.name,
+            cpf_cnpj: clientData.cpfCnpj || clientData.cpf_cnpj,
+            email: clientData.email,
+            phone: clientData.phone,
+            company: clientData.company,
+            active: true,
+            tenant_id: currentTenantId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            // Dados de endereço
+            address: clientData.address,
+            address_number: clientData.addressNumber,
+            complement: clientData.complement,
+            neighborhood: clientData.neighborhood,
+            postal_code: clientData.postal_code,
+            city: clientData.city,
+            state: clientData.state,
+            country: clientData.country || 'Brasil',
+          };
+          
+          const { data: newClient, error } = await supabase
+            .from('customers')
+            .insert(formattedClientData)
+            .select()
+            .single();
+
+          if (error) {
+            results.errors.push({
+              clientData,
+              error: error.message
+            });
+          } else {
+            results.success.push(newClient);
+          }
+        } catch (clientError) {
+          results.errors.push({
+            clientData,
+            error: clientError instanceof Error ? clientError.message : 'Erro desconhecido'
+          });
+        }
+      }
+      
+      console.log('Importação concluída:', {
+        sucessos: results.success.length,
+        erros: results.errors.length
+      });
+      
+      return results;
+    } catch (error) {
+      console.error('Erro geral na importação de clientes:', error);
+      throw error;
+    }
   }
 };
 

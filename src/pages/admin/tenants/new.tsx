@@ -266,8 +266,8 @@ export default function NewTenantPage() {
                     <FormLabel>Revendedor</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value || undefined}
-                      defaultValue={field.value || undefined}
+                      value={field.value || ""}
+                      defaultValue={field.value || ""}
                     >
                       <FormControl>
                         <SelectTrigger>

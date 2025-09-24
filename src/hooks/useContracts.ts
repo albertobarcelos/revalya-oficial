@@ -1,5 +1,6 @@
 import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/use-toast'
 import { throttledAudit } from '@/utils/logThrottle'
@@ -136,8 +137,9 @@ export function useContracts(filters: ContractFilters = {}) {
         throw error
       }
 
-      console.log(`🔍 [AUDIT] Contratos encontrados: ${data?.length || 0}`);
-      console.log(`🔍 [AUDIT] Primeiros contratos:`, data?.slice(0, 3));
+      // AIDEV-NOTE: Logs com throttling para evitar spam no console
+      throttledAudit('contracts_found', `Contratos encontrados: ${data?.length || 0}`);
+      throttledAudit('contracts_preview', `Primeiros contratos encontrados`, data?.slice(0, 3));
 
       // 🔍 VALIDAÇÃO ADICIONAL: Verificar se todos os dados pertencem ao tenant
       const invalidData = data?.filter(item => item.tenant_id !== tenantId)
@@ -153,7 +155,7 @@ export function useContracts(filters: ContractFilters = {}) {
   // ✏️ MUTAÇÃO SEGURA PARA CRIAR CONTRATO
   const createContract = useSecureTenantMutation(
     async (supabase, tenantId, contractData: Partial<Contract>) => {
-      console.log(`✏️ [AUDIT] Criando contrato para tenant: ${tenantId}`);
+      throttledAudit(`✏️ Criando contrato para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contracts')
@@ -189,7 +191,7 @@ export function useContracts(filters: ContractFilters = {}) {
   // ✏️ MUTAÇÃO SEGURA PARA ATUALIZAR CONTRATO
   const updateContract = useSecureTenantMutation(
     async (supabase, tenantId, { id, ...updates }: Partial<Contract> & { id: string }) => {
-      console.log(`✏️ [AUDIT] Atualizando contrato ${id} para tenant: ${tenantId}`);
+      throttledAudit(`✏️ Atualizando contrato ${id} para tenant: ${tenantId}`);
       
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que o contrato pertence ao tenant
       const { data: existingContract } = await supabase
@@ -231,7 +233,7 @@ export function useContracts(filters: ContractFilters = {}) {
   // 🗑️ MUTAÇÃO SEGURA PARA DELETAR CONTRATO
   const deleteContract = useSecureTenantMutation(
     async (supabase, tenantId, contractId: string) => {
-      console.log(`🗑️ [AUDIT] Deletando contrato ${contractId} para tenant: ${tenantId}`);
+      throttledAudit(`🗑️ Deletando contrato ${contractId} para tenant: ${tenantId}`);
       
       const { error } = await supabase
         .from('contracts')
@@ -256,7 +258,7 @@ export function useContracts(filters: ContractFilters = {}) {
   // 🔄 MUTAÇÃO SEGURA PARA ATUALIZAR STATUS DO CONTRATO
   const updateContractStatusMutation = useSecureTenantMutation(
     async (supabase, tenantId, { contractId, newStatus }: { contractId: string; newStatus: string }) => {
-      console.log(`🔄 [AUDIT] Atualizando status do contrato ${contractId} para tenant: ${tenantId}`);
+      throttledAudit(`🔄 Atualizando status do contrato ${contractId} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contracts')
@@ -285,6 +287,9 @@ export function useContracts(filters: ContractFilters = {}) {
     return queryClient.invalidateQueries({ queryKey: ['contracts', currentTenant?.id] })
   }
 
+  // AIDEV-NOTE: Criando instância do hook de serviços para compatibilidade
+  const contractServicesHook = useContractServices();
+
   // AIDEV-NOTE: Retornando objetos completos das mutações para permitir uso de mutate e mutateAsync
   return {
     contracts: query.data || [],
@@ -297,6 +302,9 @@ export function useContracts(filters: ContractFilters = {}) {
     deleteContract: deleteContract, // ✅ Objeto completo da mutação
     isDeleting: deleteContract.isPending,
     updateContractStatusMutation,
+    // AIDEV-NOTE: Adicionando funções de serviços para compatibilidade com componentes existentes
+    addContractService: contractServicesHook.addService,
+    addContractServiceMutation: contractServicesHook.addServiceMutation,
     refetch,
     refreshContracts: refetch // Alias para compatibilidade
   }
@@ -310,7 +318,7 @@ export function useContractStages() {
   const query = useSecureTenantQuery(
     ['contract-stages'],
     async (supabase, tenantId) => {
-      console.log(`🏷️ [AUDIT] Buscando stages para tenant: ${tenantId}`);
+      throttledAudit(`🏷️ Buscando stages para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contract_stages')
@@ -326,7 +334,7 @@ export function useContractStages() {
 
   const createStage = useSecureTenantMutation(
     async (supabase, tenantId, stageData: Partial<ContractStage>) => {
-      console.log(`✏️ [AUDIT] Criando stage para tenant: ${tenantId}`);
+      throttledAudit(`✏️ Criando stage para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contract_stages')
@@ -347,7 +355,7 @@ export function useContractStages() {
 
   const updateStage = useSecureTenantMutation(
     async (supabase, tenantId, { id, ...updates }: Partial<ContractStage> & { id: string }) => {
-      console.log(`✏️ [AUDIT] Atualizando stage ${id} para tenant: ${tenantId}`);
+      throttledAudit(`✏️ Atualizando stage ${id} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contract_stages')
@@ -380,12 +388,62 @@ export function useContractServices(contractId?: string) {
   const { hasAccess, currentTenant } = useTenantAccessGuard()
   const queryClient = useQueryClient()
 
+  // AIDEV-NOTE: Função para inicializar contexto RPC seguindo padrão de useServices
+  const initializeTenantContext = useCallback(async () => {
+    if (!currentTenant?.id) {
+      console.warn('⚠️ [INIT] Tenant não encontrado para configuração de contexto');
+      return false;
+    }
+    
+    try {
+      const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant.id,
+        p_user_id: null
+      });
+      
+      if (contextError) {
+        console.warn('⚠️ [INIT] Aviso ao configurar contexto inicial:', contextError);
+        return false; // Não falha, mas registra
+      }
+      
+      console.log('✅ [INIT] Contexto RPC configurado com sucesso para tenant:', currentTenant.id);
+      return true;
+    } catch (error) {
+      console.error('🚨 [INIT] Erro crítico ao configurar contexto:', error);
+      return false;
+    }
+  }, [currentTenant?.id]);
+
+  // AIDEV-NOTE: Sincronização automática do contexto quando tenant muda
+  useEffect(() => {
+    if (currentTenant?.id) {
+      initializeTenantContext();
+    }
+  }, [currentTenant?.id, initializeTenantContext]);
+
+  // AIDEV-NOTE: Função para validar dados retornados (validação dupla)
+  const validateTenantData = useCallback((data: ContractService[], tenantId: string) => {
+    if (!data || data.length === 0) return data;
+    
+    const invalidData = data.filter(item => item.tenant_id !== tenantId);
+    if (invalidData.length > 0) {
+      console.error('🚨 [SECURITY] Dados de tenant incorreto detectados:', invalidData);
+      throw new Error('Violação de segurança: dados de tenant incorreto detectados');
+    }
+    
+    console.log('✅ [SECURITY] Validação de tenant aprovada para', data.length, 'registros');
+    return data;
+  }, []);
+
   const query = useSecureTenantQuery(
-    ['contract-services', contractId],
+    ['contract-services', currentTenant?.id, contractId],
     async (supabase, tenantId) => {
       if (!contractId) return []
       
-      console.log(`🛠️ [AUDIT] Buscando serviços do contrato ${contractId} para tenant: ${tenantId}`);
+      // AIDEV-NOTE: Configurar contexto RPC antes da operação
+      await initializeTenantContext();
+      
+      throttledAudit(`🛠️ Buscando serviços do contrato ${contractId} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contract_services')
@@ -400,11 +458,23 @@ export function useContractServices(contractId?: string) {
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
         .eq('contract_id', contractId)
 
-      if (error) throw error
-      return data as unknown as ContractService[]
+      if (error) {
+        console.error('🚨 [ERROR] Erro ao buscar serviços do contrato:', error);
+        throw error;
+      }
+
+      const typedData = data as unknown as ContractService[];
+      
+      // AIDEV-NOTE: Aplicar validação dupla de segurança
+      const validatedData = validateTenantData(typedData, tenantId);
+      
+      throttledAudit(`✅ ${validatedData.length} serviços encontrados para contrato ${contractId}`);
+      return validatedData;
     },
     {
-      enabled: !!contractId
+      enabled: !!contractId && !!currentTenant?.id,
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      cacheTime: 10 * 60 * 1000, // 10 minutos
     }
   )
 
@@ -414,7 +484,13 @@ export function useContractServices(contractId?: string) {
         throw new Error('Contrato não encontrado')
       }
       
-      console.log(`✏️ [AUDIT] Adicionando serviço ao contrato ${contractId} para tenant: ${tenantId}`);
+      // AIDEV-NOTE: Configurar contexto RPC antes da operação
+      const contextInitialized = await initializeTenantContext();
+      if (!contextInitialized) {
+        console.warn('⚠️ [MUTATION] Contexto não inicializado, prosseguindo com filtros diretos');
+      }
+      
+      throttledAudit(`✏️ Adicionando serviço ao contrato ${contractId} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('contract_services')
@@ -426,17 +502,50 @@ export function useContractServices(contractId?: string) {
         .select()
         .single()
 
-      if (error) throw error
-      return data
+      if (error) {
+        console.error('🚨 [ERROR] Erro ao adicionar serviço:', error);
+        throw error;
+      }
+
+      // AIDEV-NOTE: Validar dados retornados
+      if (data.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY] Serviço criado com tenant_id incorreto:', data);
+        throw new Error('Violação de segurança: tenant_id incorreto no serviço criado');
+      }
+
+      throttledAudit(`✅ Serviço adicionado com sucesso: ${data.id}`);
+      return data;
     },
     {
-      invalidateQueries: ['contract-services']
+      onSuccess: () => {
+        // AIDEV-NOTE: Invalidação específica por tenant
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'contract-services' && 
+                   query.queryKey[1] === currentTenant?.id;
+          }
+        });
+      },
+      onError: (error) => {
+        console.error('🚨 [MUTATION] Erro na mutação addService:', error);
+        toast({
+          title: "Erro ao adicionar serviço",
+          description: "Não foi possível adicionar o serviço ao contrato. Tente novamente.",
+          variant: "destructive",
+        });
+      }
     }
   )
 
   const removeService = useSecureTenantMutation(
     async (supabase, tenantId, serviceId: string) => {
-      console.log(`🗑️ [AUDIT] Removendo serviço ${serviceId} para tenant: ${tenantId}`);
+      // AIDEV-NOTE: Configurar contexto RPC antes da operação
+      const contextInitialized = await initializeTenantContext();
+      if (!contextInitialized) {
+        console.warn('⚠️ [MUTATION] Contexto não inicializado, prosseguindo com filtros diretos');
+      }
+      
+      throttledAudit(`🗑️ Removendo serviço ${serviceId} para tenant: ${tenantId}`);
       
       const { error } = await supabase
         .from('contract_services')
@@ -444,20 +553,55 @@ export function useContractServices(contractId?: string) {
         .eq('id', serviceId)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
 
-      if (error) throw error
+      if (error) {
+        console.error('🚨 [ERROR] Erro ao remover serviço:', error);
+        throw error;
+      }
+
+      throttledAudit(`✅ Serviço removido com sucesso: ${serviceId}`);
       return { success: true }
     },
     {
-      invalidateQueries: ['contract-services']
+      onSuccess: () => {
+        // AIDEV-NOTE: Invalidação específica por tenant
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'contract-services' && 
+                   query.queryKey[1] === currentTenant?.id;
+          }
+        });
+      },
+      onError: (error) => {
+        console.error('🚨 [MUTATION] Erro na mutação removeService:', error);
+        toast({
+          title: "Erro ao remover serviço",
+          description: "Não foi possível remover o serviço do contrato. Tente novamente.",
+          variant: "destructive",
+        });
+      }
     }
   )
+
+  // AIDEV-NOTE: Função de refresh com invalidação específica
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        return query.queryKey[0] === 'contract-services' && 
+               query.queryKey[1] === currentTenant?.id &&
+               query.queryKey[2] === contractId;
+      }
+    });
+  }, [queryClient, currentTenant?.id, contractId]);
 
   return {
     services: query.data || [],
     isLoading: query.isLoading,
     error: query.error,
     addService: addService.mutate,
+    addServiceMutation: addService,
     removeService: removeService.mutate,
-    refetch: () => queryClient.invalidateQueries({ queryKey: ['contract-services', currentTenant?.id, contractId] })
+    removeServiceMutation: removeService,
+    refresh,
+    refetch: query.refetch
   }
 }

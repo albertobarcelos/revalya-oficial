@@ -117,7 +117,7 @@ export function ChargesDashboard() {
 
     charges.forEach(charge => {
       // Filtro para cobranças PAGAS
-      if (['RECEIVED', 'RECEIVED_IN_CASH', 'CONFIRMED'].includes(charge.status)) {
+      if (['RECEIVED', 'RECEIVED_IN_CASH', 'RECEIVED_PIX', 'RECEIVED_BOLETO', 'RECEIVED_CARD', 'CONFIRMED', 'PAID'].includes(charge.status)) {
         const paymentDate = new Date(charge.data_pagamento + 'T00:00:00');
         if (paymentDate >= paidFilter.startDate && paymentDate <= paidFilter.endDate) {
           groups.paid.charges.push(charge);
@@ -125,7 +125,8 @@ export function ChargesDashboard() {
         return;
       }
       
-      if (charge.tipo !== 'BOLETO') return;
+      // AIDEV-NOTE: Aceitar todos os tipos de cobrança (PIX, BOLETO, CREDIT_CARD, CASH) para os cards de vencimento
+      // Removido filtro restritivo que estava impedindo cobranças PIX de aparecerem nos cards
       
       const dueDateStr = charge.data_vencimento;
       const dueDate = new Date(dueDateStr + 'T00:00:00');

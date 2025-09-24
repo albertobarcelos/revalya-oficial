@@ -7,8 +7,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useTenantStore } from '@/store/tenantStore';
-import { useZustandAuth } from './useZustandAuth';
+import { useZustandAuth } from '@/hooks/useZustandAuth';
 import { useSupabase } from '@/hooks/useSupabase';
+import { throttledAutoSelect, throttledDebug } from '@/utils/logThrottle';
 
 /**
  * Hook principal para gerenciamento de tenant usando Zustand
@@ -41,20 +42,20 @@ export function useZustandTenant() {
   useEffect(() => {
     // Evitar chamadas duplicadas: respeitar isLoading, hasLoaded e um lock local
     if (!userId || !supabase) {
-      console.log('[useZustandTenant] Usuário não autenticado ou supabase não inicializado, não carregando dados do portal');
+      throttledDebug('[useZustandTenant] Usuário não autenticado ou supabase não inicializado, não carregando dados do portal');
       return;
     }
     if (hasLoaded) {
       // Já carregado com sucesso, não repetir
-      console.log('[useZustandTenant] Dados já carregados, pulando fetch');
+      throttledDebug('[useZustandTenant] Dados já carregados, pulando fetch');
       return;
     }
     if (isLoading || fetchLockRef.current) {
       // Já em progresso
-      console.log('[useZustandTenant] Fetch já em progresso, aguardando...');
+      throttledDebug('[useZustandTenant] Fetch já em progresso, aguardando...');
       return;
     }
-    console.log('[useZustandTenant] Usuário autenticado, carregando dados do portal (com guard)');
+    throttledDebug('[useZustandTenant] Usuário autenticado, carregando dados do portal (com guard)');
     fetchLockRef.current = true;
     // Pequeno atraso para garantir que a sessão está completamente estabelecida
     setTimeout(() => {
@@ -74,26 +75,22 @@ export function useZustandTenant() {
     // Lista de rotas que NÃO são tenants (ignorar auto-seleção)
     const nonTenantRoutes = ['login', 'portal', 'meus-aplicativos', 'admin', 'api', 'auth'];
     
-    console.log(`🔍 [TENANT AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
-    
-    // Se o slug é uma rota não-tenant, não tentar auto-seleção
-    if (urlSlug && nonTenantRoutes.includes(urlSlug)) {
-      console.log(`🚫 [TENANT AUTO-SELECT] Slug '${urlSlug}' é uma rota não-tenant, ignorando auto-seleção`);
-      return;
-    }
-    
     // Se há um slug na URL e dados carregados, mas o tenant atual não corresponde
     if (urlSlug && hasLoaded && availableTenants.length > 0) {
+      throttledAutoSelect(`URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
+      
       if (!currentTenant || currentTenant.slug !== urlSlug) {
-        console.log(`🔄 [TENANT AUTO-SELECT] Tentando trocar para tenant com slug: ${urlSlug}`);
+        throttledAutoSelect(`Tentando trocar para tenant com slug: ${urlSlug}`);
         
         const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
         if (targetTenant) {
-          console.log(`✅ [TENANT AUTO-SELECT] Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
+          throttledAutoSelect(`Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
           switchTenant(targetTenant.id);
         } else {
           console.error(`🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
         }
+      } else {
+        throttledAutoSelect(`Tenant já está correto: ${currentTenant.name} (${currentTenant.slug})`);
       }
     }
   }, [hasLoaded, availableTenants, currentTenant, switchTenant]);

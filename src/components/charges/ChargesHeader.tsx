@@ -28,7 +28,7 @@ export const ChargesHeader: React.FC<ChargesHeaderProps> = ({
       <div className="flex gap-2">
         <Button variant="outline" onClick={onExport}>
           <Download className="mr-2 h-4 w-4" />
-          Exportar
+          Conciliar
         </Button>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

@@ -40,6 +40,7 @@ const TenantUsersPage = lazy(() => import('../../pages/tenant/users'));
 const ExamplesPage = lazy(() => import('../../pages/dashboard/examples'));
 const FaturamentoKanban = lazy(() => import('../../pages/FaturamentoKanban'));
 const Recebimentos = lazy(() => import('../../pages/Recebimentos'));
+const Reconciliation = lazy(() => import('../../pages/Reconciliation'));
 const ContractSettings = lazy(() => import('../../pages/ContractSettings'));
 const Tasks = lazy(() => import('../../pages/Tasks'));
 const NotFound = lazy(() => import('../../pages/NotFound'));
@@ -112,6 +113,7 @@ export function TenantAutoLoginRouter() {
         <Route path="faturamento" element={<FaturamentoKanban />} />
         <Route path="faturamento-kanban" element={<FaturamentoKanban />} />
         <Route path="recebimentos" element={<Recebimentos />} />
+        <Route path="conciliacao" element={<Reconciliation />} />
         
         {/* ========== ROTAS DE COMUNICAÇÃO ========== */}
         <Route path="messages/history" element={<MessageHistoryPage />} />

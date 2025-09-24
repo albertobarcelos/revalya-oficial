@@ -5,13 +5,14 @@ import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ChargesDashboard } from "@/components/charges/dashboard/ChargesDashboard";
 import { Button } from "@/components/ui/button";
-import { DownloadIcon, Plus } from "lucide-react";
+import { DownloadIcon, Plus, ArrowRightLeft } from "lucide-react";
 import { CreateChargeDialog } from "@/components/charges/CreateChargeDialog";
 import { ChargesCompanyList } from "@/components/charges/ChargesCompanyList";
 import { ChargesList } from "@/components/charges/ChargesList";
 import { useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
 import { useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
+import { default as ReconciliationModal } from "@/components/reconciliation/ReconciliationModal";
 
 export default function Charges() {
   // 🛡️ PROTEÇÃO MULTI-TENANT OBRIGATÓRIA
@@ -25,6 +26,7 @@ export default function Charges() {
   // 🎯 ESTADO LOCAL
   const [isCreateChargeDialogOpen, setIsCreateChargeDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isReconciliationModalOpen, setIsReconciliationModalOpen] = useState(false);
   
   // 🔍 LOGS DE AUDITORIA OBRIGATÓRIOS
   useEffect(() => {
@@ -106,9 +108,10 @@ export default function Charges() {
     );
   }
 
-  const handleExport = () => {
-    // Implement export logic
-    console.log("Exporting charges");
+  const handleConciliar = () => {
+    // AIDEV-NOTE: Abrindo modal de conciliação em vez de navegar para página separada
+    console.log(`🔄 [AUDIT] Abrindo modal de conciliação - Tenant: ${currentTenant?.name}`);
+    setIsReconciliationModalOpen(true);
   };
 
   return (
@@ -117,9 +120,9 @@ export default function Charges() {
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <Header>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-1" onClick={handleExport}>
-              <DownloadIcon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline text-sm">Exportar</span>
+            <Button variant="outline" className="gap-1" onClick={handleConciliar}>
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline text-sm">Conciliar</span>
             </Button>
           </div>
         </Header>
@@ -191,6 +194,11 @@ export default function Charges() {
       <CreateChargeDialog
         open={isCreateChargeDialogOpen}
         onOpenChange={setIsCreateChargeDialogOpen}
+      />
+
+      <ReconciliationModal
+        isOpen={isReconciliationModalOpen}
+        onClose={() => setIsReconciliationModalOpen(false)}
       />
     </div>
   );
