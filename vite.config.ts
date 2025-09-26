@@ -140,6 +140,24 @@ export default defineConfig(({ command, mode }) => {
     define: {
       __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
       __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+      // Define process.env for frontend compatibility
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
+      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
+      'process.env.VITE_SUPABASE_SERVICE_ROLE_KEY': JSON.stringify(env.VITE_SUPABASE_SERVICE_ROLE_KEY),
+      'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL),
+      'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+      'process.env.SUPABASE_SERVICE_ROLE_KEY': JSON.stringify(env.VITE_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY),
+      'process.env.DOCUSIGN_API_KEY': JSON.stringify(env.DOCUSIGN_API_KEY),
+      'process.env.CLICKSIGN_API_KEY': JSON.stringify(env.CLICKSIGN_API_KEY),
+      'process.env.VITE_DEV_MODE': JSON.stringify(env.VITE_DEV_MODE),
+      'process.env.VITE_APP_URL': JSON.stringify(env.VITE_APP_URL),
+      'process.env.PORT': JSON.stringify(env.PORT || '3000'),
+      // Define process object for compatibility
+      'process.memoryUsage': 'undefined',
+      'process.exit': 'undefined',
+      'process.on': 'undefined',
+      'process.cwd': 'undefined',
     },
 
     // Optimization

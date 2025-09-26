@@ -48,7 +48,8 @@ import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, 
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
 import { ImportModal } from "@/components/clients/ImportModal";
-import { ImportPreview } from "@/components/clients/ImportPreview";
+import { ImportSuccessModal } from "@/components/clients/import/ImportSuccessModal";
+import { ImportWizard } from "@/components/clients/import/ImportWizard";
 import { useToast } from "@/components/ui/use-toast";
 import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
 import type { Customer } from "@/types/database";
@@ -70,9 +71,22 @@ export default function Clients() {
   
   // Estados para importação
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
-  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [importWizardData, setImportWizardData] = useState<any[]>([]);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [importType, setImportType] = useState<'asaas' | 'csv' | null>(null);
+  
+  // AIDEV-NOTE: Estados para controle da importação e UX
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    status: string;
+  } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: number;
+    errors: string[];
+  } | null>(null);
   
   const { toast } = useToast();
 
@@ -80,6 +94,28 @@ export default function Clients() {
   const { customers: allCustomers, isLoading, refetch, totalCount } = useCustomers({
     search: searchTerm
   });
+
+  // AIDEV-NOTE: Função para simular progresso da importação
+  const simulateImportProgress = (total: number) => {
+    return new Promise<void>((resolve) => {
+      let current = 0;
+      const interval = setInterval(() => {
+        current++;
+        setImportProgress({
+          current,
+          total,
+          status: current === total ? 'Finalizando...' : `Processando cliente ${current}...`
+        });
+        
+        if (current >= total) {
+          clearInterval(interval);
+          setTimeout(() => {
+            resolve();
+          }, 500); // Pequena pausa para mostrar "Finalizando..."
+        }
+      }, 200); // Atualiza a cada 200ms
+    });
+  };
 
   // Calcular paginação baseada no totalCount
   const total = totalCount || 0;
@@ -524,61 +560,33 @@ export default function Clients() {
           open={isImportModalOpen}
           onOpenChange={setIsImportModalOpen}
           onImportData={(data, type) => {
-            setImportPreviewData(data);
+            setImportWizardData(data);
             setImportType(type);
-            setShowImportPreview(true);
+            setShowImportWizard(true);
             setIsImportModalOpen(false);
           }}
         />
 
-        {/* Pré-visualização de Importação */}
-        {showImportPreview && (
-          <ImportPreview
-            open={showImportPreview}
-            onOpenChange={setShowImportPreview}
-            data={importPreviewData}
-            source={importType}
-            onCancel={() => {
-              setShowImportPreview(false);
-              setImportPreviewData([]);
-              setImportType(null);
-            }}
-            onConfirm={async (selectedData) => {
-              try {
-                // AIDEV-NOTE: Implementação da lógica de inserção no banco usando clientsService
-                const { clientsService } = await import('@/services/clientsService');
-                const results = await clientsService.importClients(selectedData);
-                
-                if (results.errors.length > 0) {
-                  toast({
-                    title: "Importação parcialmente concluída",
-                    description: `${results.success.length} clientes importados com sucesso. ${results.errors.length} falharam.`,
-                    variant: "destructive",
-                  });
-                } else {
-                  toast({
-                    title: "Importação realizada com sucesso!",
-                    description: `${results.success.length} clientes foram importados.`,
-                  });
-                }
-                
-                setShowImportPreview(false);
-                setImportPreviewData([]);
-                setImportType(null);
-                
-                // Atualizar a lista de clientes
-                refetch(searchTerm, itemsPerPage, currentPage);
-              } catch (error) {
-                console.error('Erro na importação:', error);
-                toast({
-                  title: "Erro na importação",
-                  description: "Ocorreu um erro ao importar os clientes.",
-                  variant: "destructive",
-                });
-               }
-             }}
-          />
-        )}
+        {/* Wizard de Configuração da Importação */}
+        <ImportWizard
+          open={showImportWizard}
+          onOpenChange={setShowImportWizard}
+          data={importWizardData}
+          type={importType}
+          onSuccess={(result) => {
+            setImportResult(result);
+            setShowSuccessModal(true);
+            setShowImportWizard(false);
+            refetch(searchTerm, itemsPerPage, currentPage);
+          }}
+        />
+
+        {/* Modal de Sucesso da Importação */}
+        <ImportSuccessModal
+          open={showSuccessModal}
+          onOpenChange={setShowSuccessModal}
+          result={importResult}
+        />
       </div>
     </Layout>
   );

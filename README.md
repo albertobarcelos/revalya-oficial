@@ -103,6 +103,90 @@ Corrigimos um problema crítico onde a função `createService` no hook `useServ
 // Garante que o RLS (Row Level Security) funcione corretamente
 ```
 
+### Janeiro 2025: Padronização e Correção do Sistema de Import de Clientes
+
+Implementamos uma padronização completa do sistema de import de clientes, corrigindo problemas críticos de mapeamento de campos e melhorando a experiência do usuário.
+
+#### 🐛 **Problemas Identificados**
+
+1. **Inconsistência de Nomenclatura**:
+   - **Erro**: Campos `cityName` e `city` usados inconsistentemente
+   - **Causa**: Diferentes fontes de dados (CSV, ASAAS API) com estruturas distintas
+   - **Impacto**: Confusão no mapeamento e perda de dados de cidade
+
+2. **Mapeamento Incorreto da API ASAAS**:
+   - **Erro**: Campo `city` retornando ID numérico (15355) em vez do nome da cidade
+   - **Causa**: API ASAAS retorna `city` como ID e `cityName` como nome legível
+   - **Impacto**: Dados de cidade incorretos nos imports do ASAAS
+
+3. **Falta de Logs de Debug**:
+   - **Problema**: Dificuldade para diagnosticar problemas de mapeamento
+   - **Causa**: Ausência de logs detalhados durante o processo de import
+   - **Impacto**: Tempo excessivo para identificar e corrigir problemas
+
+#### ✅ **Soluções Implementadas**
+
+1. **Padronização de Nomenclatura**:
+   - Unificação para usar `city` como campo padrão em todo o sistema
+   - Atualização de `SYSTEM_FIELDS` em `src/types/import.ts`
+   - Mapeamento alternativo incluindo `['cidade', 'municipio', 'cityname', 'city']`
+   - Atualização de traduções em `useNotifications.ts`
+
+2. **Correção do Mapeamento ASAAS**:
+   - Priorização de `cityName` sobre `city` no mapeamento do ASAAS
+   - Alteração em `useImportWizard.ts`: `city: item.cityName || item.city || ''`
+   - Garantia de que o nome da cidade seja usado em vez do ID numérico
+
+3. **Sistema de Debug Avançado**:
+   - Logs detalhados em `ImportModal.tsx` para CSV e ASAAS
+   - Instrumentação de sample de dados e campos detectados
+   - Logs de fallback e resolução de campos em `clientsService.ts`
+
+#### 🔧 **Detalhes Técnicos**
+
+**Arquivos Modificados:**
+- `src/types/import.ts` - Padronização de `SYSTEM_FIELDS`
+- `src/hooks/useImportWizard.ts` - Correção do mapeamento ASAAS
+- `src/components/clients/ImportModal.tsx` - Logs de debug
+- `src/hooks/useNotifications.ts` - Atualização de traduções
+- `src/services/clientsService.ts` - Logs de diagnóstico
+
+**Padrão de Mapeamento:**
+```typescript
+// Para ASAAS API (prioriza cityName)
+city: item.cityName || item.city || ''
+
+// Para CSV/Excel (mapeamento flexível)
+alternativeMap: {
+  city: ['cidade', 'municipio', 'cityname', 'city']
+}
+```
+
+**Sistema de Debug:**
+```typescript
+// Logs automáticos para diagnóstico
+console.log('🔍 Debug - sourceData[0]:', sourceData[0]);
+console.log('🔍 Debug - detectedFields:', detectedFields);
+```
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Padronização crítica - usar 'city' como campo unificado
+// Garante consistência entre diferentes fontes de dados (CSV, ASAAS, etc.)
+
+// AIDEV-NOTE: Priorizar cityName do ASAAS sobre city (que é ID numérico)
+// API ASAAS: city=15355 (ID), cityName="São José do Rio Claro" (nome)
+```
+
+#### 🎯 **Resultados Obtidos**
+
+- ✅ **Consistência**: Campo `city` padronizado em todo o sistema
+- ✅ **Correção ASAAS**: Nomes de cidade corretos em vez de IDs
+- ✅ **Debug Avançado**: Logs detalhados para diagnóstico rápido
+- ✅ **Mapeamento Flexível**: Suporte a múltiplas variações de nomes de campos
+- ✅ **Validação**: Type-check e lint passando sem erros
+
 ### Janeiro 2025: Sistema de Auto-Login Multi-Tenant Inspirado na Omie
 
 Implementamos um sistema revolucionário de auto-login multi-tenant que permite URLs limpas e acesso direto sem códigos na URL, inspirado na arquitetura da Omie:

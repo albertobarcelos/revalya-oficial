@@ -80,6 +80,25 @@ class AsaasService {
   async getAllCustomers(tenantId?: string, offset: number = 0, limit: number = 20): Promise<{ data: any[], hasMore: boolean, totalCount: number }> {
     try {
       const response = await this.request<{ data: any[], hasMore: boolean, totalCount: number }>(`/customers?offset=${offset}&limit=${limit}`, {}, tenantId);
+      
+      // AIDEV-NOTE: Debug para verificar estrutura dos dados retornados pela API ASAAS
+      if (response.data && response.data.length > 0) {
+        const firstClient = response.data[0];
+        console.log('🔍 [DEBUG][AsaasService] Primeiro cliente da API:', firstClient);
+        console.log('🔍 [DEBUG][AsaasService] Campos disponíveis:', Object.keys(firstClient));
+        
+        // AIDEV-NOTE: Procurando pelo bairro "Morado dos ipes" em todos os campos
+        console.log('🔍 [DEBUG][AsaasService] === BUSCA PELO BAIRRO "Morado dos ipes" ===');
+        Object.keys(firstClient).forEach(key => {
+          const value = firstClient[key];
+          console.log(`🔍 [DEBUG][AsaasService] ${key}:`, value);
+          if (typeof value === 'string' && value.toLowerCase().includes('morado')) {
+            console.log(`🎯 [ENCONTRADO] Campo "${key}" contém "morado":`, value);
+          }
+        });
+        console.log('🔍 [DEBUG][AsaasService] === FIM DA BUSCA ===');
+      }
+      
       return {
         data: response.data || [],
         hasMore: response.hasMore || false,

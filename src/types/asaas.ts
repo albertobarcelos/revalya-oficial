@@ -15,7 +15,8 @@ export interface AsaasCustomer {
   additionalEmails: string | null;
   externalReference: string | null;
   notificationDisabled: boolean;
-  city: string | null;
+  city: string | null; // AIDEV-NOTE: Código da cidade (não usado na interface)
+  cityName?: string | null; // AIDEV-NOTE: Nome da cidade (usado na interface)
   state: string | null;
   country: string;
   observations: string | null;
