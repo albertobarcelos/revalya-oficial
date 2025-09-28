@@ -9,9 +9,6 @@ class AsaasService {
   constructor() {
     this.proxyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/asaas-proxy`;
     this.cityCache = new Map<string, string>();
-    console.log('Asaas Service initialized:', {
-      proxyUrl: this.proxyUrl
-    });
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}, tenantId?: string): Promise<T> {
@@ -75,29 +72,49 @@ class AsaasService {
     }
   }
 
-
+  // AIDEV-NOTE: Método específico para buscar um cliente por ID em todas as páginas
+  async findCustomerById(customerId: string, tenantId?: string): Promise<any | null> {
+    try {
+      let offset = 0;
+      const limit = 100; // Usar limite maior para buscar mais rápido
+      let found = false;
+      let attempts = 0;
+      const maxAttempts = 50; // Máximo 5000 clientes
+      
+      while (!found && attempts < maxAttempts) {
+        const response = await this.request<{ data: any[], hasMore: boolean, totalCount: number }>(`/customers?offset=${offset}&limit=${limit}`, {}, tenantId);
+        
+        if (!response.data || response.data.length === 0) {
+          break;
+        }
+        
+        // Buscar o cliente específico nesta página
+        const targetCustomer = response.data.find((customer: any) => customer.id === customerId);
+        
+        if (targetCustomer) {
+          return targetCustomer;
+        }
+        
+        // Se não há mais páginas, parar
+        if (!response.hasMore) {
+          break;
+        }
+        
+        offset += limit;
+        attempts++;
+      }
+      
+      return null;
+      
+    } catch (error) {
+      console.error(`Erro ao buscar cliente ${customerId}:`, error);
+      throw error;
+    }
+  }
 
   async getAllCustomers(tenantId?: string, offset: number = 0, limit: number = 20): Promise<{ data: any[], hasMore: boolean, totalCount: number }> {
     try {
       const response = await this.request<{ data: any[], hasMore: boolean, totalCount: number }>(`/customers?offset=${offset}&limit=${limit}`, {}, tenantId);
-      
-      // AIDEV-NOTE: Debug para verificar estrutura dos dados retornados pela API ASAAS
-      if (response.data && response.data.length > 0) {
-        const firstClient = response.data[0];
-        console.log('🔍 [DEBUG][AsaasService] Primeiro cliente da API:', firstClient);
-        console.log('🔍 [DEBUG][AsaasService] Campos disponíveis:', Object.keys(firstClient));
-        
-        // AIDEV-NOTE: Procurando pelo bairro "Morado dos ipes" em todos os campos
-        console.log('🔍 [DEBUG][AsaasService] === BUSCA PELO BAIRRO "Morado dos ipes" ===');
-        Object.keys(firstClient).forEach(key => {
-          const value = firstClient[key];
-          console.log(`🔍 [DEBUG][AsaasService] ${key}:`, value);
-          if (typeof value === 'string' && value.toLowerCase().includes('morado')) {
-            console.log(`🎯 [ENCONTRADO] Campo "${key}" contém "morado":`, value);
-          }
-        });
-        console.log('🔍 [DEBUG][AsaasService] === FIM DA BUSCA ===');
-      }
       
       return {
         data: response.data || [],
@@ -105,7 +122,7 @@ class AsaasService {
         totalCount: response.totalCount || 0
       };
     } catch (error) {
-      console.error('Erro ao buscar todos os clientes:', error);
+      console.error('Erro ao buscar clientes:', error);
       throw error;
     }
   }

@@ -1,0 +1,6 @@
+nome_cliente,email_contato,telefone_principal,documento_cpf,empresa_nome,endereco_completo,cidade_local,estado_uf
+João Silva,joao.silva@email.com,11999887766,12345678901,Empresa ABC,Rua das Flores 123,São Paulo,SP
+Maria Santos,maria.santos@email.com,21987654321,98765432100,Empresa XYZ,Av. Paulista 456,Rio de Janeiro,RJ
+Pedro Oliveira,pedro.oliveira@email.com,31876543210,11122233344,Tech Solutions,Rua da Tecnologia 789,Belo Horizonte,MG
+Ana Costa,ana.costa@email.com,41765432109,55566677788,Inovação Ltda,Av. das Américas 321,Curitiba,PR
+Carlos Ferreira,carlos.ferreira@email.com,51654321098,99988877766,StartUp Inc,Rua dos Empreendedores 654,Porto Alegre,RS

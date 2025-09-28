@@ -26,6 +26,7 @@ interface CustomerImportData {
   state?: string;
   company?: string;
   country?: string;
+  customer_asaas_id?: string; // AIDEV-NOTE: Campo ID_Externo para vinculação com Asaas
   [key: string]: any;
 }
 
@@ -104,6 +105,8 @@ class ImportService {
       tenant_id: this.tenantId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      // AIDEV-NOTE: Campo ID_Externo para vinculação com Asaas
+      customer_asaas_id: clientData.customer_asaas_id?.trim(),
       // Dados de endereço com fallbacks
       address: clientData.address?.trim(),
       address_number: clientData.address_number || clientData.addressNumber,

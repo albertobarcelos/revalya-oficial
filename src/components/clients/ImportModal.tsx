@@ -57,7 +57,6 @@ export function ImportModal({
   const handleFileSelected = (file: File) => {
     setSelectedFile(file);
     // TODO: Implementar processamento do arquivo aqui
-    console.log('Arquivo selecionado:', file.name);
   };
 
   // AIDEV-NOTE: Handler para importação do Asaas
@@ -87,11 +86,11 @@ export function ImportModal({
       // AIDEV-NOTE: Mapear todos os campos disponíveis do Asaas para o ImportWizard
       const mockData = customers.map((customer, i) => ({
         // Campos básicos
-        id: customer.id || '', // AIDEV-NOTE: ID original do Asaas (cus_xxxxx)
+        id: customer.id || '', // AIDEV-NOTE: ID original do Asaas para mapeamento do ID_Cliente
         name: customer.name || `Cliente ${i + 1}`,
         email: customer.email || '',
         phone: customer.phone || '', // AIDEV-NOTE: Campo telefone fixo
-        celular: customer.mobilePhone || '', // AIDEV-NOTE: Campo celular do mobilePhone
+        mobilePhone: customer.mobilePhone || '', // AIDEV-NOTE: Campo mobilePhone original do Asaas
         
         // Informações empresariais (movido para cima do CPF/CNPJ)
         company: customer.company || '',
@@ -112,11 +111,9 @@ export function ImportModal({
         
         // Informações adicionais
         observations: customer.observations || '',
-        externalReference: customer.externalReference || '',
         
         // Status e identificação
         deleted: customer.deleted === true, // AIDEV-NOTE: Garantir valor booleano correto
-        id: customer.id || '', // AIDEV-NOTE: ID original do cliente no Asaas
       }));
       
       onImportData(mockData, 'asaas');
@@ -127,8 +124,6 @@ export function ImportModal({
         description: `${customers.length} clientes foram importados do Asaas.`,
       });
     } catch (error) {
-      console.error('Erro ao buscar clientes do Asaas:', error);
-      
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
       
       if (errorMessage.includes('não configurada') || errorMessage.includes('inativa')) {

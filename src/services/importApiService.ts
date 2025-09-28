@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 
-// AIDEV-NOTE: Cliente Supabase para autenticação
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// AIDEV-NOTE: Usando cliente Supabase autenticado do projeto para respeitar RLS
 
 // AIDEV-NOTE: Interface para resposta de upload
 export interface ImportUploadResponse {
@@ -67,7 +63,8 @@ export interface ImportHistoryFilters {
 }
 
 class ImportApiService {
-  private baseUrl = '/api/import';
+  // AIDEV-NOTE: URL base das Edge Functions do Supabase
+  private baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
   // AIDEV-NOTE: Obter token de autenticação
   private async getAuthToken(): Promise<string> {
@@ -80,64 +77,143 @@ class ImportApiService {
     return session.access_token;
   }
 
-  // AIDEV-NOTE: Fazer upload de arquivo para importação
-  async uploadFile(file: File): Promise<ImportUploadResponse> {
+  // AIDEV-NOTE: Obter dados do usuário atual
+  private async getCurrentUser() {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      throw new Error('Usuário não autenticado');
+    }
+    
+    return user;
+  }
+
+  // AIDEV-NOTE: Fazer upload de arquivo para importação usando Supabase Edge Function
+  async uploadFile(file: File, tenantId: string, userId: string, fieldMappings?: any[]): Promise<{ jobId: string; estimatedTime: number }> {
+    // AIDEV-NOTE: Debug logs para verificar fieldMappings no service
+    console.log('🔍 [DEBUG][importApiService] uploadFile chamado com:', {
+      fileName: file.name,
+      fileSize: file.size,
+      tenantId: tenantId,
+      userId: userId,
+      fieldMappingsCount: fieldMappings?.length || 0,
+      fieldMappings: fieldMappings,
+      hasFieldMappings: !!fieldMappings && fieldMappings.length > 0
+    });
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('tenantId', tenantId);
+    formData.append('userId', userId);
+    
+    // AIDEV-NOTE: Adicionar fieldMappings se fornecido
+    if (fieldMappings && fieldMappings.length > 0) {
+      const fieldMappingsJson = JSON.stringify(fieldMappings);
+      formData.append('fieldMappings', fieldMappingsJson);
+      
+      console.log('🔍 [DEBUG][importApiService] fieldMappings adicionados ao FormData:', {
+        fieldMappingsJson: fieldMappingsJson,
+        formDataHasFieldMappings: formData.has('fieldMappings')
+      });
+    } else {
+      console.log('⚠️ [WARNING][importApiService] Nenhum fieldMapping fornecido ou array vazio');
+    }
+    
+    // AIDEV-NOTE: Contar registros estimados baseado no tamanho do arquivo
+    const estimatedRecords = Math.ceil(file.size / 100); // Estimativa simples
+    formData.append('recordCount', estimatedRecords.toString());
+
     try {
       const token = await this.getAuthToken();
       
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`${this.baseUrl}/upload`, {
+      // AIDEV-NOTE: Usar userId passado como parâmetro para garantir consistência multi-tenant
+      console.log(`[AUDIT] Upload de arquivo - Tenant: ${tenantId}, User: ${userId}, File: ${file.name}`);
+      
+      const response = await fetch(`${this.baseUrl}/import-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'x-tenant-id': tenantId,
+          'x-user-id': userId
         },
-        body: formData,
+        body: formData
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro no upload do arquivo');
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: `HTTP ${response.status}` };
+        }
+        throw new Error(errorData.error || `Erro HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      
-      console.log('✅ Upload realizado com sucesso:', {
-        jobId: data.jobId,
-        totalRecords: data.totalRecords,
-        filename: file.name
-      });
+      const responseText = await response.text();
+      if (!responseText.trim()) {
+        throw new Error('Resposta vazia do servidor');
+      }
 
-      return data;
+      const data = JSON.parse(responseText);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Erro desconhecido');
+      }
+
+      return {
+        jobId: data.jobId,
+        estimatedTime: data.estimatedTime
+      };
     } catch (error) {
       console.error('❌ Erro no upload:', error);
       throw error;
     }
   }
 
-  // AIDEV-NOTE: Consultar status de um job de importação
+  // AIDEV-NOTE: Consultar status de um job de importação diretamente da tabela
   async getJobStatus(jobId: string): Promise<ImportJobStatus> {
     try {
-      const token = await this.getAuthToken();
+      console.log('🔍 [ImportApiService] Buscando status do job:', jobId);
 
-      const response = await fetch(`${this.baseUrl}/status/${jobId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // AIDEV-NOTE: Consultar diretamente a tabela import_jobs via Supabase
+      // Removendo .single() para evitar erro PGRST116 quando não há resultados
+      const { data: jobs, error } = await supabase
+        .from('import_jobs')
+        .select('*')
+        .eq('id', jobId);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao consultar status');
+      if (error) {
+        console.error('❌ Erro na consulta Supabase:', error);
+        throw new Error(`Erro ao consultar job: ${error.message}`);
       }
 
-      const data = await response.json();
-      return data;
+      if (!jobs || jobs.length === 0) {
+        console.warn('⚠️ Job não encontrado:', jobId);
+        throw new Error('Job não encontrado');
+      }
+
+      const job = jobs[0]; // Pegar o primeiro (e único) resultado
+
+      console.log('✅ [ImportApiService] Job encontrado:', job);
+
+      // AIDEV-NOTE: Mapear dados da tabela para interface ImportJobStatus
+      const jobStatus: ImportJobStatus = {
+        id: job.id,
+        status: job.status,
+        progress: job.progress || 0,
+        totalRecords: job.total_records || 0,
+        processedRecords: job.processed_records || 0,
+        successCount: job.success_count || 0,
+        errorCount: job.error_count || 0,
+        errors: job.errors || [],
+        filename: job.filename || '',
+        createdAt: job.created_at,
+        updatedAt: job.updated_at
+      };
+
+      return jobStatus;
     } catch (error) {
-      console.error('❌ Erro ao consultar status:', error);
+      console.error('❌ Erro ao buscar status do job:', error);
       throw error;
     }
   }

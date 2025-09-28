@@ -33,7 +33,6 @@ export const SYSTEM_FIELDS: SystemField[] = [
   { key: 'country', label: 'País', required: false, type: 'text' },
   { key: 'additional_info', label: 'Informações Adicionais', required: false, type: 'text' },
   { key: 'customer_asaas_id', label: 'ID_Externo', required: false, type: 'text' },
-  { key: 'id', label: 'ID_Cliente', required: false, type: 'text' },
 ];
 
 // AIDEV-NOTE: Estrutura para mapeamento de campos
@@ -80,13 +79,23 @@ export interface ProcessedRecord {
 
 // AIDEV-NOTE: Estado do processo de importação
 export interface ImportState {
-  step: 'mapping' | 'confirmation' | 'preview' | 'importing';
+  step: 'mapping' | 'confirmation' | 'preview' | 'importing' | 'rejected';
   sourceType: 'asaas' | 'csv';
   sourceData: SourceData[];
   fieldMappings: FieldMapping[];
   processedRecords: ProcessedRecord[];
   validRecords: ProcessedRecord[];
   invalidRecords: ProcessedRecord[];
+  rejectedRecords?: RejectedRecord[]; // AIDEV-NOTE: Registros rejeitados pela Edge Function
+}
+
+// AIDEV-NOTE: Registro rejeitado com detalhes do erro
+export interface RejectedRecord {
+  row: number;
+  data: Record<string, any>;
+  error: string;
+  field?: string;
+  canBeFixed?: boolean; // AIDEV-NOTE: Indica se o erro pode ser corrigido pelo usuário
 }
 
 // AIDEV-NOTE: Configuração de importação

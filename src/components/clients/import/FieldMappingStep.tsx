@@ -57,14 +57,14 @@ const ASAAS_FIELD_TRANSLATIONS: Record<string, string> = {
   'email': 'Email',
   'phone': 'Telefone',
   'mobilePhone': 'Celular',
-  'cpfCnpj': 'CPF/CNPJ',
+  'cpf_cnpj': 'CPF/CNPJ',
   'personType': 'Tipo de pessoa',
   'company': 'Empresa',
   'groupName': 'Nome do grupo',
   
   // Endereço
   'address': 'Endereço',
-  'addressNumber': 'Número',
+  'address_number': 'Número',
   'complement': 'Complemento',
   'neighborhood': 'Bairro',
   'province': 'Bairro',
@@ -72,12 +72,10 @@ const ASAAS_FIELD_TRANSLATIONS: Record<string, string> = {
   'cityName': 'Cidade',
   'state': 'Estado',
   'country': 'País',
-  'postalCode': 'CEP',
+  'postal_code': 'CEP',
   
   // Informações adicionais
   'observations': 'Observações',
-  'externalReference': 'ID_Cliente',
-  'external_reference': 'ID_Cliente', // AIDEV-NOTE: Campo específico para ID do cliente ASAAS
   'notificationDisabled': 'Notificações desabilitadas',
   'additionalEmails': 'Emails adicionais',
   'municipalInscription': 'Inscrição municipal',
@@ -91,8 +89,8 @@ const ASAAS_FIELD_TRANSLATIONS: Record<string, string> = {
   'dateCreated': 'Data de criação',
   'birthDate': 'Data de nascimento',
   
-  // IDs e referências
-  'id': 'ID_Cliente',
+  // IDs e referências - AIDEV-NOTE: Campo 'id' traduzido para 'ID_Externo' para mapeamento visual
+  'asaas_customer_id': 'ID_Cliente',
   'object': 'Tipo de objeto',
   'deleted': 'Deletado'
 };
@@ -116,37 +114,40 @@ export function FieldMappingStep({
   mappingProgress,
   fullSourceData
 }: FieldMappingStepProps) {
+  const { currentTenant } = useTenantContext();
+
+  // AIDEV-NOTE: Extrair campos únicos dos dados de origem (incluindo 'id' para Asaas)
+  const sourceFields = Object.keys(sourceData[0] || {});
+  
+  console.log('🔍 [DEBUG][FieldMappingStep] Campos disponíveis:', {
+    sourceFields,
+    sourceDataLength: sourceData.length,
+    firstRecord: sourceData[0],
+    hasIdField: sourceFields.includes('id')
+  });
+
+  // AIDEV-NOTE: Debug dos fieldMappings recebidos
+  console.log('🔍 [DEBUG][FieldMappingStep] Field Mappings recebidos:', {
+    fieldMappings,
+    mappingsCount: fieldMappings.length,
+    idMapping: fieldMappings.find(m => m.sourceField === 'id'),
+    customerAsaasIdMapping: fieldMappings.find(m => m.targetField === 'customer_asaas_id')
+  });
+
   // AIDEV-NOTE: Estado para armazenar nomes de cidades resolvidos (não mais necessário)
   // Removido pois agora usamos apenas cityName que já contém o nome da cidade
   const { tenant } = useTenantContext(); // AIDEV-NOTE: Obter tenant_id para requisições do Asaas
-  
-  // AIDEV-NOTE: Debug para verificar dados recebidos
-  console.log('🔍 [DEBUG][FieldMappingStep] sourceData:', sourceData);
-  console.log('🔍 [DEBUG][FieldMappingStep] sourceData.length:', sourceData.length);
-  console.log('🔍 [DEBUG][FieldMappingStep] sourceData[0]:', sourceData[0]);
-  
-  // AIDEV-NOTE: Obter campos disponíveis da fonte de dados
-  const sourceFields = Object.keys(sourceData[0] || {}).filter(field => field !== 'id');
-  
-  console.log('🔍 [DEBUG][FieldMappingStep] sourceFields:', sourceFields);
 
-  // AIDEV-NOTE: Obter dados de exemplo para cada campo (busca em múltiplos registros)
+  // AIDEV-NOTE: Função para obter dados de exemplo de um campo específico
   const getSampleData = (sourceFieldName: string): string => {
-    // AIDEV-NOTE: Debug específico para o campo province
-    if (sourceFieldName === 'province') {
-      console.log('🔍 [DEBUG][getSampleData] Analisando campo province:');
-      console.log('🔍 [DEBUG][getSampleData] sourceData:', sourceData);
-      console.log('🔍 [DEBUG][getSampleData] sourceData.length:', sourceData.length);
-      
-      sourceData.forEach((record, index) => {
-        console.log(`🔍 [DEBUG][getSampleData] Record ${index}:`, {
-          id: record.id,
-          province: record.province,
-          'typeof province': typeof record.province,
-          'province length': record.province?.length,
-          'province trimmed': record.province?.trim(),
-          'all keys': Object.keys(record)
-        });
+    // DEBUG: Log temporário para verificar dados
+    if (sourceFieldName === 'id') {
+      console.log('DEBUG - getSampleData para campo "id":', {
+        sourceFieldName,
+        sourceDataLength: sourceData.length,
+        firstRecord: sourceData[0],
+        hasIdField: sourceData[0] && 'id' in sourceData[0],
+        idValue: sourceData[0] && sourceData[0]['id']
       });
     }
     
@@ -156,18 +157,9 @@ export function FieldMappingStep({
       if (record && record[sourceFieldName]) {
         const value = String(record[sourceFieldName]).trim();
         if (value) {
-          // AIDEV-NOTE: Log específico quando encontra valor para province
-          if (sourceFieldName === 'province') {
-            console.log('🔍 [DEBUG][getSampleData] Valor encontrado para province:', value);
-          }
           return value;
         }
       }
-    }
-    
-    // AIDEV-NOTE: Log quando não encontra valor para province
-    if (sourceFieldName === 'province') {
-      console.log('🔍 [DEBUG][getSampleData] Nenhum valor válido encontrado para province, retornando "Sem dados"');
     }
     
     return 'Sem dados';
@@ -197,9 +189,9 @@ export function FieldMappingStep({
   };
 
   // AIDEV-NOTE: Obter campo do sistema mapeado para um campo de origem (para o Select)
+  // AIDEV-NOTE: Função para obter o campo do sistema mapeado para um campo de origem
   const getMappedSystemField = (sourceField: string): string | null => {
     const mapping = fieldMappings.find(m => m.sourceField === sourceField);
-    // AIDEV-NOTE: Retorna null se não há mapeamento ou se targetField é null/undefined
     return mapping?.targetField ?? null;
   };
 
@@ -208,6 +200,8 @@ export function FieldMappingStep({
     const mapping = fieldMappings.find(m => m.sourceField === sourceField);
     return mapping?.isImmutable === true;
   };
+
+
 
   return (
     <div className="space-y-6">
@@ -294,17 +288,36 @@ export function FieldMappingStep({
                     const selectValue = mappedSystemField ?? "__unmapped__";
                     const isImmutable = isFieldImmutable(field);
                     
-                    // AIDEV-NOTE: Se o campo é imutável, mostrar badge ao invés de Select
+                    // AIDEV-NOTE: Debug específico para campo 'id'
+                    if (field === 'id') {
+                      console.log('🔍 [DEBUG][FieldMappingStep] Campo ID:', {
+                        field,
+                        mappedSystemField,
+                        selectValue,
+                        isImmutable
+                      });
+                    }
+                    
+                    // AIDEV-NOTE: Se o campo é imutável, mostrar badge especial
                     if (isImmutable) {
+                      const displayLabel = REVALYA_CUSTOMER_FIELDS.find(f => f.key === mappedSystemField)?.label || mappedSystemField;
+                      
                       return (
-                        <div className="flex items-center gap-2 h-8 px-3 py-1 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <motion.div 
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ duration: 0.2 }}
+                          className="flex items-center gap-2 h-8 px-3 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-800 rounded-md shadow-sm"
+                        >
+                          <Link2 className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                           <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                            {REVALYA_CUSTOMER_FIELDS.find(f => f.key === mappedSystemField)?.label || mappedSystemField}
+                            {displayLabel}
                           </span>
-                          <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                          <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+                            <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
                             Automático
                           </Badge>
-                        </div>
+                        </motion.div>
                       );
                     }
                     

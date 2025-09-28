@@ -26,14 +26,16 @@ import { FieldMappingStep } from './FieldMappingStep';
 import { MappingConfirmationStep } from './MappingConfirmationStep';
 import { DataPreviewStep } from './DataPreviewStep';
 import { ImportingStep } from './ImportingStep';
+import { RejectedRecordsStep } from './RejectedRecordsStep'; // AIDEV-NOTE: Importar novo componente
 import type { AsaasCustomer } from '@/types/asaas';
+import type { RejectedRecord } from '@/types/import'; // AIDEV-NOTE: Importar tipo RejectedRecord
 
 interface ImportWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sourceType: 'csv' | 'asaas';
   data: any[];
-  onImportComplete: (selectedData: any[]) => void;
+  onSuccess: (result: any) => void;
   isImporting?: boolean;
   importProgress?: {
     current: number;
@@ -42,17 +44,55 @@ interface ImportWizardProps {
   };
 }
 
+// AIDEV-NOTE: Função utilitária para gerar CSV de registros rejeitados
+const generateRejectedRecordsCSV = (rejectedRecords: RejectedRecord[]): string => {
+  if (rejectedRecords.length === 0) return '';
+  
+  // AIDEV-NOTE: Cabeçalhos do CSV
+  const headers = ['Linha', 'Erro', 'Pode ser Corrigido', ...Object.keys(rejectedRecords[0].data)];
+  
+  // AIDEV-NOTE: Converter registros para linhas CSV
+  const rows = rejectedRecords.map(record => [
+    record.rowNumber.toString(),
+    record.errorMessage,
+    record.canBeFixed ? 'Sim' : 'Não',
+    ...Object.values(record.data).map(value => 
+      typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : String(value || '')
+    )
+  ]);
+  
+  // AIDEV-NOTE: Combinar cabeçalhos e linhas
+  return [headers, ...rows].map(row => row.join(',')).join('\n');
+};
+
+// AIDEV-NOTE: Função utilitária para download de CSV
+const downloadCSV = (csvContent: string, filename: string): void => {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  
+  if (link.download !== undefined) {
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
+
 export function ImportWizard({
   open,
   onOpenChange,
   sourceType,
   data,
-  onImportComplete,
+  onSuccess,
   isImporting = false,
   importProgress
 }: ImportWizardProps) {
   const {
     importState,
+    config,
     selectedRecords,
     mappingProgress,
     canProceedToPreview,
@@ -64,12 +104,21 @@ export function ImportWizard({
     selectAllValid,
     deselectAll,
     goToStep,
-    resetWizard
+    resetWizard,
+    setConfig,
+    setRejectedRecords // AIDEV-NOTE: Adicionar função para definir registros rejeitados
   } = useImportWizard();
 
   // AIDEV-NOTE: Inicializar dados quando o modal abre
   React.useEffect(() => {
     if (open && data.length > 0) {
+      console.log('🔍 [DEBUG][ImportWizard] Dados recebidos:', {
+        sourceType,
+        dataLength: data.length,
+        firstRecord: data[0],
+        hasIdField: data[0]?.id ? 'SIM' : 'NÃO',
+        idValue: data[0]?.id
+      });
       initializeSourceData(data, sourceType);
     }
   }, [open, data, sourceType, initializeSourceData]);
@@ -133,10 +182,6 @@ export function ImportWizard({
   };
 
   const handlePreviewNext = () => {
-    console.log('🔍 [DEBUG][ImportWizard.handlePreviewNext] Iniciando preparação dos dados');
-    console.log('🔍 [DEBUG][ImportWizard.handlePreviewNext] selectedRecords:', selectedRecords);
-    console.log('🔍 [DEBUG][ImportWizard.handlePreviewNext] selectedRecords.length:', selectedRecords.length);
-    
     // AIDEV-NOTE: Ir para o step de importação em vez de chamar onImportComplete diretamente
     goToStep('importing');
   };
@@ -252,6 +297,7 @@ export function ImportWizard({
                   processedRecords={importState.processedRecords}
                   validRecords={importState.validRecords}
                   invalidRecords={importState.invalidRecords}
+                  fieldMappings={importState.fieldMappings} // AIDEV-NOTE: Passar fieldMappings para DataPreviewStep
                   onToggleSelection={toggleRecordSelection}
                   onSelectAllValid={selectAllValid}
                   onDeselectAll={deselectAll}
@@ -274,9 +320,60 @@ export function ImportWizard({
               >
                 <ImportingStep
                   selectedRecords={selectedRecords}
-                  onImportComplete={onImportComplete}
+                  fieldMappings={importState.fieldMappings}
+                  onImportComplete={onSuccess}
                   onBack={() => goToStep('preview')}
                   onClose={() => onOpenChange(false)}
+                  onRejectedRecords={setRejectedRecords} // AIDEV-NOTE: Passar função para lidar com registros rejeitados
+                />
+              </motion.div>
+            )}
+
+            {importState.step === 'rejected' && (
+              <motion.div
+                key="rejected"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <RejectedRecordsStep
+                  rejectedRecords={importState.rejectedRecords || []}
+                  onCorrectRecord={(recordIndex, correctedData) => {
+                    // AIDEV-NOTE: Implementar correção de registro
+                    const updatedRejectedRecords = [...(importState.rejectedRecords || [])];
+                    if (updatedRejectedRecords[recordIndex]) {
+                      updatedRejectedRecords[recordIndex] = {
+                        ...updatedRejectedRecords[recordIndex],
+                        data: correctedData,
+                        canBeFixed: false // AIDEV-NOTE: Marcar como corrigido
+                      };
+                      
+                      // AIDEV-NOTE: Atualizar estado com registros corrigidos
+                      setImportState(prev => ({
+                        ...prev,
+                        rejectedRecords: updatedRejectedRecords
+                      }));
+                    }
+                  }}
+                  onRetryImport={() => {
+                    // AIDEV-NOTE: Filtrar apenas registros corrigidos e voltar para importação
+                    const correctedRecords = (importState.rejectedRecords || [])
+                      .filter(record => !record.canBeFixed)
+                      .map(record => record.data);
+                    
+                    if (correctedRecords.length > 0) {
+                      // AIDEV-NOTE: Atualizar selectedRecords com registros corrigidos
+                      setSelectedRecords(correctedRecords);
+                      goToStep('importing');
+                    }
+                  }}
+                  onGoBack={() => goToStep('preview')}
+                  onExportRejected={() => {
+                    // AIDEV-NOTE: Implementar exportação de registros rejeitados para CSV
+                    const csvContent = generateRejectedRecordsCSV(importState.rejectedRecords || []);
+                    downloadCSV(csvContent, 'registros-rejeitados.csv');
+                  }}
                 />
               </motion.div>
             )}

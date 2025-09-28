@@ -400,6 +400,15 @@ Notas Multi-Tenant
 - A persistência em `sessionStorage` mantém o isolamento por aba, conforme o Manual Multi-Tenant Revalya.
 - O App continua aplicando RLS e filtros explícitos por `tenant_id` em todas as consultas.
 
+## 🔧 Serviços
+
+### Importação de Dados
+- **BulkInsertService**: Inserção otimizada em lote via Edge Functions com fallback direto no Supabase
+  - ✅ **Correção 28/01/2025**: Implementado detecção adequada de falhas e fallback automático
+  - 🔍 **Monitoração**: Logs detalhados indicam método usado (`edge_function` | `direct_supabase`)
+  - 🛡️ **Robustez**: Timeout configurável (30s) e tratamento de erros em múltiplas camadas
+- **ImportService**: Processamento e validação de arquivos CSV/Excel
+
 ## Estrutura do Projeto
 
 ```

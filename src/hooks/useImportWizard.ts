@@ -28,7 +28,8 @@ export function useImportWizard() {
     fieldMappings: [],
     processedRecords: [],
     validRecords: [],
-    invalidRecords: []
+    invalidRecords: [],
+    rejectedRecords: [] // AIDEV-NOTE: Inicializar array de registros rejeitados
   });
 
   // AIDEV-NOTE: Dados completos para carregamento após mapeamento
@@ -46,9 +47,16 @@ export function useImportWizard() {
 
   // AIDEV-NOTE: Inicializar dados de origem (apenas 1 registro para mapeamento)
   const initializeSourceData = useCallback((data: any[], sourceType: 'asaas' | 'csv') => {
+    console.log('🔍 [DEBUG][useImportWizard] initializeSourceData chamada:', {
+      sourceType,
+      dataLength: data.length,
+      firstRecord: data[0],
+      hasIdInFirstRecord: data[0]?.id ? 'SIM' : 'NÃO'
+    });
+    
     // AIDEV-NOTE: Armazenar dados completos para uso posterior
     setFullSourceData(data);
-    
+
     // AIDEV-NOTE: Usar apenas o primeiro registro para mapeamento
     const sampleData = data.slice(0, 1);
     
@@ -56,7 +64,6 @@ export function useImportWizard() {
       if (sourceType === 'asaas') {
         // Mapear dados do Asaas para formato padrão
         const processedItem = {
-          id: item.id || uuidv4(),
           name: item.name || '',
           email: item.email || '',
           phone: item.phone || '', // AIDEV-NOTE: Preservar campo phone original
@@ -71,22 +78,15 @@ export function useImportWizard() {
           state: item.state || '',
           postal_code: item.postalCode || '',
           country: item.country || 'Brasil',
-          external_reference: item.externalReference || '',
+          asaas_customer_id: item.id || '', // AIDEV-NOTE: Preservar ID original do Asaas para mapeamento
           observations: item.observations || ''
         };
 
-        // AIDEV-NOTE: Debug específico para investigar problema do campo neighborhood
-        if (item.id === 'cus_000136093936') {
-          console.log('🔍 [DEBUG] Cliente cus_000136093936 - Dados originais (2ª ocorrência):', {
-            id: item.id,
-            name: item.name,
-            province: item.province,
-            neighborhood: item.neighborhood,
-            'province || neighborhood': item.province || item.neighborhood || '',
-            allFields: Object.keys(item)
-          });
-          console.log('🔍 [DEBUG] Cliente cus_000136093936 - Dados processados (2ª ocorrência):', processedItem);
-        }
+        console.log('🔍 [DEBUG][useImportWizard] Dados processados do Asaas:', {
+          originalItem: item,
+          processedItem,
+          fieldsPreserved: Object.keys(processedItem).filter(key => processedItem[key])
+        });
 
         return processedItem;
       } else {
@@ -99,52 +99,131 @@ export function useImportWizard() {
     });
 
     // AIDEV-NOTE: Criar mapeamentos com mapeamento automático para campos específicos do Asaas
-    const emptyMappings: FieldMapping[] = SYSTEM_FIELDS.map(systemField => {
-      // AIDEV-NOTE: Mapeamento automático e imutável para customer_asaas_id
-      if (systemField.key === 'customer_asaas_id' && sourceType === 'asaas') {
-        return {
-          sourceField: 'external_reference',
-          targetField: systemField.key,
-          sampleData: sourceData[0]?.external_reference || '',
-          isAutoMapped: true, // AIDEV-NOTE: Marca como mapeamento automático
-          isImmutable: true   // AIDEV-NOTE: Impede alteração manual
-        };
+    const initialMappings: FieldMapping[] = SYSTEM_FIELDS.map(field => {
+      let sourceField: string | null = null;
+      let isAutoMapped = false;
+      let isImmutable = false;
+
+      if (sourceType === 'asaas') {
+        // Mapeamento automático para dados do Asaas
+        switch (field.key) {
+          case 'name':
+            sourceField = 'name';
+            isAutoMapped = true;
+            break;
+          case 'email':
+            sourceField = 'email';
+            isAutoMapped = true;
+            break;
+          case 'cpf_cnpj':
+            sourceField = 'cpf_cnpj';
+            isAutoMapped = true;
+            break;
+          case 'company':
+            sourceField = 'company';
+            isAutoMapped = true;
+            break;
+          case 'address':
+            sourceField = 'address';
+            isAutoMapped = true;
+            break;
+          case 'address_number':
+            sourceField = 'address_number';
+            isAutoMapped = true;
+            break;
+          case 'complement':
+            sourceField = 'complement';
+            isAutoMapped = true;
+            break;
+          case 'neighborhood':
+            sourceField = 'province';
+            isAutoMapped = true;
+            break;
+          case 'city':
+            sourceField = 'city';
+            isAutoMapped = true;
+            break;
+          case 'state':
+            sourceField = 'state';
+            isAutoMapped = true;
+            break;
+          case 'postal_code':
+            sourceField = 'postal_code';
+            isAutoMapped = true;
+            break;
+          case 'country':
+            sourceField = 'country';
+            isAutoMapped = true;
+            break;
+          case 'customer_asaas_id':
+            sourceField = 'asaas_customer_id'; // AIDEV-NOTE: Mapear para o campo preservado
+            isAutoMapped = true;
+            isImmutable = false; // AIDEV-NOTE: Permitir que o usuário desmapeie se desejar
+            break;
+          case 'additional_info':
+            sourceField = 'observations';
+            isAutoMapped = true;
+            break;
+          case 'celular_whatsapp':
+            // AIDEV-NOTE: Mapeamento automático inteligente para celular_whatsapp (com fallback)
+            const mobilePhoneData = sourceData[0]?.mobilePhone?.trim();
+            const phoneData = sourceData[0]?.phone?.trim();
+            
+            // AIDEV-NOTE: Priorizar mobilePhone, mas fazer fallback para phone se mobilePhone estiver vazio
+            sourceField = mobilePhoneData ? 'mobilePhone' : (phoneData ? 'phone' : 'mobilePhone');
+            isAutoMapped = true;
+            
+            console.log('🔍 [DEBUG][useImportWizard] Mapeamento celular_whatsapp:', {
+              mobilePhoneData,
+              phoneData,
+              selectedSourceField: sourceField
+            });
+            break;
+          case 'phone':
+            // AIDEV-NOTE: Mapeamento automático para phone -> phone (telefone fixo) - apenas se não foi usado no celular
+            const mobilePhoneDataForPhone = sourceData[0]?.mobilePhone?.trim();
+            const phoneDataForPhone = sourceData[0]?.phone?.trim();
+            
+            // AIDEV-NOTE: Se mobilePhone está vazio e phone foi usado para celular, deixar phone vazio
+            // Se mobilePhone tem dados, phone pode ser mapeado normalmente
+            const shouldMapPhone = mobilePhoneDataForPhone || !phoneDataForPhone;
+            sourceField = shouldMapPhone ? 'phone' : null;
+            isAutoMapped = true;
+            
+            console.log('🔍 [DEBUG][useImportWizard] Mapeamento phone:', {
+              mobilePhoneDataForPhone,
+              phoneDataForPhone,
+              shouldMapPhone,
+              selectedSourceField: sourceField
+            });
+            break;
+        }
       }
-      
-      // AIDEV-NOTE: Mapeamento automático para phone -> phone
-      if (systemField.key === 'phone' && sourceType === 'asaas') {
-        return {
-          sourceField: 'phone',
-          targetField: systemField.key,
-          sampleData: sourceData[0]?.phone || '',
-          isAutoMapped: true, // AIDEV-NOTE: Marca como mapeamento automático
-          isImmutable: false  // AIDEV-NOTE: Permite alteração manual se necessário
-        };
-      }
-      
-      // AIDEV-NOTE: Mapeamento automático para mobilePhone -> celular_whatsapp
-      if (systemField.key === 'celular_whatsapp' && sourceType === 'asaas') {
-        return {
-          sourceField: 'mobilePhone',
-          targetField: systemField.key,
-          sampleData: sourceData[0]?.mobilePhone || '',
-          isAutoMapped: true, // AIDEV-NOTE: Marca como mapeamento automático
-          isImmutable: false  // AIDEV-NOTE: Permite alteração manual se necessário
-        };
-      }
-      
+
       return {
-        sourceField: null,
-        targetField: systemField.key,
-        sampleData: ''
+        sourceField,
+        targetField: field.key,
+        isAutoMapped,
+        isImmutable
       };
+    });
+
+    console.log('🔍 [DEBUG][useImportWizard] Mapeamentos iniciais criados:', {
+      totalMappings: initialMappings.length,
+      autoMappedCount: initialMappings.filter(m => m.isAutoMapped).length,
+      mappingsWithSource: initialMappings.filter(m => m.sourceField).length,
+      detailedMappings: initialMappings.filter(m => m.sourceField).map(m => ({
+        source: m.sourceField,
+        target: m.targetField,
+        autoMapped: m.isAutoMapped
+      }))
     });
 
     setImportState(prev => ({
       ...prev,
       sourceType,
       sourceData,
-      fieldMappings: emptyMappings,
+      fieldMappings: initialMappings,
       step: 'mapping'
     }));
   }, []);
@@ -187,19 +266,24 @@ export function useImportWizard() {
 
   // AIDEV-NOTE: Função para processar registros
   const processRecords = useCallback(async (sourceData: SourceData[], fieldMappings: FieldMapping[]): Promise<ProcessedRecord[]> => {
-    console.log('🔍 [DEBUG] processRecords - Iniciando processamento de registros');
-    console.log('🔍 [DEBUG] sourceData length:', sourceData.length);
-    console.log('🔍 [DEBUG] fieldMappings:', fieldMappings);
+    console.log('🔍 [DEBUG][useImportWizard] processRecords iniciado:', {
+      sourceDataLength: sourceData.length,
+      fullSourceDataLength: fullSourceData.length,
+      fieldMappingsCount: fieldMappings.length,
+      sourceType: importState.sourceType
+    });
 
     // AIDEV-NOTE: Processar todos os dados usando o mapeamento confirmado
-    const allSourceData: SourceData[] = fullSourceData.map(item => {
+    const allSourceData: SourceData[] = fullSourceData.map((item, index) => {
       if (importState.sourceType === 'asaas') {
         // Mapear dados do Asaas para formato padrão
-        return {
+        const processedItem = {
           id: item.id || uuidv4(),
+          asaas_customer_id: item.id || '', // AIDEV-NOTE: Preservar ID original do Asaas para mapeamento
           name: item.name || '',
           email: item.email || '',
-          phone: item.phone || item.mobilePhone || '',
+          phone: item.phone || '', // AIDEV-NOTE: Preservar campo phone original
+          mobilePhone: item.mobilePhone || '', // AIDEV-NOTE: Preservar campo mobilePhone original separadamente
           cpf_cnpj: item.cpfCnpj || '',
           company: item.company || '',
           address: item.address || '',
@@ -210,9 +294,19 @@ export function useImportWizard() {
           state: item.state || '',
           postal_code: item.postalCode || '',
           country: item.country || 'Brasil',
-          external_reference: item.externalReference || '',
           observations: item.observations || ''
         };
+
+        // AIDEV-NOTE: Log detalhado apenas para os primeiros 3 registros
+        if (index < 3) {
+          console.log(`🔍 [DEBUG][useImportWizard] Processamento Asaas item ${index}:`, {
+            originalItem: item,
+            processedItem,
+            fieldsWithData: Object.keys(processedItem).filter(key => processedItem[key])
+          });
+        }
+
+        return processedItem;
       } else {
         // Dados do CSV já vêm no formato correto
         return {
@@ -222,10 +316,13 @@ export function useImportWizard() {
       }
     });
 
-    console.log('🔍 [DEBUG] allSourceData length:', allSourceData.length);
-    console.log('🔍 [DEBUG] allSourceData[0]:', allSourceData[0]);
+    console.log('🔍 [DEBUG][useImportWizard] allSourceData processado:', {
+      totalRecords: allSourceData.length,
+      firstRecord: allSourceData[0],
+      availableFields: Object.keys(allSourceData[0] || {})
+    });
 
-    const processedRecords: ProcessedRecord[] = allSourceData.map(source => {
+    const processedRecords: ProcessedRecord[] = allSourceData.map((source, index) => {
       // Aplicar mapeamento
       const mappedData: Record<string, string | null> = {};
       
@@ -245,6 +342,20 @@ export function useImportWizard() {
         }
       });
 
+      // AIDEV-NOTE: Log detalhado do mapeamento apenas para os primeiros 3 registros
+      if (index < 3) {
+        console.log(`🔍 [DEBUG][useImportWizard] Mapeamento aplicado item ${index}:`, {
+          sourceData: source,
+          appliedMappings: fieldMappings.filter(m => m.sourceField && m.targetField).map(m => ({
+            source: m.sourceField,
+            target: m.targetField,
+            sourceValue: source[m.sourceField!],
+            mappedValue: mappedData[m.targetField!]
+          })),
+          finalMappedData: mappedData
+        });
+      }
+
       // Validar registro
       const validation = validateRecord(mappedData, SYSTEM_FIELDS);
 
@@ -258,18 +369,19 @@ export function useImportWizard() {
       };
     });
 
-    console.log('🔍 [DEBUG] processedRecords length:', processedRecords.length);
-    console.log('🔍 [DEBUG] processedRecords[0]:', processedRecords[0]);
+    console.log('🔍 [DEBUG][useImportWizard] processRecords finalizado:', {
+      totalProcessed: processedRecords.length,
+      validCount: processedRecords.filter(r => r.isValid).length,
+      invalidCount: processedRecords.filter(r => !r.isValid).length,
+      firstValidRecord: processedRecords.find(r => r.isValid),
+      firstInvalidRecord: processedRecords.find(r => !r.isValid)
+    });
 
     return processedRecords;
   }, [fullSourceData, importState.sourceType, config]);
 
   // AIDEV-NOTE: Processar dados completos após confirmação do mapeamento
   const processAllRecords = useCallback(async () => {
-    console.log('🔍 [DEBUG] processAllRecords - Iniciando processamento');
-    console.log('🔍 [DEBUG] importState.sourceData:', importState.sourceData);
-    console.log('🔍 [DEBUG] importState.fieldMappings:', importState.fieldMappings);
-    
     if (!importState.sourceData.length || !importState.fieldMappings.length) {
       console.error('❌ [ERROR] Dados ou mapeamentos ausentes');
       return;
@@ -282,8 +394,6 @@ export function useImportWizard() {
         importState.sourceData,
         importState.fieldMappings
       );
-      
-      console.log('🔍 [DEBUG] processedRecords:', processedRecords);
       
       const validRecords = processedRecords.filter(record => record.isValid);
       const invalidRecords = processedRecords.filter(record => !record.isValid);
@@ -356,9 +466,19 @@ export function useImportWizard() {
       fieldMappings: [],
       processedRecords: [],
       validRecords: [],
-      invalidRecords: []
+      invalidRecords: [],
+      rejectedRecords: [] // AIDEV-NOTE: Resetar registros rejeitados
     });
     setSelectedRecords([]);
+  }, []);
+
+  // AIDEV-NOTE: Função para definir registros rejeitados e navegar para o step de correção
+  const setRejectedRecords = useCallback((rejectedRecords: any[]) => {
+    setImportState(prev => ({
+      ...prev,
+      rejectedRecords,
+      step: 'rejected'
+    }));
   }, []);
 
   // AIDEV-NOTE: Computações derivadas
@@ -396,6 +516,7 @@ export function useImportWizard() {
     deselectAll,
     goToStep,
     resetWizard,
-    setConfig
+    setConfig,
+    setRejectedRecords // AIDEV-NOTE: Exportar função para definir registros rejeitados
   };
 }

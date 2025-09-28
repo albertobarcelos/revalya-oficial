@@ -34,13 +34,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { ProcessedRecord } from '@/types/import';
+import type { ProcessedRecord, FieldMapping } from '@/types/import';
 import { SYSTEM_FIELDS } from '@/types/import';
 
 interface DataPreviewStepProps {
   processedRecords: ProcessedRecord[];
   validRecords: ProcessedRecord[];
   invalidRecords: ProcessedRecord[];
+  fieldMappings: FieldMapping[]; // AIDEV-NOTE: Adicionar fieldMappings para determinar colunas visíveis
   onToggleSelection: (recordId: string) => void;
   onSelectAllValid: () => void;
   onDeselectAll: () => void;
@@ -59,6 +60,7 @@ export function DataPreviewStep({
   processedRecords,
   validRecords,
   invalidRecords,
+  fieldMappings, // AIDEV-NOTE: Receber fieldMappings como prop
   onToggleSelection,
   onSelectAllValid,
   onDeselectAll,
@@ -90,7 +92,6 @@ export function DataPreviewStep({
   // AIDEV-NOTE: Salvar edição (implementação simplificada)
   const saveEdit = () => {
     // TODO: Implementar lógica de salvamento
-    console.log('Salvando edição:', editingCell, editingValue);
     setEditingCell(null);
     setEditingValue('');
   };
@@ -98,12 +99,12 @@ export function DataPreviewStep({
   // AIDEV-NOTE: Filtrar registros para exibição
   const displayRecords = showInvalidOnly ? invalidRecords : processedRecords;
 
-  // AIDEV-NOTE: Obter campos mapeados para exibição
+  // AIDEV-NOTE: Obter campos mapeados para exibição baseado nos fieldMappings
   const mappedFields = SYSTEM_FIELDS.filter(field => 
-    processedRecords.some(record => 
-      record.mappedData[field.key] !== undefined && 
-      record.mappedData[field.key] !== null &&
-      record.mappedData[field.key] !== ''
+    fieldMappings.some(mapping => 
+      mapping.targetField === field.key && 
+      mapping.sourceField !== null && 
+      mapping.sourceField !== ''
     )
   );
 

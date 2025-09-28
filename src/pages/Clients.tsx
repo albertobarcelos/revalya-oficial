@@ -572,7 +572,7 @@ export default function Clients() {
           open={showImportWizard}
           onOpenChange={setShowImportWizard}
           data={importWizardData}
-          type={importType}
+          sourceType={importType}
           onSuccess={(result) => {
             setImportResult(result);
             setShowSuccessModal(true);
