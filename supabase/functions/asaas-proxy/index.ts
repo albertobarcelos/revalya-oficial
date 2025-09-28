@@ -7,6 +7,31 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
+// AIDEV-NOTE: Rate limiting simples (em produção usar Redis)
+const requestCache = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(tenantId: string): boolean {
+  const now = Date.now();
+  const key = `asaas_${tenantId}`;
+  const limit = 100; // 100 requests per minute
+  const windowMs = 60000; // 1 minute
+  
+  const current = requestCache.get(key);
+  
+  if (!current || now > current.resetTime) {
+    requestCache.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  
+  if (current.count >= limit) {
+    console.warn('RATE_LIMIT_EXCEEDED:', { tenant_id: tenantId, count: current.count, limit });
+    return false;
+  }
+  
+  current.count++;
+  return true;
+}
+
 // AIDEV-NOTE: Função para buscar credenciais do Asaas por tenant
 async function getAsaasCredentials(tenantId: string, environment: string = 'production') {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -56,13 +81,26 @@ serve(async (req) => {
       throw new Error('Tenant ID é obrigatório (header x-tenant-id ou body tenant_id)')
     }
     
-    console.log('Buscando credenciais para tenant:', finalTenantId, 'ambiente:', environment)
+    // AIDEV-NOTE: Verificar rate limiting
+    if (!checkRateLimit(finalTenantId)) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded. Tente novamente em alguns minutos.' 
+        }),
+        { 
+          status: 429, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    console.log('Validando integração para tenant')
     
     // AIDEV-NOTE: Buscar credenciais específicas do tenant
     const credentials = await getAsaasCredentials(finalTenantId, environment)
     
     if (!credentials || !credentials.apiKey) {
-      console.error('Credenciais do Asaas não configuradas para o tenant:', finalTenantId)
+      console.error('Integração Asaas não configurada para tenant')
       throw new Error('Integração com Asaas não configurada para este tenant. Configure nas Integrações.')
     }
     
@@ -70,7 +108,7 @@ serve(async (req) => {
       throw new Error('Integração com Asaas está desativada para este tenant.')
     }
     
-    console.log('Credenciais encontradas para tenant:', finalTenantId)
+    console.log('Integração validada com sucesso')
     
     console.log('Detalhes da requisição:', {
       method,
@@ -105,10 +143,7 @@ serve(async (req) => {
       'access_token': credentials.apiKey
     }
 
-    console.log('Fazendo requisição com headers:', {
-      contentType: headers['Content-Type'],
-      hasAccessToken: !!headers['access_token']
-    })
+    console.log('Requisição autorizada iniciada')
 
     const response = await fetch(url, {
       method: method,

@@ -15,10 +15,10 @@ Validar todas as correções implementadas no sistema de importação, especialm
 - **Funcionalidade**: Rastreamento completo do fluxo de dados desde o preview até a geração do CSV
 - **Status**: ✅ Implementado
 
-### 3. Verificação das Edge Functions
-- **import-upload**: ✅ Recebe e armazena `field_mappings` corretamente
-- **process-import-jobs**: ✅ Recupera e aplica `field_mappings` corretamente
-- **Status**: ✅ Verificado
+### 3. ~~Verificação das Edge Functions~~ - **OBSOLETO**
+- ~~**import-upload**~~: **REMOVIDO** - Substituído pela nova solução bulk-insert-helper
+- ~~**process-import-jobs**~~: **REMOVIDO** - Substituído pelo processamento direto
+- **Status**: ✅ Migrado para nova arquitetura
 
 ## Plano de Teste
 
@@ -73,11 +73,11 @@ Arquivo: `test-asaas-data.csv`
 🔍 [DEBUG][importApiService] fieldMappings adicionados ao FormData
 ```
 
-### Backend (Edge Functions)
+### Backend (Nova Solução)
 ```
-[DEBUG] Field mappings parsed successfully
-[DEBUG] Processing import file with field mappings
-[DEBUG] Mapped data for row
+[DEBUG] DirectImportProcessor: Processing job
+[DEBUG] BulkInsertService: Using bulk-insert-helper
+[DEBUG] Import completed successfully
 ```
 
 ## Critérios de Sucesso
@@ -94,7 +94,8 @@ Arquivo: `test-asaas-data.csv`
 
 1. **Campo `Cliente_ID`**: Corrigido para `customer_asaas_id`
 2. **Logs de debug ausentes**: Implementados em todo o fluxo
-3. **Verificação das Edge Functions**: Confirmado funcionamento correto
+3. ~~**Verificação das Edge Functions**~~: **MIGRADO** para nova solução bulk-insert-helper
+4. **Nova Arquitetura**: Implementada solução mais robusta com processamento direto
 
 ## Próximos Passos
 

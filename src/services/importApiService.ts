@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getCurrentUser } from '../utils/auth';
 
 // AIDEV-NOTE: Usando cliente Supabase autenticado do projeto para respeitar RLS
 
@@ -63,8 +64,7 @@ export interface ImportHistoryFilters {
 }
 
 class ImportApiService {
-  // AIDEV-NOTE: URL base das Edge Functions do Supabase
-  private baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+  // AIDEV-NOTE: Removido baseUrl das Edge Functions - agora usando processamento direto
 
   // AIDEV-NOTE: Obter token de autenticação
   private async getAuthToken(): Promise<string> {
@@ -88,7 +88,7 @@ class ImportApiService {
     return user;
   }
 
-  // AIDEV-NOTE: Fazer upload de arquivo para importação usando Supabase Edge Function
+  // AIDEV-NOTE: Processar arquivo de importação diretamente usando BulkInsertService
   async uploadFile(file: File, tenantId: string, userId: string, fieldMappings?: any[]): Promise<{ jobId: string; estimatedTime: number }> {
     // AIDEV-NOTE: Debug logs para verificar fieldMappings no service
     console.log('🔍 [DEBUG][importApiService] uploadFile chamado com:', {
@@ -100,74 +100,193 @@ class ImportApiService {
       fieldMappings: fieldMappings,
       hasFieldMappings: !!fieldMappings && fieldMappings.length > 0
     });
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('tenantId', tenantId);
-    formData.append('userId', userId);
-    
-    // AIDEV-NOTE: Adicionar fieldMappings se fornecido
-    if (fieldMappings && fieldMappings.length > 0) {
-      const fieldMappingsJson = JSON.stringify(fieldMappings);
-      formData.append('fieldMappings', fieldMappingsJson);
-      
-      console.log('🔍 [DEBUG][importApiService] fieldMappings adicionados ao FormData:', {
-        fieldMappingsJson: fieldMappingsJson,
-        formDataHasFieldMappings: formData.has('fieldMappings')
-      });
-    } else {
-      console.log('⚠️ [WARNING][importApiService] Nenhum fieldMapping fornecido ou array vazio');
-    }
-    
-    // AIDEV-NOTE: Contar registros estimados baseado no tamanho do arquivo
-    const estimatedRecords = Math.ceil(file.size / 100); // Estimativa simples
-    formData.append('recordCount', estimatedRecords.toString());
 
     try {
-      const token = await this.getAuthToken();
+      const user = await this.getCurrentUser();
       
       // AIDEV-NOTE: Usar userId passado como parâmetro para garantir consistência multi-tenant
       console.log(`[AUDIT] Upload de arquivo - Tenant: ${tenantId}, User: ${userId}, File: ${file.name}`);
       
-      const response = await fetch(`${this.baseUrl}/import-upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-tenant-id': tenantId,
-          'x-user-id': userId
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch {
-          errorData = { error: `HTTP ${response.status}` };
-        }
-        throw new Error(errorData.error || `Erro HTTP ${response.status}`);
-      }
-
-      const responseText = await response.text();
-      if (!responseText.trim()) {
-        throw new Error('Resposta vazia do servidor');
-      }
-
-      const data = JSON.parse(responseText);
+      // AIDEV-NOTE: Gerar ID único para o job
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      if (!data.success) {
-        throw new Error(data.error || 'Erro desconhecido');
+      // AIDEV-NOTE: Criar registro do job na tabela import_jobs
+      const { error: jobError } = await supabase
+        .from('import_jobs')
+        .insert({
+          id: jobId,
+          tenant_id: tenantId,
+          user_id: userId,
+          filename: file.name,
+          file_size: file.size,
+          file_type: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+          status: 'pending',
+          field_mappings: fieldMappings || [],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (jobError) {
+        throw new Error(`Erro ao criar job: ${jobError.message}`);
       }
+
+      // AIDEV-NOTE: Processar arquivo usando a nova solução bulk-insert-helper
+      // O processamento será feito de forma assíncrona
+      this.processFileAsync(file, jobId, tenantId, userId, fieldMappings);
+
+      // AIDEV-NOTE: Estimar tempo baseado no tamanho do arquivo
+      const estimatedTime = Math.ceil(file.size / 1000); // Estimativa em ms
 
       return {
-        jobId: data.jobId,
-        estimatedTime: data.estimatedTime
+        jobId: jobId,
+        estimatedTime: estimatedTime
       };
     } catch (error) {
       console.error('❌ Erro no upload:', error);
       throw error;
     }
+  }
+
+  // AIDEV-NOTE: Processar arquivo de forma assíncrona
+  private async processFileAsync(file: File, jobId: string, tenantId: string, userId: string, fieldMappings?: any[]): Promise<void> {
+    try {
+      // AIDEV-NOTE: Atualizar status para processando
+      await supabase
+        .from('import_jobs')
+        .update({ 
+          status: 'processing',
+          started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+
+      // AIDEV-NOTE: Ler e processar arquivo
+      const fileContent = await this.readFileContent(file);
+      const processedData = await this.parseFileData(fileContent, file.type, fieldMappings);
+      
+      // AIDEV-NOTE: Adicionar tenant_id e created_by a todos os registros
+      const dataWithTenant = processedData.map(record => ({
+        ...record,
+        tenant_id: tenantId,
+        created_by: userId
+      }));
+
+      // AIDEV-NOTE: Usar BulkInsertService para inserir dados
+      const { BulkInsertService } = await import('./bulkInsertService');
+      const result = await BulkInsertService.insertBulk({
+        table: 'customers',
+        data: dataWithTenant,
+        batchSize: 100
+      });
+
+      // AIDEV-NOTE: Atualizar status final do job
+      const finalStatus = result.success ? 'completed' : 'failed';
+      
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: finalStatus,
+          completed_at: new Date().toISOString(),
+          total_records: result.totalRecords,
+          processed_records: result.processedRecords,
+          success_count: result.processedRecords,
+          error_count: result.totalRecords - result.processedRecords,
+          errors: result.errors,
+          progress: 100,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+
+      console.log(`✅ [ImportApiService] Job ${jobId} processado: ${result.processedRecords} registros`);
+      
+    } catch (error) {
+      console.error(`❌ [ImportApiService] Erro ao processar job ${jobId}:`, error);
+      
+      // AIDEV-NOTE: Marcar job como falhou
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: 'failed',
+          errors: [error instanceof Error ? error.message : 'Erro desconhecido'],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+    }
+  }
+
+  // AIDEV-NOTE: Ler conteúdo do arquivo
+  private async readFileContent(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(new Error('Erro ao ler arquivo'));
+      reader.readAsText(file);
+    });
+  }
+
+  // AIDEV-NOTE: Processar dados do arquivo baseado no tipo
+  private async parseFileData(content: string, fileType: string, fieldMappings?: any[]): Promise<any[]> {
+    const isCSV = fileType.includes('csv') || fileType.includes('text');
+    
+    if (isCSV) {
+      return this.parseCSVData(content, fieldMappings);
+    } else {
+      // AIDEV-NOTE: Para Excel, seria necessário usar uma biblioteca como xlsx
+      // Por enquanto, assumindo que o conteúdo já foi convertido para CSV
+      return this.parseCSVData(content, fieldMappings);
+    }
+  }
+
+  // AIDEV-NOTE: Processar dados CSV
+  private parseCSVData(content: string, fieldMappings?: any[]): any[] {
+    const lines = content.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const data: any[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      const record: any = {};
+      
+      headers.forEach((header, index) => {
+        const value = values[index] || '';
+        
+        // AIDEV-NOTE: Aplicar mapeamento de campos se fornecido
+        if (fieldMappings && fieldMappings.length > 0) {
+          const mapping = fieldMappings.find(m => m.csvField === header);
+          if (mapping && mapping.dbField) {
+            record[mapping.dbField] = value;
+          }
+        } else {
+          // AIDEV-NOTE: Mapeamento padrão
+          const fieldMap: { [key: string]: string } = {
+            'nome': 'name',
+            'name': 'name',
+            'email': 'email',
+            'telefone': 'phone',
+            'phone': 'phone',
+            'cpf': 'cpf_cnpj',
+            'cnpj': 'cpf_cnpj',
+            'cpf_cnpj': 'cpf_cnpj',
+            'empresa': 'company',
+            'company': 'company',
+            'endereco': 'address',
+            'address': 'address'
+          };
+          
+          const dbField = fieldMap[header.toLowerCase()] || header.toLowerCase();
+          record[dbField] = value;
+        }
+      });
+      
+      // AIDEV-NOTE: Validar se tem pelo menos nome ou email
+      if (record.name || record.email) {
+        data.push(record);
+      }
+    }
+    
+    return data;
   }
 
   // AIDEV-NOTE: Consultar status de um job de importação diretamente da tabela

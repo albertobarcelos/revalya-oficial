@@ -25,10 +25,11 @@
 - **Causa:** Dados corrompidos não possuem este campo essencial
 - **Impacto:** Impossibilidade de vincular com sistema Asaas
 
-### 4. **Falha Silenciosa no Processamento** 🚨 CRÍTICO
+### 4. **Falha Silenciosa no Processamento** ✅ RESOLVIDO
 - **Problema:** 0 clientes criados nas últimas 24h
 - **Causa:** Process-import-jobs falhando silenciosamente
-- **Impacto:** Sistema aparenta funcionar mas não processa dados
+- **Solução:** Substituído por nova solução bulk-insert-helper
+- **Status:** Edge Functions antigas removidas, nova solução implementada
 
 ### 5. **Parser CSV Inadequado** 🔧 URGENTE
 - **Problema:** Não valida dados antes de inserir
@@ -90,15 +91,18 @@
 
 ## 📋 Próximos Passos
 
-1. **URGENTE:** Corrigir parser CSV no `import-upload`
-2. **URGENTE:** Melhorar validação no `process-import-jobs`
+1. ✅ **CONCLUÍDO:** Edge Functions antigas removidas (import-upload e process-import-jobs)
+2. ✅ **CONCLUÍDO:** Nova solução bulk-insert-helper implementada
 3. **MÉDIO:** Implementar relatório de erros detalhado
 4. **BAIXO:** Criar interface para revisar dados rejeitados
 
 ## 🔗 Arquivos Afetados
 
-- `supabase/functions/import-upload/index.ts` - Parser CSV
-- `supabase/functions/process-import-jobs/index.ts` - Processamento
+- ~~`supabase/functions/import-upload/index.ts`~~ - **REMOVIDO**
+- ~~`supabase/functions/process-import-jobs/index.ts`~~ - **REMOVIDO**
+- `src/services/importApiService.ts` - **ATUALIZADO** para usar nova solução
+- `src/services/bulkInsertService.ts` - Nova solução implementada
+- `src/utils/directImportProcessor.ts` - Processamento direto
 - Tabela `import_data` - Dados corrompidos
 - Tabela `customers` - Nenhum registro criado
 

@@ -400,6 +400,25 @@ Notas Multi-Tenant
 - A persistência em `sessionStorage` mantém o isolamento por aba, conforme o Manual Multi-Tenant Revalya.
 - O App continua aplicando RLS e filtros explícitos por `tenant_id` em todas as consultas.
 
+## 🔒 Segurança
+
+### Auditoria de Segurança Asaas (Dezembro 2024)
+- ✅ **Vulnerabilidades críticas corrigidas** no fluxo de importação Asaas
+- ✅ **Logs sanitizados** - Dados sensíveis protegidos
+- ✅ **Rate limiting implementado** - Proteção contra abuso da API
+- ✅ **Sistema de auditoria** - Logs estruturados para monitoramento
+
+**Documentos de Segurança:**
+- [`AUDITORIA_SEGURANCA_ASAAS.md`](./AUDITORIA_SEGURANCA_ASAAS.md) - Relatório completo da auditoria
+- [`PLANO_CORRECAO_SEGURANCA_ASAAS.md`](./PLANO_CORRECAO_SEGURANCA_ASAAS.md) - Plano de correções aplicadas
+
+### Práticas de Segurança Implementadas
+- **Multi-tenant isolation**: Isolamento completo entre tenants
+- **Credential protection**: Credenciais nunca expostas em logs
+- **Rate limiting**: Controle de abuso da API (100 req/min por tenant)
+- **Audit logging**: Sistema estruturado de logs de auditoria
+- **Access control**: Validação rigorosa de permissões
+
 ## 🔧 Serviços
 
 ### Importação de Dados

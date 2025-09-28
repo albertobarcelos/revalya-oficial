@@ -20,9 +20,11 @@ Registros inválidos (sem nome ou email inválido): 134
 
 ## 🛠️ Correções Implementadas
 
-### 1. **Correção no import-upload/index.ts**
+### 1. **~~Correção no import-upload/index.ts~~** - **OBSOLETO**
 
-**Arquivo:** `f:/NEXFINAN/revalya-oficial/supabase/functions/import-upload/index.ts`
+**Arquivo:** ~~`f:/NEXFINAN/revalya-oficial/supabase/functions/import-upload/index.ts`~~ - **REMOVIDO**
+
+**Status:** Esta Edge Function foi completamente removida e substituída pela nova solução bulk-insert-helper.
 
 **Mudanças:**
 - Implementada função `isValidRecord()` com mesma lógica do frontend
@@ -55,9 +57,11 @@ function isValidRecord(record: any): boolean {
 }
 ```
 
-### 2. **Aprimoramento no process-import-jobs/index.ts**
+### 2. **~~Aprimoramento no process-import-jobs/index.ts~~** - **OBSOLETO**
 
-**Arquivo:** `f:/NEXFINAN/revalya-oficial/supabase/functions/process-import-jobs/index.ts`
+**Arquivo:** ~~`f:/NEXFINAN/revalya-oficial/supabase/functions/process-import-jobs/index.ts`~~ - **REMOVIDO**
+
+**Status:** Esta Edge Function foi completamente removida e substituída pela nova solução bulk-insert-helper.
 
 **Mudanças:**
 - Função `isValidRecord()` para validação rigorosa
@@ -147,8 +151,11 @@ Sincronização: ✅ PERFEITA
 ## 📝 Notas Técnicas
 
 ### Arquivos Modificados
-- `supabase/functions/import-upload/index.ts` (linhas 257-290)
-- `supabase/functions/process-import-jobs/index.ts` (linhas 772-800, 409-423)
+- ~~`supabase/functions/import-upload/index.ts`~~ - **REMOVIDO**
+- ~~`supabase/functions/process-import-jobs/index.ts`~~ - **REMOVIDO**
+- `src/services/importApiService.ts` - **ATUALIZADO** para nova solução
+- `src/services/bulkInsertService.ts` - Nova solução implementada
+- `src/utils/directImportProcessor.ts` - Processamento direto
 
 ### Compatibilidade
 - ✅ Mantém compatibilidade com dados existentes
