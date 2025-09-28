@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { UnifiedTenantProvider } from '@/core/tenant'
 import { CNPJBackgroundProvider } from '@/providers/CNPJBackgroundProvider'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueueInitializer } from '@/components/import/QueueInitializer'
 import '@/index.css'
 
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ export default function RootLayout({
               }}
             >
               <CNPJBackgroundProvider autoStart={true}>
+                <QueueInitializer />
                 {children}
                 <Toaster />
               </CNPJBackgroundProvider>

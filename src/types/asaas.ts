@@ -15,7 +15,8 @@ export interface AsaasCustomer {
   additionalEmails: string | null;
   externalReference: string | null;
   notificationDisabled: boolean;
-  city: string | null;
+  city: string | null; // AIDEV-NOTE: Código da cidade (não usado na interface)
+  cityName?: string | null; // AIDEV-NOTE: Nome da cidade (usado na interface)
   state: string | null;
   country: string;
   observations: string | null;
@@ -109,12 +110,14 @@ export const mapAsaasCustomerToCustomer = (asaasCustomer: AsaasCustomer) => {
     phone: asaasCustomer.phone || asaasCustomer.mobilePhone,
     cpf_cnpj: asaasCustomer.cpfCnpj,
     address: asaasCustomer.address,
-    city: asaasCustomer.city,
+    neighborhood: asaasCustomer.neighborhood, // ✅ Corrigido: mapear neighborhood corretamente
+    city: asaasCustomer.cityName || asaasCustomer.city, // ✅ Priorizar cityName se disponível
     state: asaasCustomer.state,
     postal_code: asaasCustomer.postalCode,
+    country: asaasCustomer.country || 'Brasil', // ✅ Valor padrão mais flexível
     notes: asaasCustomer.observations,
     status: asaasCustomer.deleted ? 'inactive' : 'active',
-    company: asaasCustomer.company // Atualizado para mapear o campo company
+    company: asaasCustomer.company
   };
 };
 

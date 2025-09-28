@@ -733,8 +733,8 @@ export {
   type CacheValue,
 }
 
-// Cleanup na saída do processo
-if (typeof process !== 'undefined') {
+// Cleanup na saída do processo (apenas em ambiente Node.js)
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
   process.on('beforeExit', async () => {
     await cache.destroy()
   })

@@ -4,6 +4,7 @@ export interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
+  celular_whatsapp: string | null; // AIDEV-NOTE: Campo para armazenar celular/WhatsApp mapeado do mobilePhone do Asaas
   cpf_cnpj: string | null;
   address: string | null;
   address_number: string | null;
