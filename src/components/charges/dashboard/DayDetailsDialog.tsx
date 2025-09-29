@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, Users, DollarSign, Clock, CheckCircle, AlertCircle, Send, X } from 'lucide-react';
+import { Calendar, Users, DollarSign, Clock, CheckCircle, AlertCircle, Send, X, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Cobranca } from '@/types/database';
@@ -70,6 +70,50 @@ export function DayDetailsDialog({
     });
   };
 
+  // AIDEV-NOTE: Função para formatar tipos de pagamento para exibição amigável
+  const formatPaymentType = (type: string): string => {
+    if (!type) return 'Não informado';
+    
+    const typeMap: Record<string, string> = {
+      'CREDIT_CARD': 'Cartão de Crédito',
+      'CREDIT_CARD_RECURRING': 'Cartão Recorrente',
+      'BOLETO': 'Boleto Bancário',
+      'PIX': 'PIX',
+      'CASH': 'Dinheiro',
+      'TRANSFER': 'Transferência',
+      'DEBIT_CARD': 'Cartão de Débito',
+      // Valores em português (caso já venham formatados)
+      'Cartão': 'Cartão de Crédito',
+      'Boleto': 'Boleto Bancário',
+      'Dinheiro': 'Dinheiro',
+      'Transferência': 'Transferência Bancária'
+    };
+    
+    return typeMap[type] || type;
+  };
+
+  // AIDEV-NOTE: Função para obter ícone do método de pagamento
+  const getPaymentIcon = (type: string) => {
+    const normalizedType = type?.toUpperCase() || '';
+    
+    switch (normalizedType) {
+      case 'CREDIT_CARD':
+      case 'CREDIT_CARD_RECURRING':
+      case 'DEBIT_CARD':
+        return <CreditCard className="h-3 w-3" />;
+      case 'PIX':
+        return <Smartphone className="h-3 w-3" />;
+      case 'BOLETO':
+        return <Building2 className="h-3 w-3" />;
+      case 'CASH':
+        return <Banknote className="h-3 w-3" />;
+      case 'TRANSFER':
+        return <Building2 className="h-3 w-3" />;
+      default:
+        return <DollarSign className="h-3 w-3" />;
+    }
+  };
+
   // AIDEV-NOTE: Função para gerar badge de status - corrigida para incluir todos os status de pagamento
   const getStatusBadge = (status: string) => {
     const normalizedStatus = status?.toLowerCase() || '';
@@ -78,6 +122,7 @@ export function DayDetailsDialog({
     if (['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(normalizedStatus)) {
       return (
         <Badge className="bg-green-50 text-green-700 border-green-100 text-xs font-medium px-2 py-0.5">
+          <CheckCircle className="h-3 w-3 mr-1" />
           Pago
         </Badge>
       );
@@ -87,6 +132,7 @@ export function DayDetailsDialog({
     if (normalizedStatus.includes('overdue') || normalizedStatus.includes('atraso') || normalizedStatus === 'late') {
       return (
         <Badge className="bg-red-50 text-red-700 border-red-100 text-xs font-medium px-2 py-0.5">
+          <AlertCircle className="h-3 w-3 mr-1" />
           Atrasado
         </Badge>
       );
@@ -95,25 +141,44 @@ export function DayDetailsDialog({
     // Status pendente (padrão)
     return (
       <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 text-xs font-medium px-2 py-0.5">
+        <Clock className="h-3 w-3 mr-1" />
         Pendente
       </Badge>
     );
   };
 
-  // AIDEV-NOTE: Função para gerar badge de tipo de cobrança
+  // AIDEV-NOTE: Função para gerar badge de tipo de cobrança com formatação adequada e ícones
   const getTypeBadge = (type: string) => {
-    const typeColors: { [key: string]: string } = {
-      'boleto': 'bg-blue-50 text-blue-700 border-blue-100',
-      'pix': 'bg-purple-50 text-purple-700 border-purple-100',
-      'cartao': 'bg-green-50 text-green-700 border-green-100',
-      'dinheiro': 'bg-orange-50 text-orange-700 border-orange-100'
+    const normalizedType = type?.toUpperCase() || '';
+    const formattedType = formatPaymentType(type);
+    const icon = getPaymentIcon(type);
+    
+    // Cores específicas para cada tipo de pagamento
+    const getTypeColor = (type: string): string => {
+      switch (type) {
+        case 'CREDIT_CARD':
+        case 'CREDIT_CARD_RECURRING':
+        case 'DEBIT_CARD':
+          return 'bg-purple-50 text-purple-700 border-purple-100';
+        case 'PIX':
+          return 'bg-green-50 text-green-700 border-green-100';
+        case 'BOLETO':
+          return 'bg-blue-50 text-blue-700 border-blue-100';
+        case 'CASH':
+          return 'bg-orange-50 text-orange-700 border-orange-100';
+        case 'TRANSFER':
+          return 'bg-cyan-50 text-cyan-700 border-cyan-100';
+        default:
+          return 'bg-gray-50 text-gray-700 border-gray-100';
+      }
     };
     
-    const colorClass = typeColors[type?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-100';
+    const colorClass = getTypeColor(normalizedType);
     
     return (
-      <Badge className={`${colorClass} text-xs font-medium px-2 py-0.5`}>
-        {type || 'N/A'}
+      <Badge className={`${colorClass} text-xs font-medium px-2 py-0.5 flex items-center gap-1`}>
+        {icon}
+        {formattedType}
       </Badge>
     );
   };
@@ -247,7 +312,7 @@ export function DayDetailsDialog({
                         </p>
                       </div>
                       
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         {getStatusBadge(charge.status || '')}
                         {getTypeBadge(charge.tipo || '')}
                       </div>

@@ -74,24 +74,51 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
     return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Sem cobranças</Badge>;
   };
 
-  // AIDEV-NOTE: Função para gerar badge de tipo de cobrança
+  // AIDEV-NOTE: Função para formatar tipos de pagamento para exibição amigável
+  const formatPaymentType = (type: string): string => {
+    if (!type) return 'Outros';
+    
+    const typeMap: Record<string, string> = {
+      'CREDIT_CARD': 'Cartão de Crédito',
+      'CREDIT_CARD_RECURRING': 'Cartão Recorrente',
+      'BOLETO': 'Boleto Bancário',
+      'PIX': 'PIX',
+      'CASH': 'Dinheiro',
+      'TRANSFER': 'Transferência',
+      'DEBIT_CARD': 'Cartão de Débito',
+      // Valores em português (caso já venham formatados)
+      'cartao': 'Cartão',
+      'boleto': 'Boleto',
+      'pix': 'PIX',
+      'dinheiro': 'Dinheiro',
+      'transferencia': 'Transferência'
+    };
+    
+    return typeMap[type] || type;
+  };
+
+  // AIDEV-NOTE: Função para gerar badge de tipo de cobrança com formatação adequada
   const getTypeBadges = (chargeTypes: { [key: string]: number }) => {
     return Object.entries(chargeTypes)
       .filter(([_, count]) => count > 0)
       .slice(0, 2) // Mostrar apenas os 2 primeiros tipos
       .map(([type, count]) => {
+        // AIDEV-NOTE: Aplicar formatação antes de exibir
+        const formattedType = formatPaymentType(type);
+        
         const typeColors: { [key: string]: string } = {
           'boleto': 'bg-blue-100 text-blue-800 border-blue-200',
           'pix': 'bg-purple-100 text-purple-800 border-purple-200',
           'cartao': 'bg-green-100 text-green-800 border-green-200',
-          'dinheiro': 'bg-orange-100 text-orange-800 border-orange-200'
+          'dinheiro': 'bg-orange-100 text-orange-800 border-orange-200',
+          'transferencia': 'bg-cyan-100 text-cyan-800 border-cyan-200'
         };
         
         const colorClass = typeColors[type.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
         
         return (
           <Badge key={type} className={`${colorClass} text-xs`}>
-            {type} ({count})
+            {formattedType} ({count})
           </Badge>
         );
       });

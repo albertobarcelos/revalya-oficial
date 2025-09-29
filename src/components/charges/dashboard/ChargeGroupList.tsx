@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Bell, FileText, Building2, CreditCard, Search } from 'lucide-react';
+import { Bell, FileText, Building2, CreditCard, Search, Smartphone, Receipt } from 'lucide-react';
 import type { Cobranca } from '@/types/database';
 
 // AIDEV-NOTE: Interface para props do componente de lista de cobranças do grupo
@@ -78,6 +78,50 @@ const formatDocument = (document: string | number | null | undefined): string =>
     return cleanDoc.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
   }
   return String(document);
+};
+
+// AIDEV-NOTE: Função para formatar tipos de pagamento para exibição amigável
+const formatPaymentType = (tipo: string | null | undefined): string => {
+  if (!tipo) return 'Não definido';
+  
+  const typeMap: Record<string, string> = {
+    'CREDIT_CARD': 'Cartão de Crédito',
+    'CREDIT_CARD_RECURRING': 'Cartão Recorrente',
+    'BOLETO': 'Boleto Bancário',
+    'PIX': 'PIX',
+    'CASH': 'Dinheiro',
+    'TRANSFER': 'Transferência',
+    'DEPOSIT': 'Depósito',
+    'UNDEFINED': 'Não Definido',
+    'BANK_SLIP': 'Boleto Bancário',
+    'MONTHLY': 'Mensal',
+    'INSTALLMENT': 'Parcela',
+    // Fallbacks para formatos alternativos
+    'Boleto': 'Boleto Bancário',
+    'Pix': 'PIX'
+  };
+
+  return typeMap[tipo] || tipo;
+};
+
+// AIDEV-NOTE: Função para obter ícone contextual baseado no tipo de pagamento
+const getPaymentIcon = (tipo: string | null | undefined) => {
+  switch (tipo) {
+    case 'CREDIT_CARD':
+    case 'CREDIT_CARD_RECURRING':
+      return <CreditCard className="h-3 w-3 text-blue-500" />;
+    case 'PIX':
+      return <Smartphone className="h-3 w-3 text-purple-500" />;
+    case 'BOLETO':
+    case 'BANK_SLIP':
+      return <Receipt className="h-3 w-3 text-orange-500" />;
+    case 'CASH':
+    case 'TRANSFER':
+    case 'DEPOSIT':
+      return <FileText className="h-3 w-3 text-green-500" />;
+    default:
+      return <CreditCard className="h-3 w-3 text-gray-400" />;
+  }
 };
 
 // AIDEV-NOTE: Componente separado para lista de cobranças do grupo selecionado
@@ -226,9 +270,9 @@ export function ChargeGroupList({
                       <div className="flex items-center space-x-3">
                         {charge.tipo && (
                           <div className="flex items-center space-x-1">
-                            <CreditCard className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-500 uppercase font-medium">
-                              {charge.tipo === 'BOLETO' ? 'Boleto' : charge.tipo}
+                            {getPaymentIcon(charge.tipo)}
+                            <span className="text-xs text-gray-500 font-medium">
+                              {formatPaymentType(charge.tipo)}
                             </span>
                           </div>
                         )}

@@ -170,20 +170,20 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const groupedCharges = groupChargesByDay(filteredCharges);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-full overflow-hidden">
       {/* Header */}
       <motion.div 
-        className="flex items-center justify-between"
+        className="flex items-center justify-between flex-wrap gap-4"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="space-y-1">
+        <div className="space-y-1 flex-1 min-w-0">
           <h2 className="text-xl font-semibold">Calendário de Recebimentos Semanais</h2>
           <AnimatePresence mode="wait">
             <motion.div 
               key={`${format(weekStart, 'yyyy-MM-dd')}`}
-              className="flex items-center space-x-4"
+              className="flex items-center space-x-4 flex-wrap"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
@@ -200,12 +200,12 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
         </div>
         
         <motion.div 
-          className="flex items-center space-x-2"
+          className="flex items-center space-x-2 flex-wrap gap-2"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <div className="flex space-x-2">
+          <div className="flex space-x-2 flex-wrap gap-2">
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
                 <Filter className="h-4 w-4 mr-1" />Filtros
@@ -274,12 +274,12 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
 
       {/* Calendário */}
       <motion.div 
-        className="px-4 py-4"
+        className="w-full"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
       >
-        <div className="relative px-16 py-6 mb-4 border rounded-xl bg-gradient-to-br from-background/80 to-background/40 shadow-lg backdrop-blur-sm overflow-visible">
+        <div className="relative w-full px-4 sm:px-8 lg:px-16 py-6 mb-4 border rounded-xl bg-gradient-to-br from-background/80 to-background/40 shadow-lg backdrop-blur-sm overflow-hidden">
           <AnimatePresence>
             {isLoading && (
               <motion.div 
@@ -305,7 +305,7 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
           <AnimatePresence mode="wait">
             <motion.div 
               key={`week-${format(weekStart, 'yyyy-MM-dd')}`}
-              className="grid grid-cols-7 gap-4"
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4"
               initial={{ opacity: 0, x: isChangingWeek ? 50 : 0 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}

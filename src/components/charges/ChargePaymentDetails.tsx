@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Calendar, CreditCard, FileText, Receipt } from 'lucide-react';
+import { AlertTriangle, Calendar, CreditCard, FileText, Receipt, Smartphone, Building2, Banknote, DollarSign } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Cobranca } from '@/types';
 
@@ -10,6 +10,72 @@ interface ChargePaymentDetailsProps {
 
 function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsProps) {
   if (!chargeDetails) return null;
+
+  // AIDEV-NOTE: Função para formatar tipos de pagamento para exibição amigável
+  const formatPaymentType = (type: string): string => {
+    if (!type) return 'Não informado';
+    
+    const typeMap: Record<string, string> = {
+      'CREDIT_CARD': 'Cartão de Crédito',
+      'CREDIT_CARD_RECURRING': 'Cartão Recorrente',
+      'BOLETO': 'Boleto Bancário',
+      'PIX': 'PIX',
+      'CASH': 'Dinheiro',
+      'TRANSFER': 'Transferência',
+      'DEBIT_CARD': 'Cartão de Débito',
+      // Valores em português (caso já venham formatados)
+      'Cartão': 'Cartão de Crédito',
+      'Boleto': 'Boleto Bancário',
+      'Dinheiro': 'Dinheiro',
+      'Transferência': 'Transferência Bancária'
+    };
+    
+    return typeMap[type] || type;
+  };
+
+  // AIDEV-NOTE: Função para obter ícone do método de pagamento
+  const getPaymentIcon = (type: string) => {
+    const normalizedType = type?.toUpperCase() || '';
+    
+    switch (normalizedType) {
+      case 'CREDIT_CARD':
+      case 'CREDIT_CARD_RECURRING':
+      case 'DEBIT_CARD':
+        return <CreditCard className="h-3 w-3 mr-1" />;
+      case 'PIX':
+        return <Smartphone className="h-3 w-3 mr-1" />;
+      case 'BOLETO':
+        return <Building2 className="h-3 w-3 mr-1" />;
+      case 'CASH':
+        return <Banknote className="h-3 w-3 mr-1" />;
+      case 'TRANSFER':
+        return <Building2 className="h-3 w-3 mr-1" />;
+      default:
+        return <DollarSign className="h-3 w-3 mr-1" />;
+    }
+  };
+
+  // AIDEV-NOTE: Função para obter cores específicas para cada tipo de pagamento
+  const getPaymentTypeColor = (type: string): string => {
+    const normalizedType = type?.toUpperCase() || '';
+    
+    switch (normalizedType) {
+      case 'CREDIT_CARD':
+      case 'CREDIT_CARD_RECURRING':
+      case 'DEBIT_CARD':
+        return 'bg-purple-100 text-purple-800';
+      case 'PIX':
+        return 'bg-green-100 text-green-800';
+      case 'BOLETO':
+        return 'bg-blue-100 text-blue-800';
+      case 'CASH':
+        return 'bg-orange-100 text-orange-800';
+      case 'TRANSFER':
+        return 'bg-cyan-100 text-cyan-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -59,25 +125,11 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
         </div>
       )}
 
+      {/* AIDEV-NOTE: Badge de método de pagamento com formatação adequada e ícones */}
       <div className="flex items-center space-x-2 mt-2">
-        <Badge
-          className={`
-            ${chargeDetails.tipo === 'BOLETO' ? 'bg-blue-100 text-blue-800' :
-              chargeDetails.tipo === 'PIX' ? 'bg-green-100 text-green-800' :
-              chargeDetails.tipo === 'CREDIT_CARD' ? 'bg-purple-100 text-purple-800' :
-              'bg-gray-100 text-gray-800'}
-          `}
-        >
-          {chargeDetails.tipo === 'BOLETO' ? (
-            <Receipt className="h-3 w-3 mr-1" />
-          ) : chargeDetails.tipo === 'PIX' ? (
-            <FileText className="h-3 w-3 mr-1" />
-          ) : chargeDetails.tipo === 'CREDIT_CARD' ? (
-            <CreditCard className="h-3 w-3 mr-1" />
-          ) : (
-            <Calendar className="h-3 w-3 mr-1" />
-          )}
-          {chargeDetails.tipo}
+        <Badge className={`${getPaymentTypeColor(chargeDetails.tipo)} flex items-center`}>
+          {getPaymentIcon(chargeDetails.tipo)}
+          {formatPaymentType(chargeDetails.tipo)}
         </Badge>
       </div>
     </div>
