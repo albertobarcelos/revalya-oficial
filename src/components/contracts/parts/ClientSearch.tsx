@@ -1,23 +1,11 @@
-import React, { useState } from "react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogTitle,
-  DialogDescription, 
-  DialogHeader
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import React, { useState, useEffect } from "react";
+import { Search, Plus, Users, Building2, Mail, Phone, FileText, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Search, X, Plus, UserCheck, ArrowLeft, Users } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useCustomers } from "@/hooks/useCustomers";
 
 interface Client {
   id: string;
@@ -32,176 +20,268 @@ interface Client {
 interface ClientSearchProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  clients: Client[];
-  onClientSelect: (clientId: string) => void;
+  clients: Client[]; // AIDEV-NOTE: Mantido para compatibilidade, mas não será usado
+  onClientSelect: (client: any) => void;
   onCreateClient: () => void;
 }
 
-export function ClientSearch({ open, onOpenChange, clients, onClientSelect, onCreateClient }: ClientSearchProps) {
+export function ClientSearch({ 
+  open, 
+  onOpenChange, 
+  clients: _, // AIDEV-NOTE: Ignorando prop clients, usando hook diretamente
+  onClientSelect, 
+  onCreateClient 
+}: ClientSearchProps) {
+  // AIDEV-NOTE: Estados para controle de busca e paginação
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   
-  const filteredClients = clients.filter(client => 
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (client.document && client.document.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (client.email && client.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // AIDEV-NOTE: Hook useCustomers com paginação e busca no servidor
+  const { 
+    customers, 
+    totalCount, 
+    isLoading, 
+    error 
+  } = useCustomers({
+    searchTerm: debouncedSearchTerm,
+    page: currentPage,
+    limit: 10
+  });
+
+  // AIDEV-NOTE: Debounce para busca em tempo real
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset para primeira página ao buscar
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // AIDEV-NOTE: Cálculos de paginação
+  const totalPages = Math.ceil(totalCount / 10);
+  const hasNextPage = currentPage < totalPages;
+  const hasPreviousPage = currentPage > 1;
+
+  // AIDEV-NOTE: Função para navegar entre páginas
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  // AIDEV-NOTE: Reset da busca ao fechar modal
+  const handleClose = (open: boolean) => {
+    if (!open) {
+      setSearchTerm("");
+      setDebouncedSearchTerm("");
+      setCurrentPage(1);
+    }
+    onOpenChange(open);
+  };
+
+  // AIDEV-NOTE: Função para formatar documento (CPF/CNPJ)
+  const formatDocument = (doc: string | number | undefined) => {
+    if (!doc) return "";
+    const docStr = doc.toString().replace(/\D/g, "");
+    
+    if (docStr.length === 11) {
+      // CPF: 000.000.000-00
+      return docStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    } else if (docStr.length === 14) {
+      // CNPJ: 00.000.000/0000-00
+      return docStr.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+    }
+    
+    return docStr;
+  };
+
+  // AIDEV-NOTE: Função para selecionar cliente (passa objeto completo para resolver problema de paginação)
+  const handleSelectClient = (customer: any) => {
+    onClientSelect(customer);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
-      <DialogContent 
-        className="max-w-full h-screen px-0 m-0 bg-transparent border-0 shadow-none" 
-        style={{ 
-          width: '100vw',
-          paddingTop: '139px',
-          paddingBottom: '139px',
-          backdropFilter: 'none'
-        }}
-      >
-        <DialogHeader className="hidden">
-          <DialogTitle>Seleção de Cliente</DialogTitle>
-          <DialogDescription>
-            Selecione um cliente para associar ao contrato ou cadastre um novo.
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Selecionar Cliente
+          </DialogTitle>
         </DialogHeader>
-        <div className="bg-background/95 backdrop-blur-sm border-y border-border/50 shadow-lg w-full" style={{ maxHeight: 'calc(100vh - 278px)', overflow: 'auto' }}>
-          {/* Cabeçalho com seta de voltar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-primary text-primary-foreground sticky top-0 z-10">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="mr-2 hover:bg-primary-foreground/10 text-primary-foreground"
-              onClick={() => onOpenChange(false)}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            
-            <div className="flex-1 flex items-center">
-              <Users className="h-5 w-5 mr-2" />
-              <h2 className="text-lg font-medium">Seleção de Cliente</h2>
-            </div>
-            
-            <Button 
-              variant="ghost" 
-              className="gap-1 hover:bg-primary-foreground/10 text-primary-foreground"
-              onClick={onCreateClient}
-            >
-              <Plus className="h-4 w-4" />
-              <span>Novo Cliente</span>
-            </Button>
-          </div>
 
-          {/* Conteúdo principal */}
-          <div className="p-4">
-            {/* Barra de pesquisa */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Digite o que deseja pesquisar (Nome, CNPJ, Razão Social, CPF...)"
-                  className="pl-10 py-6 bg-background text-base"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                {searchTerm && (
-                  <button 
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+        {/* AIDEV-NOTE: Barra de busca e botão de criar cliente */}
+        <div className="flex gap-3 flex-shrink-0">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Buscar por nome, empresa, email ou documento..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button onClick={onCreateClient} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Cliente
+          </Button>
+        </div>
+
+        <Separator />
+
+        {/* AIDEV-NOTE: Área de conteúdo com scroll */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {/* AIDEV-NOTE: Indicador de carregamento */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Carregando clientes...</span>
+            </div>
+          )}
+
+          {/* AIDEV-NOTE: Tratamento de erro */}
+          {error && (
+            <div className="flex items-center justify-center py-8 text-destructive">
+              <span>Erro ao carregar clientes. Tente novamente.</span>
+            </div>
+          )}
+
+          {/* AIDEV-NOTE: Lista de clientes */}
+          {!isLoading && !error && (
+            <>
+              {customers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Users className="h-12 w-12 mb-4 opacity-50" />
+                  <p className="text-lg font-medium">Nenhum cliente encontrado</p>
+                  <p className="text-sm">
+                    {searchTerm ? "Tente ajustar sua busca" : "Comece criando seu primeiro cliente"}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto">
+                  <div className="space-y-2 p-1">
+                    {customers.map((customer) => (
+                      <div
+                        key={customer.id}
+                        onClick={() => handleSelectClient(customer)}
+                        className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                {customer.name}
+                              </h3>
+                              {customer.company && (
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {customer.company}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                              {customer.email && (
+                                <div className="flex items-center gap-2">
+                                  <Mail className="h-4 w-4 flex-shrink-0" />
+                                  <span className="truncate">{customer.email}</span>
+                                </div>
+                              )}
+                              
+                              {customer.phone && (
+                                <div className="flex items-center gap-2">
+                                  <Phone className="h-4 w-4 flex-shrink-0" />
+                                  <span>{customer.phone}</span>
+                                </div>
+                              )}
+                              
+                              {customer.cpf_cnpj && (
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4 flex-shrink-0" />
+                                  <span>{formatDocument(customer.cpf_cnpj)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* AIDEV-NOTE: Controles de paginação */}
+        {!isLoading && !error && totalPages > 1 && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between flex-shrink-0 py-2">
+              <div className="text-sm text-muted-foreground">
+                {totalCount > 0 && (
+                  <>
+                    Mostrando {((currentPage - 1) * 10) + 1} a {Math.min(currentPage * 10, totalCount)} de {totalCount} clientes
+                  </>
                 )}
               </div>
-              <Button className="bg-primary hover:bg-primary/90 py-6 px-4">
-                <Search className="h-4 w-4 mr-2" />
-                Pesquisar
-              </Button>
-            </div>
-
-            {/* Tabela de clientes */}
-            <div className="border rounded-md bg-card/50">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-10 text-center">#</TableHead>
-                    <TableHead>CNPJ/CPF</TableHead>
-                    <TableHead>Nome / Razão Social</TableHead>
-                    <TableHead>Crédito Total</TableHead>
-                    <TableHead>Total a Receber</TableHead>
-                    <TableHead>Crédito Disponível</TableHead>
-                    <TableHead>Telefone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-16"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredClients.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="h-24 text-center">
-                        Nenhum cliente encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredClients.map((client, index) => (
-                      <TableRow 
-                        key={client.id}
-                        className="hover:bg-muted/30 cursor-pointer"
-                        onClick={() => onClientSelect(client.id)}
-                      >
-                        <TableCell className="text-center">
-                          <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-                            <span className="h-2 w-2 rounded-full bg-green-600"></span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{client.document || "-"}</TableCell>
-                        <TableCell>{client.name}</TableCell>
-                        <TableCell>R$ 0,00</TableCell>
-                        <TableCell>R$ 0,00</TableCell>
-                        <TableCell>-</TableCell>
-                        <TableCell>{client.phone || "-"}</TableCell>
-                        <TableCell>
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                            Ativo
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-8 w-8 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onClientSelect(client.id);
-                            }}
-                          >
-                            <UserCheck className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              <div className="flex items-center justify-between px-4 py-2 border-t">
-                <span className="text-xs text-muted-foreground">
-                  {filteredClients.length} de {clients.length} registros
-                </span>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={!hasPreviousPage}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
                 
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" disabled>
-                    Anterior
-                  </Button>
-                  <Button variant="outline" size="sm" className="bg-primary/10 border-primary text-primary">
-                    1
-                  </Button>
-                  <Button variant="outline" size="sm" disabled>
-                    Próximo
-                  </Button>
+                <div className="flex items-center gap-1">
+                  {/* AIDEV-NOTE: Mostrar páginas próximas */}
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
                 </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!hasNextPage}
+                  className="flex items-center gap-1"
+                >
+                  Próximo
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
