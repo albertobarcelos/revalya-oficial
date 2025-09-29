@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useCustomers } from "@/hooks/useCustomers";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Layout } from "@/components/layout/Layout";
 import { useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
 import { useParams, useNavigate } from "react-router-dom";
@@ -29,21 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PaginationControls, usePaginationState } from "@/components/ui/pagination-controls";
 import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
@@ -64,8 +51,12 @@ export default function Clients() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  // AIDEV-NOTE: Implementando debounce para busca em tempo real
+  // Delay de 300ms para otimizar consultas ao banco sem prejudicar UX
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  
+  // AIDEV-NOTE: Usando hook personalizado para gerenciar estado de paginação
+  const pagination = usePaginationState(10);
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   
@@ -91,8 +82,12 @@ export default function Clients() {
   const { toast } = useToast();
 
   // TODOS OS HOOKS DEVEM VIR ANTES DE QUALQUER RETURN CONDICIONAL
+  // AIDEV-NOTE: Usando busca dinâmica com debounce para otimizar performance
+  // A busca agora é executada automaticamente conforme o usuário digita
   const { customers: allCustomers, isLoading, refetch, totalCount } = useCustomers({
-    search: searchTerm
+    searchTerm: debouncedSearchTerm,
+    page: pagination.currentPage,
+    limit: pagination.itemsPerPage
   });
 
   // AIDEV-NOTE: Função para simular progresso da importação
@@ -117,14 +112,17 @@ export default function Clients() {
     });
   };
 
-  // Calcular paginação baseada no totalCount
+  // AIDEV-NOTE: Calcular paginação baseada no totalCount (agora com paginação no servidor)
   const total = totalCount || 0;
-  const totalPages = Math.ceil(total / itemsPerPage);
+  const totalPages = Math.ceil(total / pagination.itemsPerPage);
   
-  // Aplicar paginação no frontend (já que a API retorna apenas 10 itens)
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCustomers = allCustomers?.slice(startIndex, endIndex) || [];
+  // AIDEV-NOTE: Removendo paginação frontend já que agora é feita no servidor
+  const paginatedCustomers = allCustomers || [];
+
+  // AIDEV-NOTE: Reset da página quando searchTerm mudar (busca em tempo real)
+  useEffect(() => {
+    pagination.resetToFirstPage();
+  }, [debouncedSearchTerm, pagination.resetToFirstPage]);
 
   // FORÇA LIMPEZA COMPLETA DO CACHE AO TROCAR TENANT
   useEffect(() => {
@@ -210,81 +208,12 @@ export default function Clients() {
   // AUDIT LOG: Página renderizada com sucesso
   console.log(` [AUDIT] Página Clientes renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
 
-  const handleItemsPerPageChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
-  };
-
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Resetar para primeira página ao buscar
+    pagination.resetToFirstPage(); // Resetar para primeira página ao buscar
   };
 
-  const renderPaginationItems = () => {
-    const items = [];
-    const maxVisiblePages = 5;
-    const halfVisible = Math.floor(maxVisiblePages / 2);
-    
-    let startPage = Math.max(1, currentPage - halfVisible);
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
 
-    if (startPage > 1) {
-      items.push(
-        <PaginationItem key="first">
-          <PaginationLink onClick={() => setCurrentPage(1)}>
-            <span className="sr-only">Ir para primeira página</span>
-            1
-          </PaginationLink>
-        </PaginationItem>
-      );
-      if (startPage > 2) {
-        items.push(
-          <PaginationItem key="ellipsis-start">
-            <PaginationLink disabled>...</PaginationLink>
-          </PaginationItem>
-        );
-      }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      items.push(
-        <PaginationItem key={i}>
-          <PaginationLink
-            onClick={() => setCurrentPage(i)}
-            isActive={currentPage === i}
-            aria-current={currentPage === i ? 'page' : undefined}
-          >
-            <span className="sr-only">Página {i}</span>
-            {i}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-
-    if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        items.push(
-          <PaginationItem key="ellipsis-end">
-            <PaginationLink disabled>...</PaginationLink>
-          </PaginationItem>
-        );
-      }
-      items.push(
-        <PaginationItem key="last">
-          <PaginationLink onClick={() => setCurrentPage(totalPages)}>
-            <span className="sr-only">Ir para última página</span>
-            {totalPages}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-    
-    return items;
-  };
 
   return (
     <Layout>
@@ -368,7 +297,7 @@ export default function Clients() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Array.from({ length: itemsPerPage }).map((_, index) => (
+                    {Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
                       <TableRowSkeleton key={index} columns={7} />
                     ))}
                   </TableBody>
@@ -496,49 +425,21 @@ export default function Clients() {
           </CardContent>
           
           {!isLoading && total > 0 && (
-            <CardFooter className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-              <div className="flex flex-col space-y-2 md:flex-row md:items-center md:space-y-0 md:space-x-4">
-                <p className="text-sm text-gray-500">
-                  Mostrando {total > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a{" "}
-                  {Math.min(currentPage * itemsPerPage, total)} de {total} clientes
-                </p>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-muted-foreground">Itens por página:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Próximo
-                </Button>
-              </div>
+            <CardFooter>
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalItems={total}
+                itemsPerPage={pagination.itemsPerPage}
+                onPageChange={pagination.setCurrentPage}
+                onItemsPerPageChange={pagination.setItemsPerPage}
+                statusTextTemplate={(start, end, total) => 
+                  `Mostrando ${start} a ${end} de ${total} clientes`
+                }
+                showNavigationButtons={true}
+                showItemsPerPageSelector={true}
+                showStatusText={true}
+                isLoading={isLoading}
+              />
             </CardFooter>
           )}
         </Card>
@@ -550,7 +451,7 @@ export default function Clients() {
             onOpenChange={(open) => !open && setEditingCustomer(null)}
             onSuccess={() => {
               setEditingCustomer(null);
-              refetch(searchTerm, itemsPerPage, currentPage);
+              refetch(searchTerm, pagination.itemsPerPage, pagination.currentPage);
             }}
           />
         )}
@@ -577,7 +478,7 @@ export default function Clients() {
             setImportResult(result);
             setShowSuccessModal(true);
             setShowImportWizard(false);
-            refetch(searchTerm, itemsPerPage, currentPage);
+            refetch(searchTerm, pagination.itemsPerPage, pagination.currentPage);
           }}
         />
 
