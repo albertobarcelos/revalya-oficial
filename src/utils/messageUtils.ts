@@ -46,8 +46,14 @@ export const processMessageTags = (message: string, data: {
   }; 
 }) => {
   if (!message) return '';
+  
+  // AIDEV-NOTE: Validação para evitar erros quando dados estão undefined
+  if (!data || !data.charge || !data.customer) {
+    console.warn('⚠️ Dados incompletos para processamento de tags:', data);
+    return message;
+  }
 
-  const daysOverdue = calculateDaysOverdue(data.charge.data_vencimento);
+  const daysOverdue = data.charge.data_vencimento ? calculateDaysOverdue(data.charge.data_vencimento) : 0;
   
   // Adicionando logs para depuração
   console.log('🏷️ Processando tags da mensagem:', { 
@@ -75,7 +81,7 @@ export const processMessageTags = (message: string, data: {
   }).format(data.charge?.valor || 0));
   
   // Usando o formatDate para garantir o formato correto da data
-  processedMessage = processedMessage.replace(/{cobranca\.vencimento}/g, formatDate(data.charge?.data_vencimento));
+  processedMessage = processedMessage.replace(/{cobranca\.vencimento}/g, data.charge?.data_vencimento ? formatDate(data.charge.data_vencimento) : '');
   
   processedMessage = processedMessage.replace(/{cobranca\.descricao}/g, data.charge?.descricao || '');
   processedMessage = processedMessage.replace(/{cobranca\.linkPagamento}/g, data.charge?.link_pagamento || '');

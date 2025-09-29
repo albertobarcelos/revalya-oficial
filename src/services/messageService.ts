@@ -401,7 +401,7 @@ export const messageService = {
 
       // AIDEV-NOTE: Verificar se a instância está conectada
       const status = await whatsappService.checkInstanceStatus(instanceName);
-      if (status !== 'open') {
+      if (status !== 'open' && status !== 'connected') {
         throw new Error(`Instância ${instanceName} não está conectada. Status: ${status}`);
       }
 

@@ -15,14 +15,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, MessageSquare, Send, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { TagSelector } from "./TagSelector";
 import { useToast } from '@/components/ui/use-toast';
 import { processMessageTags } from '@/utils/messageUtils';
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
-import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hooks seguros para multi-tenant
+import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
+import { supabase } from '@/lib/supabase';
 
 interface MessageTemplate {
   id: string;
@@ -47,24 +49,70 @@ export function BulkMessageDialog({
 }: BulkMessageDialogProps) {
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
-  const [messageMode, setMessageMode] = useState<'template' | 'custom'>('template');
-  const [customMessage, setCustomMessage] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null); // AIDEV-NOTE: Ref para acesso direto ao textarea
-  // AIDEV-NOTE: Estado do popover removido - agora gerenciado pelo TagSelector
-  const [previewMessage, setPreviewMessage] = useState("");
+  const [customMessage, setCustomMessage] = useState<string>("");
+  const [messageMode, setMessageMode] = useState<'template' | 'custom'>('custom');
+  const [previewMessage, setPreviewMessage] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [selectedChargesData, setSelectedChargesData] = useState<any[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard(); // AIDEV-NOTE: Hook seguro para validação multi-tenant
+  const { currentTenant } = useCurrentTenant();
+  const { hasAccess, accessError } = useTenantAccessGuard();
 
-  // AIDEV-NOTE: Validação crítica de segurança - bloquear acesso se não autorizado
+  // AIDEV-NOTE: Hook para carregar templates de forma segura no nível do componente
+  const {
+    data: templatesData,
+    error: templatesError,
+    isLoading: isTemplatesLoading,
+    refetch: refetchTemplates
+  } = useSecureTenantQuery(
+    ['notification_templates'],
+    async (supabase, tenantId) => {
+      const { data, error } = await supabase
+        .from('notification_templates')
+        .select('id, name, message')
+        .eq('tenant_id', tenantId)
+        .eq('active', true);
+
+      if (error) {
+        throw error;
+      }
+
+      return data as MessageTemplate[];
+    },
+    {
+      enabled: open && !!currentTenant?.slug, // Só carrega quando o dialog está aberto e há tenant
+      staleTime: 5 * 60 * 1000, // 5 minutos
+    }
+  );
+
+  // AIDEV-NOTE: Efeito para atualizar templates quando os dados chegam
+  useEffect(() => {
+    if (templatesData) {
+      setTemplates(templatesData);
+    }
+  }, [templatesData]);
+
+  // AIDEV-NOTE: Efeito para tratar erros de carregamento de templates
+  useEffect(() => {
+    if (templatesError) {
+      console.error('Erro ao carregar templates:', templatesError);
+      toast({
+        title: "Erro ao carregar modelos",
+        description: "Não foi possível carregar os modelos de mensagem.",
+        variant: "destructive",
+      });
+    }
+  }, [templatesError, toast]);
+
+  // AIDEV-NOTE: Validação de acesso e segurança multi-tenant
   useEffect(() => {
     if (!hasAccess && accessError) {
       console.error('🚨 [SECURITY] Acesso negado ao BulkMessageDialog:', accessError);
       toast({
         title: "Acesso Negado",
-        description: accessError,
-        variant: "destructive"
+        description: "Você não tem permissão para acessar esta funcionalidade.",
+        variant: "destructive",
       });
       onOpenChange(false);
     }
@@ -84,17 +132,121 @@ export function BulkMessageDialog({
     { id: "{cobranca.link_pagamento}", name: "Link de Pagamento", color: "#6366f1" },
   ];
 
+  // AIDEV-NOTE: Função para inserir tags no textarea
+  const insertTag = (tag: string) => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+      const newText = before + tag + after;
+      
+      setCustomMessage(newText);
+      
+      // Restaurar posição do cursor
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + tag.length, start + tag.length);
+      }, 0);
+      
+      generatePreview(newText);
+    }
+  };
+
+  // AIDEV-NOTE: Função para gerar preview da mensagem com dados reais das cobranças selecionadas
+  const generatePreview = (message: string) => {
+    // Se não há dados das cobranças ainda, usar dados de exemplo
+    if (selectedChargesData.length === 0) {
+      const preview = processMessageTags(message, {
+        customer: {
+          name: "Carregando...",
+          company: "Carregando...",
+          cpf_cnpj: "000.000.000-00",
+          email: "carregando@exemplo.com",
+          phone: "(00) 00000-0000"
+        },
+        charge: {
+          valor: 0.00,
+          data_vencimento: "2025-01-01",
+          descricao: "Carregando...",
+          link_pagamento: "https://exemplo.com/pagamento/123",
+          codigo_barras: "00000000000000000000000000000000000000000"
+        }
+      });
+      setPreviewMessage(preview);
+      return;
+    }
+
+    // Usar dados da primeira cobrança selecionada para o preview
+    const firstCharge = selectedChargesData[0];
+    const preview = processMessageTags(message, {
+      customer: {
+        name: firstCharge.customers?.name || "Cliente não informado",
+        company: firstCharge.customers?.company || "",
+        cpf_cnpj: firstCharge.customers?.cpf_cnpj || "",
+        email: firstCharge.customers?.email || "",
+        phone: firstCharge.customers?.phone || ""
+      },
+      charge: {
+        valor: firstCharge.valor || 0,
+        data_vencimento: firstCharge.data_vencimento || "",
+        descricao: firstCharge.descricao || "",
+        link_pagamento: firstCharge.link_pagamento || "",
+        codigo_barras: firstCharge.codigo_barras || ""
+      }
+    });
+    setPreviewMessage(preview);
+  };
+
   useEffect(() => {
-    if (open) {
-      loadTemplates();
-    } else {
+    if (!open) {
       // Reset fields when dialog closes
       setSelectedTemplateId("");
       setCustomMessage("");
       setPreviewMessage("");
-      setMessageMode('template');
+      setMessageMode('custom');
+      setSelectedChargesData([]);
     }
   }, [open]);
+
+  // AIDEV-NOTE: Buscar dados das cobranças selecionadas para preview correto
+  useEffect(() => {
+    const fetchSelectedChargesData = async () => {
+      if (!open || selectedCharges.length === 0 || !currentTenant?.id) {
+        return;
+      }
+
+      try {
+        const { data: chargesData, error } = await supabase
+          .from('charges')
+          .select(`
+            *,
+            customers(
+              name,
+              email,
+              phone,
+              cpf_cnpj,
+              company
+            )
+          `)
+          .eq('tenant_id', currentTenant.id)
+          .in('id', selectedCharges);
+
+        if (error) {
+          console.error('❌ Erro ao buscar dados das cobranças:', error);
+          return;
+        }
+
+        setSelectedChargesData(chargesData || []);
+      } catch (error) {
+        console.error('❌ Erro ao buscar dados das cobranças:', error);
+      }
+    };
+
+    fetchSelectedChargesData();
+  }, [open, selectedCharges, currentTenant?.id]);
 
   useEffect(() => {
     if (selectedTemplateId && templates.length > 0) {
@@ -105,203 +257,21 @@ export function BulkMessageDialog({
     }
   }, [selectedTemplateId, templates]);
 
-  // Carregar templates de mensagem
-  const loadTemplates = async () => {
-    setIsLoadingTemplates(true);
-    try {
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .select('*')
-        .eq('tenant_id', currentTenant?.id) // AIDEV-NOTE: Filtro obrigatório por tenant
-        .order('name');
-
-      if (error) throw error;
-      
-      setTemplates(data || []);
-      // Set default template if available
-      if (data && data.length > 0) {
-        setSelectedTemplateId(data[0].id);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar templates:', error);
-      toast({
-        title: "Erro ao carregar templates",
-        description: "Não foi possível carregar os templates de mensagem.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingTemplates(false);
-    }
-  };
-
-  // AIDEV-NOTE: Função otimizada para inserir tags usando useRef
-  const insertTag = (tag: string) => {
-    console.log('🏷️ [TAG INSERT] Iniciando inserção:', tag);
-    
-    if (!textareaRef.current) {
-      console.error('❌ [TAG INSERT] Textarea ref não disponível');
-      return;
-    }
-    
-    const textarea = textareaRef.current;
-    const start = textarea.selectionStart || 0;
-    const end = textarea.selectionEnd || 0;
-    
-    console.log('📝 [TAG INSERT] Estado atual:', {
-      currentText: customMessage.substring(0, 50) + '...',
-      selectionStart: start,
-      selectionEnd: end,
-      tagToInsert: tag
-    });
-    
-    // AIDEV-NOTE: Construir novo texto com a tag inserida
-    const newText = customMessage.substring(0, start) + tag + customMessage.substring(end);
-    
-    // AIDEV-NOTE: Atualizar estado
-    setCustomMessage(newText);
-    generatePreview(newText);
-    
-    // AIDEV-NOTE: Focar e posicionar cursor após inserção
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const newCursorPosition = start + tag.length;
-      textarea.setSelectionRange(newCursorPosition, newCursorPosition);
-      console.log('✅ [TAG INSERT] Tag inserida com sucesso. Nova posição:', newCursorPosition);
-    });
-    
-    // AIDEV-NOTE: Popover será fechado pelo evento de clique
-  };
-
-  // AIDEV-NOTE: Hook seguro para buscar dados da cobrança para preview
-  const { data: previewChargeData, isLoading: isLoadingPreview } = useSecureTenantQuery(
-    ['charge-preview', currentTenant?.id, selectedCharges?.[0]],
-    async (supabase, tenantId) => {
-      if (!selectedCharges || selectedCharges.length === 0) return null;
-      
-      console.log('🔍 [PREVIEW DEBUG] Buscando dados para preview:', {
-        tenantId,
-        chargeId: selectedCharges[0]
-      });
-      
-      const { data, error } = await supabase
-        .from('charges')
-        .select(`
-          *,
-          customers(
-            name,
-            email,
-            phone,
-            cpf_cnpj,
-            company
-          )
-        `)
-        .eq('tenant_id', tenantId)
-        .eq('id', selectedCharges[0])
-        .single();
-        
-      if (error) {
-        console.error('❌ [PREVIEW ERROR] Erro ao buscar cobrança:', error);
-        throw error;
-      }
-      
-      return data;
-    },
-    {
-      enabled: !!(selectedCharges && selectedCharges.length > 0 && currentTenant?.id && hasAccess)
-    }
-  );
-
-  // Gerar preview da mensagem
-  const generatePreview = async (text: string) => {
-    try {
-      // AIDEV-NOTE: Validação crítica de segurança multi-tenant
-      if (!hasAccess) {
-        console.error('🚨 [SECURITY] Acesso negado para preview:', accessError);
-        setPreviewMessage('❌ Acesso negado: ' + (accessError || 'Tenant não autorizado'));
-        return;
-      }
-      
-      if (!currentTenant?.id) {
-        console.error('🚨 [SECURITY] Tenant não definido para preview');
-        setPreviewMessage('❌ Erro: Tenant não definido');
-        return;
-      }
-      
-      // Se houver cobranças selecionadas, usar dados reais para preview
-      if (selectedCharges && selectedCharges.length > 0) {
-        if (isLoadingPreview) {
-          setPreviewMessage('⏳ Carregando dados para preview...');
-        } else if (previewChargeData) {
-          const chargeData = previewChargeData;
-          
-          // AIDEV-NOTE: Validação dupla de segurança - verificar se os dados pertencem ao tenant correto
-          if (chargeData.tenant_id !== currentTenant.id) {
-            console.error('🚨 [SECURITY VIOLATION] Dados de cobrança não pertencem ao tenant atual:', {
-              dataTenantId: chargeData.tenant_id,
-              currentTenantId: currentTenant.id,
-              chargeId: chargeData.id
-            });
-            setPreviewMessage('❌ Erro de segurança: Dados não autorizados');
-            return;
-          }
-          
-          // Formatar a data no formato brasileiro e incluir o dia da semana
-          const dueDate = chargeData.data_vencimento.split('T')[0];
-          const formattedDate = new Date(dueDate + 'T00:00:00').toLocaleDateString('pt-BR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-
-          // Formatar o valor
-          const formattedValue = new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-          }).format(chargeData.valor);
-
-          const processedMessage = processMessageTags(text, {
-            customerData: chargeData.customers,
-            chargeData: {
-              ...chargeData,
-              data_vencimento_formatada: formattedDate,
-              valor_formatado: formattedValue
-            }
-          });
-
-          setPreviewMessage(processedMessage);
-        } else {
-          setPreviewMessage('❌ Erro ao carregar dados da cobrança para preview');
+  // AIDEV-NOTE: Regenerar preview quando dados das cobranças são carregados
+  useEffect(() => {
+    if (selectedChargesData.length > 0) {
+      if (messageMode === 'template' && selectedTemplateId && templates.length > 0) {
+        const template = templates.find(t => t.id === selectedTemplateId);
+        if (template) {
+          generatePreview(template.message);
         }
-      } else {
-        // Preview com dados fictícios se não houver cobranças selecionadas
-        const processedMessage = processMessageTags(text, {
-          customerData: {
-            name: 'João Silva',
-            email: 'joao@email.com',
-            phone: '(11) 99999-9999',
-            cpf_cnpj: '123.456.789-00',
-            company: 'Empresa Exemplo Ltda'
-          },
-          chargeData: {
-            id: 'exemplo-123',
-            numero_cobranca: 'COB-001',
-            valor: 150.00,
-            valor_formatado: 'R$ 150,00',
-            data_vencimento: '2024-01-15',
-            data_vencimento_formatada: 'segunda-feira, 15 de janeiro de 2024',
-            status: 'pendente',
-            descricao: 'Serviço de exemplo'
-          }
-        });
-        setPreviewMessage(processedMessage);
+      } else if (messageMode === 'custom' && customMessage.trim()) {
+        generatePreview(customMessage);
       }
-    } catch (error) {
-      console.error('Erro ao gerar preview:', error);
-      setPreviewMessage(text);
     }
-  };
+  }, [selectedChargesData, messageMode, selectedTemplateId, templates, customMessage]);
 
+  // AIDEV-NOTE: Função para enviar mensagens com validação de segurança
   const handleSendMessage = async () => {
     if (messageMode === 'template' && !selectedTemplateId) {
       toast({
@@ -352,99 +322,161 @@ export function BulkMessageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Enviar mensagem ({selectedCharges?.length || 0})</DialogTitle>
-          <DialogDescription>
-            Selecione um modelo de mensagem para enviar para as cobranças selecionadas.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[600px] p-0">
+        {/* AIDEV-NOTE: Cabeçalho com ícone e informações do cliente */}
+        <DialogHeader className="px-6 py-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <MessageSquare className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-semibold">Enviar Mensagem</DialogTitle>
+              <DialogDescription className="text-sm text-gray-600">
+                Selecione um template ou escreva uma mensagem personalizada para enviar ao cliente.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <Tabs defaultValue="template" onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="template">Usar Modelo</TabsTrigger>
-            <TabsTrigger value="custom">Digitar Mensagem</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="template">
-            <div className="py-4">
-              <label className="text-sm font-medium">Modelo de Mensagem</label>
-              <Select
-                disabled={isLoadingTemplates}
-                value={selectedTemplateId}
-                onValueChange={setSelectedTemplateId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um modelo..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* AIDEV-NOTE: Informações do cliente em destaque */}
+        <div className="px-6 py-4 bg-gray-50 border-b">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-gray-700">Cliente:</span>
+              <p className="text-gray-900 font-semibold">KLEVERSON SILVA JARA</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Telefone:</span>
+              <p className="text-gray-900">(65) 99974-5637</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Valor:</span>
+              <p className="text-gray-900 font-semibold text-green-600">R$ 300,00</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Vencimento:</span>
+              <p className="text-gray-900">03/10/2025</p>
+            </div>
+          </div>
+        </div>
+
+        {/* AIDEV-NOTE: Conteúdo principal com seleção de modo */}
+        <div className="px-6 py-6 space-y-6">
+          <div className="space-y-4">
+            <Label className="text-base font-medium">Selecione um template ou escreva uma mensagem personalizada</Label>
+            
+            <RadioGroup 
+              value={messageMode} 
+              onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}
+              className="space-y-4"
+            >
+              {/* AIDEV-NOTE: Opção de template */}
+              <div className="flex items-center space-x-3">
+                <RadioGroupItem value="template" id="template" />
+                <Label htmlFor="template" className="font-medium">Usar Template</Label>
+              </div>
               
-              {selectedTemplateId && templates.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-sm font-medium mb-2">Preview da mensagem:</p>
-                  <div className="p-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
-                    {previewMessage || templates.find(t => t.id === selectedTemplateId)?.message || ""}
-                  </div>
+              {messageMode === 'template' && (
+                <div className="ml-6 space-y-3">
+                  <Select
+                    disabled={isTemplatesLoading}
+                    value={selectedTemplateId}
+                    onValueChange={setSelectedTemplateId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um modelo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {selectedTemplateId && templates.length > 0 && (
+                    <div className="p-3 bg-gray-50 rounded-lg border">
+                      <p className="text-sm font-medium mb-2 text-gray-700">Preview da mensagem:</p>
+                      <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                        {previewMessage || templates.find(t => t.id === selectedTemplateId)?.message || ""}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="custom">
-            <div className="py-4 space-y-4">
-              <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">Digite sua mensagem</label>
+
+              {/* AIDEV-NOTE: Opção de mensagem personalizada */}
+              <div className="flex items-center space-x-3">
+                <RadioGroupItem value="custom" id="custom" />
+                <Label htmlFor="custom" className="font-medium">Mensagem Personalizada</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* AIDEV-NOTE: Área de mensagem personalizada */}
+          {messageMode === 'custom' && (
+            <div className="space-y-4">
+              <Label className="text-sm font-medium text-gray-700">Mensagem Personalizada</Label>
+              
+              <div className="space-y-3">
+                <div className="flex justify-end">
                   <TagSelector 
                     availableTags={availableTags}
                     onTagSelect={insertTag}
                   />
                 </div>
-              
-              <Textarea
-                ref={textareaRef}
-                id="custom-message"
-                placeholder="Digite sua mensagem aqui. Você pode inserir tags como {cliente.nome} que serão substituídas por valores reais."
-                className="min-h-[150px]"
-                value={customMessage}
-                onChange={(e) => {
-                  setCustomMessage(e.target.value);
-                  generatePreview(e.target.value);
-                }}
-              />
-              
-              {customMessage && (
-                <div>
-                  <p className="text-sm font-medium mb-2">Preview da mensagem:</p>
-                  <div className="p-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
-                    {previewMessage}
+                
+                <Textarea
+                  ref={textareaRef}
+                  placeholder="Digite sua mensagem aqui..."
+                  className="min-h-[120px] resize-none border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  value={customMessage}
+                  onChange={(e) => {
+                    setCustomMessage(e.target.value);
+                    generatePreview(e.target.value);
+                  }}
+                />
+                
+                {customMessage && (
+                  <div className="p-3 bg-gray-50 rounded-lg border">
+                    <p className="text-sm font-medium mb-2 text-gray-700">Preview da mensagem:</p>
+                    <div className="text-sm text-gray-900 whitespace-pre-wrap">
+                      {previewMessage}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
         
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        {/* AIDEV-NOTE: Rodapé com botões de ação */}
+        <DialogFooter className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+            className="flex items-center gap-2"
+          >
+            <X className="h-4 w-4" />
             Cancelar
           </Button>
           <Button 
             onClick={handleSendMessage} 
             disabled={isSubmitting || isLoading || (messageMode === 'template' && !selectedTemplateId) || (messageMode === 'custom' && !customMessage.trim())}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
           >
             {(isSubmitting || isLoading) ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Enviando mensagem...
               </>
-            ) : 'Enviar Mensagem'}
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Enviar Mensagem
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

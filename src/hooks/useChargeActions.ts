@@ -1,5 +1,8 @@
 import { useCharges } from "@/hooks/useCharges";
 import { useToast } from "@/components/ui/use-toast";
+import { useParams } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { messageService } from "@/services/messageService";
 import type { Cobranca } from "@/types/database";
 
 /**
@@ -9,6 +12,7 @@ import type { Cobranca } from "@/types/database";
 export function useChargeActions() {
   const { toast } = useToast();
   const { updateCharge, isUpdating, cancelCharge, isCancelling } = useCharges();
+  const { slug: tenantSlug } = useParams<{ slug: string }>();
 
   /**
    * Marca uma cobrança como recebida em dinheiro
@@ -163,21 +167,98 @@ export function useChargeActions() {
   };
 
   /**
-   * AIDEV-NOTE: Envia mensagem para o cliente (placeholder - implementar integração)
+   * AIDEV-NOTE: Envia mensagem padrão para o cliente via WhatsApp
+   * Template: Olá {Cliente}! Você possui uma cobrança pendente...
    */
   const sendMessage = async (chargeId: string) => {
     try {
-      // TODO: Implementar integração com sistema de mensagens
-      console.log("Enviando mensagem para cobrança:", chargeId);
+      // AIDEV-NOTE: Validar se tenantSlug está disponível
+      if (!tenantSlug) {
+        throw new Error("Tenant não identificado");
+      }
+
+      // AIDEV-NOTE: Buscar dados completos da cobrança incluindo customer
+      const { data: charge, error: chargeError } = await supabase
+        .from('charges')
+        .select(`
+          *,
+          customers(name, phone)
+        `)
+        .eq('id', chargeId)
+        .single();
+
+      if (chargeError || !charge) {
+        throw new Error("Cobrança não encontrada");
+      }
+
+      // AIDEV-NOTE: Validar se o cliente tem telefone
+      if (!charge.customers?.phone) {
+        throw new Error("Cliente não possui telefone cadastrado");
+      }
+
+      // AIDEV-NOTE: Formatar data de vencimento (ex: terça-feira, 30 de setembro de 2025)
+      const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        const options: Intl.DateTimeFormatOptions = {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        };
+        return date.toLocaleDateString('pt-BR', options);
+      };
+
+      // AIDEV-NOTE: Formatar valor monetário
+      const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(value);
+      };
+
+      // AIDEV-NOTE: Criar template de mensagem seguindo o padrão especificado
+      const messageTemplate = `Olá ${charge.customers.name}!
+
+Você possui uma cobrança pendente:
+
+💰 Valor: ${formatCurrency(charge.valor)}
+📅 Vencimento: ${formatDate(charge.data_vencimento)}
+📝 Descrição: ${charge.descricao || 'Cobrança pendente'}
+
+Por favor, entre em contato para regularizar sua situação.
+
+Atenciosamente,
+
+${tenantSlug}`;
+
+      // AIDEV-NOTE: Limpar e formatar número de telefone
+      const phoneNumber = charge.customers.phone.replace(/\D/g, '');
+
+      // AIDEV-NOTE: Enviar mensagem via messageService
+      const result = await messageService.sendMessage(
+        tenantSlug,
+        phoneNumber,
+        messageTemplate,
+        {
+          delay: 1000,
+          linkPreview: false
+        }
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || "Erro ao enviar mensagem");
+      }
+
       toast({
         title: "Mensagem enviada",
-        description: "A mensagem foi enviada para o cliente.",
+        description: `A mensagem foi enviada para ${charge.customers.name}.`,
       });
+
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
       toast({
         title: "Erro",
-        description: "Não foi possível enviar a mensagem.",
+        description: error instanceof Error ? error.message : "Não foi possível enviar a mensagem.",
         variant: "destructive",
       });
     }

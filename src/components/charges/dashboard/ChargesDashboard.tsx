@@ -221,7 +221,11 @@ export function ChargesDashboard() {
 
       for (const charge of chargesToSend) {
         if (charge.customer?.phone) {
-          const processedMessage = processMessageTags(templateId, charge);
+          // TODO: Implementar processamento de template e envio de mensagem
+          // const processedMessage = processMessageTags(templateMessage, {
+          //   customer: charge.customer || {},
+          //   charge: charge
+          // });
           // Implementar envio de mensagem aqui
         }
       }
