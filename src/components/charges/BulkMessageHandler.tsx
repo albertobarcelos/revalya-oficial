@@ -23,11 +23,14 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
   const { toast } = useToast();
   const { currentTenant } = useCurrentTenant();
 
-  const handleSendBulkMessages = async (templateId: string) => {
+  // AIDEV-NOTE: Função para enviar mensagens em massa com suporte a templates e mensagens personalizadas
+  const handleSendBulkMessages = async (templateId: string, customMessage?: string) => {
+    console.log('🎯 [BulkMessageHandler] FUNÇÃO CHAMADA! Parâmetros recebidos:', { templateId, customMessage, selectedCharges });
     try {
-      console.log('🚀 Iniciando envio de mensagens em massa');
-      console.log('📝 Template ID:', templateId);
-      console.log('🎯 Cobranças selecionadas:', selectedCharges);
+      console.log('🚀 [BulkMessageHandler] Iniciando envio de mensagens em massa');
+      console.log('📝 [BulkMessageHandler] Template ID:', templateId);
+      console.log('📝 [BulkMessageHandler] Mensagem personalizada:', customMessage ? 'Sim' : 'Não');
+      console.log('🎯 [BulkMessageHandler] Cobranças selecionadas:', selectedCharges);
       
       setIsSending(true);
 
@@ -58,22 +61,32 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
 
       console.log('✅ Dados das cobranças carregados:', selectedChargesData);
 
-      const { data: templateData, error: templateError } = await supabase
-        .from('notification_templates')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', templateId)
-        .single();
+      let templateData = null;
+      let messageToProcess = customMessage;
 
-      if (templateError) {
-        console.error('❌ Erro ao buscar template:', templateError);
-        throw new Error('Erro ao buscar template');
+      // AIDEV-NOTE: Se não é mensagem personalizada, buscar template do banco
+      if (!customMessage || !templateId.startsWith('custom_')) {
+        const { data: fetchedTemplate, error: templateError } = await supabase
+          .from('notification_templates')
+          .select('*')
+          .eq('tenant_id', currentTenant.id)
+          .eq('id', templateId)
+          .single();
+
+        if (templateError) {
+          console.error('❌ Erro ao buscar template:', templateError);
+          throw new Error('Erro ao buscar template');
+        }
+
+        templateData = fetchedTemplate;
+        messageToProcess = templateData.message;
+        console.log('✅ Template carregado:', templateData);
+      } else {
+        console.log('✅ Usando mensagem personalizada:', customMessage);
       }
 
-      console.log('✅ Template carregado:', templateData);
-
       const messages = selectedChargesData.map(charge => {
-        const processedMessage = processMessageTags(templateData.message, {
+        const processedMessage = processMessageTags(messageToProcess || '', {
           customer: charge.customer || {},
           charge: charge
         });

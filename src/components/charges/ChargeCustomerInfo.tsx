@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Cobranca } from '@/types';
 import { formatCpfCnpj } from '@/lib/utils';
@@ -8,9 +8,11 @@ import { formatCpfCnpj } from '@/lib/utils';
 interface ChargeCustomerInfoProps {
   chargeDetails: Cobranca | null;
   onSendMessage: () => void;
+  // AIDEV-NOTE: Prop para controlar estado de loading do botão "Enviar Mensagem"
+  isSendingMessage?: boolean;
 }
 
-function ChargeCustomerInfoComponent({ chargeDetails, onSendMessage }: ChargeCustomerInfoProps) {
+function ChargeCustomerInfoComponent({ chargeDetails, onSendMessage, isSendingMessage = false }: ChargeCustomerInfoProps) {
   if (!chargeDetails) return null;
 
   return (
@@ -26,10 +28,15 @@ function ChargeCustomerInfoComponent({ chargeDetails, onSendMessage }: ChargeCus
               variant="outline"
               size="sm"
               onClick={onSendMessage}
-              disabled={!chargeDetails.customer?.phone}
+              disabled={!chargeDetails.customer?.phone || isSendingMessage}
             >
-              <Send className="h-4 w-4 mr-2" />
-              Enviar Mensagem
+              {/* AIDEV-NOTE: Ícone de loading quando mensagem está sendo enviada */}
+              {isSendingMessage ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              {isSendingMessage ? 'Enviando...' : 'Enviar Mensagem'}
             </Button>
           )}
         </div>

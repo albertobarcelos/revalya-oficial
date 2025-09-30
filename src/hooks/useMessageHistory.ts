@@ -11,15 +11,8 @@
 
 import { useToast } from '@/components/ui/use-toast';
 import { useTenantAccessGuard, useSecureTenantQuery } from './templates/useSecureTenantQuery';
-
-export interface MessageHistory {
-  id: string;
-  sent_at: string;
-  template_name: string;
-  status: 'delivered' | 'read' | 'sent';
-  message: string;
-  tenant_id: string; // 🛡️ OBRIGATÓRIO para segurança multi-tenant
-}
+// AIDEV-NOTE: Importando tipo correto do database.ts para garantir consistência
+import type { MessageHistory } from '@/types/database';
 
 export function useMessageHistory(chargeId: string | null) {
   const { toast } = useToast();
@@ -61,13 +54,13 @@ export function useMessageHistory(chargeId: string | null) {
         return [];
       }
 
-      // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
+      // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID (schema correto)
       const { data, error } = await supabase
         .from('message_history')
-        .select('id, sent_at, template_name, status, message, tenant_id')
+        .select('id, created_at, status, message, tenant_id, metadata')
         .eq('tenant_id', tenantId) // 🛡️ FILTRO CRÍTICO
         .eq('charge_id', chargeId)
-        .order('sent_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('🚨 [ERROR] useMessageHistory - Erro na consulta:', error);

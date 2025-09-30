@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
+import { useQueryClient } from "@tanstack/react-query";
 import { SearchIcon, Info, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -85,6 +86,7 @@ export function ChargesList() {
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isSendingMessages, setIsSendingMessages] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: chargesData, total, isLoading, refetch, cancelCharge, exportToCSV } = useCharges({
     page: currentPage,
@@ -199,6 +201,14 @@ export function ChargesList() {
     setIsSendingMessages(true);
     try {
       const result = await messageService.sendBulkMessages(selectedCharges, templateId, customMessage);
+      
+      // AIDEV-NOTE: Invalidar cache do histórico de mensagens para todas as cobranças afetadas
+      selectedCharges.forEach(chargeId => {
+        queryClient.invalidateQueries({
+          queryKey: ['message_history']
+        });
+      });
+      console.log('🔄 Cache do histórico de mensagens invalidado após envio em massa');
       
       // Limpar seleção após o envio
       setSelectedCharges([]);

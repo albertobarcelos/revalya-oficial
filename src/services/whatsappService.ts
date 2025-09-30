@@ -1430,6 +1430,110 @@ class WhatsAppService {
       return false;
     }
   }
+
+  /**
+   * AIDEV-NOTE: Valida se um tenant possui uma instância ativa e conectada
+   * Este método é essencial para o envio de mensagens em massa, garantindo que
+   * apenas tenants com WhatsApp configurado e conectado possam enviar mensagens
+   * 
+   * @param tenantSlug - Slug do tenant para validação
+   * @returns Promise<{isValid: boolean, instanceName?: string, error?: string}>
+   */
+  validateTenantActiveInstance = async (tenantSlug: string): Promise<{
+    isValid: boolean;
+    instanceName?: string;
+    error?: string;
+  }> => {
+    try {
+      if (!tenantSlug) {
+        return {
+          isValid: false,
+          error: 'Slug do tenant não fornecido'
+        };
+      }
+
+      logService.info(this.MODULE_NAME, `Validando instância ativa para tenant: ${tenantSlug}`);
+
+      // 1. Verificar se existe uma instância para o tenant
+      const instance = await this.findInstanceForTenant(tenantSlug);
+      if (!instance) {
+        logService.warn(this.MODULE_NAME, `Nenhuma instância encontrada para o tenant: ${tenantSlug}`);
+        return {
+          isValid: false,
+          error: 'Nenhuma instância WhatsApp encontrada para este tenant'
+        };
+      }
+
+      // 2. Verificar se a instância está conectada
+      const status = await this.checkInstanceStatus(instance.instanceName);
+      if (status !== 'connected') {
+        logService.warn(this.MODULE_NAME, `Instância ${instance.instanceName} não está conectada. Status: ${status}`);
+        return {
+          isValid: false,
+          instanceName: instance.instanceName,
+          error: `Instância WhatsApp não está conectada. Status atual: ${status}`
+        };
+      }
+
+      // 3. Verificar se a integração está ativa no banco de dados
+      const tenant = await this.getTenantBySlug(tenantSlug);
+      if (!tenant || !tenant.id) {
+        return {
+          isValid: false,
+          error: 'Tenant não encontrado'
+        };
+      }
+
+      const { data: integration } = await supabase
+        .from('tenant_integrations')
+        .select('is_active, config')
+        .eq('tenant_id', tenant.id)
+        .eq('integration_type', 'whatsapp')
+        .single();
+
+      if (!integration || !integration.is_active) {
+        logService.warn(this.MODULE_NAME, `Integração WhatsApp não está ativa para o tenant: ${tenantSlug}`);
+        return {
+          isValid: false,
+          instanceName: instance.instanceName,
+          error: 'Integração WhatsApp não está ativa para este tenant'
+        };
+      }
+
+      // 4. Validação adicional: verificar se a instância responde a comandos básicos
+      try {
+        const instanceInfo = await this.getInstanceInfo(instance.instanceName);
+        if (!instanceInfo || !instanceInfo.instance) {
+          logService.warn(this.MODULE_NAME, `Instância ${instance.instanceName} não responde a comandos`);
+          return {
+            isValid: false,
+            instanceName: instance.instanceName,
+            error: 'Instância WhatsApp não está respondendo'
+          };
+        }
+      } catch (infoError) {
+        logService.error(this.MODULE_NAME, `Erro ao verificar informações da instância ${instance.instanceName}:`, infoError);
+        return {
+          isValid: false,
+          instanceName: instance.instanceName,
+          error: 'Erro ao verificar status da instância WhatsApp'
+        };
+      }
+
+      logService.info(this.MODULE_NAME, `Instância ${instance.instanceName} validada com sucesso para o tenant ${tenantSlug}`);
+      return {
+        isValid: true,
+        instanceName: instance.instanceName
+      };
+
+    } catch (error) {
+      logService.error(this.MODULE_NAME, `Erro ao validar instância ativa para tenant ${tenantSlug}:`, error);
+      return {
+        isValid: false,
+        error: 'Erro interno ao validar instância WhatsApp'
+      };
+    }
+  }
 }
 
 export const whatsappService = new WhatsAppService();

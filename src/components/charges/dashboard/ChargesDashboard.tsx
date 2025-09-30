@@ -22,6 +22,7 @@ import type { Cobranca } from '@/types/database';
 import { Search, Bell, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { processMessageTags } from '@/utils/messageUtils';
+import { supabase } from '@/lib/supabase';
 
 // AIDEV-NOTE: Interface para agrupamento de cobranças por categoria
 interface GroupedCharges {
@@ -202,8 +203,10 @@ export function ChargesDashboard() {
     setIsDetailDrawerOpen(true);
   };
 
-  // AIDEV-NOTE: Handler para envio de mensagens em massa
-  const handleSendMessages = async (templateId: string) => {
+  // AIDEV-NOTE: Handler para envio de mensagens em massa com suporte a templates e mensagens personalizadas
+  const handleSendMessages = async (templateId: string, customMessage?: string) => {
+    console.log('🎯 [ChargesDashboard] FUNÇÃO CHAMADA! Parâmetros recebidos:', { templateId, customMessage, selectedCharges });
+    
     if (selectedCharges.length === 0) {
       toast({
         title: "Nenhuma cobrança selecionada",
@@ -213,38 +216,128 @@ export function ChargesDashboard() {
       return;
     }
 
-    setIsSending(true);
     try {
-      const chargesToSend = selectedGroup 
-        ? groupedCharges[selectedGroup].charges.filter(c => selectedCharges.includes(c.id))
-        : [];
+      console.log('🚀 [ChargesDashboard] Iniciando envio de mensagens em massa');
+      console.log('📝 [ChargesDashboard] Template ID:', templateId);
+      console.log('📝 [ChargesDashboard] Mensagem personalizada:', customMessage ? 'Sim' : 'Não');
+      console.log('🎯 [ChargesDashboard] Cobranças selecionadas:', selectedCharges);
+      
+      setIsSending(true);
 
-      for (const charge of chargesToSend) {
-        if (charge.customer?.phone) {
-          // TODO: Implementar processamento de template e envio de mensagem
-          // const processedMessage = processMessageTags(templateMessage, {
-          //   customer: charge.customer || {},
-          //   charge: charge
-          // });
-          // Implementar envio de mensagem aqui
-        }
+      // AIDEV-NOTE: Validação de segurança multi-tenant usando valores já disponíveis
+      if (!hasAccess || accessError) {
+        console.error('🚨 [SECURITY] Acesso negado:', accessError);
+        throw new Error('Acesso negado: validação de tenant falhou');
       }
+      
+      if (!currentTenant) {
+        console.error('🚨 [SECURITY] Tenant não encontrado');
+        throw new Error('Tenant não encontrado');
+      }
+
+      let messageTemplate = '';
+      let templateData = null;
+
+      // AIDEV-NOTE: Buscar template ou usar mensagem personalizada
+      if (customMessage) {
+        console.log('📝 [ChargesDashboard] Usando mensagem personalizada');
+        messageTemplate = customMessage;
+      } else {
+        console.log('📋 [ChargesDashboard] Buscando template do banco de dados');
+        const { data: template, error: templateError } = await supabase
+          .from('notification_templates')
+          .select('*')
+          .eq('id', templateId)
+          .eq('tenant_id', currentTenant.id)
+          .single();
+
+        if (templateError || !template) {
+          console.error('❌ [ChargesDashboard] Erro ao buscar template:', templateError);
+          throw new Error('Template não encontrado');
+        }
+
+        templateData = template;
+        messageTemplate = template.message;
+        console.log('✅ [ChargesDashboard] Template encontrado:', template.name);
+      }
+
+      // AIDEV-NOTE: Buscar dados das cobranças selecionadas
+      const { data: charges, error: chargesError } = await supabase
+        .from('charges')
+        .select(`
+          *,
+          customer:customers(*)
+        `)
+        .in('id', selectedCharges)
+        .eq('tenant_id', currentTenant.id);
+
+      if (chargesError || !charges) {
+        console.error('❌ [ChargesDashboard] Erro ao buscar cobranças:', chargesError);
+        throw new Error('Erro ao buscar dados das cobranças');
+      }
+
+      console.log('📊 [ChargesDashboard] Cobranças encontradas:', charges.length);
+
+      // AIDEV-NOTE: Processar mensagens para cada cobrança
+      const messagesToSend = charges.map(charge => {
+        const processedMessage = processMessageTags(messageTemplate, {
+          customer: charge.customer || {},
+          charge: charge
+        });
+
+        return {
+          phone: charge.customer?.phone,
+          message: processedMessage,
+          chargeId: charge.id,
+          customerId: charge.customer?.id
+        };
+      }).filter(msg => msg.phone); // Filtrar apenas cobranças com telefone
+
+      console.log('📱 [ChargesDashboard] Mensagens a serem enviadas:', messagesToSend.length);
+
+      // AIDEV-NOTE: Construir payload para webhook
+      const payload = {
+        messages: messagesToSend,
+        templateId: customMessage ? `custom_${Date.now()}` : templateId,
+        templateName: templateData?.name || 'Mensagem Personalizada',
+        tenantId: currentTenant.id,
+        sentBy: currentTenant.user_id,
+        sentAt: new Date().toISOString()
+      };
+
+      console.log('🚀 [ChargesDashboard] Enviando mensagens em massa via Evolution API:', payload);
+
+      // AIDEV-NOTE: Usar messageService para envio direto via Evolution API (igual às mensagens individuais)
+      // Importar messageService no topo do arquivo se necessário
+      const { messageService } = await import('../../../services/messageService');
+      
+      const result = await messageService.sendBulkMessages(
+        selectedCharges,
+        customMessage || templateData?.message || 'Mensagem padrão',
+        templateId,
+        currentTenant.slug,
+        currentTenant.id
+      );
+
+      console.log('✅ [ChargesDashboard] Resultado do envio em massa:', result);
 
       toast({
         title: "Mensagens enviadas",
-        description: `${selectedCharges.length} mensagens foram enviadas com sucesso.`,
+        description: `${result.successCount}/${result.totalMessages} mensagens foram enviadas com sucesso.`,
       });
       
       setSelectedCharges([]);
       setIsMessageDialogOpen(false);
+
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [ChargesDashboard] Erro ao enviar mensagens:', error);
       toast({
         title: "Erro ao enviar mensagens",
-        description: "Ocorreu um erro ao enviar as mensagens. Tente novamente.",
+        description: error instanceof Error ? error.message : "Ocorreu um erro ao enviar as mensagens. Tente novamente.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 [ChargesDashboard] Finalizando processo');
       setIsSending(false);
     }
   };

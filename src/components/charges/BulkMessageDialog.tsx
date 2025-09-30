@@ -293,29 +293,36 @@ export function BulkMessageDialog({
 
     try {
       setIsSubmitting(true);
-      console.log(`Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
+      console.log(`🚀 [BulkMessageDialog] Iniciando envio - Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
       
       if (messageMode === 'template') {
-        await onSendMessages(selectedTemplateId);
+        console.log('📋 [BulkMessageDialog] Chamando onSendMessages com template:', selectedTemplateId);
+        const result = await onSendMessages(selectedTemplateId);
+        console.log('✅ [BulkMessageDialog] Resultado do envio via template:', result);
       } else {
         // Enviar mensagem customizada com um ID temporário
         const tempTemplateId = 'custom_' + Date.now();
-        console.log('Enviando mensagem customizada:', tempTemplateId, customMessage);
+        console.log('📝 [BulkMessageDialog] Enviando mensagem customizada:', tempTemplateId, customMessage);
+        console.log('📞 [BulkMessageDialog] Chamando onSendMessages com:', { tempTemplateId, customMessage });
         
-        await onSendMessages(tempTemplateId, customMessage);
+        const result = await onSendMessages(tempTemplateId, customMessage);
+        console.log('✅ [BulkMessageDialog] Resultado do envio personalizado:', result);
       }
       
+      console.log('🎉 [BulkMessageDialog] Envio concluído com sucesso, fechando diálogo');
       // Após o envio bem-sucedido, fechar o diálogo
       onOpenChange(false);
       
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [BulkMessageDialog] Erro ao enviar mensagens:', error);
+      console.error('❌ [BulkMessageDialog] Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
       toast({
         title: "Erro ao enviar mensagem",
         description: "Não foi possível enviar a mensagem. Tente novamente.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 [BulkMessageDialog] Finalizando processo, setIsSubmitting(false)');
       setIsSubmitting(false);
     }
   };

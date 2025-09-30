@@ -1,6 +1,7 @@
 import { useCharges } from "@/hooks/useCharges";
 import { useToast } from "@/components/ui/use-toast";
 import { useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { messageService } from "@/services/messageService";
 import type { Cobranca } from "@/types/database";
@@ -11,6 +12,7 @@ import type { Cobranca } from "@/types/database";
  */
 export function useChargeActions() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { updateCharge, isUpdating, cancelCharge, isCancelling } = useCharges();
   const { slug: tenantSlug } = useParams<{ slug: string }>();
 
@@ -247,6 +249,31 @@ ${tenantSlug}`;
 
       if (!result.success) {
         throw new Error(result.error || "Erro ao enviar mensagem");
+      }
+
+      // AIDEV-NOTE: Registrar automaticamente no histórico de mensagens
+      try {
+        await messageService.recordMessageHistory(
+          [charge], // Array com a cobrança
+          [{
+            charge: { id: charge.id },
+            template: { message: messageTemplate }
+          }], // Array com a mensagem
+          'individual-message', // Template ID para mensagens individuais
+          'Mensagem Individual', // Nome do template
+          charge.tenant_id // Tenant ID obrigatório
+        );
+        console.log('✅ Histórico de mensagem individual registrado com sucesso');
+        
+        // AIDEV-NOTE: Invalidar cache do histórico de mensagens para atualização imediata
+        queryClient.invalidateQueries({
+          queryKey: ['message_history', charge.tenant_id, chargeId]
+        });
+        console.log('🔄 Cache do histórico de mensagens invalidado para sincronização');
+        
+      } catch (historyError) {
+        console.error('⚠️ Erro ao registrar histórico da mensagem:', historyError);
+        // Não falha o envio se o histórico falhar
       }
 
       toast({

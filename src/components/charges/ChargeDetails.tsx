@@ -140,6 +140,7 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
       <ChargeCustomerInfo
         chargeDetails={chargeDetails}
         onSendMessage={handleSendMessage}
+        isSendingMessage={isSendingMessage}
       />
 
       <ChargePaymentDetails chargeDetails={chargeDetails} />

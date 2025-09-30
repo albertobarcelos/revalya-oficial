@@ -731,12 +731,14 @@ export interface Notification {
 
 export interface MessageHistory {
   id: string;
+  tenant_id: string; // 🛡️ Campo obrigatório para segurança multi-tenant
   charge_id: string;
   template_id: string;
-  sent_at: string;
-  status: 'success' | 'error';
-  error_message?: string;
-  message_content: string;
-  customer_name: string;
-  customer_phone: string;
+  customer_id: string;
+  message: string; // Campo correto conforme schema
+  status: 'SENT' | 'DELIVERED' | 'READ' | 'FAILED'; // Valores corretos do enum
+  error_details?: string; // Nome correto do campo
+  metadata?: Record<string, any>; // Campo JSONB do schema
+  created_at: string; // Campo correto do schema
+  updated_at: string; // Campo correto do schema
 }

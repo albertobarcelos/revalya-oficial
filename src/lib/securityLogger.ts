@@ -128,6 +128,39 @@ export class SecurityLogger {
     
     console.warn('RATE_LIMIT_ALERT:', JSON.stringify(event));
   }
+
+  /**
+   * Log genérico de eventos de segurança
+   * AIDEV-NOTE: Método genérico para compatibilidade com implementações existentes
+   */
+  static async logSecurityEvent(eventData: {
+    event: string;
+    tenant_id: string;
+    success: boolean;
+    metadata?: Record<string, any>;
+    ip_address?: string;
+    user_agent?: string;
+  }): Promise<void> {
+    const event: SecurityEvent = {
+      ...eventData,
+      timestamp: new Date(),
+      metadata: eventData.metadata ? {
+        ...eventData.metadata,
+        // AIDEV-NOTE: Sanitizar dados sensíveis automaticamente
+        credentials: '[REDACTED]',
+        api_key: '[REDACTED]',
+        access_token: '[REDACTED]',
+        password: '[REDACTED]'
+      } : undefined
+    };
+    
+    // Log estruturado baseado no tipo de evento
+    if (eventData.success) {
+      console.log('SECURITY_EVENT:', JSON.stringify(event));
+    } else {
+      console.warn('SECURITY_ALERT:', JSON.stringify(event));
+    }
+  }
 }
 
 export default SecurityLogger;
