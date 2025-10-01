@@ -1,6 +1,6 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 import { Contract } from '@/types';
@@ -30,7 +30,8 @@ export function RecentContracts({ contracts }: RecentContractsProps) {
               <TableRow key={contract.id}>
                 <TableCell>{contract.customer?.name || 'N/A'}</TableCell>
                 <TableCell>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(contract.amount || 0)}</TableCell>
-                <TableCell>{format(new Date(contract.initial_date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                {/* AIDEV-NOTE: Corrigido timezone - usar parseISO */}
+                <TableCell>{format(parseISO(contract.initial_date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                 <TableCell>{contract.status}</TableCell>
               </TableRow>
             ))}

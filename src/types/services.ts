@@ -4,6 +4,7 @@ export interface Service {
   description?: string | null;
   code?: string | null;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string | null;
   municipality_code?: string | null;
@@ -22,6 +23,7 @@ export interface CreateServiceDTO {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   municipality_code?: string;

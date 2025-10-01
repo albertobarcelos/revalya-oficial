@@ -218,6 +218,28 @@ export function ContractFormActions({
       invalidateQueries: ['contracts', 'contract_services']
     }
   );
+
+  // AIDEV-NOTE: Hook seguro para inserção de produtos do contrato
+  const insertContractProductsMutation = useSecureTenantMutation(
+    async (supabase, tenantId, productsToInsert: any[]) => {
+      const { data, error } = await supabase
+        .from('contract_products')
+        .insert(productsToInsert)
+        .select();
+      
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        console.log('✅ Produtos inseridos com sucesso');
+      },
+      onError: (error) => {
+        console.error('❌ Erro ao inserir produtos:', error);
+      },
+      invalidateQueries: ['contracts', 'contract_products']
+    }
+  );
   
   // Hook para recarregamento automático em background
   const backgroundRefresh = forceRefreshContracts 
@@ -617,11 +639,11 @@ export function ContractFormActions({
             throw new Error(`Produto não encontrado: ${productData.product_id}`);
           }
           
-          if (productCheck.tenant_id !== tenantContext.tenantId) {
+          if (productCheck.tenant_id !== currentTenant.id) {
             console.error('❌ Produto não pertence ao tenant:', {
               productId: productData.product_id,
               productTenantId: productCheck.tenant_id,
-              contextTenantId: tenantContext.tenantId
+              contextTenantId: currentTenant.id
             });
             throw new Error(`Produto ${productCheck.name} não pertence ao tenant atual`);
           }
@@ -629,17 +651,8 @@ export function ContractFormActions({
           console.log('✅ Produto verificado:', productCheck.name);
         }
         
-        // Inserir os produtos
-        const { data: insertedProducts, error: productsError } = await supabase
-          .from('contract_products')
-          .insert(productsToInsert)
-          .select();
-        
-        if (productsError) {
-          console.error('Erro ao salvar produtos:', productsError);
-          throw new Error(`Erro ao salvar produtos: ${productsError.message}`);
-        }
-        
+        // Inserir os produtos usando mutação segura
+        const insertedProducts = await insertContractProductsMutation.mutateAsync(productsToInsert);
         console.log('Produtos salvos com sucesso:', insertedProducts);
       }
       

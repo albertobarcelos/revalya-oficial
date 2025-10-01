@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { UseFormReturn } from "react-hook-form";
+import { parseISO } from "date-fns";
 import { supabase } from '@/lib/supabase';
 import { ContractFormValues } from "@/components/contracts/schema/ContractFormSchema";
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
@@ -293,8 +294,9 @@ export function useContractEdit(): UseContractEditReturn {
       const formData: Partial<ContractFormValues> = {
         customer_id: contract.customer_id,
         contract_number: contract.contract_number,
-        initial_date: contract.initial_date ? new Date(contract.initial_date) : new Date(),
-        final_date: contract.final_date ? new Date(contract.final_date) : new Date(),
+        // AIDEV-NOTE: Corrigido timezone - usar parseISO para strings de data
+        initial_date: contract.initial_date ? parseISO(contract.initial_date) : new Date(),
+        final_date: contract.final_date ? parseISO(contract.final_date) : new Date(),
         billing_type: contract.billing_type || 'Mensal',
         billing_day: contract.billing_day || 10,
         anticipate_weekends: contract.anticipate_weekends ?? true,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -279,7 +279,7 @@ export function ChargeGroupList({
                         <div className="flex items-center space-x-1 text-gray-600">
                           <span>Venc:</span>
                           <span className="font-medium">
-                            {charge.data_vencimento ? format(new Date(charge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
+                            {charge.data_vencimento ? format(parseISO(charge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
                           </span>
                         </div>
                       </div>
