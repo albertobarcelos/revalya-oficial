@@ -220,6 +220,9 @@ class BillingProcessorService {
     contract: any,
     externalData: { external_id: string; payment_url?: string; barcode?: string }
   ): Promise<Charge> {
+    // AIDEV-NOTE: Definindo created_at e updated_at explicitamente para evitar problemas de timezone
+    const now = new Date().toISOString();
+    
     const chargeData = {
       tenant_id: billing.tenant_id,
       customer_id: contract.customer_id,
@@ -231,6 +234,8 @@ class BillingProcessorService {
       link_pagamento: externalData.payment_url,
       asaas_id: externalData.external_id,
       codigo_barras: externalData.barcode,
+      created_at: now,
+      updated_at: now,
       metadata: {
         contract_id: contract.id,
         billing_id: billing.id,

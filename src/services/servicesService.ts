@@ -12,6 +12,7 @@ export interface ServiceFormData {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   withholding_tax?: boolean;
@@ -95,6 +96,7 @@ class ServicesService {
       description: data.description,
       code: data.code,
       default_price: data.default_price,
+      cost_price: data.cost_price, // AIDEV-NOTE: Incluindo preço de custo na atualização
       tax_rate: data.tax_rate,
       tax_code: data.tax_code,
       withholding_tax: data.withholding_tax || false,

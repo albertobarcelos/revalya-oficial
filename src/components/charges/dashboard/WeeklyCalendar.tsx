@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isToday, getWeek, getYear } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isToday, getWeek, getYear, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -58,12 +58,12 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const [previousWeekTotal, setPreviousWeekTotal] = useState(0);
   const [weeklyGrowth, setWeeklyGrowth] = useState(0);
 
-  // AIDEV-NOTE: Função para agrupar cobranças por dia
+  // AIDEV-NOTE: Função para agrupar cobranças por dia - Corrigido para usar parseISO e evitar problemas de timezone
   const groupChargesByDay = (charges: Cobranca[]): GroupedCharges => {
     return charges.reduce((acc, charge) => {
       if (!charge.data_vencimento) return acc;
       
-      const dayKey = format(new Date(charge.data_vencimento), 'yyyy-MM-dd');
+      const dayKey = format(parseISO(charge.data_vencimento), 'yyyy-MM-dd');
       if (!acc[dayKey]) acc[dayKey] = [];
       acc[dayKey].push(charge);
       

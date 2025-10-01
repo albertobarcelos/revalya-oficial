@@ -31,7 +31,9 @@ import { NewContractForm } from '@/components/contracts/NewContractForm';
 import { MonthlyBillingDetails } from '@/components/billing/MonthlyBillingDetails';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
-import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
+import { useTenantAccessGuard, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
+import { useSupabase } from '@/hooks/useSupabase';
+import logger from '@/lib/logger';
 import { 
   groupItemsByPaymentConfig, 
   generateGroupDescription, 
@@ -41,16 +43,11 @@ import {
 } from '@/utils/billingGrouper';
 import { ensureAuthenticated, withAuth, forceSessionRefresh } from '@/utils/authGuard';
 import { insertChargeWithAuthContext, insertMultipleCharges } from '@/utils/chargeUtils';
-import { format } from 'date-fns';
+import { format, startOfDay, addMonths } from 'date-fns';
 
 type ContractStatus = 'Faturar Hoje' | 'Faturamento Pendente' | 'Faturados no Mês' | 'Contratos a Renovar';
 
-const columns = [
-  { id: "faturar-hoje", title: "Faturar Hoje" },
-  { id: "pendente", title: "Faturamento Pendente" },
-  { id: "faturados", title: "Faturados no Mês" },
-  { id: "renovar", title: "Contratos a Renovar" },
-];
+// AIDEV-NOTE: Definição de colunas movida para dentro do componente para evitar duplicação
 
 interface KanbanCardProps {
   contract: KanbanContract;
@@ -436,6 +433,7 @@ function KanbanColumn({
 export default function FaturamentoKanban() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const { kanbanData, isLoading, error, refreshData, updateContractStatus } = useBillingKanban();
+  const { user } = useSupabase();
   
   // 🔍 [DEBUG] Log do estado do componente
   console.log('🎯 [COMPONENT] FaturamentoKanban render:', {
@@ -551,32 +549,25 @@ export default function FaturamentoKanban() {
     }
   };
 
-  // AIDEV-NOTE: Função para gerar cobrança dos contratos selecionados
-  const handleBilling = useCallback(async () => {
-    if (!currentTenant || selectedContracts.size === 0) return;
-
-    setIsBilling(true);
-    try {
-      // AIDEV-NOTE: Forçar refresh da sessão antes de processar cobranças críticas
-      const authCheck = await forceSessionRefresh();
-      if (!authCheck.success) {
-        toast({
-          title: "Erro de Autenticação",
-          description: `Falha na autenticação: ${authCheck.error}. Tente fazer login novamente.`,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      console.log('Sessão refreshada com sucesso para usuário:', authCheck.user?.id);
-
-      const contractsToProcess = Array.from(selectedContracts);
+  // AIDEV-NOTE: Hook seguro para mutação de faturamento com contexto de tenant
+  const billingMutation = useSecureTenantMutation(
+    async (supabase, tenantId, variables: { contractIds: string[] }) => {
+      const { contractIds } = variables;
       let successCount = 0;
       let errorCount = 0;
 
-      for (const contractId of contractsToProcess) {
+      // AIDEV-NOTE: Forçar refresh da sessão antes de processar cobranças críticas
+      const authCheck = await forceSessionRefresh();
+      if (!authCheck.success) {
+        throw new Error(`Falha na autenticação: ${authCheck.error}. Tente fazer login novamente.`);
+      }
+      
+      console.log('✅ [BILLING] Sessão refreshada com sucesso para usuário:', authCheck.user?.id);
+      console.log('🔒 [BILLING] Processando faturamento para tenant:', tenantId);
+
+      for (const contractId of contractIds) {
         try {
-          // Buscar dados do contrato com serviços e produtos - AIDEV-NOTE: Inclui dados completos para agrupamento
+          // AIDEV-NOTE: Buscar dados do contrato com validação de tenant explícita
           const { data: contract, error: contractError } = await supabase
             .from('contracts')
             .select(`
@@ -625,11 +616,11 @@ export default function FaturamentoKanban() {
               )
             `)
             .eq('id', contractId)
-            .eq('tenant_id', currentTenant.id)
+            .eq('tenant_id', tenantId) // AIDEV-NOTE: Usar tenantId do contexto seguro
             .single();
 
           if (contractError || !contract) {
-            console.error('Erro ao buscar contrato:', contractError);
+            console.error('❌ [BILLING] Erro ao buscar contrato:', contractError);
             errorCount++;
             continue;
           }
@@ -640,13 +631,13 @@ export default function FaturamentoKanban() {
           const paymentGroups = groupItemsByPaymentConfig(services, products);
 
           if (paymentGroups.length === 0) {
-            console.warn(`Contrato ${contract.contract_number} não possui serviços ou produtos configurados`);
+            console.warn(`⚠️ [BILLING] Contrato ${contract.contract_number} não possui serviços ou produtos configurados`);
             errorCount++;
             continue;
           }
 
-          // Gerar dados comuns do faturamento
-          const billingDate = new Date();
+          // AIDEV-NOTE: Usar startOfDay para garantir consistência de timezone e evitar problemas de horário
+          const billingDate = startOfDay(new Date());
           const referenceMonth = `${String(billingDate.getMonth() + 1).padStart(2, '0')}/${billingDate.getFullYear()}`;
           
           // AIDEV-NOTE: Processar cada grupo de pagamento separadamente
@@ -659,13 +650,13 @@ export default function FaturamentoKanban() {
             const isInstallment = group.payment_method?.toLowerCase() === 'cartão' && group.installments > 1;
             
             if (isInstallment) {
-              // Criar múltiplas cobranças para pagamento parcelado usando função que contorna RLS
+              // Criar múltiplas cobranças para pagamento parcelado
               const installmentCharges = [];
               const installmentValue = group.total_amount / group.installments;
               
               for (let i = 1; i <= group.installments; i++) {
-                const installmentDueDate = new Date(dueDate);
-                installmentDueDate.setMonth(installmentDueDate.getMonth() + (i - 1));
+                // AIDEV-NOTE: Usar addMonths do date-fns para evitar problemas com meses de diferentes tamanhos
+                const installmentDueDate = addMonths(dueDate, i - 1);
                 
                 const installmentDescription = `${chargeDescription} - Parcela ${i}/${group.installments}`;
                 
@@ -675,7 +666,7 @@ export default function FaturamentoKanban() {
                   data_vencimento: installmentDueDate.toISOString().split('T')[0],
                   descricao: installmentDescription,
                   status: 'PENDING',
-                  tenant_id: currentTenant.id,
+                  tenant_id: tenantId, // AIDEV-NOTE: Usar tenantId do contexto seguro
                   customer_id: (contract.customer as any).id,
                   tipo: chargeType
                 });
@@ -684,71 +675,146 @@ export default function FaturamentoKanban() {
               const { error: installmentError } = await insertMultipleCharges(installmentCharges);
 
               if (installmentError) {
-                console.error('Erro ao criar parcelas do grupo:', installmentError);
+                console.error('❌ [BILLING] Erro ao criar parcelas do grupo:', installmentError);
                 errorCount++;
+              } else {
+                console.log(`✅ [BILLING] Parcelas criadas para contrato ${contract.contract_number}`);
               }
             } else {
-              // Criar cobrança única para o grupo usando função que contorna RLS
+              // Criar cobrança única para o grupo
               const { error: chargeError } = await insertChargeWithAuthContext({
                 contract_id: contractId,
                 valor: group.total_amount,
                 data_vencimento: dueDate.toISOString().split('T')[0],
                 descricao: chargeDescription,
                 status: 'PENDING',
-                tenant_id: currentTenant.id,
+                tenant_id: tenantId, // AIDEV-NOTE: Usar tenantId do contexto seguro
                 customer_id: (contract.customer as any).id,
                 tipo: chargeType
               });
 
               if (chargeError) {
-                console.error('Erro ao criar cobrança do grupo:', chargeError);
+                console.error('❌ [BILLING] Erro ao criar cobrança do grupo:', chargeError);
                 errorCount++;
                 continue;
+              } else {
+                console.log(`✅ [BILLING] Cobrança criada para contrato ${contract.contract_number}`);
               }
             }
           }
 
-          // AIDEV-NOTE: Não é mais necessário atualizar o campo 'billed' do contrato
-          // pois agora controlamos o status através da existência de registros na tabela charges
           successCount++;
         } catch (error) {
-          console.error('Erro no processamento do contrato:', error);
+          console.error('❌ [BILLING] Erro no processamento do contrato:', error);
           errorCount++;
         }
       }
 
-      // Mostrar resultado
-      if (successCount > 0) {
-        toast({
-          title: "Faturamento realizado",
-          description: `${successCount} contrato(s) faturado(s) com sucesso.${errorCount > 0 ? ` ${errorCount} erro(s) encontrado(s).` : ''}`,
-        });
-      }
+      return { successCount, errorCount };
+    },
+    {
+      onSuccess: ({ successCount, errorCount }) => {
+        // Mostrar resultado
+        if (successCount > 0) {
+          toast({
+            title: "Faturamento realizado",
+            description: `${successCount} contrato(s) faturado(s) com sucesso.${errorCount > 0 ? ` ${errorCount} erro(s) encontrado(s).` : ''}`,
+          });
+        }
 
-      if (errorCount > 0 && successCount === 0) {
+        if (errorCount > 0 && successCount === 0) {
+          toast({
+            title: "Erro no faturamento",
+            description: `Não foi possível faturar nenhum contrato. ${errorCount} erro(s) encontrado(s).`,
+            variant: "destructive",
+          });
+        }
+
+        // Limpar seleção e atualizar dados
+        setSelectedContracts(new Set());
+        setShowCheckboxes(false);
+        refreshData();
+      },
+      onError: (error) => {
+        console.error('❌ [BILLING] Erro geral no faturamento:', error);
         toast({
           title: "Erro no faturamento",
-          description: `Não foi possível faturar nenhum contrato. ${errorCount} erro(s) encontrado(s).`,
+          description: error.message || "Ocorreu um erro inesperado durante o faturamento.",
           variant: "destructive",
         });
-      }
+      },
+      invalidateQueries: ['kanban', 'charges', 'contracts']
+    }
+  );
 
-      // Limpar seleção e atualizar dados
-      setSelectedContracts(new Set());
-      setShowCheckboxes(false);
-      await refreshData();
-
-    } catch (error) {
-      console.error('Erro geral no faturamento:', error);
+  // AIDEV-NOTE: Função wrapper para iniciar o faturamento
+  const handleBilling = useCallback(async () => {
+    if (!currentTenant || selectedContracts.size === 0) {
       toast({
-        title: "Erro no faturamento",
-        description: "Ocorreu um erro inesperado durante o faturamento.",
+        title: "Erro de validação",
+        description: "Selecione pelo menos um contrato para faturar.",
         variant: "destructive",
       });
+      return;
+    }
+
+    setIsBilling(true);
+    try {
+      const contractIds = Array.from(selectedContracts);
+      console.log('🚀 [BILLING] Iniciando faturamento para contratos:', contractIds);
+      
+      // Log de auditoria - início do faturamento
+       await logger.audit({
+         userId: user?.id || 'anonymous',
+         tenantId: currentTenant.id,
+         action: 'CREATE',
+         resourceType: 'BILLING',
+         resourceId: contractIds.join(','),
+         metadata: {
+           operation: 'bulk_billing_started',
+           contract_count: contractIds.length,
+           contract_ids: contractIds
+         }
+       });
+       
+       const result = await billingMutation.mutateAsync({ contractIds });
+       
+       // Log de auditoria - resultado do faturamento
+       await logger.audit({
+         userId: user?.id || 'anonymous',
+         tenantId: currentTenant.id,
+         action: 'CREATE',
+         resourceType: 'BILLING',
+         resourceId: contractIds.join(','),
+         metadata: {
+           operation: 'bulk_billing_completed',
+           success_count: result?.successCount || 0,
+           error_count: result?.errorCount || 0,
+           total_processed: contractIds.length
+         }
+       });
+    } catch (error) {
+      // Log de auditoria - erro no faturamento
+       await logger.audit({
+         userId: user?.id || 'anonymous',
+         tenantId: currentTenant.id,
+         action: 'CREATE',
+         resourceType: 'BILLING',
+         resourceId: Array.from(selectedContracts).join(','),
+         metadata: {
+           operation: 'bulk_billing_failed',
+           error_message: error instanceof Error ? error.message : 'Erro desconhecido',
+           contract_count: selectedContracts.size,
+           contract_ids: Array.from(selectedContracts)
+         }
+       });
+      
+      // Erro já tratado no onError do mutation
+      console.error('❌ [BILLING] Erro capturado no handleBilling:', error);
     } finally {
       setIsBilling(false);
     }
-  }, [currentTenant, selectedContracts, refreshData]);
+  }, [currentTenant, selectedContracts, billingMutation]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -774,18 +840,22 @@ export default function FaturamentoKanban() {
       return;
     }
 
-    // Encontrar o contrato e sua coluna atual
-    let sourceColumnId: string | null = null;
-    let contractToMove: KanbanContract | null = null;
+    // AIDEV-NOTE: Otimização - criar mapa de contratos para busca mais eficiente
+    const contractMap = new Map<string, { contract: KanbanContract; columnId: string }>();
+    
+    Object.entries(kanbanData).forEach(([columnId, columnContracts]) => {
+      columnContracts.forEach(contract => {
+        contractMap.set(contract.id, { contract, columnId });
+      });
+    });
 
-    for (const [columnId, columnContracts] of Object.entries(kanbanData)) {
-      const contract = columnContracts.find(c => c.id === contractId);
-      if (contract) {
-        sourceColumnId = columnId;
-        contractToMove = contract;
-        break;
-      }
+    const contractInfo = contractMap.get(contractId);
+    if (!contractInfo) {
+      console.warn('Contrato não encontrado:', contractId);
+      return;
     }
+
+    const { contract: contractToMove, columnId: sourceColumnId } = contractInfo;
 
     if (!contractToMove || !sourceColumnId || sourceColumnId === newColumnId) {
       return;
@@ -831,15 +901,34 @@ export default function FaturamentoKanban() {
         if (!contractToMove.billing_id) {
           console.log('🔄 Criando cobrança para contrato sem billing_id:', contractToMove.contract_id);
           
-          // Criar cobrança usando a função de utilidade
+          // AIDEV-NOTE: Buscar método de pagamento do contrato para determinar tipo correto
+          let paymentMethod = 'boleto'; // Default fallback
+          try {
+            const { data: contractData } = await supabase
+              .from('contracts')
+              .select('contract_services(payment_method), contract_products(payment_method)')
+              .eq('id', contractToMove.contract_id)
+              .eq('tenant_id', currentTenant.id)
+              .single();
+            
+            // Pegar o primeiro método de pagamento encontrado
+            const serviceMethod = contractData?.contract_services?.[0]?.payment_method;
+            const productMethod = contractData?.contract_products?.[0]?.payment_method;
+            paymentMethod = serviceMethod || productMethod || 'boleto';
+          } catch (error) {
+            console.warn('Erro ao buscar método de pagamento, usando padrão:', error);
+          }
+          
+          // AIDEV-NOTE: Criar cobrança usando a função de utilidade com parâmetros corretos
           const chargeData = {
+            tenant_id: currentTenant.id, // AIDEV-NOTE: Usar tenant_id do contexto seguro
             contract_id: contractToMove.contract_id,
             customer_id: contractToMove.customer_id,
-            amount: contractToMove.valor,
-            due_date: format(new Date(), 'yyyy-MM-dd'),
-            description: `Faturamento do contrato ${contractToMove.numero}`,
+            valor: contractToMove.valor, // AIDEV-NOTE: Usar 'valor' ao invés de 'amount'
+            data_vencimento: format(startOfDay(new Date()), 'yyyy-MM-dd'), // AIDEV-NOTE: Usar startOfDay para consistência de timezone
+            descricao: `Faturamento do contrato ${contractToMove.numero}`, // AIDEV-NOTE: Usar 'descricao' ao invés de 'description'
             status: 'RECEIVED', // Já marcar como recebido pois foi movido para 'faturados'
-            charge_type: 'MONTHLY'
+            tipo: mapPaymentMethodToChargeType(paymentMethod, null, null) // AIDEV-NOTE: Usar função para mapear tipo correto
           };
           
           const result = await insertChargeWithAuthContext(chargeData);

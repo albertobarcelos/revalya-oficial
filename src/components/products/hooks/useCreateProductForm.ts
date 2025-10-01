@@ -17,7 +17,7 @@ interface CreateProductFormData {
   stock_quantity: number | null;
   min_stock: number | null;
   category: string | null;
-  unit: string | null;
+  unit_of_measure: string | null;
   is_active: boolean;
 }
 
@@ -37,7 +37,7 @@ export function useCreateProductForm() {
     stock_quantity: null,
     min_stock: null,
     category: null,
-    unit: null,
+    unit_of_measure: null,
     is_active: true,
   });
 
@@ -62,7 +62,7 @@ export function useCreateProductForm() {
         stock_quantity: productData.stock_quantity ? Number(productData.stock_quantity) : 0,
         min_stock_quantity: productData.min_stock ? Number(productData.min_stock) : 0,
         category: productData.category?.trim() || null,
-        unit: productData.unit?.trim() || null,
+        unit_of_measure: productData.unit_of_measure?.trim() || null,
         is_active: productData.is_active,
         tenant_id: tenantId, // 🔒 Garantir tenant_id na criação
         created_at: new Date().toISOString(),
@@ -136,7 +136,7 @@ export function useCreateProductForm() {
       stock_quantity: null,
       min_stock: null,
       category: null,
-      unit: null,
+      unit_of_measure: null,
       is_active: true,
     });
   }, []);

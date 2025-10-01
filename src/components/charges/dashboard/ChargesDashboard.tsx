@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -118,7 +118,7 @@ export function ChargesDashboard() {
     charges.forEach(charge => {
       // Filtro para cobranças PAGAS
       if (['RECEIVED', 'RECEIVED_IN_CASH', 'RECEIVED_PIX', 'RECEIVED_BOLETO', 'RECEIVED_CARD', 'CONFIRMED', 'PAID'].includes(charge.status)) {
-        const paymentDate = new Date(charge.data_pagamento + 'T00:00:00');
+        const paymentDate = parseISO(charge.data_pagamento + 'T00:00:00');
         if (paymentDate >= paidFilter.startDate && paymentDate <= paidFilter.endDate) {
           groups.paid.charges.push(charge);
         }
@@ -129,8 +129,8 @@ export function ChargesDashboard() {
       // Removido filtro restritivo que estava impedindo cobranças PIX de aparecerem nos cards
       
       const dueDateStr = charge.data_vencimento;
-      const dueDate = new Date(dueDateStr + 'T00:00:00');
-      const today = new Date(todayStr + 'T00:00:00');
+      const dueDate = parseISO(dueDateStr + 'T00:00:00');
+      const today = parseISO(todayStr + 'T00:00:00');
       
       // Filtro para cobranças VENCIDAS
       if (dueDateStr < todayStr) {

@@ -19,7 +19,7 @@ import { useProductForm } from './hooks/useProductForm';
 import { generateInternalCode } from '@/lib/utils/productUtils';
 import type { Product } from '@/hooks/useSecureProducts';
 import { motion } from 'framer-motion';
-import { useActiveProductCategories } from '@/hooks/useProductCategories';
+import { useProductCategories } from '@/hooks/useSecureProducts';
 import { 
   Package, 
   DollarSign, 
@@ -68,8 +68,8 @@ export function EditProductDialog({
   onOpenChange,
   onSuccess,
 }: EditProductDialogProps) {
-  // AIDEV-NOTE: Hook para buscar categorias ativas do tenant
-  const { categories, isLoading: isLoadingCategories } = useActiveProductCategories();
+  // AIDEV-NOTE: Hook para buscar categorias da tabela products do tenant
+  const { data: categories, isLoading: isLoadingCategories } = useProductCategories();
 
   // AIDEV-NOTE: Busca segura de dados completos do produto usando padrões multi-tenant
   const {
@@ -83,12 +83,35 @@ export function EditProductDialog({
       
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          id,
+          name,
+          description,
+          code,
+          sku,
+          barcode,
+          unit_price,
+          cost_price,
+          stock_quantity,
+          min_stock_quantity,
+          category,
+          supplier,
+          tax_rate,
+          has_inventory,
+          is_active,
+          image_url,
+          created_at,
+          updated_at,
+          tenant_id
+        `)
         .eq('id', product.id)
         .eq('tenant_id', tenantId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+      
       return data;
     },
     {
@@ -202,14 +225,14 @@ export function EditProductDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="internal_code" className="text-sm font-medium">
+                      <Label htmlFor="code" className="text-sm font-medium">
                         Código Interno
                       </Label>
                       <div className="flex gap-2">
                         <Input
-                          id="internal_code"
-                          name="internal_code"
-                          value={formData.internal_code || ''}
+                          id="code"
+                          name="code"
+                          value={formData.code || ''}
                           onChange={handleChange}
                           placeholder="Código interno do produto"
                           className="flex-1"
@@ -219,7 +242,7 @@ export function EditProductDialog({
                           variant="outline"
                           size="sm"
                           onClick={() => handleChange({
-                            target: { name: 'internal_code', value: generateInternalCode() }
+                            target: { name: 'code', value: generateInternalCode() }
                           } as any)}
                           className="px-3"
                         >
@@ -263,12 +286,12 @@ export function EditProductDialog({
                           } />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories.map((category) => (
-                            <SelectItem key={category.id} value={category.name}>
-                              {category.name}
+                          {categories?.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
                             </SelectItem>
                           ))}
-                          {categories.length === 0 && !isLoadingCategories && (
+                          {(!categories || categories.length === 0) && !isLoadingCategories && (
                             <SelectItem value="no-categories" disabled>
                               Nenhuma categoria encontrada
                             </SelectItem>
@@ -288,15 +311,15 @@ export function EditProductDialog({
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="sale_price" className="text-sm font-medium">
+                      <Label htmlFor="unit_price" className="text-sm font-medium">
                         Preço de Venda *
                       </Label>
                       <Input
-                        id="sale_price"
-                        name="sale_price"
+                        id="unit_price"
+                        name="unit_price"
                         type="number"
                         step="0.01"
-                        value={formData.sale_price || ''}
+                        value={formData.unit_price || ''}
                         onChange={handleChange}
                         placeholder="0,00"
                         className="w-full"
@@ -305,13 +328,13 @@ export function EditProductDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="unit" className="text-sm font-medium">
+                      <Label htmlFor="unit_of_measure" className="text-sm font-medium">
                         Unidade de Medida
                       </Label>
                       <Select
-                        value={formData.unit || ''}
+                        value={formData.unit_of_measure || ''}
                         onValueChange={(value) => handleChange({
-                          target: { name: 'unit', value }
+                          target: { name: 'unit_of_measure', value }
                         } as any)}
                       >
                         <SelectTrigger>

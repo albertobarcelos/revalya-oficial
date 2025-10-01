@@ -19,6 +19,7 @@ interface ProductFormData {
   min_stock_quantity: number;
   category: string | null;
   supplier: string | null;
+  unit_of_measure: string | null;
   tax_rate: number;
   has_inventory: boolean;
   is_active: boolean;
@@ -42,6 +43,7 @@ export function useProductForm(product: Product, onSuccess: () => void) {
     min_stock_quantity: product.min_stock_quantity || 0, // Usando min_stock_quantity correto
     category: product.category,
     supplier: product.supplier, // Usando supplier correto
+    unit_of_measure: product.unit_of_measure || null, // Usando unit_of_measure da nova coluna
     tax_rate: product.tax_rate || 0, // Usando tax_rate da interface
     has_inventory: product.has_inventory !== undefined ? product.has_inventory : true, // Usando has_inventory da interface
     is_active: product.is_active, // Usando is_active correto
