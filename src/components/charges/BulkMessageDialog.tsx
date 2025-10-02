@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { TagSelector } from "./TagSelector";
@@ -23,6 +23,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { processMessageTags } from '@/utils/messageUtils';
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
 import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hooks seguros para multi-tenant
+import { supabase } from '@/lib/supabase'; // AIDEV-NOTE: Cliente Supabase para carregar templates
 
 interface MessageTemplate {
   id: string;
@@ -260,38 +261,46 @@ export function BulkMessageDialog({
             currency: 'BRL'
           }).format(chargeData.valor);
 
-          const processedMessage = processMessageTags(text, {
-            customerData: chargeData.customers,
-            chargeData: {
-              ...chargeData,
-              data_vencimento_formatada: formattedDate,
-              valor_formatado: formattedValue
+          // AIDEV-NOTE: Log para debug dos dados antes de processar
+          console.log('🔍 [PREVIEW DEBUG] Dados da cobrança completos:', chargeData);
+          console.log('🔍 [PREVIEW DEBUG] Dados do customer:', chargeData.customers);
+          
+          // AIDEV-NOTE: Estrutura de dados correta para processMessageTags
+          const dataForProcessing = {
+            customer: chargeData.customers || {},
+            charge: {
+              valor: chargeData.valor,
+              data_vencimento: dueDate,
+              descricao: chargeData.descricao,
+              link_pagamento: chargeData.link_pagamento,
+              codigo_barras: chargeData.codigo_barras
             }
-          });
+          };
+          
+          console.log('🔍 [PREVIEW DEBUG] Dados sendo enviados para processMessageTags:', dataForProcessing);
+          
+          const processedMessage = processMessageTags(text, dataForProcessing);
 
           setPreviewMessage(processedMessage);
         } else {
           setPreviewMessage('❌ Erro ao carregar dados da cobrança para preview');
         }
       } else {
-        // Preview com dados fictícios se não houver cobranças selecionadas
+        // AIDEV-NOTE: Preview com dados fictícios usando estrutura correta
         const processedMessage = processMessageTags(text, {
-          customerData: {
+          customer: {
             name: 'João Silva',
             email: 'joao@email.com',
             phone: '(11) 99999-9999',
             cpf_cnpj: '123.456.789-00',
-            company: 'Empresa Exemplo Ltda'
+            Company: 'Empresa Exemplo Ltda'
           },
-          chargeData: {
-            id: 'exemplo-123',
-            numero_cobranca: 'COB-001',
+          charge: {
             valor: 150.00,
-            valor_formatado: 'R$ 150,00',
             data_vencimento: '2024-01-15',
-            data_vencimento_formatada: 'segunda-feira, 15 de janeiro de 2024',
-            status: 'pendente',
-            descricao: 'Serviço de exemplo'
+            descricao: 'Serviço de exemplo',
+            link_pagamento: 'https://exemplo.com/pagamento',
+            codigo_barras: '00000000000000000000000000000000000000000000'
           }
         });
         setPreviewMessage(processedMessage);
@@ -303,7 +312,16 @@ export function BulkMessageDialog({
   };
 
   const handleSendMessage = async () => {
+    console.log('🚀 [BULK-MESSAGE-DIALOG] Iniciando handleSendMessage');
+    console.log('📋 [BULK-MESSAGE-DIALOG] Estado atual:', {
+      messageMode,
+      selectedTemplateId,
+      customMessage: customMessage.substring(0, 50) + '...',
+      selectedChargesCount: selectedCharges?.length || 0
+    });
+
     if (messageMode === 'template' && !selectedTemplateId) {
+      console.log('❌ [BULK-MESSAGE-DIALOG] Erro: Template não selecionado');
       toast({
         title: "Selecione um template",
         description: "Por favor, selecione um modelo de mensagem.",
@@ -313,6 +331,7 @@ export function BulkMessageDialog({
     }
 
     if (messageMode === 'custom' && !customMessage.trim()) {
+      console.log('❌ [BULK-MESSAGE-DIALOG] Erro: Mensagem customizada vazia');
       toast({
         title: "Digite uma mensagem",
         description: "Por favor, digite uma mensagem para enviar.",
@@ -323,48 +342,69 @@ export function BulkMessageDialog({
 
     try {
       setIsSubmitting(true);
-      console.log(`Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
+      console.log(`📝 [BULK-MESSAGE-DIALOG] Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
       
       if (messageMode === 'template') {
+        console.log('🎯 [BULK-MESSAGE-DIALOG] Chamando onSendMessages com template:', selectedTemplateId);
         await onSendMessages(selectedTemplateId);
+        console.log('✅ [BULK-MESSAGE-DIALOG] onSendMessages (template) executado com sucesso');
       } else {
         // Enviar mensagem customizada com um ID temporário
         const tempTemplateId = 'custom_' + Date.now();
-        console.log('Enviando mensagem customizada:', tempTemplateId, customMessage);
+        console.log('🎯 [BULK-MESSAGE-DIALOG] Chamando onSendMessages com mensagem customizada:', tempTemplateId, customMessage);
         
         await onSendMessages(tempTemplateId, customMessage);
+        console.log('✅ [BULK-MESSAGE-DIALOG] onSendMessages (custom) executado com sucesso');
       }
       
+      console.log('🎉 [BULK-MESSAGE-DIALOG] Processo concluído, fechando diálogo');
       // Após o envio bem-sucedido, fechar o diálogo
       onOpenChange(false);
       
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [BULK-MESSAGE-DIALOG] Erro detalhado no handleSendMessage:', error);
+      console.error('❌ [BULK-MESSAGE-DIALOG] Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+      
       toast({
         title: "Erro ao enviar mensagem",
         description: "Não foi possível enviar a mensagem. Tente novamente.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 [BULK-MESSAGE-DIALOG] Finalizando handleSendMessage');
       setIsSubmitting(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col relative !fixed !left-[50%] !top-[50%] !translate-x-[-50%] !translate-y-[-50%]">
+        {/* AIDEV-NOTE: Overlay de carregamento durante envio */}
+        {isSubmitting && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+            <div className="flex flex-col items-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-medium">Enviando mensagens...</p>
+                <p className="text-sm text-muted-foreground">Processando {selectedCharges?.length || 0} cobranças</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Enviar mensagem ({selectedCharges?.length || 0})</DialogTitle>
           <DialogDescription>
             Selecione um modelo de mensagem para enviar para as cobranças selecionadas.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="template" onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="template">Usar Modelo</TabsTrigger>
-            <TabsTrigger value="custom">Digitar Mensagem</TabsTrigger>
-          </TabsList>
+        <div className="flex-1 overflow-y-auto">
+          <Tabs defaultValue="template" onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}>
+            <TabsList className="grid grid-cols-2">
+              <TabsTrigger value="template">Usar Modelo</TabsTrigger>
+              <TabsTrigger value="custom">Digitar Mensagem</TabsTrigger>
+            </TabsList>
           
           <TabsContent value="template">
             <div className="py-4">
@@ -429,22 +469,34 @@ export function BulkMessageDialog({
               )}
             </div>
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </div>
         
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button 
             onClick={handleSendMessage} 
             disabled={isSubmitting || isLoading || (messageMode === 'template' && !selectedTemplateId) || (messageMode === 'custom' && !customMessage.trim())}
+            className="min-w-[140px]"
           >
-            {(isSubmitting || isLoading) ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Enviando mensagem...
+                Processando...
               </>
-            ) : 'Enviar Mensagem'}
+            ) : isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Carregando...
+              </>
+            ) : (
+              <>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Enviar Mensagem
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -24,6 +24,130 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Refatoração Completa do Edge Function Service com Segurança Multi-Tenant
+
+Implementamos uma refatoração completa do `edgeFunctionService.ts` para atender aos padrões de segurança multi-tenant estabelecidos no projeto, seguindo as diretrizes dos documentos de segurança e integração de canais.
+
+#### 🎯 **Objetivos da Refatoração**
+
+1. **Conformidade com Padrões de Segurança**: Alinhamento com o guia de implementação multi-tenant seguro
+2. **Validação Dupla de Tenant**: Implementação de validação em múltiplas camadas
+3. **Auditoria e Logs**: Sistema completo de auditoria para operações de Edge Functions
+4. **Tipagem Rigorosa**: Eliminação de tipos `any` e implementação de interfaces específicas
+
+#### 🔧 **Principais Mudanças Implementadas**
+
+1. **Novas Interfaces TypeScript**:
+   ```typescript
+   // Contexto de tenant para validações de segurança
+   interface TenantContext {
+     id: string;
+     slug: string;
+     userId: string;
+   }
+
+   // Headers seguros com validação de tenant
+   interface SecureHeaders {
+     'Authorization': string;
+     'Content-Type': string;
+     'x-tenant-id'?: string;
+     'x-request-id'?: string;
+   }
+
+   // Interface para erros estendidos (substituindo 'any')
+   interface ExtendedError extends Error {
+     status?: number;
+     statusText?: string;
+     responseError?: unknown;
+   }
+   ```
+
+2. **Sistema de Auditoria Completo**:
+   ```typescript
+   class SecurityAuditLogger {
+     // Log de chamadas para Edge Functions
+     static logEdgeFunctionCall(functionName: string, tenantId: string, requestId: string): void
+
+     // Log de validações de segurança
+     static logSecurityValidation(type: string, tenantId: string, details: Record<string, unknown>): void
+
+     // Log de erros de segurança
+     static logError(error: Error, context: Record<string, unknown>): void
+   }
+   ```
+
+3. **Validador de Segurança Multi-Tenant**:
+   ```typescript
+   class MultiTenantSecurityValidator {
+     // Validação de contexto de tenant
+     static validateTenantContext(tenantContext: TenantContext | null): void
+
+     // Validação dupla de tenant_id na resposta
+     static validateResponseTenantId<T>(data: T, expectedTenantId: string): void
+
+     // Validação de autenticação JWT
+     static validateJWTAuth(jwt: string | null): void
+   }
+   ```
+
+4. **Função Principal Refatorada**:
+   - **`callEdgeFunctionWithRetry`**: Implementa retry automático com validações de segurança
+   - **`sendBulkMessages`**: Função específica para envio de mensagens em lote
+   - **`callEdgeFunction`**: Método genérico para chamadas de Edge Functions
+
+#### 🛡️ **Recursos de Segurança Implementados**
+
+1. **Validação Dupla de Tenant**:
+   - Validação no contexto da requisição
+   - Validação na resposta da Edge Function
+   - Prevenção de vazamento de dados entre tenants
+
+2. **Sistema de Auditoria**:
+   - Log de todas as chamadas para Edge Functions
+   - Rastreamento de validações de segurança
+   - Log detalhado de erros com contexto
+
+3. **Headers Seguros**:
+   - JWT obrigatório para autenticação
+   - `x-tenant-id` para isolamento de dados
+   - `x-request-id` para rastreabilidade
+
+4. **Retry Inteligente**:
+   - Retry automático em caso de erro 401 (token expirado)
+   - Máximo de 3 tentativas com backoff
+   - Preservação de contexto de segurança
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Interface para contexto de tenant - validação de segurança multi-tenant
+// Garante que todas as operações tenham contexto válido do tenant
+
+// AIDEV-NOTE: Classe para auditoria de segurança em Edge Functions
+// Registra todas as operações para compliance e debugging
+
+// AIDEV-NOTE: Validador de segurança multi-tenant
+// Implementa validações obrigatórias conforme guia de segurança
+
+// AIDEV-NOTE: Função principal com retry e validações de segurança
+// Implementa padrão de retry com preservação de contexto de tenant
+```
+
+#### ✅ **Validações Realizadas**
+
+1. **Build Successful**: `npm run build` executado sem erros
+2. **Lint Clean**: `npx eslint` passou sem warnings ou erros
+3. **Type Safety**: Eliminação completa de tipos `any`
+4. **Security Compliance**: Conformidade com guias de segurança multi-tenant
+
+#### 🎯 **Impacto da Refatoração**
+
+- ✅ **Segurança**: Implementação completa de validações multi-tenant
+- ✅ **Auditoria**: Sistema de logs para compliance e debugging
+- ✅ **Tipagem**: Code base 100% type-safe
+- ✅ **Manutenibilidade**: Código modular e bem documentado
+- ✅ **Conformidade**: Alinhamento com padrões estabelecidos no projeto
+
 ### Janeiro 2025: Refatoração e Correções das Páginas de Produtos e Serviços
 
 Implementamos uma série de correções e melhorias nas páginas de produtos e serviços para garantir consistência e funcionalidade completa.

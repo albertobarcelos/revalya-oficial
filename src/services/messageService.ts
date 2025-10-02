@@ -4,6 +4,7 @@ import type { Cobranca } from '@/types/database';
 import { v4 as uuidv4 } from 'uuid';
 import { logService } from './logService';
 import { whatsappService } from './whatsappService';
+import { edgeFunctionService } from './edgeFunctionService';
 
 interface MessageRecord {
   charge_id: string;
@@ -21,10 +22,11 @@ export const messageService = {
   lastCustomMessage: '',
 
   /**
-   * Envia mensagens em massa e registra no histórico
+   * AIDEV-NOTE: Envia mensagens em massa usando Edge Function
+   * Migrado de N8N direto para Edge Function com segurança JWT + RLS
    */
   async sendBulkMessages(chargeIds: string[], templateIdOrCustom: string, customMessage?: string) {
-    // Verificação crítica - se for um template customizado mas a mensagem estiver vazia, buscar do elemento DOM
+    // AIDEV-NOTE: Verificação crítica - se for um template customizado mas a mensagem estiver vazia, buscar do elemento DOM
     if ((customMessage === '' || customMessage === undefined) && templateIdOrCustom.startsWith('custom_')) {
       // Tentar buscar diretamente do textarea
       const textareaElement = document.getElementById('custom-message') as HTMLTextAreaElement;
@@ -34,165 +36,58 @@ export const messageService = {
       }
     }
 
-    // Armazenar e logar a mensagem personalizada
+    // AIDEV-NOTE: Determinar se é mensagem customizada
     const isCustom = customMessage || templateIdOrCustom.startsWith('custom_');
     const directMessage = customMessage || '';
     console.log('📌 Mensagem original recebida:', directMessage);
     
     try {
-      // 1. Buscar dados das cobranças
-      const { data: selectedChargesData, error: chargesError } = await supabase
-        .from('charges')
-        .select(`*,
-          customers(name, email, phone, cpf_cnpj, company)
-        `)
-        .in('id', chargeIds);
-
-      if (chargesError) {
-        throw new Error('Erro ao buscar dados das cobranças');
-      }
-
-      // 2. Gerar UUID e preparar dados
-      const actualTemplateId = uuidv4();
-      let templateData;
+      // AIDEV-NOTE: Determinar o templateId final
+      let finalTemplateId = templateIdOrCustom;
       
       if (isCustom) {
-        templateData = {
-          id: actualTemplateId,
-          name: 'Mensagem Personalizada',
-          message: directMessage
-        };
-      } else {
-        // Buscar template existente do banco de dados
-        const { data, error: templateError } = await supabase
-          .from('notification_templates')
-          .select('*')
-          .eq('id', templateIdOrCustom)
-          .single();
+        // AIDEV-NOTE: Para mensagens customizadas, usar apenas ID temporário para identificação
+        // Não é necessário inserir na tabela notification_templates
+        const tempTemplateId = uuidv4();
+        console.log('📝 Usando template temporário para mensagem customizada:', tempTemplateId);
+        
+        finalTemplateId = tempTemplateId;
+      }
 
-        if (templateError) {
-          throw new Error('Erro ao buscar template');
-        }
-        templateData = data;
-      }
-      
-      // 3. Processar manualmente as mensagens
-      const directMessages = selectedChargesData.map(charge => {
-        // Preparar os dados para substituição
-        const dueDate = charge.data_vencimento.split('T')[0];
-        
-        // Formatar a data no formato brasileiro e incluir o dia da semana
-        const dateOptions = { weekday: 'long' as const };
-        const dateParts = dueDate.split('-');
-        const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-        
-        // Obter o dia da semana em português
-        let weekDay = '';
-        try {
-          const date = new Date(dueDate);
-          weekDay = date.toLocaleDateString('pt-BR', dateOptions);
-          weekDay = weekDay.charAt(0).toUpperCase() + weekDay.slice(1); // Capitalizar
-        } catch (error) {
-          console.error('Erro ao formatar data com dia da semana:', error);
-        }
-        
-        // Data formatada completa (ex: 09/03/2025, Domingo)
-        const fullFormattedDate = weekDay ? `${formattedDate}, ${weekDay}` : formattedDate;
-        
-        const customerName = charge.customer?.name || 'Cliente';
-        const customerPhone = charge.customer?.phone || '';
-        const chargeAmount = new Intl.NumberFormat('pt-BR', {
-          style: 'currency',
-          currency: 'BRL'
-        }).format(charge.valor || 0);
-        const paymentLink = charge.link_pagamento || '';
-        const description = charge.descricao || 'Sem descrição';
-        
-        // Processar a mensagem manualmente para garantir que funcionem
-        let finalMessage = isCustom ? directMessage : templateData.message;
-        
-        // Substituições diretas para garantir que funcionem
-        // Incluir múltiplas versões da mesma tag (camelCase, snake_case, etc.)
-        finalMessage = finalMessage
-          // Cliente
-          .replace(/\{cliente\.nome\}/gi, customerName)
-          .replace(/\{cliente\.telefone\}/gi, customerPhone)
-          .replace(/\{cliente\.company\}/gi, charge.customer?.company || '')
-          .replace(/\{cliente\.empresa\}/gi, charge.customer?.company || '')
-          .replace(/\{cliente\.cpf_cnpj\}/gi, charge.customer?.cpf_cnpj?.toString() || '')
-          .replace(/\{cliente\.email\}/gi, charge.customer?.email || '')
-          
-          // Cobrança - valores
-          .replace(/\{cobranca\.valor\}/gi, chargeAmount)
-          
-          // Cobrança - datas (múltiplos formatos)
-          .replace(/\{cobranca\.vencimento\}/gi, formattedDate) // Formato simples: 09/03/2025
-          .replace(/\{cobranca\.data_vencimento\}/gi, formattedDate)
-          .replace(/\{cobranca\.dataVencimento\}/gi, formattedDate)
-          .replace(/\{cobranca\.vencimento_completo\}/gi, fullFormattedDate) // Formato completo com dia da semana
-          
-          // Cobrança - links e descrições
-          .replace(/\{cobranca\.link_pagamento\}/gi, paymentLink)
-          .replace(/\{cobranca\.linkPagamento\}/gi, paymentLink)
-          .replace(/\{cobranca\.link\}/gi, paymentLink)
-          .replace(/\{cobranca\.descricao\}/gi, description)
-          .replace(/\{cobranca\.descrição\}/gi, description);
-        
-        console.log('✅ Mensagem processada final:', finalMessage);
-        
-        // Construir objeto para envio
-        return {
-          customer: {
-            name: customerName,
-            phone: customerPhone.replace(/\D/g, ''),
-            document: charge.customer?.cpf_cnpj?.toString().replace(/\D/g, '') || '',
-          },
-          charge: {
-            id: charge.id,
-            amount: charge.valor,
-            dueDate: dueDate,
-            status: charge.status,
-            paymentLink: paymentLink,
-            description: description
-          },
-          template: {
-            id: actualTemplateId,
-            message: finalMessage,
-          }
-        };
+      console.log('📤 Enviando para Edge Function:', {
+        chargeCount: chargeIds.length,
+        templateId: finalTemplateId,
+        isCustom,
       });
-      
-      // 4. Log final antes de enviar
-      console.log('📦 Conteúdo exato a ser enviado:', JSON.stringify({
-        messageCount: directMessages.length,
-        sampleMessage: directMessages[0]?.template?.message
-      }));
-      
-      // 5. Enviar diretamente
-      const response = await fetch('https://n8n-wh.nexsyn.com.br/webhook/asaas/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: directMessages,
-          templateId: actualTemplateId,
-        }),
+
+      // AIDEV-NOTE: Chamar Edge Function com segurança JWT + RLS
+      const result = await edgeFunctionService.sendBulkMessages(
+        chargeIds,
+        finalTemplateId,
+        true // sendImmediately = true
+      );
+
+      console.log('✅ Resposta da Edge Function:', {
+        success: result.success,
+        summary: result.summary,
       });
-      
-      if (!response.ok) {
-        throw new Error(`Erro ao enviar mensagens: ${response.status}`);
+
+      // AIDEV-NOTE: Verificar se houve sucesso
+      if (!result.success) {
+        throw new Error('Falha no envio de mensagens pela Edge Function');
       }
-      
-      // 6. Registrar no histórico
-      await this.recordMessageHistory(selectedChargesData, directMessages, actualTemplateId, 
-        isCustom ? 'Mensagem Personalizada' : templateData.name);
-      
+
+      // AIDEV-NOTE: Retornar formato compatível com o frontend
       return {
         success: true,
-        count: directMessages.length,
-        data: await response.json()
+        count: result.summary.sent,
+        data: {
+          summary: result.summary,
+          results: result.results,
+        }
       };
     } catch (error) {
-      console.error('❌ Erro:', error);
+      console.error('❌ Erro no messageService.sendBulkMessages:', error);
       throw error;
     }
   },
