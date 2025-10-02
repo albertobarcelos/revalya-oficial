@@ -103,6 +103,158 @@ Corrigimos um problema crítico onde a função `createService` no hook `useServ
 // Garante que o RLS (Row Level Security) funcione corretamente
 ```
 
+### Janeiro 2025: Padronização e Correção do Sistema de Import de Clientes
+
+Implementamos uma padronização completa do sistema de import de clientes, corrigindo problemas críticos de mapeamento de campos e melhorando a experiência do usuário.
+
+#### 🐛 **Problemas Identificados**
+
+1. **Inconsistência de Nomenclatura**:
+   - **Erro**: Campos `cityName` e `city` usados inconsistentemente
+   - **Causa**: Diferentes fontes de dados (CSV, ASAAS API) com estruturas distintas
+   - **Impacto**: Confusão no mapeamento e perda de dados de cidade
+
+2. **Mapeamento Incorreto da API ASAAS**:
+   - **Erro**: Campo `city` retornando ID numérico (15355) em vez do nome da cidade
+   - **Causa**: API ASAAS retorna `city` como ID e `cityName` como nome legível
+   - **Impacto**: Dados de cidade incorretos nos imports do ASAAS
+
+3. **Falta de Logs de Debug**:
+   - **Problema**: Dificuldade para diagnosticar problemas de mapeamento
+   - **Causa**: Ausência de logs detalhados durante o processo de import
+   - **Impacto**: Tempo excessivo para identificar e corrigir problemas
+
+#### ✅ **Soluções Implementadas**
+
+1. **Padronização de Nomenclatura**:
+   - Unificação para usar `city` como campo padrão em todo o sistema
+   - Atualização de `SYSTEM_FIELDS` em `src/types/import.ts`
+   - Mapeamento alternativo incluindo `['cidade', 'municipio', 'cityname', 'city']`
+   - Atualização de traduções em `useNotifications.ts`
+
+2. **Correção do Mapeamento ASAAS**:
+   - Priorização de `cityName` sobre `city` no mapeamento do ASAAS
+   - Alteração em `useImportWizard.ts`: `city: item.cityName || item.city || ''`
+   - Garantia de que o nome da cidade seja usado em vez do ID numérico
+
+3. **Sistema de Debug Avançado**:
+   - Logs detalhados em `ImportModal.tsx` para CSV e ASAAS
+   - Instrumentação de sample de dados e campos detectados
+   - Logs de fallback e resolução de campos em `clientsService.ts`
+
+#### 🔧 **Detalhes Técnicos**
+
+**Arquivos Modificados:**
+- `src/types/import.ts` - Padronização de `SYSTEM_FIELDS`
+- `src/hooks/useImportWizard.ts` - Correção do mapeamento ASAAS
+- `src/components/clients/ImportModal.tsx` - Logs de debug
+- `src/hooks/useNotifications.ts` - Atualização de traduções
+- `src/services/clientsService.ts` - Logs de diagnóstico
+
+**Padrão de Mapeamento:**
+```typescript
+// Para ASAAS API (prioriza cityName)
+city: item.cityName || item.city || ''
+
+// Para CSV/Excel (mapeamento flexível)
+alternativeMap: {
+  city: ['cidade', 'municipio', 'cityname', 'city']
+}
+```
+
+**Sistema de Debug:**
+```typescript
+// Logs automáticos para diagnóstico
+console.log('🔍 Debug - sourceData[0]:', sourceData[0]);
+console.log('🔍 Debug - detectedFields:', detectedFields);
+```
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Padronização crítica - usar 'city' como campo unificado
+// Garante consistência entre diferentes fontes de dados (CSV, ASAAS, etc.)
+
+// AIDEV-NOTE: Priorizar cityName do ASAAS sobre city (que é ID numérico)
+// API ASAAS: city=15355 (ID), cityName="São José do Rio Claro" (nome)
+```
+
+#### 🎯 **Resultados Obtidos**
+
+- ✅ **Consistência**: Campo `city` padronizado em todo o sistema
+- ✅ **Correção ASAAS**: Nomes de cidade corretos em vez de IDs
+- ✅ **Debug Avançado**: Logs detalhados para diagnóstico rápido
+- ✅ **Mapeamento Flexível**: Suporte a múltiplas variações de nomes de campos
+- ✅ **Validação**: Type-check e lint passando sem erros
+
+### Janeiro 2025: Integração Completa do Sistema de Produtos em Contratos
+
+Implementamos a integração completa do sistema de produtos nos contratos, permitindo que os usuários adicionem, configurem e gerenciem produtos diretamente no formulário de criação de contratos.
+
+#### 🚀 **Principais Funcionalidades**
+
+1. **Integração ContractProducts em ContractTabs**:
+   - Remoção do placeholder "Em desenvolvimento" na aba de produtos
+   - Integração completa do componente `ContractProducts` no `ContractTabs`
+   - Passagem correta de props `products` entre componentes
+
+2. **Atualização do Hook useContracts**:
+   - Integração do hook `useContractProducts` no componente `ContractProducts`
+   - Alinhamento com o padrão usado em `ContractServices`
+   - Garantia de consistência na arquitetura de hooks
+
+3. **Configuração de Props e Estado**:
+   - Atualização da interface `ContractTabsProps` para incluir `products`
+   - Configuração de valor padrão como array vazio para `products`
+   - Passagem correta de props do `ContractTabs` para `ContractProducts`
+
+#### 🔧 **Detalhes Técnicos**
+
+**Arquivos Modificados:**
+- `src/components/contracts/ContractTabs.tsx` - Integração de produtos e atualização de props
+- `src/components/contracts/ContractProducts.tsx` - Adição do hook `useContractProducts`
+
+**Mudanças Implementadas:**
+
+1. **ContractTabs.tsx**:
+```typescript
+// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
+interface ContractTabsProps {
+  products?: Product[]; // Nova prop adicionada
+}
+
+// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
+<ContractProducts products={products} />
+```
+
+2. **ContractProducts.tsx**:
+```typescript
+// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
+// Garante consistência na arquitetura de hooks entre serviços e produtos
+const contractProducts = useContractProducts();
+```
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
+// Permite passagem de dados de produtos do formulário pai para o componente
+
+// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
+// Substitui o texto "Em desenvolvimento" por funcionalidade real
+
+// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
+// Garante consistência na arquitetura de hooks entre serviços e produtos
+```
+
+#### 🎯 **Resultados Obtidos**
+
+- ✅ **Integração Completa**: Produtos funcionais na criação de contratos
+- ✅ **Consistência**: Padrão arquitetural alinhado com serviços
+- ✅ **Props Corretas**: Passagem adequada de dados entre componentes
+- ✅ **Hooks Integrados**: `useContractProducts` funcionando corretamente
+- ✅ **Testes Validados**: Funcionalidade testada e funcionando no preview
+
 ### Janeiro 2025: Sistema de Auto-Login Multi-Tenant Inspirado na Omie
 
 Implementamos um sistema revolucionário de auto-login multi-tenant que permite URLs limpas e acesso direto sem códigos na URL, inspirado na arquitetura da Omie:
@@ -315,6 +467,34 @@ Como testar
 Notas Multi-Tenant
 - A persistência em `sessionStorage` mantém o isolamento por aba, conforme o Manual Multi-Tenant Revalya.
 - O App continua aplicando RLS e filtros explícitos por `tenant_id` em todas as consultas.
+
+## 🔒 Segurança
+
+### Auditoria de Segurança Asaas (Dezembro 2024)
+- ✅ **Vulnerabilidades críticas corrigidas** no fluxo de importação Asaas
+- ✅ **Logs sanitizados** - Dados sensíveis protegidos
+- ✅ **Rate limiting implementado** - Proteção contra abuso da API
+- ✅ **Sistema de auditoria** - Logs estruturados para monitoramento
+
+**Documentos de Segurança:**
+- [`AUDITORIA_SEGURANCA_ASAAS.md`](./AUDITORIA_SEGURANCA_ASAAS.md) - Relatório completo da auditoria
+- [`PLANO_CORRECAO_SEGURANCA_ASAAS.md`](./PLANO_CORRECAO_SEGURANCA_ASAAS.md) - Plano de correções aplicadas
+
+### Práticas de Segurança Implementadas
+- **Multi-tenant isolation**: Isolamento completo entre tenants
+- **Credential protection**: Credenciais nunca expostas em logs
+- **Rate limiting**: Controle de abuso da API (100 req/min por tenant)
+- **Audit logging**: Sistema estruturado de logs de auditoria
+- **Access control**: Validação rigorosa de permissões
+
+## 🔧 Serviços
+
+### Importação de Dados
+- **BulkInsertService**: Inserção otimizada em lote via Edge Functions com fallback direto no Supabase
+  - ✅ **Correção 28/01/2025**: Implementado detecção adequada de falhas e fallback automático
+  - 🔍 **Monitoração**: Logs detalhados indicam método usado (`edge_function` | `direct_supabase`)
+  - 🛡️ **Robustez**: Timeout configurável (30s) e tratamento de erros em múltiplas camadas
+- **ImportService**: Processamento e validação de arquivos CSV/Excel
 
 ## Estrutura do Projeto
 

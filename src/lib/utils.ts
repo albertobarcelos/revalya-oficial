@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function cn(...inputs: ClassValue[]) {
@@ -86,10 +86,12 @@ export function formatCpfCnpj(value: unknown): string {
   return numericValue;
 }
 
+// AIDEV-NOTE: Corrigido problema de timezone - usar parseISO para strings de data
 export function formatDate(dateString: string, formatString: string = "dd/MM/yyyy") {
   if (!dateString) return '-';
   try {
-    const date = new Date(dateString);
+    // Usar parseISO para evitar problemas de timezone com strings no formato ISO
+    const date = parseISO(dateString);
     return format(date, formatString, { locale: ptBR });
   } catch (error) {
     console.error('Erro ao formatar data:', error);

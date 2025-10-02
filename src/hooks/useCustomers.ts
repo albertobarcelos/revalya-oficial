@@ -31,13 +31,23 @@ export interface CustomerFilters {
   active?: boolean
 }
 
-export function useCustomers(filters: CustomerFilters = {}) {
+// AIDEV-NOTE: Interface para parâmetros de paginação do hook useCustomers
+interface UseCustomersParams {
+  searchTerm?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function useCustomers(params?: UseCustomersParams) {
+  const { searchTerm, page = 1, limit = 10 } = params || {};
+  const filters: CustomerFilters = { search: searchTerm };
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard()
   const queryClient = useQueryClient()
 
   // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT
+  // AIDEV-NOTE: Query key agora inclui parâmetros de paginação para cache correto
   const query = useSecureTenantQuery(
-    ['customers', currentTenant?.id, JSON.stringify(filters)],
+    ['customers', currentTenant?.id, JSON.stringify(filters), page, limit],
     async (supabase, tenantId) => {
       // 🛡️ VALIDAÇÃO DE SEGURANÇA
       if (tenantId !== currentTenant?.id) {
@@ -57,15 +67,30 @@ export function useCustomers(filters: CustomerFilters = {}) {
         .eq('tenant_id', tenantId)
 
       // Aplicar filtros de busca se fornecidos
+      // AIDEV-NOTE: Separando condições de busca para evitar erro de sintaxe PostgREST
       if (filters.search) {
+        // AIDEV-NOTE: Busca em campos de texto usando sintaxe PostgREST válida
         query = query.or(
-          `name.ilike.%${filters.search}%,cpf_cnpj.ilike.%${filters.search}%,company.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
+          `name.ilike.%${filters.search}%,company.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
         );
+        
+        // AIDEV-NOTE: Busca adicional no campo cpf_cnpj convertendo para string
+        // Usando eq para busca exata em números (CNPJ/CPF sem formatação)
+        const numericSearch = filters.search.replace(/\D/g, ''); // Remove caracteres não numéricos
+        if (numericSearch) {
+          query = query.or(`cpf_cnpj.eq.${numericSearch}`);
+        }
+        
+        console.log(`🔍 [DEBUG] Aplicando busca por: "${filters.search}" nos campos: name, company, email + busca numérica: "${numericSearch}"`);
       }
 
+      // AIDEV-NOTE: Implementação de paginação dinâmica no servidor
+      // Calcula o offset baseado na página atual e limite
+      const offset = (page - 1) * limit
+      
       const { data, error, count } = await query
         .order('name')
-        .limit(50);
+        .range(offset, offset + limit - 1);
 
       if (error) {
         console.error('❌ Erro ao buscar clientes:', error)

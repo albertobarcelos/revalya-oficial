@@ -232,6 +232,7 @@ export type Database = {
           additional_info: Json | null
           address: string | null
           address_number: string | null
+          celular_whatsapp: string | null
           city: string | null
           company: string | null
           complement: string | null
@@ -254,6 +255,7 @@ export type Database = {
           additional_info?: Json | null
           address?: string | null
           address_number?: string | null
+          celular_whatsapp?: string | null
           city?: string | null
           company?: string | null
           complement?: string | null
@@ -276,6 +278,7 @@ export type Database = {
           additional_info?: Json | null
           address?: string | null
           address_number?: string | null
+          celular_whatsapp?: string | null
           city?: string | null
           company?: string | null
           complement?: string | null

@@ -180,36 +180,35 @@ class BillingProcessorService {
    */
   private async createExternalCharge(
     billing: ContractBilling,
-    contract: any,
+    contractData: any,
     gateway: any
   ): Promise<{ external_id: string; payment_url?: string; barcode?: string }> {
+    // AIDEV-NOTE: Validação de credenciais já é feita no gatewayService.createCharge
+    // Não precisamos duplicar a validação aqui
+    
     const chargeRequest = {
       customer: {
-        id: contract.customer.external_id || contract.customer.id,
-        name: contract.customer.name,
-        email: contract.customer.email,
-        phone: contract.customer.phone,
-        document: contract.customer.document
+        name: contractData.customer.name,
+        email: contractData.customer.email,
+        document: contractData.customer.document,
+        external_id: contractData.customer.customer_asaas_id
       },
       amount: billing.net_amount,
       due_date: billing.due_date,
-      description: `${contract.customer.name} - ${billing.reference_period}`,
-      payment_method: billing.payment_method,
-      reference: billing.billing_number,
-      metadata: {
-        contract_id: contract.id,
-        billing_id: billing.id,
-        tenant_id: billing.tenant_id
-      }
+      description: `Fatura ${billing.billing_number}`,
+      payment_method: this.mapPaymentMethodToChargeType(billing.payment_method)
     };
 
-    // Usar o serviço de gateway apropriado
-    const response = await gatewayService.createCharge(gateway.provider, chargeRequest);
-    
+    // Usar o gatewayService para criar a cobrança
+    const chargeResponse = await gatewayService.createCharge(
+      gateway.provider,
+      chargeRequest
+    );
+
     return {
-      external_id: response.id,
-      payment_url: response.payment_url,
-      barcode: response.barcode
+      external_id: chargeResponse.external_id,
+      payment_url: chargeResponse.payment_url,
+      barcode: chargeResponse.barcode
     };
   }
 
@@ -221,6 +220,9 @@ class BillingProcessorService {
     contract: any,
     externalData: { external_id: string; payment_url?: string; barcode?: string }
   ): Promise<Charge> {
+    // AIDEV-NOTE: Definindo created_at e updated_at explicitamente para evitar problemas de timezone
+    const now = new Date().toISOString();
+    
     const chargeData = {
       tenant_id: billing.tenant_id,
       customer_id: contract.customer_id,
@@ -232,6 +234,8 @@ class BillingProcessorService {
       link_pagamento: externalData.payment_url,
       asaas_id: externalData.external_id,
       codigo_barras: externalData.barcode,
+      created_at: now,
+      updated_at: now,
       metadata: {
         contract_id: contract.id,
         billing_id: billing.id,

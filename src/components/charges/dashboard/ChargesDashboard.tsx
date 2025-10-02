@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -118,7 +118,7 @@ export function ChargesDashboard() {
     charges.forEach(charge => {
       // Filtro para cobranças PAGAS
       if (['RECEIVED', 'RECEIVED_IN_CASH', 'RECEIVED_PIX', 'RECEIVED_BOLETO', 'RECEIVED_CARD', 'CONFIRMED', 'PAID'].includes(charge.status)) {
-        const paymentDate = new Date(charge.data_pagamento + 'T00:00:00');
+        const paymentDate = parseISO(charge.data_pagamento + 'T00:00:00');
         if (paymentDate >= paidFilter.startDate && paymentDate <= paidFilter.endDate) {
           groups.paid.charges.push(charge);
         }
@@ -129,8 +129,8 @@ export function ChargesDashboard() {
       // Removido filtro restritivo que estava impedindo cobranças PIX de aparecerem nos cards
       
       const dueDateStr = charge.data_vencimento;
-      const dueDate = new Date(dueDateStr + 'T00:00:00');
-      const today = new Date(todayStr + 'T00:00:00');
+      const dueDate = parseISO(dueDateStr + 'T00:00:00');
+      const today = parseISO(todayStr + 'T00:00:00');
       
       // Filtro para cobranças VENCIDAS
       if (dueDateStr < todayStr) {
@@ -245,34 +245,39 @@ export function ChargesDashboard() {
     }
   };
 
-  // AIDEV-NOTE: Renderização principal do dashboard - Layout invertido: cards primeiro, calendário depois
+  // AIDEV-NOTE: Renderização principal do dashboard - Layout com scroll adequado e espaçamento otimizado
   return (
-    <div className="flex flex-col h-full space-y-6">
+    <div className="flex flex-col h-full max-h-screen overflow-hidden">
+      {/* Container principal com scroll */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        
+        {/* Grupos de cobranças - MOVIDO PARA CIMA */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {Object.entries(groupedCharges).map(([key, group]) => (
+            <ChargeGroup
+              key={key}
+              groupKey={key}
+              group={group}
+              isSelected={selectedGroup === key}
+              onClick={() => handleGroupClick(key)}
+              dateRange={key === 'paid' ? paidFilter : undefined}
+            />
+          ))}
+        </div>
 
-      {/* Grupos de cobranças - MOVIDO PARA CIMA */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Object.entries(groupedCharges).map(([key, group]) => (
-          <ChargeGroup
-            key={key}
-            groupKey={key}
-            group={group}
-            isSelected={selectedGroup === key}
-            onClick={() => handleGroupClick(key)}
-            dateRange={key === 'paid' ? paidFilter : undefined}
-          />
-        ))}
-      </div>
-
-      {/* Calendário semanal - MOVIDO PARA BAIXO */}
-      <div className="mt-8">
-        <WeeklyCalendar 
-          initialCharges={chargesData || []} 
-          tenantId={currentTenant?.id || ''}
-          onWeekChange={(start, end) => {
-            setWeekStart(start);
-            setWeekEnd(end);
-          }}
-        />
+        {/* Calendário semanal - MOVIDO PARA BAIXO com container limitado */}
+        <div className="bg-white rounded-lg border shadow-sm">
+          <div className="p-4">
+            <WeeklyCalendar 
+              initialCharges={chargesData || []} 
+              tenantId={currentTenant?.id || ''}
+              onWeekChange={(start, end) => {
+                setWeekStart(start);
+                setWeekEnd(end);
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* AIDEV-NOTE: Lista de cobranças do grupo selecionado - Componente separado */}

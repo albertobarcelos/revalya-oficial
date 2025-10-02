@@ -1101,7 +1101,7 @@ if (typeof window === 'undefined') {
     console.error('❌ Configuração inválida:');
     validation.errors.forEach(error => console.error(`  - ${error}`));
     
-    if (ENV.NODE_ENV === 'production') {
+    if (ENV.NODE_ENV === 'production' && typeof process !== 'undefined' && typeof process.exit === 'function') {
       process.exit(1);
     }
   } else {

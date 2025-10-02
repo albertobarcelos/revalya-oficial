@@ -1,18 +1,19 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { asaasService } from '@/services/asaas';
 import type { AsaasListResponse, AsaasCustomer, AsaasPayment } from '@/types/asaas';
 
-// Renomeado para useAsaasCustomers para evitar conflito com o hook useCustomers
-export function useAsaasCustomers({ limit = 10 } = {}) {
+// Hook para buscar clientes com paginação infinita
+export function useAsaasCustomers({ limit = 20 } = {}) {
   return useInfiniteQuery({
-    queryKey: ['customers'],
+    queryKey: ['asaas-customers', limit],
     queryFn: async ({ pageParam = 0 }) => {
-      const response = await asaasService.getAllCustomers();
+      const response = await asaasService.getAllCustomers(undefined, pageParam, limit);
       return {
-        data: response,
-        hasMore: false,
-        offset: 0,
-        limit
+        data: response.data,
+        hasMore: response.hasMore,
+        offset: pageParam,
+        limit,
+        totalCount: response.totalCount
       } as AsaasListResponse<AsaasCustomer>;
     },
     getNextPageParam: (lastPage: AsaasListResponse<AsaasCustomer>) => {
@@ -21,6 +22,18 @@ export function useAsaasCustomers({ limit = 10 } = {}) {
     },
     initialPageParam: 0,
     staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+}
+
+// Hook para buscar TODOS os clientes do Asaas (com paginação automática)
+export function useAllAsaasCustomers() {
+  return useQuery({
+    queryKey: ['all-asaas-customers'],
+    queryFn: async () => {
+      return await asaasService.getAllCustomersWithPagination();
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes (cache mais longo para todos os clientes)
+    gcTime: 1000 * 60 * 15, // 15 minutes
   });
 }
 

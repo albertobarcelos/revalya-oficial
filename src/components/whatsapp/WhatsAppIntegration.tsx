@@ -10,6 +10,7 @@ import { whatsappService, IWhatsAppInstance } from "@/services/whatsappService";
 import { supabase } from '@/lib/supabase';
 import { logService } from "@/services/logService";
 import { QRCodeSVG } from "qrcode.react";
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 const MODULE_NAME = 'WhatsAppIntegration';
 
@@ -20,6 +21,22 @@ interface WhatsAppIntegrationProps {
 
 export function WhatsAppIntegration({ tenantId, tenantSlug }: WhatsAppIntegrationProps) {
   const { toast } = useToast();
+  
+  // AIDEV-NOTE: Hook de segurança multi-tenant para validar acesso
+  const { currentTenant, hasAccess } = useTenantAccessGuard(tenantId);
+  
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-muted-foreground">
+            Acesso negado. Você não tem permissão para acessar esta integração.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'loading' | 'connected' | 'disconnected' | 'connecting'>('disconnected');
@@ -32,8 +49,8 @@ export function WhatsAppIntegration({ tenantId, tenantSlug }: WhatsAppIntegratio
     setQrCode(null);
     setConnectionStatus('disconnected');
     
-    // Limpar no Supabase se tivermos o tenant
-    if (tenantId) {
+    // AIDEV-NOTE: Limpar no Supabase com validação dupla de tenant_id
+    if (currentTenant?.id) {
       try {
         await supabase
           .from('tenant_integrations')
@@ -42,7 +59,7 @@ export function WhatsAppIntegration({ tenantId, tenantSlug }: WhatsAppIntegratio
             instance_name: null,
             updated_at: new Date().toISOString()
           })
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', currentTenant.id)
           .eq('integration_type', 'whatsapp');
       } catch (error) {
         logService.error(MODULE_NAME, 'Erro ao limpar estado no Supabase:', error);
@@ -276,19 +293,19 @@ export function WhatsAppIntegration({ tenantId, tenantSlug }: WhatsAppIntegratio
           setQrCode(result.qrCode);
           
           toast({
-            title: "WhatsApp Conectando",
-            description: "Escaneie o QR Code para conectar seu WhatsApp",
+            title: "Whatsapp - QRCode Conectando",
+            description: "Escaneie o QR Code para conectar seu Whatsapp - QRCode",
           });
         } else {
           logService.warn(MODULE_NAME, 'Não foi gerado QR Code na criação da instância');
           toast({
-            title: "WhatsApp Conectando",
-            description: "Iniciando processo de conexão do WhatsApp...",
+            title: "Whatsapp - QRCode Conectando",
+            description: "Iniciando processo de conexão do Whatsapp - QRCode...",
           });
         }
       } else {
-        // Desativar WhatsApp
-        logService.info(MODULE_NAME, 'Iniciando desativação do WhatsApp');
+        // Desativar Whatsapp - QRCode
+        logService.info(MODULE_NAME, 'Iniciando desativação do Whatsapp - QRCode');
         
         // Verificar se temos o nome da instância salvo no banco
         // Buscar configuração do Supabase
@@ -545,10 +562,10 @@ export function WhatsAppIntegration({ tenantId, tenantSlug }: WhatsAppIntegratio
             <path d="M14 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1Z" />
             <path d="M12 17a5 5 0 0 0 5-5v-1a5 5 0 0 0-10 0v1a5 5 0 0 0 5 5Z" />
           </svg>
-          WhatsApp
+          Whatsapp - QRCode
         </CardTitle>
         <CardDescription>
-          Conecte seu WhatsApp para envio automático de mensagens de cobrança.
+          Conecte seu WhatsApp via QRCode para envio automático de mensagens de cobrança.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

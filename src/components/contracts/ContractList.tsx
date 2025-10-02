@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Building2, Calendar, FileText, Plus, Search, Eye, Trash2, AlertTriangle } from "lucide-react";
 import { useContracts } from "@/hooks/useContracts";
@@ -414,13 +414,15 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                       <TableCell>
                         <div className="flex items-center">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {format(new Date(contract.initial_date), "dd/MM/yyyy", { locale: ptBR })}
+                          {/* AIDEV-NOTE: Corrigido timezone - usar parseISO */}
+                          {format(parseISO(contract.initial_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {format(new Date(contract.final_date), "dd/MM/yyyy", { locale: ptBR })}
+                          {/* AIDEV-NOTE: Corrigido timezone - usar parseISO */}
+                          {format(parseISO(contract.final_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
                       </TableCell>
                       <TableCell></TableCell>

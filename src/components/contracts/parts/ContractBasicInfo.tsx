@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, Locale } from "date-fns";
+import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, parseISO, Locale } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { pt } from 'date-fns/locale';
 import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText } from "lucide-react";
@@ -55,10 +55,12 @@ export function ContractBasicInfo({
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [openInitialDatePicker, setOpenInitialDatePicker] = useState(false);
   const [openFinalDatePicker, setOpenFinalDatePicker] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
   
   // Observar mudanças nas datas para validação em tempo real
   const initialDate = useWatch({ control: form.control, name: 'initial_date' });
   const finalDate = useWatch({ control: form.control, name: 'final_date' });
+  const customerId = useWatch({ control: form.control, name: 'customer_id' });
   
   // Configuração de localização e funções auxiliares
   const locale: Locale = ptBR || pt;
@@ -66,10 +68,34 @@ export function ContractBasicInfo({
   const getMinDate = () => new Date();
 
   // Função para formatar a data de forma amigável
+  // AIDEV-NOTE: Corrigido problema de timezone - usar parseISO para strings de data
   const formatDate = (date: Date | string | null | undefined, formatStr = 'PPP') => {
     if (!date) return '';
-    return format(new Date(date), formatStr, { locale: ptBR });
+    
+    // Se for string, usar parseISO para evitar problemas de timezone
+    const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    return format(dateObj, formatStr, { locale: ptBR });
   };
+
+  // AIDEV-NOTE: Efeito para sincronizar cliente selecionado quando customer_id mudar
+  useEffect(() => {
+    if (!customerId) {
+      setSelectedClient(null);
+      return;
+    }
+    
+    // Se já temos o cliente selecionado e o ID bate, não precisa fazer nada
+    if (selectedClient && selectedClient.id === customerId) {
+      return;
+    }
+    
+    // Procura o cliente no array customers (para casos onde o cliente está na primeira página)
+    const foundClient = customers.find(c => c.id === customerId);
+    if (foundClient) {
+      setSelectedClient(foundClient);
+    }
+    // Se não encontrou, mantém o selectedClient atual (caso de paginação)
+  }, [customerId, customers, selectedClient]);
 
   // Efeito para validar data final não pode ser anterior à data inicial
   useEffect(() => {
@@ -97,8 +123,6 @@ export function ContractBasicInfo({
           control={form.control}
           name="customer_id"
           render={({ field }) => {
-            const selectedCustomer = customers.find(c => c.id === field.value);
-            
             return (
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center gap-1">
@@ -110,7 +134,7 @@ export function ContractBasicInfo({
                   <FieldSkeleton visible={isFieldLoading("customer_id")} />
                   <Input
                     placeholder="Selecione um cliente"
-                    value={selectedCustomer?.name || ""}
+                    value={selectedClient?.name || ""}
                     readOnly
                     className="cursor-pointer bg-background/50 border-border/50 transition-colors pr-8"
                     onClick={() => setShowClientSearch(true)}
@@ -134,8 +158,9 @@ export function ContractBasicInfo({
                   open={showClientSearch}
                   onOpenChange={setShowClientSearch}
                   clients={customers}
-                  onClientSelect={(id) => {
-                    form.setValue("customer_id", id);
+                  onClientSelect={(client) => {
+                    form.setValue("customer_id", client.id);
+                    setSelectedClient(client);
                     setShowClientSearch(false);
                   }}
                   onCreateClient={() => {

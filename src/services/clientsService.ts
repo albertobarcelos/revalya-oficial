@@ -18,9 +18,13 @@ interface CustomerFormData {
   postal_code?: string; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
   address?: string;
   addressNumber?: string;
+  // AIDEV-NOTE: Fallback aceito na importação (address_number || addressNumber)
+  address_number?: string;
   complement?: string;
   neighborhood?: string; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
   city?: string;
+  // AIDEV-NOTE: Fallback aceito na importação (city || cityName)
+  cityName?: string;
   state?: string;
   company?: string;
   [key: string]: any; // Para outras propriedades que possam ser adicionadas
@@ -29,7 +33,7 @@ interface CustomerFormData {
 const clientsService = {
   async getCustomers({ page, limit, searchTerm }: GetCustomersParams, tenantId?: string) {
     try {
-      // Validação de tenant_id obrigatória
+      // Validação de tenant_id obrigatório
       if (!tenantId) {
         throw new Error('tenant_id é obrigatório para buscar clientes');
       }
@@ -221,7 +225,7 @@ const clientsService = {
   },
 
   getClients: async (tenantId: string) => {
-    // Validação de tenant_id obrigatória
+    // Validação de tenant_id obrigatório
     if (!tenantId) {
       throw new Error('tenant_id é obrigatório para buscar clientes');
     }
@@ -251,7 +255,7 @@ const clientsService = {
 
   getClientsPaginated: async ({ page = 1, limit = 20, search = '', tenantId }: { page?: number; limit?: number; search?: string; tenantId: string }) => {
     try {
-      // Validação de tenant_id obrigatória
+      // Validação de tenant_id obrigatório
       if (!tenantId) {
         throw new Error('tenant_id é obrigatório para buscar clientes paginados');
       }
@@ -453,12 +457,66 @@ const clientsService = {
 
   // AIDEV-NOTE: Método específico para importação em lote de clientes
   async importClients(clientsData: CustomerFormData[]): Promise<{ success: Customer[], errors: any[] }> {
-    console.log('clientsService.importClients - dados recebidos:', clientsData);
+    console.log('🔄 [clientsService.importClients] Delegando para importService...');
+    
+    try {
+      // AIDEV-NOTE: Importar o novo microserviço de importação
+      const { importService } = await import('./importService');
+      
+      // AIDEV-NOTE: Converter dados para o formato esperado pelo importService
+      const formattedData = clientsData.map(client => ({
+        name: client.name,
+        email: client.email,
+        phone: client.phone,
+        cpf_cnpj: client.cpfCnpj || client.cpf_cnpj,
+        company: client.company,
+        address: client.address,
+        address_number: client.address_number || client.addressNumber,
+        complement: client.complement,
+        neighborhood: client.neighborhood,
+        postal_code: client.postal_code,
+        city: client.city || client.cityName,
+        state: client.state,
+        country: client.country || 'Brasil'
+      }));
+      
+      // AIDEV-NOTE: Executar importação usando o novo microserviço
+      const result = await importService.importCustomers(formattedData);
+      
+      console.log('✅ [clientsService.importClients] Importação concluída:', {
+        sucessos: result.success.length,
+        erros: result.errors.length
+      });
+      
+      // AIDEV-NOTE: Converter resultado para o formato esperado pelo clientsService
+      return {
+        success: result.success,
+        errors: result.errors.map(error => ({
+          clientData: error.record,
+          error: error.error
+        }))
+      };
+      
+    } catch (error) {
+      console.error('❌ [clientsService.importClients] Erro na importação:', error);
+      
+      // AIDEV-NOTE: Fallback para o método original em caso de erro crítico
+      return this.importClientsLegacy(clientsData);
+    }
+  },
+
+  // AIDEV-NOTE: Método legado mantido como fallback
+  async importClientsLegacy(clientsData: CustomerFormData[]): Promise<{ success: Customer[], errors: any[] }> {
+    console.log('⚠️ [clientsService.importClientsLegacy] Usando método legado como fallback');
     
     const results = {
       success: [] as Customer[],
       errors: [] as any[]
     };
+
+    // AIDEV-NOTE: Contadores para diagnóstico de campos ausentes durante a importação
+    let emptyCityCount = 0;
+    let emptyAddressNumberCount = 0;
 
     try {
       // Verificar se o usuário está autenticado
@@ -502,15 +560,34 @@ const clientsService = {
             updated_at: new Date().toISOString(),
             // Dados de endereço
             address: clientData.address,
-            address_number: clientData.addressNumber,
+            // AIDEV-NOTE: Fallback implementado conforme decisão A) — prioriza snake_case (address_number) e faz fallback para camelCase (addressNumber)
+            address_number: clientData.address_number || clientData.addressNumber,
             complement: clientData.complement,
             neighborhood: clientData.neighborhood,
             postal_code: clientData.postal_code,
-            city: clientData.city,
+            // AIDEV-NOTE: Fallback implementado conforme decisão A) — prioriza 'city' e faz fallback para 'cityName'
+            city: clientData.city || clientData.cityName,
             state: clientData.state,
             country: clientData.country || 'Brasil',
           };
-          
+
+          // AIDEV-NOTE: Logs de diagnóstico de resolução de campos
+          console.log('🔍 [DEBUG][clientsService.importClientsLegacy] Resolved fields:', {
+            source: {
+              address_number: clientData.address_number,
+              addressNumber: clientData.addressNumber,
+              city: clientData.city,
+              cityName: clientData.cityName,
+            },
+            resolved: {
+              address_number: formattedClientData.address_number,
+              city: formattedClientData.city,
+            },
+          });
+
+          if (!formattedClientData.city) emptyCityCount++;
+          if (!formattedClientData.address_number) emptyAddressNumberCount++;
+
           const { data: newClient, error } = await supabase
             .from('customers')
             .insert(formattedClientData)
@@ -533,14 +610,14 @@ const clientsService = {
         }
       }
       
-      console.log('Importação concluída:', {
+      console.log('Importação legada concluída:', {
         sucessos: results.success.length,
         erros: results.errors.length
       });
       
       return results;
     } catch (error) {
-      console.error('Erro geral na importação de clientes:', error);
+      console.error('Erro geral na importação legada de clientes:', error);
       throw error;
     }
   }

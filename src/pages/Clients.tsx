@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useCustomers } from "@/hooks/useCustomers";
+import { useDebounce } from "@/hooks/useDebounce";
 import { Layout } from "@/components/layout/Layout";
 import { useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
 import { useParams, useNavigate } from "react-router-dom";
@@ -29,26 +30,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PaginationControls, usePaginationState } from "@/components/ui/pagination-controls";
 import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
 import { ImportModal } from "@/components/clients/ImportModal";
-import { ImportPreview } from "@/components/clients/ImportPreview";
+import { ImportSuccessModal } from "@/components/clients/import/ImportSuccessModal";
+import { ImportWizard } from "@/components/clients/import/ImportWizard";
 import { useToast } from "@/components/ui/use-toast";
 import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
 import type { Customer } from "@/types/database";
@@ -63,32 +51,78 @@ export default function Clients() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  // AIDEV-NOTE: Implementando debounce para busca em tempo real
+  // Delay de 300ms para otimizar consultas ao banco sem prejudicar UX
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  
+  // AIDEV-NOTE: Usando hook personalizado para gerenciar estado de paginação
+  const pagination = usePaginationState(10);
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   
   // Estados para importação
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
-  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [importWizardData, setImportWizardData] = useState<any[]>([]);
+  const [showImportWizard, setShowImportWizard] = useState(false);
   const [importType, setImportType] = useState<'asaas' | 'csv' | null>(null);
+  
+  // AIDEV-NOTE: Estados para controle da importação e UX
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    status: string;
+  } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: number;
+    errors: string[];
+  } | null>(null);
   
   const { toast } = useToast();
 
   // TODOS OS HOOKS DEVEM VIR ANTES DE QUALQUER RETURN CONDICIONAL
+  // AIDEV-NOTE: Usando busca dinâmica com debounce para otimizar performance
+  // A busca agora é executada automaticamente conforme o usuário digita
   const { customers: allCustomers, isLoading, refetch, totalCount } = useCustomers({
-    search: searchTerm
+    searchTerm: debouncedSearchTerm,
+    page: pagination.currentPage,
+    limit: pagination.itemsPerPage
   });
 
-  // Calcular paginação baseada no totalCount
+  // AIDEV-NOTE: Função para simular progresso da importação
+  const simulateImportProgress = (total: number) => {
+    return new Promise<void>((resolve) => {
+      let current = 0;
+      const interval = setInterval(() => {
+        current++;
+        setImportProgress({
+          current,
+          total,
+          status: current === total ? 'Finalizando...' : `Processando cliente ${current}...`
+        });
+        
+        if (current >= total) {
+          clearInterval(interval);
+          setTimeout(() => {
+            resolve();
+          }, 500); // Pequena pausa para mostrar "Finalizando..."
+        }
+      }, 200); // Atualiza a cada 200ms
+    });
+  };
+
+  // AIDEV-NOTE: Calcular paginação baseada no totalCount (agora com paginação no servidor)
   const total = totalCount || 0;
-  const totalPages = Math.ceil(total / itemsPerPage);
+  const totalPages = Math.ceil(total / pagination.itemsPerPage);
   
-  // Aplicar paginação no frontend (já que a API retorna apenas 10 itens)
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCustomers = allCustomers?.slice(startIndex, endIndex) || [];
+  // AIDEV-NOTE: Removendo paginação frontend já que agora é feita no servidor
+  const paginatedCustomers = allCustomers || [];
+
+  // AIDEV-NOTE: Reset da página quando searchTerm mudar (busca em tempo real)
+  useEffect(() => {
+    pagination.resetToFirstPage();
+  }, [debouncedSearchTerm, pagination.resetToFirstPage]);
 
   // FORÇA LIMPEZA COMPLETA DO CACHE AO TROCAR TENANT
   useEffect(() => {
@@ -174,81 +208,12 @@ export default function Clients() {
   // AUDIT LOG: Página renderizada com sucesso
   console.log(` [AUDIT] Página Clientes renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
 
-  const handleItemsPerPageChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
-  };
-
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Resetar para primeira página ao buscar
+    pagination.resetToFirstPage(); // Resetar para primeira página ao buscar
   };
 
-  const renderPaginationItems = () => {
-    const items = [];
-    const maxVisiblePages = 5;
-    const halfVisible = Math.floor(maxVisiblePages / 2);
-    
-    let startPage = Math.max(1, currentPage - halfVisible);
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-    
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
 
-    if (startPage > 1) {
-      items.push(
-        <PaginationItem key="first">
-          <PaginationLink onClick={() => setCurrentPage(1)}>
-            <span className="sr-only">Ir para primeira página</span>
-            1
-          </PaginationLink>
-        </PaginationItem>
-      );
-      if (startPage > 2) {
-        items.push(
-          <PaginationItem key="ellipsis-start">
-            <PaginationLink disabled>...</PaginationLink>
-          </PaginationItem>
-        );
-      }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      items.push(
-        <PaginationItem key={i}>
-          <PaginationLink
-            onClick={() => setCurrentPage(i)}
-            isActive={currentPage === i}
-            aria-current={currentPage === i ? 'page' : undefined}
-          >
-            <span className="sr-only">Página {i}</span>
-            {i}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-
-    if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        items.push(
-          <PaginationItem key="ellipsis-end">
-            <PaginationLink disabled>...</PaginationLink>
-          </PaginationItem>
-        );
-      }
-      items.push(
-        <PaginationItem key="last">
-          <PaginationLink onClick={() => setCurrentPage(totalPages)}>
-            <span className="sr-only">Ir para última página</span>
-            {totalPages}
-          </PaginationLink>
-        </PaginationItem>
-      );
-    }
-    
-    return items;
-  };
 
   return (
     <Layout>
@@ -332,7 +297,7 @@ export default function Clients() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {Array.from({ length: itemsPerPage }).map((_, index) => (
+                    {Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
                       <TableRowSkeleton key={index} columns={7} />
                     ))}
                   </TableBody>
@@ -460,49 +425,21 @@ export default function Clients() {
           </CardContent>
           
           {!isLoading && total > 0 && (
-            <CardFooter className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
-              <div className="flex flex-col space-y-2 md:flex-row md:items-center md:space-y-0 md:space-x-4">
-                <p className="text-sm text-gray-500">
-                  Mostrando {total > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} a{" "}
-                  {Math.min(currentPage * itemsPerPage, total)} de {total} clientes
-                </p>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-muted-foreground">Itens por página:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm text-gray-600">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Próximo
-                </Button>
-              </div>
+            <CardFooter>
+              <PaginationControls
+                currentPage={pagination.currentPage}
+                totalItems={total}
+                itemsPerPage={pagination.itemsPerPage}
+                onPageChange={pagination.setCurrentPage}
+                onItemsPerPageChange={pagination.setItemsPerPage}
+                statusTextTemplate={(start, end, total) => 
+                  `Mostrando ${start} a ${end} de ${total} clientes`
+                }
+                showNavigationButtons={true}
+                showItemsPerPageSelector={true}
+                showStatusText={true}
+                isLoading={isLoading}
+              />
             </CardFooter>
           )}
         </Card>
@@ -514,7 +451,7 @@ export default function Clients() {
             onOpenChange={(open) => !open && setEditingCustomer(null)}
             onSuccess={() => {
               setEditingCustomer(null);
-              refetch(searchTerm, itemsPerPage, currentPage);
+              refetch(searchTerm, pagination.itemsPerPage, pagination.currentPage);
             }}
           />
         )}
@@ -524,56 +461,33 @@ export default function Clients() {
           open={isImportModalOpen}
           onOpenChange={setIsImportModalOpen}
           onImportData={(data, type) => {
-            setImportPreviewData(data);
+            setImportWizardData(data);
             setImportType(type);
-            setShowImportPreview(true);
+            setShowImportWizard(true);
             setIsImportModalOpen(false);
           }}
         />
 
-        {/* Pré-visualização de Importação */}
-        {showImportPreview && (
-          <ImportPreview
-            open={showImportPreview}
-            onOpenChange={setShowImportPreview}
-            data={importPreviewData}
-            importType={importType}
-            onConfirm={async (selectedData) => {
-              try {
-                // AIDEV-NOTE: Implementação da lógica de inserção no banco usando clientsService
-                const { clientsService } = await import('@/services/clientsService');
-                const results = await clientsService.importClients(selectedData);
-                
-                if (results.errors.length > 0) {
-                  toast({
-                    title: "Importação parcialmente concluída",
-                    description: `${results.success.length} clientes importados com sucesso. ${results.errors.length} falharam.`,
-                    variant: "destructive",
-                  });
-                } else {
-                  toast({
-                    title: "Importação realizada com sucesso!",
-                    description: `${results.success.length} clientes foram importados.`,
-                  });
-                }
-                
-                setShowImportPreview(false);
-                setImportPreviewData([]);
-                setImportType(null);
-                
-                // Atualizar a lista de clientes
-                refetch(searchTerm, itemsPerPage, currentPage);
-              } catch (error) {
-                console.error('Erro na importação:', error);
-                toast({
-                  title: "Erro na importação",
-                  description: "Ocorreu um erro ao importar os clientes.",
-                  variant: "destructive",
-                });
-               }
-             }}
-          />
-        )}
+        {/* Wizard de Configuração da Importação */}
+        <ImportWizard
+          open={showImportWizard}
+          onOpenChange={setShowImportWizard}
+          data={importWizardData}
+          sourceType={importType}
+          onSuccess={(result) => {
+            setImportResult(result);
+            setShowSuccessModal(true);
+            setShowImportWizard(false);
+            refetch(searchTerm, pagination.itemsPerPage, pagination.currentPage);
+          }}
+        />
+
+        {/* Modal de Sucesso da Importação */}
+        <ImportSuccessModal
+          open={showSuccessModal}
+          onOpenChange={setShowSuccessModal}
+          result={importResult}
+        />
       </div>
     </Layout>
   );

@@ -929,7 +929,23 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                 {financialData.payment_method === 'Cartão' && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Tipo de Cartão</Label>
-                      <Select value={financialData.card_type || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, card_type: value }))}>
+                      <Select value={financialData.card_type || ""} onValueChange={(value) => {
+                        // AIDEV-NOTE: Implementação das regras específicas para credit_recurring
+                        const newFinancialData = { ...financialData, card_type: value };
+                        
+                        if (value === 'credit_recurring') {
+                          // Para credit_recurring: definir automaticamente como Mensal e resetar parcelas para 1
+                          newFinancialData.billing_type = 'Mensal';
+                          newFinancialData.recurrence_frequency = 'Mensal';
+                          newFinancialData.installments = 1;
+                        } else if (value === 'credit') {
+                          // Para credit simples: permitir seleção livre, manter parcelas
+                          newFinancialData.billing_type = '';
+                          newFinancialData.recurrence_frequency = '';
+                        }
+                        
+                        setFinancialData(newFinancialData);
+                      }}>
                        <SelectTrigger>
                          <SelectValue placeholder="Selecione o tipo" />
                        </SelectTrigger>
@@ -945,9 +961,17 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                 {financialData.payment_method && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Tipo de Faturamento</Label>
-                    <Select value={financialData.billing_type || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
+                    <Select 
+                      value={financialData.billing_type || ""} 
+                      onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}
+                      disabled={financialData.card_type === 'credit_recurring'}
+                    >
+                      <SelectTrigger className={financialData.card_type === 'credit_recurring' ? 'opacity-50' : ''}>
+                        <SelectValue placeholder={
+                          financialData.card_type === 'credit_recurring' 
+                            ? "Recorrente (Mensal) - Automático" 
+                            : "Selecione o tipo"
+                        } />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Único">Único</SelectItem>
@@ -957,11 +981,18 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                         <SelectItem value="Anual">Anual</SelectItem>
                       </SelectContent>
                     </Select>
+                    {financialData.card_type === 'credit_recurring' && (
+                      <span className="text-xs text-muted-foreground">
+                        Para Crédito Recorrente, o tipo é automaticamente definido como Mensal
+                      </span>
+                    )}
                   </div>
                 )}
                 
-                {/* Frequência de Recorrência - só aparece após escolher método de pagamento e tipo de faturamento */}
-                {financialData.payment_method && (financialData.billing_type === "Mensal" || financialData.billing_type === "Trimestral" || financialData.billing_type === "Semestral" || financialData.billing_type === "Anual") && (
+                {/* Frequência de Recorrência - só aparece após escolher método de pagamento e tipo de faturamento, mas não para credit_recurring */}
+                {financialData.payment_method && 
+                 (financialData.billing_type === "Mensal" || financialData.billing_type === "Trimestral" || financialData.billing_type === "Semestral" || financialData.billing_type === "Anual") && 
+                 financialData.card_type !== 'credit_recurring' && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Frequência de Cobrança</Label>
                     <Select value={financialData.recurrence_frequency || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, recurrence_frequency: value }))}>

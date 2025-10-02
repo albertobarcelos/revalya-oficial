@@ -24,6 +24,7 @@ import {
   Tag,
   BarChart3
 } from 'lucide-react';
+import { getCostPriceLabel, getCostPriceDescription, getCostPricePlaceholder } from '@/utils/serviceLabels';
 
 // AIDEV-NOTE: Configuração para edição de SERVIÇOS - REORGANIZADA conforme solicitação
 export const serviceEditConfig: FieldConfig[] = [
@@ -102,6 +103,16 @@ export const serviceEditConfig: FieldConfig[] = [
     icon: <Hash className="h-4 w-4" />,
     group: 'details',
     description: 'Código da Lista de Serviços (LC 116/2003)'
+  },
+  {
+    name: 'cost_price',
+    label: 'Preço de Custo',
+    type: 'currency',
+    placeholder: 'R$ 0,00',
+    required: false,
+    icon: <DollarSign className="h-4 w-4" />,
+    group: 'details',
+    description: 'Valor de custo do serviço para cálculo de margem'
   },
   // AIDEV-NOTE: Campos de IMPOSTOS movidos para aba AVANÇADO
   {
@@ -404,6 +415,7 @@ export const serviceValidationSchema = z.object({
   description: z.string().optional(),
   code: z.string().min(1, 'Código é obrigatório').max(50, 'Código muito longo'),
   default_price: z.number().min(0, 'Preço deve ser positivo'),
+  cost_price: z.number().min(0, 'Preço de custo deve ser positivo').optional(),
   tax_rate: z.number().min(0).max(100).optional(),
   tax_code: z.string().optional().or(z.literal("")).transform(val => val === "" ? undefined : val),
   lc_code: z.string().optional().or(z.literal("")).transform(val => val === "" ? undefined : val),
@@ -441,6 +453,27 @@ export const clientValidationSchema = z.object({
   postal_code: z.string().optional(),
   active: z.boolean().optional()
 });
+
+// AIDEV-NOTE: Função para obter configuração dinâmica de serviços baseada na unidade de cobrança
+export const getDynamicServiceConfig = (unitType?: string) => {
+  // AIDEV-NOTE: Clona a configuração base para evitar mutação
+  const dynamicFields = serviceEditConfig.map(field => {
+    if (field.name === 'cost_price') {
+      return {
+        ...field,
+        label: getCostPriceLabel(unitType),
+        description: getCostPriceDescription(unitType),
+        placeholder: getCostPricePlaceholder(unitType)
+      };
+    }
+    return field;
+  });
+
+  return {
+    fields: dynamicFields,
+    validation: serviceValidationSchema
+  };
+};
 
 // AIDEV-NOTE: Função helper para obter configuração por tipo de entidade
 export const getEditConfig = (entityType: 'service' | 'product' | 'client') => {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useSupabase } from '@/hooks/useSupabase';
 import { useToast } from "@/components/ui/use-toast";
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+// AIDEV-NOTE: Hook obrigatório para segurança multi-tenant
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -32,6 +34,9 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
   const { supabase } = useSupabase();
   const { toast } = useToast();
   
+  // AIDEV-NOTE: Validação de acesso obrigatória para segurança multi-tenant
+  const { hasAccess, currentTenant } = useTenantAccessGuard(tenantId);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null); // Armazenar o ID da configuração
@@ -45,14 +50,28 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   
+  // AIDEV-NOTE: Verificação de acesso antes de qualquer operação
+  if (!hasAccess || !currentTenant) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-destructive">Acesso Negado</h3>
+          <p className="text-sm text-muted-foreground">Você não tem permissão para acessar esta configuração.</p>
+        </div>
+      </div>
+    );
+  }
+  
   // Definindo as funções antes de usá-las no useEffect
   const fetchReguaConfig = async () => {
     try {
       setLoading(true);
+      // AIDEV-NOTE: Validação dupla de tenant_id para segurança multi-tenant
       const { data, error } = await supabase
         .from('regua_cobranca_config')
         .select('*')
         .eq('tenant_id', tenantId)
+        .eq('tenant_id', currentTenant.id) // Validação dupla obrigatória
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 é "não encontrado"
@@ -82,10 +101,12 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
 
   const fetchEtapas = async () => {
     try {
+      // AIDEV-NOTE: Validação dupla de tenant_id para segurança multi-tenant
       const { data, error } = await supabase
         .from('regua_cobranca_etapas')
         .select('*')
         .eq('tenant_id', tenantId)
+        .eq('tenant_id', currentTenant.id) // Validação dupla obrigatória
         .order('posicao', { ascending: true });
 
       if (error) throw error;
@@ -113,10 +134,11 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
         // Se está ativando a régua
         if (!configId) {
           // Se não existe configuração, criar uma nova
+          // AIDEV-NOTE: Insert com tenant_id validado para segurança multi-tenant
           const { data, error } = await supabase
             .from('regua_cobranca_config')
             .insert({
-              tenant_id: tenantId,
+              tenant_id: currentTenant.id, // Usar currentTenant.id validado
               ativo: true,
               canal_whatsapp: canalWhatsapp,
               canal_email: canalEmail,
@@ -132,13 +154,15 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
           }
         } else {
           // Se já existe, apenas atualizar o estado ativo
+          // AIDEV-NOTE: Update com validação dupla de tenant_id para segurança
           const { error } = await supabase
             .from('regua_cobranca_config')
             .update({
               ativo: true,
               updated_at: new Date().toISOString()
             })
-            .eq('id', configId);
+            .eq('id', configId)
+            .eq('tenant_id', currentTenant.id); // Validação dupla obrigatória
           
           if (error) throw error;
         }
@@ -147,13 +171,15 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
       } else {
         // Se está desativando a régua
         if (configId) {
+          // AIDEV-NOTE: Update com validação dupla de tenant_id para segurança
           const { error } = await supabase
             .from('regua_cobranca_config')
             .update({
               ativo: false,
               updated_at: new Date().toISOString()
             })
-            .eq('id', configId);
+            .eq('id', configId)
+            .eq('tenant_id', currentTenant.id); // Validação dupla obrigatória
           
           if (error) throw error;
         }
@@ -256,10 +282,12 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
       try {
         // Se for uma etapa salva no banco
         if (!id.startsWith('novo-')) {
+          // AIDEV-NOTE: Delete com validação dupla de tenant_id para segurança
           const { error } = await supabase
             .from('regua_cobranca_etapas')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('tenant_id', currentTenant.id); // Validação dupla obrigatória
             
           if (error) throw error;
         }
@@ -300,7 +328,7 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
       // Preparar dados para inserção/atualização
       const etapaData = {
         ...editandoEtapa,
-        tenant_id: tenantId,
+        tenant_id: currentTenant.id, // Usar currentTenant.id validado
         updated_at: new Date().toISOString()
       };
       
@@ -310,6 +338,7 @@ export function ReguaCobrancaConfig({ tenantId, tenantSlug }: ReguaCobrancaConfi
       }
       
       // Salvar no banco
+      // AIDEV-NOTE: Upsert com tenant_id validado para segurança multi-tenant
       const { data, error } = await supabase
         .from('regua_cobranca_etapas')
         .upsert(etapaData)

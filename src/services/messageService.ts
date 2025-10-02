@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 import { processMessageTags } from '@/utils/messageUtils';
 import type { Cobranca } from '@/types/database';
 import { v4 as uuidv4 } from 'uuid';
+import { logService } from './logService';
+import { whatsappService } from './whatsappService';
 
 interface MessageRecord {
   charge_id: string;
@@ -367,36 +369,88 @@ export const messageService = {
   },
 
   async processMessageTemplate(template: { message: string }, data: any): Promise<string> {
-    let processedMessage = template.message;
+    return processMessageTags(template.message, data);
+  },
 
-    // Processar tags do cliente
-    if (data.customer) {
-      processedMessage = processedMessage
-        .replace(/\{cliente\.nome\}/g, data.customer.name || '')
-        .replace(/\{cliente\.empresa\}/g, data.customer.company || '')
-        .replace(/\{cliente\.cpf_cnpj\}/g, data.customer.cpf_cnpj || '')
-        .replace(/\{cliente\.email\}/g, data.customer.email || '')
-        .replace(/\{cliente\.telefone\}/g, data.customer.phone || '');
+  /**
+   * Envia uma mensagem de texto via WhatsApp
+   * AIDEV-NOTE: Método para envio de mensagens com isolamento por tenant
+   */
+  async sendMessage(
+    tenantSlug: string, 
+    phoneNumber: string, 
+    message: string,
+    options?: {
+      delay?: number;
+      linkPreview?: boolean;
+      mentionsEveryOne?: boolean;
+      mentioned?: string[];
     }
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      // AIDEV-NOTE: Validação de parâmetros obrigatórios
+      if (!tenantSlug || !phoneNumber || !message) {
+        throw new Error('Parâmetros obrigatórios não fornecidos: tenantSlug, phoneNumber, message');
+      }
 
-    // Processar tags da cobrança
-    if (data.charge) {
-      const valor = new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-      }).format(data.charge.valor || 0);
+      // AIDEV-NOTE: Buscar instância ativa para o tenant
+      const instanceName = await whatsappService.getFullInstanceName(tenantSlug);
+      if (!instanceName) {
+        throw new Error(`Nenhuma instância ativa encontrada para o tenant: ${tenantSlug}`);
+      }
 
-      const dataVencimento = data.charge.data_vencimento
-        ? new Date(data.charge.data_vencimento).toLocaleDateString('pt-BR')
-        : '';
+      // AIDEV-NOTE: Verificar se a instância está conectada
+      const status = await whatsappService.checkInstanceStatus(instanceName);
+      if (status !== 'open') {
+        throw new Error(`Instância ${instanceName} não está conectada. Status: ${status}`);
+      }
 
-      processedMessage = processedMessage
-        .replace(/\{cobranca\.valor\}/g, valor)
-        .replace(/\{cobranca\.vencimento\}/g, dataVencimento)
-        .replace(/\{cobranca\.descricao\}/g, data.charge.descricao || '')
-        .replace(/\{cobranca\.status\}/g, data.charge.status || '');
+      // AIDEV-NOTE: Formatar número de telefone (garantir formato internacional)
+      const formattedNumber = phoneNumber.startsWith('55') ? phoneNumber : `55${phoneNumber}`;
+      
+      logService.info('MessageService', `Enviando mensagem via ${instanceName} para ${formattedNumber}`);
+
+      // AIDEV-NOTE: Preparar payload para envio de mensagem
+      const messagePayload = {
+        number: formattedNumber,
+        text: message,
+        delay: options?.delay || 1000,
+        linkPreview: options?.linkPreview ?? true,
+        mentionsEveryOne: options?.mentionsEveryOne ?? false,
+        ...(options?.mentioned && { mentioned: options.mentioned })
+      };
+
+      // AIDEV-NOTE: Enviar mensagem via Evolution API usando o whatsappService
+      const response = await (whatsappService as any).callEvolutionApi(
+        `/message/sendText/${instanceName}`,
+        'POST',
+        messagePayload
+      );
+
+      // AIDEV-NOTE: Validar resposta da API
+      if (!response || !response.key) {
+        throw new Error('Resposta inválida da Evolution API');
+      }
+
+      logService.info('MessageService', `Mensagem enviada com sucesso:`, {
+        messageId: response.key.id,
+        instanceName,
+        phoneNumber: formattedNumber,
+        tenant: tenantSlug
+      });
+
+      return {
+        success: true,
+        messageId: response.key.id
+      };
+
+    } catch (error) {
+      logService.error('MessageService', `Erro ao enviar mensagem para ${phoneNumber} via tenant ${tenantSlug}:`, error);
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro desconhecido ao enviar mensagem'
+      };
     }
-
-    return processedMessage;
   }
 };
