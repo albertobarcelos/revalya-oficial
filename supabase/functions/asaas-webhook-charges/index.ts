@@ -1,350 +1,430 @@
-// =====================================================
-// EDGE FUNCTION: ASAAS WEBHOOK CHARGES
-// Descrição: Processa webhooks do ASAAS para conciliation_staging
-// Autor: Barcelitos AI Agent
-// Data: 2025-01-09
-// =====================================================
+import { serve } from "https://deno.land/std/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js";
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+// Configuração de CORS
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, asaas-access-token, x-asaas-access-token, x-webhook-token, access_token, user-agent",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
+};
 
-// AIDEV-NOTE: Interfaces para tipagem dos dados ASAAS
-interface AsaasWebhookPayload {
-  event: string
-  payment: {
-    id: string
-    customer: string
-    subscription?: string
-    value: number
-    netValue?: number
-    originalValue?: number
-    interestValue?: number
-    description?: string
-    billingType: string
-    status: string
-    pixTransaction?: any
-    creditCard?: any
-    installmentCount?: number
-    installmentNumber?: number
-    dueDate: string
-    originalDueDate?: string
-    paymentDate?: string
-    clientPaymentDate?: string
-    confirmedDate?: string
-    creditDate?: string
-    estimatedCreditDate?: string
-    invoiceUrl?: string
-    bankSlipUrl?: string
-    transactionReceiptUrl?: string
-    externalReference?: string
-    discount?: {
-      value: number
-      limitDate?: string
-    }
-    fine?: {
-      value: number
-    }
-    interest?: {
-      value: number
-    }
-    deleted: boolean
-    anticipated?: boolean
-    anticipable?: boolean
-  }
+const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+
+// AIDEV-NOTE: Mapeamento de status de pagamento para status externo (valores válidos do constraint)
+function mapPaymentStatusToExternal(status: string): string {
+  const statusMap: Record<string, string> = {
+    "PENDING": "pending",
+    "RECEIVED": "received",
+    "PAID": "received", // AIDEV-NOTE: Status PAID do ASAAS mapeado para "received" para resolver constraint violation
+    "CONFIRMED": "confirmed",
+    "OVERDUE": "overdue",
+    "REFUNDED": "refunded",
+    "RECEIVED_IN_CASH": "received",
+    "REFUND_REQUESTED": "refunded",
+    "REFUND_IN_PROGRESS": "refunded",
+    "CHARGEBACK_REQUESTED": "refunded",
+    "CHARGEBACK_DISPUTE": "refunded",
+    "AWAITING_CHARGEBACK_REVERSAL": "pending",
+    "DUNNING_REQUESTED": "overdue",
+    "DUNNING_RECEIVED": "overdue",
+    "AWAITING_RISK_ANALYSIS": "pending",
+    "CREATED": "created",
+    "DELETED": "deleted",
+    "CHECKOUT_VIEWED": "checkout_viewed",
+    "ANTICIPATED": "anticipaded" // Mantém o typo do constraint do banco
+  };
+  return statusMap[status] || "pending"; // Default para pending se não encontrar
 }
 
-interface AsaasCustomer {
-  id: string
-  name: string
-  email?: string
-  phone?: string
-  mobilePhone?: string
-  cpfCnpj?: string
-  postalCode?: string
-  address?: string
-  addressNumber?: string
-  complement?: string
-  province?: string
-  city?: string
-  state?: string
-  country?: string
-}
-
-// AIDEV-NOTE: Função para validar assinatura HMAC SHA-256
-async function validateWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string
-): Promise<boolean> {
+// AIDEV-NOTE: Função para buscar dados do cliente na API ASAAS
+async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: string) {
   try {
-    const encoder = new TextEncoder()
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    )
+    console.log(`🔍 Buscando cliente ${customerId} na API ASAAS...`);
+    console.log(`🔧 URL da API: ${apiUrl}`);
+    console.log(`🔑 API Key original: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 10)}`);
     
-    const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(payload))
-    const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
+    // AIDEV-NOTE: Usar a API key completa incluindo o prefixo '$' conforme documentação ASAAS
+    console.log(`🔑 API Key completa: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 10)}`);
     
-    return signature.toLowerCase() === expectedSignature.toLowerCase()
-  } catch (error) {
-    console.error('Erro na validação da assinatura:', error)
-    return false
-  }
-}
-
-// AIDEV-NOTE: Função para buscar dados do cliente ASAAS
-async function fetchAsaasCustomer(customerId: string, apiKey: string): Promise<AsaasCustomer | null> {
-  try {
-    const response = await fetch(`https://www.asaas.com/api/v3/customers/${customerId}`, {
+    const response = await fetch(`${apiUrl}/v3/customers/${customerId}`, {
+      method: 'GET',
       headers: {
         'access_token': apiKey,
         'Content-Type': 'application/json'
       }
-    })
-    
+    });
+
+    console.log(`📡 Status da resposta: ${response.status} - ${response.statusText}`);
+
     if (!response.ok) {
-      console.error(`Erro ao buscar cliente ASAAS: ${response.status}`)
-      return null
+      const errorText = await response.text();
+      console.error(`❌ Erro ao buscar cliente: ${response.status} - ${response.statusText}`);
+      console.error(`📄 Detalhes do erro: ${errorText}`);
+      return null;
     }
+
+    const customerData = await response.json();
+    console.log(`✅ Cliente encontrado: ${customerData.name || 'N/A'}`);
     
-    return await response.json()
+    return customerData;
   } catch (error) {
-    console.error('Erro na requisição para ASAAS:', error)
-    return null
+    console.error('❌ Erro ao buscar cliente na API ASAAS:', error);
+    return null;
   }
 }
 
-// AIDEV-NOTE: Função para determinar o tenant_id baseado no webhook
-async function determineTenantId(supabase: any, payload: AsaasWebhookPayload): Promise<string | null> {
-  try {
-    // AIDEV-NOTE: Busca tenant baseado na referência externa ou configuração
-    const { data: tenantIntegration, error } = await supabase
-      .from('tenant_integrations')
-      .select('tenant_id, config')
-      .eq('integration_type', 'ASAAS')
-      .eq('status', 'active')
-      .single()
-    
-    if (error || !tenantIntegration) {
-      console.error('Erro ao buscar tenant integration:', error)
-      return null
-    }
-    
-    return tenantIntegration.tenant_id
-  } catch (error) {
-    console.error('Erro ao determinar tenant_id:', error)
-    return null
+// AIDEV-NOTE: Handler para requisições GET - consultas à API ASAAS
+async function handleGetRequest(req: Request, url: URL) {
+  console.log("🔍 Processando requisição GET para consulta API ASAAS");
+  
+  // Extrair parâmetros da query string
+  const customerId = url.searchParams.get('customer_id');
+  
+  if (!customerId) {
+    return new Response(JSON.stringify({
+      error: "customer_id é obrigatório para consultas GET"
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
   }
+
+  //// 🔍 Buscar tenant_id baseado no customer_id
+  const { data: mappingData, error: mappingError } = await supabase
+    .from("conciliation_staging")
+    .select("tenant_id")
+    .eq("asaas_customer_id", customerId)
+    .limit(1)
+    .maybeSingle();
+
+  if (mappingError || !mappingData) {
+    console.error("❌ Customer ID não encontrado no mapeamento:", mappingError);
+    return new Response(JSON.stringify({
+      error: "Customer ID não encontrado no sistema"
+    }), {
+      status: 404,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  const tenantId = mappingData.tenant_id;
+  console.log("📌 Tenant encontrado para customer_id:", tenantId);
+
+  // 🔑 Buscar configuração ASAAS no banco
+  const { data: integrationData, error: integrationError } = await supabase
+    .from("tenant_integrations")
+    .select("id, config")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "asaas")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (integrationError || !integrationData) {
+    console.error("❌ Integração ASAAS não encontrada:", integrationError);
+    return new Response(JSON.stringify({
+      error: "Integração ASAAS não encontrada"
+    }), {
+      status: 404,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  if (!integrationData.config?.api_key || !integrationData.config?.api_url) {
+    return new Response(JSON.stringify({
+      error: "Configuração ASAAS incompleta (api_key ou api_url ausente)"
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  // 🔍 Buscar dados do cliente na API ASAAS
+  const customerData = await fetchAsaasCustomer(
+    customerId,
+    integrationData.config.api_key,
+    integrationData.config.api_url
+  );
+
+  if (!customerData) {
+    return new Response(JSON.stringify({
+      error: "Cliente não encontrado na API ASAAS"
+    }), {
+      status: 404,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  return new Response(JSON.stringify({
+    success: true,
+    customer: customerData
+  }), {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
 }
 
-// AIDEV-NOTE: Função principal da Edge Function
+// AIDEV-NOTE: Handler para requisições POST - webhooks ASAAS
+async function handlePostRequest(req: Request, tenantId: string) {
+  console.log("📨 Processando webhook POST do ASAAS");
+  
+  // 🔑 Buscar configuração ASAAS no banco
+  const { data: integrationData, error: integrationError } = await supabase
+    .from("tenant_integrations")
+    .select("id, webhook_token, config")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "asaas")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (integrationError || !integrationData) {
+    console.error("❌ Integração ASAAS não encontrada:", integrationError);
+    return new Response(JSON.stringify({
+      error: "Integração ASAAS não encontrada"
+    }), {
+      status: 404,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  // 🔐 Validação flexível de token
+  const accessToken = req.headers.get("asaas-access-token") || 
+                     req.headers.get("x-asaas-access-token") || 
+                     req.headers.get("x-webhook-token") || 
+                     req.headers.get("authorization")?.replace("Bearer ", "");
+  
+  console.log("📌 Token esperado:", integrationData.webhook_token);
+  console.log("📌 Token recebido:", accessToken);
+  
+  if (!accessToken || accessToken.trim() !== integrationData.webhook_token.trim()) {
+    return new Response(JSON.stringify({
+      error: "Não autorizado"
+    }), {
+      status: 401,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  // 📦 Parse do payload
+  const payload = await req.json();
+  console.log("📦 Payload recebido:", JSON.stringify(payload));
+  
+  const eventId = payload.event?.id || crypto.randomUUID();
+  const eventType = payload.event?.type || payload.event || "UNKNOWN";
+  const payment = payload.payment || {};
+  
+  // 🔍 Buscar dados do cliente na API ASAAS se customer_id estiver presente
+  let customerData = null;
+  if (payment.customer && integrationData.config?.api_key && integrationData.config?.api_url) {
+    customerData = await fetchAsaasCustomer(
+      payment.customer, 
+      integrationData.config.api_key,
+      integrationData.config.api_url
+    );
+  }
+
+  // ⚡️ Idempotência
+  const { data: existing } = await supabase
+    .from("integration_processed_events")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("integration_id", integrationData.id)
+    .eq("event_id", eventId)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(`⚠️ Evento duplicado ignorado: ${eventId}`);
+    return new Response(JSON.stringify({
+      message: "Evento já processado"
+    }), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  // 📝 Registrar evento processado
+  await supabase.from("integration_processed_events").insert({
+    tenant_id: tenantId,
+    integration_id: integrationData.id,
+    event_type: eventType,
+    event_id: eventId,
+    status: "processed",
+    payload,
+    processed_at: new Date().toISOString()
+  });
+
+  // 💾 Persistir dados na conciliation_staging
+  // AIDEV-NOTE: Garantir que id_externo sempre tenha um valor válido
+  const idExterno = payment.id || eventId || crypto.randomUUID();
+  
+  const { error: persistError } = await supabase.from("conciliation_staging").upsert({
+    tenant_id: tenantId,
+    origem: "asaas",
+    id_externo: idExterno,
+    asaas_customer_id: payment.customer,
+    asaas_subscription_id: payment.subscription,
+    valor_cobranca: payment.value,
+    valor_pago: payment.netValue ?? 0,
+    valor_original: payment.originalValue,
+    valor_liquido: payment.netValue,
+    valor_juros: payment.interest?.value ?? 0,
+    valor_multa: payment.fine?.value ?? 0,
+    valor_desconto: payment.discount?.value ?? 0,
+    status_externo: mapPaymentStatusToExternal(payment.status || "pending"),
+    status_conciliacao: "PENDING",
+    data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString() : null,
+    data_vencimento_original: payment.originalDueDate ? new Date(payment.originalDueDate).toISOString() : null,
+    data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,
+    data_pagamento_cliente: payment.clientPaymentDate ? new Date(payment.clientPaymentDate).toISOString() : null,
+    data_confirmacao: payment.confirmedDate ? new Date(payment.confirmedDate).toISOString() : null,
+    data_credito: payment.creditDate ? new Date(payment.creditDate).toISOString() : null,
+    data_credito_estimada: payment.estimatedCreditDate ? new Date(payment.estimatedCreditDate).toISOString() : null,
+    installment_number: payment.installmentNumber,
+    installment_count: payment.installmentCount,
+    invoice_url: payment.invoiceUrl?.replace(/,$/, '') || null, // AIDEV-NOTE: Remove vírgula no final da URL
+    bank_slip_url: payment.bankSlipUrl?.replace(/,$/, '') || null, // AIDEV-NOTE: Remove vírgula no final da URL
+    transaction_receipt_url: payment.transactionReceiptUrl?.replace(/,$/, '') || null,
+    payment_method: payment.billingType,
+    external_reference: payment.externalReference,
+    deleted_flag: payment.deleted ?? false,
+    anticipated_flag: payment.anticipated ?? false,
+    // AIDEV-NOTE: Campos do customer obtidos da API do Asaas
+    customer_name: customerData?.name || null,
+    customer_email: customerData?.email || null,
+    customer_phone: customerData?.phone || null,
+    customer_mobile_phone: customerData?.mobilePhone || null,
+    customer_document: customerData?.cpfCnpj || null,
+    customer_address: customerData?.address || null,
+    customer_address_number: customerData?.addressNumber || null,
+    customer_complement: customerData?.complement || null,
+    customer_city: customerData?.city || null,
+    customer_state: customerData?.state || null,
+    customer_province: customerData?.province || null,
+    customer_postal_code: customerData?.postalCode || null,
+    customer_country: customerData?.country || null,
+    webhook_event: eventType,
+    raw_data: payload,
+    updated_at: new Date().toISOString()
+  }, {
+    onConflict: "tenant_id,id_externo,origem",
+    ignoreDuplicates: false
+  });
+
+  if (persistError) {
+    console.error("❌ Erro ao persistir conciliação:", persistError);
+    return new Response(JSON.stringify({
+      error: "Erro ao persistir conciliação"
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  return new Response(JSON.stringify({
+    success: true,
+    message: "Webhook processado com sucesso",
+    eventType,
+    eventId
+  }), {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
+}
+
+// Função principal com JWT EXPLICITAMENTE DESATIVADO
 serve(async (req) => {
-  // AIDEV-NOTE: Configuração CORS para permitir webhooks
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders
+    });
   }
-
+  
+  // AIDEV-NOTE: Aceita POST (webhooks) e GET (consultas API)
+  if (req.method !== "POST" && req.method !== "GET") {
+    return new Response(JSON.stringify({
+      error: "Método não permitido. Use POST para webhooks ou GET para consultas."
+    }), {
+      status: 405,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+  
   try {
-    // AIDEV-NOTE: Validação do método HTTP
-    if (req.method !== 'POST') {
-      return new Response(
-        JSON.stringify({ error: 'Método não permitido' }),
-        { 
-          status: 405, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // AIDEV-NOTE: Leitura do payload
-    const rawPayload = await req.text()
-    let webhookPayload: AsaasWebhookPayload
-
-    try {
-      webhookPayload = JSON.parse(rawPayload)
-    } catch (parseError) {
-      console.error('Erro ao fazer parse do payload:', parseError)
-      return new Response(
-        JSON.stringify({ error: 'Payload inválido' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // AIDEV-NOTE: Validação da estrutura do payload
-    if (!webhookPayload.event || !webhookPayload.payment || !webhookPayload.payment.id) {
-      return new Response(
-        JSON.stringify({ error: 'Estrutura do payload inválida' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // AIDEV-NOTE: Inicialização do cliente Supabase
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // AIDEV-NOTE: Determinação do tenant_id
-    const tenantId = await determineTenantId(supabase, webhookPayload)
-    if (!tenantId) {
-      return new Response(
-        JSON.stringify({ error: 'Tenant não encontrado' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // AIDEV-NOTE: Validação da assinatura HMAC (se configurada)
-    const webhookSignature = req.headers.get('asaas-signature')
-    const webhookSecret = Deno.env.get('ASAAS_WEBHOOK_SECRET')
+    // 🔎 Extrair tenant da URL
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split("/");
+    const tenantId = pathParts[pathParts.length - 1];
+    console.log("📌 URL completa:", req.url);
+    console.log("📌 Tenant extraído:", tenantId);
+    console.log("📌 Método HTTP:", req.method);
     
-    if (webhookSecret && webhookSignature) {
-      const isValidSignature = await validateWebhookSignature(
-        rawPayload,
-        webhookSignature,
-        webhookSecret
-      )
-      
-      if (!isValidSignature) {
-        console.error('Assinatura do webhook inválida')
-        return new Response(
-          JSON.stringify({ error: 'Assinatura inválida' }),
-          { 
-            status: 401, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+    if (!tenantId || tenantId === "asaas-webhook") {
+      return new Response(JSON.stringify({
+        error: "Tenant ID inválido"
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+
+    // AIDEV-NOTE: Roteamento baseado no método HTTP
+    if (req.method === "GET") {
+      return await handleGetRequest(req, url);
+    } else if (req.method === "POST") {
+      return await handlePostRequest(req, tenantId);
+    }
+  } catch (err) {
+    console.error("❌ Erro inesperado:", err);
+    return new Response(JSON.stringify({
+      error: "Erro interno"
+    }), {
+      status: 500,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
       }
-    }
-
-    // AIDEV-NOTE: Extração dos dados do payment
-    const payment = webhookPayload.payment
-    
-    // AIDEV-NOTE: Busca dados do cliente ASAAS (opcional)
-    let customerData: AsaasCustomer | null = null
-    const asaasApiKey = Deno.env.get('ASAAS_API_KEY')
-    
-    if (asaasApiKey && payment.customer) {
-      customerData = await fetchAsaasCustomer(payment.customer, asaasApiKey)
-    }
-
-    // AIDEV-NOTE: Preparação dos dados para inserção
-    const stagingData = {
-      tenant_id: tenantId,
-      id_externo: payment.id,
-      asaas_customer_id: payment.customer,
-      asaas_subscription_id: payment.subscription || null,
-      
-      // Dados financeiros
-      valor: payment.originalValue || payment.value,
-      valor_pago: payment.status === 'RECEIVED' || payment.status === 'CONFIRMED' ? payment.value : null,
-      valor_liquido: payment.netValue || null,
-      taxa_asaas: payment.originalValue && payment.netValue 
-        ? (payment.originalValue - payment.netValue) 
-        : null,
-      
-      // Status e método
-      status: payment.status,
-      payment_method: payment.billingType,
-      
-      // Datas
-      data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString().split('T')[0] : null,
-      data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,
-      data_confirmacao: payment.confirmedDate ? new Date(payment.confirmedDate).toISOString() : null,
-      
-      // Dados do cliente
-      customer_name: customerData?.name || null,
-      customer_email: customerData?.email || null,
-      customer_document: customerData?.cpfCnpj || null,
-      customer_phone: customerData?.phone || customerData?.mobilePhone || null,
-      
-      // Dados adicionais
-      description: payment.description || null,
-      external_reference: payment.externalReference || null,
-      installment_number: payment.installmentNumber || null,
-      installment_count: payment.installmentCount || null,
-      
-      // Controle
-      raw_data: webhookPayload,
-      webhook_event: webhookPayload.event,
-      webhook_signature: webhookSignature || null,
-      processed: false,
-      processing_attempts: 0
-    }
-
-    // AIDEV-NOTE: Inserção com UPSERT para evitar duplicatas
-    const { data, error } = await supabase
-      .from('conciliation_staging')
-      .upsert(stagingData, {
-        onConflict: 'tenant_id,id_externo',
-        ignoreDuplicates: false
-      })
-      .select()
-
-    if (error) {
-      console.error('Erro ao inserir dados no staging:', error)
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro interno do servidor',
-          details: error.message 
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
-
-    // AIDEV-NOTE: Log de sucesso
-    console.log(`Webhook processado com sucesso:`, {
-      event: webhookPayload.event,
-      payment_id: payment.id,
-      tenant_id: tenantId,
-      status: payment.status,
-      value: payment.value
-    })
-
-    // AIDEV-NOTE: Resposta de sucesso
-    return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Webhook processado com sucesso',
-        payment_id: payment.id,
-        event: webhookPayload.event,
-        processed_at: new Date().toISOString()
-      }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
-  } catch (error) {
-    console.error('Erro não tratado na Edge Function:', error)
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Erro interno do servidor',
-        message: error.message 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    });
   }
-})
+}, {
+  // AIDEV-NOTE: JWT EXPLICITAMENTE DESATIVADO
+  verifyJWT: false
+});

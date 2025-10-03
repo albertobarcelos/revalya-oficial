@@ -148,9 +148,13 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   // FUNCTIONS
   // =====================================================
   
-  // AIDEV-NOTE: Função para aplicar filtros localmente - corrigida para usar ReconciliationFilters
+  // AIDEV-NOTE: Função para aplicar filtros localmente - corrigida para usar campos corretos dos dados
   const applyFilters = (data: ImportedMovement[], filters: FilterType): ImportedMovement[] => {
-    return data.filter(movement => {
+    console.group('🔍 DEBUG - Aplicação de Filtros');
+    console.log('📊 Total de registros antes dos filtros:', data.length);
+    console.log('🎛️ Filtros aplicados:', filters);
+    
+    const filteredData = data.filter(movement => {
       // Filtro por status - usando a propriedade correta
       if (filters.status !== 'ALL' && filters.status !== movement.reconciliationStatus) {
         return false;
@@ -171,7 +175,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         }
       }
       
-      // Filtro por termo de busca - usando a propriedade correta 'search'
+      // Filtro por termo de busca - usando múltiplos campos para busca incluindo novos campos
       if (filters.search && filters.search.trim()) {
         const searchLower = filters.search.toLowerCase();
         const matchesSearch = 
@@ -179,57 +183,180 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           movement.customerName?.toLowerCase().includes(searchLower) ||
           movement.customerDocument?.toLowerCase().includes(searchLower) ||
           movement.description?.toLowerCase().includes(searchLower) ||
-          movement.amount.toString().includes(searchLower);
+          movement.amount.toString().includes(searchLower) ||
+          movement.id?.toString().includes(searchLower) ||
+          // AIDEV-NOTE: Novos campos incluídos na busca geral
+          movement.customer_name?.toLowerCase().includes(searchLower) ||
+          movement.customer_document?.toLowerCase().includes(searchLower) ||
+          movement.external_reference?.toLowerCase().includes(searchLower) ||
+          movement.observacao?.toLowerCase().includes(searchLower) ||
+          movement.payment_method?.toLowerCase().includes(searchLower) ||
+          movement.origem?.toLowerCase().includes(searchLower) ||
+          movement.id_externo?.toLowerCase().includes(searchLower) ||
+          movement.valor_original?.toString().includes(searchLower) ||
+          movement.valor_pago?.toString().includes(searchLower) ||
+          movement.installment_number?.toString().includes(searchLower);
         
         if (!matchesSearch) return false;
       }
       
-      // Filtro por conta
+      // Filtro por conta - verificando se o campo account existe
       if (filters.accountFilter && filters.accountFilter.trim()) {
         const accountLower = filters.accountFilter.toLowerCase();
-        if (!movement.account?.toLowerCase().includes(accountLower)) {
+        // AIDEV-NOTE: Como não temos campo 'account' específico, vamos usar customerName como alternativa
+        if (!movement.customerName?.toLowerCase().includes(accountLower)) {
           return false;
         }
       }
       
-      // Filtro por data - usando dateFrom e dateTo
-      if (filters.dateFrom && movement.paymentDate) {
-        if (new Date(movement.paymentDate) < new Date(filters.dateFrom)) {
+      // Filtro por data - usando data de pagamento ou vencimento
+      if (filters.dateFrom) {
+        const filterDate = new Date(filters.dateFrom);
+        const paymentDate = movement.paymentDate ? new Date(movement.paymentDate) : null;
+        const dueDate = movement.dueDate ? new Date(movement.dueDate) : null;
+        
+        // Verifica se pelo menos uma das datas é maior ou igual à data inicial
+        if (paymentDate && paymentDate < filterDate && (!dueDate || dueDate < filterDate)) {
+          return false;
+        }
+        if (!paymentDate && dueDate && dueDate < filterDate) {
+          return false;
+        }
+        if (!paymentDate && !dueDate) {
           return false;
         }
       }
       
-      if (filters.dateTo && movement.paymentDate) {
-        if (new Date(movement.paymentDate) > new Date(filters.dateTo)) {
+      if (filters.dateTo) {
+        const filterDate = new Date(filters.dateTo);
+        const paymentDate = movement.paymentDate ? new Date(movement.paymentDate) : null;
+        const dueDate = movement.dueDate ? new Date(movement.dueDate) : null;
+        
+        // Verifica se pelo menos uma das datas é menor ou igual à data final
+        if (paymentDate && paymentDate > filterDate && (!dueDate || dueDate > filterDate)) {
+          return false;
+        }
+        if (!paymentDate && dueDate && dueDate > filterDate) {
           return false;
         }
       }
       
-      // Filtros específicos ASAAS
+      // Filtros específicos ASAAS - corrigidos para usar campos corretos
       if (filters.source === ReconciliationSource.ASAAS) {
+        // Filtro por Nosso Número (usando externalId ou id_externo)
         if (filters.asaasNossoNumero && filters.asaasNossoNumero.trim()) {
-          if (!movement.externalId?.includes(filters.asaasNossoNumero)) {
+          const nossoNumero = filters.asaasNossoNumero.toLowerCase();
+          if (!movement.externalId?.toLowerCase().includes(nossoNumero) && 
+              !movement.id?.toString().includes(nossoNumero)) {
             return false;
           }
         }
         
+        // Filtro por tipo de cobrança (billingType)
         if (filters.asaasBillingType && filters.asaasBillingType !== 'ALL') {
-          // Assumindo que temos essa propriedade no movimento
           if (movement.billingType !== filters.asaasBillingType) {
             return false;
           }
         }
         
+        // Filtro por status de pagamento ASAAS
         if (filters.asaasPaymentStatus && filters.asaasPaymentStatus !== 'ALL') {
-          // Assumindo que temos essa propriedade no movimento
-          if (movement.paymentStatus !== filters.asaasPaymentStatus) {
+          // Mapear status do ASAAS para nosso enum
+          let expectedStatus: PaymentStatus | null = null;
+          switch (filters.asaasPaymentStatus) {
+            case 'PENDING':
+              expectedStatus = PaymentStatus.PENDING;
+              break;
+            case 'RECEIVED':
+            case 'CONFIRMED':
+              expectedStatus = PaymentStatus.PAID;
+              break;
+            case 'OVERDUE':
+              expectedStatus = PaymentStatus.OVERDUE;
+              break;
+            case 'REFUNDED':
+              expectedStatus = PaymentStatus.CANCELLED;
+              break;
+          }
+          
+          if (expectedStatus && movement.paymentStatus !== expectedStatus) {
             return false;
           }
+        }
+      }
+
+      // AIDEV-NOTE: Novos filtros avançados baseados na tabela conciliation_staging
+      
+      // Filtro por método de pagamento
+      if (filters.paymentMethod && filters.paymentMethod !== 'ALL') {
+        if (movement.payment_method !== filters.paymentMethod) {
+          return false;
+        }
+      }
+
+      // Filtro por documento do cliente
+      if (filters.customerDocument && filters.customerDocument.trim()) {
+        const docFilter = filters.customerDocument.replace(/\D/g, ''); // Remove formatação
+        const customerDoc = movement.customer_document?.replace(/\D/g, '') || '';
+        if (!customerDoc.includes(docFilter)) {
+          return false;
+        }
+      }
+
+      // Filtro por valor original - mínimo
+      if (filters.valorOriginalMin !== undefined && filters.valorOriginalMin !== null) {
+        if ((movement.valor_original || 0) < filters.valorOriginalMin) {
+          return false;
+        }
+      }
+
+      // Filtro por valor original - máximo
+      if (filters.valorOriginalMax !== undefined && filters.valorOriginalMax !== null) {
+        if ((movement.valor_original || 0) > filters.valorOriginalMax) {
+          return false;
+        }
+      }
+
+      // Filtro por status processamento
+      if (filters.processed && filters.processed !== 'ALL') {
+        const isProcessed = filters.processed === 'true';
+        if (movement.processed !== isProcessed) {
+          return false;
+        }
+      }
+
+      // Filtro por status conciliação
+      if (filters.reconciled && filters.reconciled !== 'ALL') {
+        const isReconciled = filters.reconciled === 'true';
+        if (movement.reconciled !== isReconciled) {
+          return false;
+        }
+      }
+
+      // Filtro por número da parcela
+      if (filters.installmentNumber !== undefined && filters.installmentNumber !== null) {
+        if (movement.installment_number !== filters.installmentNumber) {
+          return false;
+        }
+      }
+
+      // Filtro por referência externa
+      if (filters.externalReference && filters.externalReference.trim()) {
+        const refFilter = filters.externalReference.toLowerCase();
+        const externalRef = movement.external_reference?.toLowerCase() || '';
+        if (!externalRef.includes(refFilter)) {
+          return false;
         }
       }
       
       return true;
     });
+    
+    console.log('📊 Total de registros após filtros:', filteredData.length);
+    console.log('📈 Taxa de filtro:', `${((filteredData.length / data.length) * 100).toFixed(1)}%`);
+    console.groupEnd();
+    
+    return filteredData;
   };
 
   // AIDEV-NOTE: Função para calcular indicadores baseados nos dados filtrados - corrigida
@@ -253,9 +380,10 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   };
 
   // AIDEV-NOTE: Função para mapear dados do banco para o formato ImportedMovement
+  // Baseado na estrutura real da tabela conciliation_staging conforme supabase-tabela.md
   const mapStagingDataToImportedMovement = (stagingData: any[]): ImportedMovement[] => {
     return stagingData.map(item => {
-      // AIDEV-NOTE: Mapear paymentStatus do banco para enum válido
+      // AIDEV-NOTE: Mapear payment_status do banco para enum válido (campo existe na tabela)
       let paymentStatus = PaymentStatus.PENDING;
       if (item.payment_status) {
         switch (item.payment_status.toUpperCase()) {
@@ -277,6 +405,25 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         }
       }
 
+      // AIDEV-NOTE: Mapear status_conciliacao corrigido após migração - usar valores do enum
+      let reconciliationStatus = ReconciliationStatus.PENDING;
+      if (item.status_conciliacao) {
+        switch (item.status_conciliacao) {
+          case 'RECONCILED':
+            reconciliationStatus = ReconciliationStatus.RECONCILED;
+            break;
+          case 'DIVERGENT':
+            reconciliationStatus = ReconciliationStatus.DIVERGENT;
+            break;
+          case 'CANCELLED':
+            reconciliationStatus = ReconciliationStatus.CANCELLED;
+            break;
+          case 'PENDING':
+          default:
+            reconciliationStatus = ReconciliationStatus.PENDING;
+        }
+      }
+
       return {
         id: item.id,
         externalId: item.id_externo,
@@ -284,11 +431,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         chargeAmount: item.valor_cobranca || 0,
         paidAmount: item.valor_pago || 0,
         source: item.origem as ReconciliationSource,
-        reconciliationStatus: item.status_conciliacao === 'conciliado' 
-          ? ReconciliationStatus.RECONCILED 
-          : item.status_conciliacao === 'divergente'
-          ? ReconciliationStatus.DIVERGENT
-          : ReconciliationStatus.PENDING,
+        reconciliationStatus,
         externalStatus: item.status_externo,
         contractId: item.contrato_id,
         chargeId: item.cobranca_id,
@@ -298,23 +441,122 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         description: item.observacao,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
-        // Campos computados
+        // Campos computados baseados na estrutura real
         hasContract: !!item.contrato_id,
-        customerName: '', // Será preenchido se necessário
-        customerDocument: '', // Será preenchido se necessário
-        account: '', // Será preenchido se necessário
+        customerName: item.customer_name || '',
+        customerDocument: item.customer_document || '',
+        account: item.external_reference || '',
         tenantId: currentTenant?.id || '',
-        // Campos específicos ASAAS (se aplicável)
-        billingType: item.billing_type,
-        paymentStatus
+        // Campos específicos disponíveis na tabela
+        billingType: item.payment_method || '',
+        paymentStatus,
+        // Campos adicionais disponíveis na estrutura real
+        originalValue: item.valor_original || 0,
+        netValue: item.valor_liquido || 0,
+        interestValue: item.valor_juros || 0,
+        fineValue: item.valor_multa || 0,
+        discountValue: item.valor_desconto || 0,
+        // Campos ASAAS disponíveis
+        asaasCustomerId: item.asaas_customer_id || '',
+        asaasSubscriptionId: item.asaas_subscription_id || '',
+        // Campos de cliente disponíveis
+        customerEmail: item.customer_email || '',
+        customerPhone: item.customer_phone || '',
+        customerMobilePhone: item.customer_mobile_phone || '',
+        customerAddress: item.customer_address || '',
+        customerAddressNumber: item.customer_address_number || '',
+        customerComplement: item.customer_complement || '',
+        customerProvince: item.customer_province || '',
+        customerCity: item.customer_city || '',
+        customerState: item.customer_state || '',
+        customerPostalCode: item.customer_postal_code || '',
+        customerCountry: item.customer_country || '',
+        // Campos de parcela
+        installmentNumber: item.installment_number || 0,
+        installmentCount: item.installment_count || 0,
+        // URLs disponíveis
+        invoiceUrl: item.invoice_url || '',
+        bankSlipUrl: item.bank_slip_url || '',
+        transactionReceiptUrl: item.transaction_receipt_url || '',
+        // Campos de processamento
+        processed: item.processed || false,
+        processedAt: item.processed_at,
+        processingAttempts: item.processing_attempts || 0,
+        processingError: item.processing_error || '',
+        // Campos de conciliação
+        reconciled: item.reconciled || false,
+        reconciledAt: item.reconciled_at,
+        reconciledBy: item.reconciled_by,
+        reconciliationNotes: item.reconciliation_notes || '',
+        // Campos de auditoria
+        createdBy: item.created_by,
+        updatedBy: item.updated_by,
+        // Dados brutos
+        rawData: item.raw_data || {},
+        webhookEvent: item.webhook_event || '',
+        webhookSignature: item.webhook_signature || ''
       };
     });
   };
 
   const loadReconciliationData = async () => {
+    if (!currentTenant?.id) {
+      console.error('Tenant não encontrado');
+      return;
+    }
+
     setIsLoading(true);
+    const startTime = performance.now();
+    
     try {
-      // AIDEV-NOTE: Consulta direta ao Supabase - sem necessidade de endpoint Next.js
+      // AIDEV-NOTE: Garantir que o contexto de autenticação está ativo e propagado
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('❌ Sessão de autenticação não encontrada');
+        toast({
+          title: "Erro de Autenticação",
+          description: "Sessão expirada. Faça login novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('🔐 Configurando contexto - Tenant:', currentTenant.id, 'User:', session.user.id);
+      console.log('🔑 Token de acesso presente:', !!session.access_token);
+      console.log('🔑 User ID da sessão:', session.user.id);
+      
+      // AIDEV-NOTE: Configurar contexto de tenant obrigatório para RLS
+      const contextResult = await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: currentTenant.id,
+        p_user_id: session.user.id
+      });
+
+      // AIDEV-NOTE: Usar função de debug para verificar contexto de autenticação
+      const { data: authDebug } = await supabase.rpc('debug_auth_context');
+      console.log('🔍 Debug auth context:', authDebug);
+
+      // AIDEV-NOTE: Tentar atualizar JWT com tenant atual
+      const { data: jwtUpdate } = await supabase.rpc('update_user_jwt_tenant', {
+        p_user_id: session.user.id,
+        p_tenant_id: currentTenant.id
+      });
+      console.log('🔑 JWT Update result:', jwtUpdate);
+
+      // AIDEV-NOTE: Refresh da sessão para propagar contexto JWT atualizado
+      if (jwtUpdate?.success) {
+        console.log('🔄 Fazendo refresh da sessão para propagar JWT...');
+        await supabase.auth.refreshSession();
+        
+        // Aguardar um momento para garantir propagação
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Verificar contexto após refresh
+        const { data: authDebugAfter } = await supabase.rpc('debug_auth_context');
+        console.log('🔍 Debug auth context após refresh:', authDebugAfter);
+      }
+
+      // AIDEV-NOTE: Consulta completa incluindo todos os campos necessários para filtros ASAAS
+      console.log('🔍 Executando query na tabela conciliation_staging...');
       const { data, error } = await supabase
         .from('conciliation_staging')
         .select(`
@@ -332,11 +574,66 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           data_pagamento,
           observacao,
           created_at,
-          updated_at
+          updated_at,
+          asaas_customer_id,
+          asaas_subscription_id,
+          customer_name,
+          customer_document,
+          customer_email,
+          customer_phone,
+          customer_mobile_phone,
+          customer_address,
+          customer_address_number,
+          customer_complement,
+          customer_province,
+          customer_postal_code,
+          customer_city,
+          customer_state,
+          customer_country,
+          external_reference,
+          payment_method,
+          installment_number,
+          installment_count,
+          invoice_url,
+          bank_slip_url,
+          transaction_receipt_url,
+          webhook_event,
+          webhook_signature,
+          processed,
+          processed_at,
+          processing_attempts,
+          processing_error,
+          reconciled,
+          reconciled_at,
+          reconciled_by,
+          reconciliation_notes,
+          created_by,
+          updated_by,
+          valor_original,
+          valor_liquido,
+          valor_juros,
+          valor_multa,
+          valor_desconto,
+          status_anterior,
+          deleted_flag,
+          anticipated_flag,
+          data_vencimento_original,
+          data_pagamento_cliente,
+          data_confirmacao,
+          data_credito,
+          data_credito_estimada,
+          raw_data
         `)
-        .eq('tenant_id', currentTenant?.id)
+        .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
+
+      console.log('🔍 Query executada - Error:', error);
+      console.log('🔍 Query executada - Data length:', data?.length);
+      console.log('🔍 Query executada - Primeiros 2 registros:', data?.slice(0, 2));
+
+      const endTime = performance.now();
+      const queryTime = endTime - startTime;
       
       if (error) {
         throw error;
@@ -344,6 +641,47 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
       
       // AIDEV-NOTE: Mapear dados do banco para o formato correto
       const mappedMovements = mapStagingDataToImportedMovement(data || []);
+      
+      // AIDEV-NOTE: Debug de quantidade de dados consultados
+      console.group('🔍 DEBUG - Dados de Conciliação Carregados');
+      console.log(`📊 Total de registros consultados: ${data?.length || 0}`);
+      console.log(`⏱️ Tempo de consulta: ${queryTime.toFixed(2)}ms`);
+      console.log(`🗂️ Registros mapeados: ${mappedMovements.length}`);
+      
+      // Análise dos dados por origem
+      const origemStats = data?.reduce((acc, item) => {
+        acc[item.origem] = (acc[item.origem] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+      console.log('📈 Distribuição por origem:', origemStats);
+      
+      // Análise dos dados por status
+      const statusStats = data?.reduce((acc, item) => {
+        acc[item.status_conciliacao] = (acc[item.status_conciliacao] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+      console.log('📊 Distribuição por status:', statusStats);
+      
+      // Análise dos dados por método de pagamento
+      const paymentMethodStats = data?.reduce((acc, item) => {
+        const method = item.payment_method || 'N/A';
+        acc[method] = (acc[method] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+      console.log('💳 Distribuição por método de pagamento:', paymentMethodStats);
+      
+      // Verificação de campos importantes para filtros
+      const fieldsAnalysis = {
+        comCustomerName: data?.filter(item => item.customer_name).length || 0,
+        comCustomerDocument: data?.filter(item => item.customer_document).length || 0,
+        comExternalReference: data?.filter(item => item.external_reference).length || 0,
+        comDataPagamento: data?.filter(item => item.data_pagamento).length || 0,
+        comContratoId: data?.filter(item => item.contrato_id).length || 0,
+        comAsaasPaymentId: data?.filter(item => item.asaas_payment_id).length || 0,
+      };
+      console.log('🔍 Análise de campos para filtros:', fieldsAnalysis);
+      console.groupEnd();
+      
       setMovements(mappedMovements);
       
       toast({
@@ -387,37 +725,42 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     try {
       setIsLoading(true);
       
+      // AIDEV-NOTE: Configurar contexto de tenant antes da atualização (segurança multi-tenant)
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant?.id 
+      });
+      
       logAction('reconciliation_action', { 
         action, 
         movementId, 
         tenant: currentTenant?.name 
       });
 
-      // AIDEV-NOTE: Atualização direta no Supabase - sem necessidade de endpoint Next.js
+      // AIDEV-NOTE: Atualização direta no Supabase usando valores corretos do enum
       let updateData: any = {
         updated_at: new Date().toISOString()
       };
 
-      // Definir status baseado na ação
+      // AIDEV-NOTE: Definir status baseado na ação usando valores do enum corretos
       switch (action) {
         case 'vincular_contrato':
-          updateData.status_conciliacao = 'vinculado';
+          updateData.status_conciliacao = 'RECONCILED';
           updateData.observacao = 'Contrato vinculado automaticamente';
           break;
         case 'criar_avulsa':
-          updateData.status_conciliacao = 'avulsa_criada';
+          updateData.status_conciliacao = 'RECONCILED';
           updateData.observacao = 'Cobrança avulsa criada';
           break;
         case 'marcar_divergente':
-          updateData.status_conciliacao = 'divergente';
+          updateData.status_conciliacao = 'DIVERGENT';
           updateData.observacao = 'Marcado como divergente';
           break;
         case 'aprovar':
-          updateData.status_conciliacao = 'aprovado';
+          updateData.status_conciliacao = 'RECONCILED';
           updateData.observacao = 'Movimento aprovado';
           break;
         case 'rejeitar':
-          updateData.status_conciliacao = 'rejeitado';
+          updateData.status_conciliacao = 'CANCELLED';
           updateData.observacao = 'Movimento rejeitado';
           break;
       }

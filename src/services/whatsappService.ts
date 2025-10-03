@@ -1430,6 +1430,93 @@ class WhatsAppService {
       return false;
     }
   }
+
+  /**
+   * Obtém uma instância ativa para envio de mensagens
+   */
+  getActiveInstance = async (): Promise<IWhatsAppInstance | null> => {
+    try {
+      const instances = await this.listInstances();
+      const activeInstance = instances.find(instance => 
+        instance.status === WHATSAPP.CONNECTION_STATES.CONNECTED ||
+        instance.status === WHATSAPP.CONNECTION_STATES.READY
+      );
+      
+      if (activeInstance) {
+        return activeInstance;
+      }
+      
+      // Se não encontrar instância ativa, tentar a primeira disponível
+      if (instances.length > 0) {
+        return instances[0];
+      }
+      
+      return null;
+    } catch (error) {
+      logService.error(this.MODULE_NAME, 'Erro ao buscar instância ativa:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Envia mensagens em lote para vários destinatários
+   */
+  sendBulkMessages = async (data: { messages: any[], templateId: string }): Promise<any> => {
+    try {
+      logService.info(this.MODULE_NAME, `Enviando ${data.messages.length} mensagens em lote`);
+      
+      // Obter instância ativa
+      const instance = await this.getActiveInstance();
+      if (!instance) {
+        throw new Error('Nenhuma instância WhatsApp ativa disponível');
+      }
+      
+      const results = [];
+      const errors = [];
+      
+      // Processar mensagens em lote com rate limiting
+      for (const message of data.messages) {
+        try {
+          // Extrair dados necessários
+          const phone = message.customer?.phone?.replace(/\D/g, '') || '';
+          const text = message.template?.message || '';
+          
+          if (!phone || !text) {
+            errors.push({ error: 'Dados incompletos', message });
+            continue;
+          }
+          
+          // Enviar mensagem
+          await rateLimitService.wait('whatsapp_message');
+          const result = await this.sendTextMessage(instance.instanceName, phone, text);
+          results.push(result);
+          
+        } catch (error) {
+          errors.push({ error, message });
+          logService.error(this.MODULE_NAME, 'Erro ao enviar mensagem individual:', { error });
+        }
+      }
+      
+      return {
+        success: true,
+        total: data.messages.length,
+        sent: results.length,
+        failed: errors.length,
+        errors: errors.length > 0 ? errors : undefined
+      };
+      
+    } catch (error) {
+      logService.error(this.MODULE_NAME, 'Erro ao enviar mensagens em lote:', { error });
+      throw error;
+    }
+  }
+  
+  /**
+   * Envia mensagens usando o formato antigo do webhook
+   */
+  sendMessages = async (data: { messages: any[], templateId: string }): Promise<any> => {
+    return this.sendBulkMessages(data);
+  }
 }
 
 export const whatsappService = new WhatsAppService();

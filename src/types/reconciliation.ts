@@ -57,29 +57,104 @@ export enum ReconciliationAction {
 
 /**
  * Movimentação importada de fonte externa - Estrutura da tabela conciliation_staging
+ * AIDEV-NOTE: Interface atualizada para corresponder exatamente à estrutura da tabela conforme supabase-tabela.md
  */
 export interface ImportedMovement {
+  // AIDEV-NOTE: Campos principais obrigatórios
   id: string;                            // Chave primária interna
+  tenant_id: string;                     // ID do tenant (obrigatório)
   origem: ReconciliationSource;          // GET → Asaas, Cora, Itaú etc.
   id_externo: string;                    // ex.: charge_id Asaas
   valor_cobranca?: number;               // Valor interno, se houver
   valor_pago: number;                    // Valor importado, real
   status_externo: string;                // pendente, pago, cancelado
   status_conciliacao: ReconciliationStatus; // não conciliado, conciliado, divergente
+  
+  // AIDEV-NOTE: Campos de relacionamento
   contrato_id?: string;                  // nullable, se vinculado
   cobranca_id?: string;                  // nullable, se vinculada a cobrança existente
+  
+  // AIDEV-NOTE: Campos financeiros adicionais
   juros_multa_diferenca: number;         // decimal
+  valor_original?: number;               // Valor original da cobrança
+  valor_liquido?: number;                // Valor líquido recebido
+  valor_juros?: number;                  // Valor de juros
+  valor_multa?: number;                  // Valor de multa
+  valor_desconto?: number;               // Valor de desconto
+  
+  // AIDEV-NOTE: Campos de datas
   data_vencimento?: string;              // Data de vencimento
   data_pagamento?: string;               // Data de pagamento
+  data_vencimento_original?: string;     // Data de vencimento original
+  data_pagamento_cliente?: string;       // Data de pagamento informada pelo cliente
+  data_credito?: string;                 // Data de crédito
+  data_confirmacao?: string;             // Data de confirmação
+  
+  // AIDEV-NOTE: Campos de observação e referência
   observacao?: string;                   // Texto livre do usuário
+  external_reference?: string;           // Referência externa
+  
+  // AIDEV-NOTE: Campos ASAAS específicos (apenas os que existem na tabela)
+  asaas_customer_id?: string;            // ID do cliente no ASAAS
+  asaas_subscription_id?: string;        // ID da assinatura no ASAAS
+  
+  // AIDEV-NOTE: Campos de método de pagamento
+  payment_method?: string;               // Método de pagamento
+  billing_type?: string;                 // Tipo de cobrança
+  
+  // AIDEV-NOTE: Campos de status e flags
+  status_anterior?: string;              // Status anterior
+  deleted_flag?: boolean;                // Flag de exclusão
+  anticipated_flag?: boolean;            // Flag de antecipação
+  
+  // AIDEV-NOTE: Campos do cliente
+  customer_name?: string;                // Nome do cliente
+  customer_email?: string;               // Email do cliente
+  customer_document?: string;            // Documento do cliente (CPF/CNPJ)
+  customer_phone?: string;               // Telefone do cliente
+  customer_address?: string;             // Endereço do cliente
+  customer_city?: string;                // Cidade do cliente
+  customer_state?: string;               // Estado do cliente
+  customer_postal_code?: string;         // CEP do cliente
+  customer_country?: string;             // País do cliente
+  
+  // AIDEV-NOTE: Campos de parcelamento
+  installment_number?: number;           // Número da parcela
+  installment_count?: number;            // Total de parcelas
+  
+  // AIDEV-NOTE: URLs e documentos
+  invoice_url?: string;                  // URL da fatura
+  bank_slip_url?: string;                // URL do boleto
+  transaction_receipt_url?: string;      // URL do comprovante
+  
+  // AIDEV-NOTE: Campos de webhook
+  webhook_event?: string;                // Evento do webhook
+  webhook_signature?: string;            // Assinatura do webhook
+  
+  // AIDEV-NOTE: Dados brutos e processamento
+  raw_data?: any;                        // Dados brutos do webhook/API
+  processed?: boolean;                   // Flag de processamento
+  processed_at?: string;                 // Data de processamento
+  processing_attempts?: number;          // Tentativas de processamento
+  processing_error?: string;             // Erro de processamento
+  
+  // AIDEV-NOTE: Campos de conciliação
+  reconciled?: boolean;                  // Flag de conciliação
+  reconciled_at?: string;                // Data de conciliação
+  reconciled_by?: string;                // Usuário que conciliou
+  reconciliation_notes?: string;         // Notas da conciliação
+  
+  // AIDEV-NOTE: Campos de auditoria
   created_at: string;                    // Timestamp de criação
   updated_at: string;                    // Timestamp de atualização
+  created_by?: string;                   // Usuário que criou
+  updated_by?: string;                   // Usuário que atualizou
   
   // AIDEV-NOTE: Campos computados para compatibilidade com componentes existentes
-  tenantId?: string;                     // Derivado do contexto
+  tenantId?: string;                     // Derivado do tenant_id
   hasContract?: boolean;                 // Derivado de contrato_id
-  customerName?: string;                 // Derivado de outras tabelas
-  customerDocument?: string;             // Derivado de outras tabelas
+  customerName?: string;                 // Alias para customer_name
+  customerDocument?: string;             // Alias para customer_document
   description?: string;                  // Derivado de observacao
 }
 
@@ -99,6 +174,20 @@ export interface ReconciliationFilters {
   asaasNossoNumero?: string;            // Filtro por nosso número ASAAS
   asaasBillingType?: string;            // Filtro por tipo de cobrança ASAAS
   asaasPaymentStatus?: string;          // Filtro por status de pagamento ASAAS
+  
+  // AIDEV-NOTE: Novos filtros baseados na tabela conciliation_staging
+  paymentMethod?: string | 'ALL';       // Filtro por método de pagamento (PIX, BOLETO, etc.)
+  customerDocument?: string;            // Filtro por documento do cliente
+  valorOriginalMin?: number;            // Valor original mínimo
+  valorOriginalMax?: number;            // Valor original máximo
+  statusAnterior?: string | 'ALL';      // Filtro por status anterior
+  deletedFlag?: boolean | 'ALL';        // Filtro por registros deletados
+  anticipatedFlag?: boolean | 'ALL';    // Filtro por registros antecipados
+  processed?: boolean | 'ALL';          // Filtro por registros processados
+  reconciled?: boolean | 'ALL';         // Filtro por registros conciliados
+  hasProcessingError?: boolean | 'ALL'; // Filtro por registros com erro de processamento
+  installmentNumber?: number;           // Filtro por número da parcela
+  externalReference?: string;           // Filtro por referência externa
 }
 
 /**

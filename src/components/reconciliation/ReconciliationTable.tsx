@@ -137,6 +137,17 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     };
 
     const config = statusConfig[status];
+    
+    // AIDEV-NOTE: Verificação de segurança para evitar erro quando status não está mapeado
+    if (!config) {
+      console.warn(`PaymentStatus não mapeado: ${status}`);
+      return (
+        <Badge variant="outline" className="bg-gray-100 text-gray-800">
+          {status || 'Desconhecido'}
+        </Badge>
+      );
+    }
+    
     return (
       <Badge variant="outline" className={config.className}>
         {config.label}
@@ -162,6 +173,16 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     };
 
     const config = sourceConfig[source];
+    
+    // AIDEV-NOTE: Verificação de segurança para evitar erro quando source não está mapeado
+    if (!config) {
+      console.warn(`ReconciliationSource não mapeado: ${source}`);
+      return (
+        <Badge variant="outline" className="bg-gray-100 text-gray-800">
+          {source || 'Desconhecido'}
+        </Badge>
+      );
+    }
     
     // Para Asaas e Cora, mostrar apenas a logo
     if (config.logo && (source === ReconciliationSource.ASAAS || source === ReconciliationSource.CORA)) {
