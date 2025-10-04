@@ -48,6 +48,7 @@ export enum ReconciliationAction {
   LINK_TO_CONTRACT = 'LINK_TO_CONTRACT',           // Vincular a contrato existente
   CREATE_STANDALONE = 'CREATE_STANDALONE',         // Criar cobrança avulsa
   COMPLEMENT_EXISTING = 'COMPLEMENT_EXISTING',     // Complementar cobrança existente
+  REGISTER_CUSTOMER = 'REGISTER_CUSTOMER',         // Cadastrar novo cliente
   DELETE_IMPORTED = 'DELETE_IMPORTED'              // Excluir item importado
 }
 
@@ -73,6 +74,8 @@ export interface ImportedMovement {
   // AIDEV-NOTE: Campos de relacionamento
   contrato_id?: string;                  // nullable, se vinculado
   cobranca_id?: string;                  // nullable, se vinculada a cobrança existente
+  charge_id?: string;                    // nullable, referência à tabela charges quando importado
+  imported_at?: string;                  // nullable, timestamp de quando foi importado para charges
   
   // AIDEV-NOTE: Campos financeiros adicionais
   juros_multa_diferenca: number;         // decimal
@@ -262,6 +265,26 @@ export interface ComplementExistingChargeData {
     paymentDate: boolean;
     status: boolean;
   };
+}
+
+/**
+ * Dados para cadastrar novo cliente
+ */
+export interface RegisterCustomerData {
+  movementId: string;
+  name: string;
+  cpfCnpj: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  company?: string;
+  observations?: string;
 }
 
 /**

@@ -15,7 +15,10 @@ import {
   ExternalLink,
   MoreHorizontal,
   Eye,
-  FileText
+  FileText,
+  UserPlus,
+  Upload,
+  CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -308,6 +311,13 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED || !movement.chargeId
       },
       {
+        type: ReconciliationAction.REGISTER_CUSTOMER,
+        label: 'Cadastrar Cliente',
+        icon: UserPlus,
+        variant: 'outline' as const,
+        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+      },
+      {
         type: ReconciliationAction.DELETE_IMPORTED,
         label: 'Excluir Item',
         icon: Trash2,
@@ -532,7 +542,16 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-center">
-                        {getStatusBadge(movement.reconciliationStatus)}
+                        <div className="flex items-center justify-center gap-2">
+                          {getStatusBadge(movement.reconciliationStatus)}
+                          {/* AIDEV-NOTE: Indicador visual de importação para charges */}
+                          {movement.charge_id && movement.imported_at && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3 text-green-600" />
+                              <span className="text-xs text-green-600 font-medium">Importado</span>
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-center">
@@ -627,6 +646,33 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                               </div>
                             </div>
                             
+                            {/* AIDEV-NOTE: Seção de status de importação */}
+                            {movement.charge_id && movement.imported_at && (
+                              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                                <h4 className="font-medium text-green-800 mb-2 flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Status de Importação
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                                  <div>
+                                    <span className="font-medium text-slate-600">ID da Cobrança:</span>
+                                    <p className="font-mono text-green-700">{movement.charge_id}</p>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-slate-600">Data de Importação:</span>
+                                    <p className="text-green-700">{formatDate(movement.imported_at)}</p>
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-slate-600">Status:</span>
+                                    <div className="flex items-center gap-1">
+                                      <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                      <span className="text-green-600 font-medium">Importado com Sucesso</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
                             {/* AIDEV-NOTE: Seção específica para dados ASAAS */}
                             {movement.source === ReconciliationSource.ASAAS && (
                               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
@@ -648,9 +694,11 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                   </div>
                                   <div>
                                     <span className="font-medium text-slate-600">Tipo de Cobrança:</span>
-                                    <p>{movement.description?.includes('PIX') ? 'PIX' : 
+                                    <p>
+                                      {movement.description?.includes('PIX') ? 'PIX' : 
                                        movement.description?.includes('BOLETO') ? 'BOLETO' : 
-                                       movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}</p>
+                                       movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
+                                    </p>
                                   </div>
                                 </div>
                               </div>

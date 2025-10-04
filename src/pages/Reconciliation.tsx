@@ -18,7 +18,8 @@ import {
   CheckCircle,
   Clock,
   FileText,
-  TrendingUp
+  TrendingUp,
+  Upload
 } from 'lucide-react';
 
 // Components
@@ -106,6 +107,9 @@ const ReconciliationPage: React.FC = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
+
+  // Selection state for bulk import
+  const [selectedMovements, setSelectedMovements] = useState<string[]>([]);
 
   // =====================================================
   // COMPUTED VALUES
@@ -245,6 +249,68 @@ const ReconciliationPage: React.FC = () => {
       recordsCount: filteredMovements.length,
       filters: filters
     });
+  };
+
+  // AIDEV-NOTE: Handler para seleção múltipla de movimentações
+  const handleSelectionChange = (movementIds: string[]) => {
+    setSelectedMovements(movementIds);
+  };
+
+  // AIDEV-NOTE: Handler para importação em lote para cobranças
+  const handleBulkImportToCharges = async () => {
+    if (selectedMovements.length === 0) {
+      toast({
+        title: "Nenhum item selecionado",
+        description: "Selecione pelo menos uma movimentação para importar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // AIDEV-NOTE: Em produção, aqui seria feita a chamada para a API de importação em lote
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Simular importação - marcar como importado
+      setMovements(prev => prev.map(movement => {
+        if (selectedMovements.includes(movement.id)) {
+          return {
+            ...movement,
+            charge_id: `CHG-${Date.now()}-${movement.id.slice(-4)}`, // Simular ID da cobrança
+            imported_at: new Date().toISOString(),
+            reconciliationStatus: ReconciliationStatus.RECONCILED
+          };
+        }
+        return movement;
+      }));
+      
+      // Limpar seleção
+      setSelectedMovements([]);
+      
+      toast({
+        title: "Importação concluída",
+        description: `${selectedMovements.length} movimentações foram importadas para cobranças com sucesso.`,
+        variant: "default"
+      });
+
+      logAction('USER_ACTION', {
+        action: 'bulk_import_to_charges',
+        resource: 'reconciliation',
+        movementIds: selectedMovements,
+        count: selectedMovements.length
+      });
+      
+    } catch (error) {
+      toast({
+        title: "Erro na importação",
+        description: "Não foi possível importar as movimentações. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleReconciliationAction = async (
@@ -430,6 +496,13 @@ const ReconciliationPage: React.FC = () => {
             <span>movimentações encontradas</span>
           </Badge>
           
+          {selectedMovements.length > 0 && (
+            <Badge variant="secondary" className="flex items-center space-x-1">
+              <span>{selectedMovements.length}</span>
+              <span>selecionadas</span>
+            </Badge>
+          )}
+          
           {filters.status === ReconciliationStatus.PENDING && (
             <Badge variant="secondary" className="flex items-center space-x-1">
               <Clock className="h-3 w-3" />
@@ -452,11 +525,24 @@ const ReconciliationPage: React.FC = () => {
           )}
         </div>
 
-        {filteredMovements.length > 0 && (
-          <div className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
-          </div>
-        )}
+        <div className="flex items-center space-x-2">
+          {selectedMovements.length > 0 && (
+            <Button
+              onClick={handleBulkImportToCharges}
+              disabled={isLoading}
+              className="flex items-center space-x-2"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Importar para Cobranças</span>
+            </Button>
+          )}
+
+          {filteredMovements.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              Página {currentPage} de {totalPages}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Table */}
@@ -466,11 +552,18 @@ const ReconciliationPage: React.FC = () => {
             movements={paginatedMovements}
             isLoading={isLoading || isRefreshing}
             onAction={handleReconciliationAction}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            totalItems={filteredMovements.length}
+            selectedMovements={selectedMovements}
+            onSelectionChange={handleSelectionChange}
+            pagination={{
+              page: currentPage,
+              limit: itemsPerPage,
+              total: filteredMovements.length,
+              onPageChange: setCurrentPage,
+              onLimitChange: (limit: number) => {
+                setItemsPerPage(limit);
+                setCurrentPage(1);
+              }
+            }}
           />
         </CardContent>
       </Card>

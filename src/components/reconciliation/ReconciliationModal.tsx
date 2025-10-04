@@ -34,6 +34,8 @@ import {
 import ReconciliationFilters from './ReconciliationFilters';
 import ReconciliationHeaderIndicators from './ReconciliationHeaderIndicators';
 import ReconciliationTable from './ReconciliationTable';
+import ReconciliationActionModal from './ReconciliationActionModal';
+import CustomerValidationGuard from './CustomerValidationGuard';
 
 // Types
 import { 
@@ -77,6 +79,13 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   const [filteredMovements, setFilteredMovements] = useState<ImportedMovement[]>([]);
   const [indicators, setIndicators] = useState<IndicatorsType | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Estados para modal de ações
+  const [actionModal, setActionModal] = useState<{
+    isOpen: boolean;
+    action: ReconciliationAction | null;
+    movement: ImportedMovement | null;
+  }>({ isOpen: false, action: null, movement: null });
   
   // AIDEV-NOTE: Estado para controlar colapso do sidebar de filtros
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -382,7 +391,19 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   // AIDEV-NOTE: Função para mapear dados do banco para o formato ImportedMovement
   // Baseado na estrutura real da tabela conciliation_staging conforme supabase-tabela.md
   const mapStagingDataToImportedMovement = (stagingData: any[]): ImportedMovement[] => {
-    return stagingData.map(item => {
+    console.log('🔍 DEBUG - Iniciando mapeamento de dados:', stagingData.length, 'registros');
+    
+    return stagingData.map((item, index) => {
+      // Debug específico para os primeiros registros
+      if (index < 3) {
+        console.log(`🔍 DEBUG - Registro ${index}:`, {
+          id: item.id,
+          customer_name: item.customer_name,
+          customer_document: item.customer_document,
+          valor_pago: item.valor_pago,
+          origem: item.origem
+        });
+      }
       // AIDEV-NOTE: Mapear payment_status do banco para enum válido (campo existe na tabela)
       let paymentStatus = PaymentStatus.PENDING;
       if (item.payment_status) {
@@ -424,7 +445,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         }
       }
 
-      return {
+      const mappedItem = {
         id: item.id,
         externalId: item.id_externo,
         amount: item.valor_pago || item.valor_cobranca || 0,
@@ -443,8 +464,6 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         updatedAt: item.updated_at,
         // Campos computados baseados na estrutura real
         hasContract: !!item.contrato_id,
-        customerName: item.customer_name || '',
-        customerDocument: item.customer_document || '',
         account: item.external_reference || '',
         tenantId: currentTenant?.id || '',
         // Campos específicos disponíveis na tabela
@@ -459,14 +478,16 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         // Campos ASAAS disponíveis
         asaasCustomerId: item.asaas_customer_id || '',
         asaasSubscriptionId: item.asaas_subscription_id || '',
-        // Campos de cliente disponíveis
+        // AIDEV-NOTE: Campos de cliente - removida duplicação que causava sobrescrita
+        customerName: item.customer_name || '',
+        customerDocument: item.customer_document || '',
         customerEmail: item.customer_email || '',
         customerPhone: item.customer_phone || '',
         customerMobilePhone: item.customer_mobile_phone || '',
         customerAddress: item.customer_address || '',
         customerAddressNumber: item.customer_address_number || '',
         customerComplement: item.customer_complement || '',
-        customerProvince: item.customer_province || '',
+        customerProvince: item.customer_cityName || '',
         customerCity: item.customer_city || '',
         customerState: item.customer_state || '',
         customerPostalCode: item.customer_postal_code || '',
@@ -496,6 +517,19 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
         webhookEvent: item.webhook_event || '',
         webhookSignature: item.webhook_signature || ''
       };
+      
+      // Debug do resultado mapeado para os primeiros registros
+      if (index < 3) {
+        console.log(`🔍 DEBUG - Resultado mapeado ${index}:`, {
+          id: mappedItem.id,
+          customerName: mappedItem.customerName,
+          customerDocument: mappedItem.customerDocument,
+          paidAmount: mappedItem.paidAmount,
+          source: mappedItem.source
+        });
+      }
+      
+      return mappedItem;
     });
   };
 
@@ -585,7 +619,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           customer_address,
           customer_address_number,
           customer_complement,
-          customer_province,
+          customer_cityName,
           customer_postal_code,
           customer_city,
           customer_state,
@@ -721,7 +755,30 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     });
   };
 
-  const handleReconciliationAction = async (action: ReconciliationAction, movementId: string) => {
+  const handleReconciliationAction = (action: ReconciliationAction, movement: ImportedMovement) => {
+    // AIDEV-NOTE: Função corrigida para receber o movimento diretamente em vez do ID
+    if (!movement) {
+      toast({
+        title: "Erro",
+        description: "Movimento não encontrado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Abrir modal de ação
+    setActionModal({
+      isOpen: true,
+      action,
+      movement
+    });
+  };
+
+  const handleActionModalClose = () => {
+    setActionModal({ isOpen: false, action: null, movement: null });
+  };
+
+  const handleActionModalConfirm = async (actionData: any) => {
     try {
       setIsLoading(true);
       
@@ -731,44 +788,56 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
       });
       
       logAction('reconciliation_action', { 
-        action, 
-        movementId, 
-        tenant: currentTenant?.name 
+        action: actionModal.action, 
+        movementId: actionModal.movement?.id, 
+        tenant: currentTenant?.name,
+        actionData
       });
 
-      // AIDEV-NOTE: Atualização direta no Supabase usando valores corretos do enum
+      // AIDEV-NOTE: Filtrar campos que não existem na tabela conciliation_staging
+      const { adjustValue, newValue, contractId, customerId, ...validActionData } = actionData;
+
+      // AIDEV-NOTE: Atualização direta no Supabase usando apenas campos válidos da tabela
       let updateData: any = {
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        ...validActionData
       };
 
       // AIDEV-NOTE: Definir status baseado na ação usando valores do enum corretos
-      switch (action) {
-        case 'vincular_contrato':
+      switch (actionModal.action) {
+        case ReconciliationAction.LINK_TO_CONTRACT:
           updateData.status_conciliacao = 'RECONCILED';
-          updateData.observacao = 'Contrato vinculado automaticamente';
+          updateData.contrato_id = contractId; // Usar o contractId extraído
+          updateData.observacao = validActionData.observacao || 'Contrato vinculado';
           break;
-        case 'criar_avulsa':
+        case ReconciliationAction.CREATE_STANDALONE:
           updateData.status_conciliacao = 'RECONCILED';
-          updateData.observacao = 'Cobrança avulsa criada';
+          updateData.observacao = validActionData.observacao || 'Cobrança avulsa criada';
           break;
-        case 'marcar_divergente':
-          updateData.status_conciliacao = 'DIVERGENT';
-          updateData.observacao = 'Marcado como divergente';
+        case ReconciliationAction.REGISTER_CUSTOMER:
+          // AIDEV-NOTE: Para cadastro de cliente, mantemos status PENDING até o cliente ser criado
+          updateData.status_conciliacao = 'PENDING';
+          updateData.observacao = `Cliente cadastrado: ${validActionData.name} - ${validActionData.document}`;
           break;
-        case 'aprovar':
+        case ReconciliationAction.COMPLEMENT_EXISTING:
           updateData.status_conciliacao = 'RECONCILED';
-          updateData.observacao = 'Movimento aprovado';
+          updateData.observacao = validActionData.observacao || 'Cobrança complementada';
           break;
-        case 'rejeitar':
+        case ReconciliationAction.DELETE_IMPORTED:
           updateData.status_conciliacao = 'CANCELLED';
-          updateData.observacao = 'Movimento rejeitado';
+          updateData.observacao = validActionData.observacao || 'Item excluído';
+          break;
+        default:
+          // AIDEV-NOTE: Fallback para ações não mapeadas
+          updateData.status_conciliacao = 'PENDING';
+          updateData.observacao = validActionData.observacao || 'Ação executada';
           break;
       }
 
       const { error } = await supabase
         .from('conciliation_staging')
         .update(updateData)
-        .eq('id', movementId)
+        .eq('id', actionModal.movement?.id)
         .eq('tenant_id', currentTenant?.id);
 
       if (error) {
@@ -776,19 +845,20 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
       }
 
       const actionMessages = {
-        vincular_contrato: "Contrato vinculado com sucesso",
-        criar_avulsa: "Cobrança avulsa criada com sucesso",
-        marcar_divergente: "Movimento marcado como divergente",
-        aprovar: "Movimento aprovado com sucesso",
-        rejeitar: "Movimento rejeitado"
+        [ReconciliationAction.LINK_TO_CONTRACT]: "Contrato vinculado com sucesso",
+        [ReconciliationAction.CREATE_STANDALONE]: "Cobrança avulsa criada com sucesso",
+        [ReconciliationAction.REGISTER_CUSTOMER]: "Cliente cadastrado com sucesso",
+        [ReconciliationAction.COMPLEMENT_EXISTING]: "Cobrança complementada com sucesso",
+        [ReconciliationAction.DELETE_IMPORTED]: "Item excluído com sucesso"
       };
 
       toast({
         title: "Ação executada",
-        description: actionMessages[action] || "Ação executada com sucesso",
+        description: actionMessages[actionModal.action!] || "Ação executada com sucesso",
       });
 
-      // Recarregar dados para refletir as mudanças
+      // Fechar modal e recarregar dados
+      handleActionModalClose();
       await loadReconciliationData();
     } catch (error: any) {
       console.error('Erro ao executar ação de conciliação:', error);
@@ -885,7 +955,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog key="reconciliation-modal" open={isOpen} onOpenChange={onClose}>
           <DialogContent 
           className="!max-w-none !w-[90vw] !h-[90vh] !max-h-[90vh] p-0 gap-0 overflow-hidden bg-transparent border-0 !left-[5vw] !top-[5vh] !transform-none !translate-x-0 !translate-y-0"
           style={{ 
@@ -1147,6 +1217,18 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
           </DialogContent>
         </Dialog>
       )}
+      
+      {/* Modal de Ações */}
+       <ReconciliationActionModal
+         isOpen={actionModal.isOpen}
+         action={actionModal.action}
+         movement={actionModal.movement}
+         onClose={handleActionModalClose}
+         onActionComplete={async (movement, action, data) => {
+           // AIDEV-NOTE: Corrigido - agora passa todos os parâmetros necessários
+           await handleActionModalConfirm(data);
+         }}
+       />
     </AnimatePresence>
   );
 };
