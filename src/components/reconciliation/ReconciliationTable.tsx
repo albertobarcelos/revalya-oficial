@@ -42,12 +42,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ReconciliationTableProps,
-  ImportedMovement,
-  ReconciliationAction,
-  ReconciliationStatus,
-  PaymentStatus,
-  ReconciliationSource
+  ImportedMovement, 
+  ReconciliationAction, 
+  ReconciliationStatus, 
+  PaymentStatus, 
+  ReconciliationSource 
 } from '@/types/reconciliation';
+import { StatusBadge } from './parts/StatusBadge';
+import { ValueCell } from './parts/ValueCell';
 
 // Components
 import AsaasDetailsModal from './AsaasDetailsModal';
@@ -81,81 +83,8 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
   // HELPER FUNCTIONS
   // =====================================================
 
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('pt-BR');
-  };
-
-  const getStatusBadge = (status: ReconciliationStatus) => {
-    const statusConfig = {
-      [ReconciliationStatus.PENDING]: {
-        label: 'Pendente',
-        variant: 'secondary' as const,
-        icon: Clock,
-        className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
-      },
-      [ReconciliationStatus.RECONCILED]: {
-        label: 'Conciliado',
-        variant: 'default' as const,
-        icon: CheckCircle,
-        className: 'bg-green-100 text-green-800 border-green-300'
-      },
-      [ReconciliationStatus.DIVERGENT]: {
-        label: 'Divergente',
-        variant: 'destructive' as const,
-        icon: AlertTriangle,
-        className: 'bg-orange-100 text-orange-800 border-orange-300'
-      },
-      [ReconciliationStatus.CANCELLED]: {
-        label: 'Cancelado',
-        variant: 'outline' as const,
-        icon: Clock,
-        className: 'bg-gray-100 text-gray-800 border-gray-300'
-      }
-    };
-
-    const config = statusConfig[status];
-    const Icon = config.icon;
-
-    return (
-      <Badge variant={config.variant} className={config.className}>
-        <Icon className="h-3 w-3 mr-1" />
-        {config.label}
-      </Badge>
-    );
-  };
-
-  const getPaymentStatusBadge = (status: PaymentStatus) => {
-    const statusConfig = {
-      [PaymentStatus.PENDING]: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800' },
-      [PaymentStatus.PAID]: { label: 'Pago', className: 'bg-green-100 text-green-800' },
-      [PaymentStatus.CANCELLED]: { label: 'Cancelado', className: 'bg-red-100 text-red-800' },
-      [PaymentStatus.OVERDUE]: { label: 'Vencido', className: 'bg-orange-100 text-orange-800' }
-    };
-
-    const config = statusConfig[status];
-    
-    // AIDEV-NOTE: Verificação de segurança para evitar erro quando status não está mapeado
-    if (!config) {
-      console.warn(`PaymentStatus não mapeado: ${status}`);
-      return (
-        <Badge variant="outline" className="bg-gray-100 text-gray-800">
-          {status || 'Desconhecido'}
-        </Badge>
-      );
-    }
-    
-    return (
-      <Badge variant="outline" className={config.className}>
-        {config.label}
-      </Badge>
-    );
   };
 
   const getSourceBadge = (source: ReconciliationSource) => {
@@ -526,24 +455,33 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-right">
-                        {movement.chargeAmount ? formatCurrency(movement.chargeAmount) : '-'}
+                        <ValueCell 
+                          value={movement.chargeAmount} 
+                          type="optional"
+                          className=""
+                        />
                       </TableCell>
                       
                       <TableCell className="font-semibold py-1 sm:py-2 text-right">
-                        {formatCurrency(movement.paidAmount)}
+                        <ValueCell 
+                          value={movement.paidAmount} 
+                          type="semibold"
+                          className=""
+                        />
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-right">
-                        {movement.difference ? (
-                          <span className={`font-semibold ${movement.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {formatCurrency(movement.difference)}
-                          </span>
-                        ) : '-'}
+                        <ValueCell 
+                          value={movement.difference} 
+                          type="difference"
+                          className=""
+                          showEmptyState={true}
+                        />
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-center">
                         <div className="flex items-center justify-center gap-2">
-                          {getStatusBadge(movement.reconciliationStatus)}
+                          <StatusBadge status={movement.reconciliationStatus} />
                           {/* AIDEV-NOTE: Indicador visual de importação para charges */}
                           {movement.charge_id && movement.imported_at && (
                             <div className="flex items-center gap-1">
@@ -555,7 +493,7 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-center">
-                        {getPaymentStatusBadge(movement.paymentStatus)}
+                        <StatusBadge status={movement.reconciliationStatus} paymentStatus={movement.paymentStatus} />
                       </TableCell>
                       
                       <TableCell className="py-1 sm:py-2 text-center">
