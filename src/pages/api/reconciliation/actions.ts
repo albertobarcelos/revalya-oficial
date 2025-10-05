@@ -97,7 +97,7 @@ export default async function handler(
       });
     }
 
-    let updateData: any = {
+    const updateData: any = {
       status_conciliacao: 'CONCILIADO',
       observacao: observacao || null,
       updated_at: new Date().toISOString()

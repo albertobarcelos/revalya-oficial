@@ -119,7 +119,7 @@ export function validarCNPJ(cnpj: string): boolean {
   // Valida DVs
   let tamanho = cnpjLimpo.length - 2;
   let numeros = cnpjLimpo.substring(0, tamanho);
-  let digitos = cnpjLimpo.substring(tamanho);
+  const digitos = cnpjLimpo.substring(tamanho);
   let soma = 0;
   let pos = tamanho - 7;
   

@@ -3,56 +3,35 @@
 // Descrição: Tabela principal para visualização e ações de conciliação
 // =====================================================
 
-import React, { useState } from 'react';
-import { 
-  Link, 
-  Plus, 
-  RefreshCw, 
-  Trash2, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock, 
-  ExternalLink,
-  MoreHorizontal,
-  Eye,
-  FileText,
-  UserPlus,
-  Upload,
-  CheckCircle2
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import React, { useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import { FileText, Badge } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody } from '@/components/ui/table';
+
+// AIDEV-NOTE: Importações dos componentes extraídos
+import { TableHeader } from './parts/TableHeader';
+import { TableRow } from './parts/TableRow';
+import { LoadingState } from './parts/LoadingState';
+import { EmptyState } from './parts/EmptyState';
+import { ExpandedRowDetails } from './parts/ExpandedRowDetails';
+import { AsaasDetailsModal } from './parts/AsaasDetailsModal';
+import { PaginationFooter } from './parts/PaginationFooter';
+
+// AIDEV-NOTE: Importações dos helpers extraídos
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  ReconciliationTableProps,
+  formatDate, 
+  getSourceBadge, 
+  createSelectionHandlers 
+} from './utils/reconciliationHelpers.tsx';
+
+// AIDEV-NOTE: Importações de tipos
+import type { 
   ImportedMovement, 
   ReconciliationAction, 
-  ReconciliationStatus, 
-  PaymentStatus, 
-  ReconciliationSource 
+  ReconciliationTableProps 
 } from '@/types/reconciliation';
-import { StatusBadge } from './parts/StatusBadge';
-import { ValueCell } from './parts/ValueCell';
-
-// Components
-import AsaasDetailsModal from './AsaasDetailsModal';
 
 // AIDEV-NOTE: Tabela completa com todas as funcionalidades de conciliação
 // Inclui ações por linha, seleção múltipla, paginação e indicadores visuais
@@ -80,83 +59,14 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
   });
 
   // =====================================================
-  // HELPER FUNCTIONS
+  // HANDLERS
   // =====================================================
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
-  };
-
-  const getSourceBadge = (source: ReconciliationSource) => {
-    const sourceConfig = {
-      [ReconciliationSource.ASAAS]: { 
-        label: 'Asaas', 
-        className: 'border-0 bg-transparent p-0',
-        logo: '/logos/Integrações/asaas.png'
-      },
-      [ReconciliationSource.CORA]: { 
-        label: 'Cora', 
-        className: 'border-0 bg-transparent p-0',
-        logo: '/logos/Integrações/cora.png'
-      },
-      [ReconciliationSource.ITAU]: { label: 'Itaú', className: 'bg-orange-100 text-orange-800' },
-      [ReconciliationSource.STONE]: { label: 'Stone', className: 'bg-green-100 text-green-800' },
-      [ReconciliationSource.MANUAL]: { label: 'Manual', className: 'bg-gray-100 text-gray-800' }
-    };
-
-    const config = sourceConfig[source];
-    
-    // AIDEV-NOTE: Verificação de segurança para evitar erro quando source não está mapeado
-    if (!config) {
-      console.warn(`ReconciliationSource não mapeado: ${source}`);
-      return (
-        <Badge variant="outline" className="bg-gray-100 text-gray-800">
-          {source || 'Desconhecido'}
-        </Badge>
-      );
-    }
-    
-    // Para Asaas e Cora, mostrar apenas a logo
-    if (config.logo && (source === ReconciliationSource.ASAAS || source === ReconciliationSource.CORA)) {
-      return (
-        <div className="flex items-center justify-center">
-          <img 
-            src={config.logo} 
-            alt={`${config.label} logo`}
-            className="w-8 h-8 object-cover rounded-full"
-            title={config.label}
-          />
-        </div>
-      );
-    }
-    
-    // Para outras fontes, manter o badge tradicional
-    return (
-      <Badge variant="outline" className={config.className}>
-        {config.label}
-      </Badge>
-    );
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (onSelectionChange) {
-      if (checked) {
-        onSelectionChange(movements.map(m => m.id));
-      } else {
-        onSelectionChange([]);
-      }
-    }
-  };
-
-  const handleSelectMovement = (movementId: string, checked: boolean) => {
-    if (onSelectionChange) {
-      if (checked) {
-        onSelectionChange([...selectedMovements, movementId]);
-      } else {
-        onSelectionChange(selectedMovements.filter(id => id !== movementId));
-      }
-    }
-  };
+  const { handleSelectAll, handleSelectMovement } = createSelectionHandlers(
+    movements,
+    selectedMovements,
+    onSelectionChange
+  );
 
   const toggleRowExpansion = (movementId: string) => {
     const newExpanded = new Set(expandedRows);
@@ -168,39 +78,7 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     setExpandedRows(newExpanded);
   };
 
-  // AIDEV-NOTE: Função para obter ações disponíveis por movimento
-  const getAvailableActions = (movement: ImportedMovement) => {
-    const actions = [];
-    
-    if (movement.reconciliationStatus === ReconciliationStatus.PENDING) {
-      if (movement.hasContract) {
-        actions.push({
-          action: ReconciliationAction.LINK_TO_CONTRACT,
-          label: 'Vincular ao Contrato',
-          icon: Link,
-          variant: 'primary' as const
-        });
-      } else {
-        actions.push({
-          action: ReconciliationAction.CREATE_STANDALONE_CHARGE,
-          label: 'Criar Cobrança Avulsa',
-          icon: Plus,
-          variant: 'secondary' as const
-        });
-      }
-      
-      actions.push({
-        action: ReconciliationAction.DELETE_IMPORTED,
-        label: 'Excluir Importado',
-        icon: Trash2,
-        variant: 'danger' as const
-      });
-    }
-    
-    return actions;
-  };
-
-  // AIDEV-NOTE: Função para abrir modal de detalhes ASAAS
+  // AIDEV-NOTE: Handlers para modal ASAAS
   const handleViewAsaasDetails = (movement: ImportedMovement) => {
     setAsaasDetailsModal({
       isOpen: true,
@@ -208,7 +86,6 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     });
   };
 
-  // AIDEV-NOTE: Função para fechar modal de detalhes ASAAS
   const handleCloseAsaasDetails = () => {
     setAsaasDetailsModal({
       isOpen: false,
@@ -216,102 +93,17 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     });
   };
 
-  const getActionButtons = (movement: ImportedMovement) => {
-    const actions = [
-      {
-        type: ReconciliationAction.LINK_TO_CONTRACT,
-        label: 'Vincular a Contrato',
-        icon: Link,
-        variant: 'default' as const,
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
-      },
-      {
-        type: ReconciliationAction.CREATE_STANDALONE,
-        label: 'Criar Cobrança Avulsa',
-        icon: Plus,
-        variant: 'secondary' as const,
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
-      },
-      {
-        type: ReconciliationAction.COMPLEMENT_EXISTING,
-        label: 'Complementar Existente',
-        icon: RefreshCw,
-        variant: 'outline' as const,
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED || !movement.chargeId
-      },
-      {
-        type: ReconciliationAction.REGISTER_CUSTOMER,
-        label: 'Cadastrar Cliente',
-        icon: UserPlus,
-        variant: 'outline' as const,
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
-      },
-      {
-        type: ReconciliationAction.DELETE_IMPORTED,
-        label: 'Excluir Item',
-        icon: Trash2,
-        variant: 'destructive' as const,
-        disabled: false
-      }
-    ];
-
-    return actions;
-  };
-
   // =====================================================
-  // LOADING STATE
+  // RENDER CONDITIONS
   // =====================================================
 
   if (loading) {
-    return (
-      <Card className="border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Movimentações
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((index) => (
-              <div key={index} className="flex items-center space-x-4 p-4 border rounded-lg">
-                <Skeleton className="h-4 w-4" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-20" />
-                <div className="flex gap-2 ml-auto">
-                  <Skeleton className="h-8 w-20" />
-                  <Skeleton className="h-8 w-20" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return <LoadingState />;
   }
-
-  // =====================================================
-  // EMPTY STATE
-  // =====================================================
 
   if (movements.length === 0) {
-    return (
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-12 text-center">
-          <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-600 mb-2">
-            Nenhuma movimentação encontrada
-          </h3>
-          <p className="text-slate-500">
-            Não há movimentações que correspondam aos filtros selecionados.
-          </p>
-        </CardContent>
-      </Card>
-    );
+    return <EmptyState />;
   }
-
   // =====================================================
   // RENDER
   // =====================================================
@@ -343,417 +135,69 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         <div className="relative h-[420px] overflow-hidden">
           <div className="overflow-x-auto overflow-y-auto h-full">
             <Table className="min-w-[1400px] relative">
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead className="w-12 sticky left-0 bg-slate-50 z-10 text-center">
-                    {onSelectionChange && (
-                      <Checkbox
-                        checked={selectedMovements.length === movements.length}
-                        onCheckedChange={handleSelectAll}
-                      />
-                    )}
-                  </TableHead>
-                  <TableHead className="min-w-[80px] text-center">Origem</TableHead>
-                  <TableHead className="min-w-[120px] text-left">ID Externo</TableHead>
-                  <TableHead className="min-w-[120px] text-left">Nosso Número</TableHead>
-                  <TableHead className="min-w-[180px] text-left">Nome do Cliente</TableHead>
-                  <TableHead className="min-w-[140px] text-left">CNPJ/CPF</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Tipo Cobrança</TableHead>
-                  <TableHead className="min-w-[120px] text-right">Valor Cobrança</TableHead>
-                  <TableHead className="min-w-[120px] text-right">Valor Pago</TableHead>
-                  <TableHead className="min-w-[100px] text-right">Diferença</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Status</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Pagamento</TableHead>
-                  <TableHead className="min-w-[120px] text-center">Contrato</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Vencimento</TableHead>
-                  <TableHead className="min-w-[100px] text-center">Dt. Pagamento</TableHead>
-                  <TableHead className="w-32 sticky right-0 bg-slate-50 z-20 text-center border-l border-slate-200">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader
+                hasSelection={!!onSelectionChange}
+                selectedCount={selectedMovements.length}
+                totalCount={movements.length}
+                onSelectAll={handleSelectAll}
+                allSelected={selectedMovements.length === movements.length}
+                partiallySelected={selectedMovements.length > 0 && selectedMovements.length < movements.length}
+              />
             
               <TableBody>
-              {/* AIDEV-NOTE: Renderização das linhas com altura mínima para manter consistência */}
+              {/* AIDEV-NOTE: Renderização das linhas com componente extraído */}
               {movements.map((movement) => {
                 const isSelected = selectedMovements.includes(movement.id);
                 const isExpanded = expandedRows.has(movement.id);
-                const hasDifference = movement.difference && Math.abs(movement.difference) > 0.01;
                 
                 return (
                   <React.Fragment key={movement.id}>
-                    <TableRow 
-                      className={`
-                        ${isSelected ? 'bg-blue-50' : ''}
-                        ${hasDifference ? 'border-l-4 border-l-orange-400' : ''}
-                        hover:bg-slate-50 transition-colors
-                      `}
-                    >
-                      <TableCell className="sticky left-0 bg-white z-10 py-1 sm:py-2 text-center">
-                        {onSelectionChange && (
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleSelectMovement(movement.id, checked as boolean)}
-                          />
-                        )}
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        {getSourceBadge(movement.source)}
-                      </TableCell>
-                      
-                      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-                        <div className="flex items-center gap-2">
-                          {movement.externalId}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleRowExpansion(movement.id)}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      
-                      {/* AIDEV-NOTE: Coluna Nosso Número - específica para ASAAS */}
-                      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-                        {movement.source === ReconciliationSource.ASAAS && movement.externalReference ? (
-                          <span className="text-slate-700">{movement.externalReference}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </TableCell>
-                      
-                      {/* AIDEV-NOTE: Coluna Nome do Cliente - específica para ASAAS */}
-                      <TableCell className="py-1 sm:py-2 text-left">
-                        {movement.source === ReconciliationSource.ASAAS && movement.customerName ? (
-                          <span className="text-slate-700 font-medium">{movement.customerName}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </TableCell>
-                      
-                      {/* AIDEV-NOTE: Coluna CNPJ/CPF - específica para ASAAS */}
-                      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-                        {movement.source === ReconciliationSource.ASAAS && movement.customerDocument ? (
-                          <span className="text-slate-700">{movement.customerDocument}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </TableCell>
-                      
-                      {/* AIDEV-NOTE: Coluna Tipo de Cobrança - específica para ASAAS */}
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        {movement.source === ReconciliationSource.ASAAS ? (
-                          <Badge variant="outline" className="text-xs">
-                            {movement.description?.includes('PIX') ? 'PIX' : 
-                             movement.description?.includes('BOLETO') ? 'BOLETO' : 
-                             movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
-                          </Badge>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-right">
-                        <ValueCell 
-                          value={movement.chargeAmount} 
-                          type="optional"
-                          className=""
-                        />
-                      </TableCell>
-                      
-                      <TableCell className="font-semibold py-1 sm:py-2 text-right">
-                        <ValueCell 
-                          value={movement.paidAmount} 
-                          type="semibold"
-                          className=""
-                        />
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-right">
-                        <ValueCell 
-                          value={movement.difference} 
-                          type="difference"
-                          className=""
-                          showEmptyState={true}
-                        />
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <StatusBadge status={movement.reconciliationStatus} />
-                          {/* AIDEV-NOTE: Indicador visual de importação para charges */}
-                          {movement.charge_id && movement.imported_at && (
-                            <div className="flex items-center gap-1">
-                              <CheckCircle2 className="h-3 w-3 text-green-600" />
-                              <span className="text-xs text-green-600 font-medium">Importado</span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        <StatusBadge status={movement.reconciliationStatus} paymentStatus={movement.paymentStatus} />
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        {movement.hasContract ? (
-                          <div className="flex items-center justify-center gap-1">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="text-sm font-mono">{movement.contractId}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-sm">Sem contrato</span>
-                        )}
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        {movement.dueDate ? formatDate(movement.dueDate) : '-'}
-                      </TableCell>
-                      
-                      <TableCell className="py-1 sm:py-2 text-center">
-                        {movement.paymentDate ? formatDate(movement.paymentDate) : '-'}
-                      </TableCell>
-                      
-                      <TableCell className="sticky right-0 bg-white z-20 py-1 sm:py-2 text-center border-l border-slate-200">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-56">
-                            {getActionButtons(movement).map((action, index) => {
-                              const Icon = action.icon;
-                              return (
-                                <DropdownMenuItem
-                                  key={action.type}
-                                  onClick={() => onAction(action.type, movement)}
-                                  disabled={action.disabled}
-                                  className={`
-                                    ${action.variant === 'destructive' ? 'text-red-600 focus:text-red-600' : ''}
-                                  `}
-                                >
-                                  <Icon className="h-4 w-4 mr-2" />
-                                  {action.label}
-                                </DropdownMenuItem>
-                              );
-                            })}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              Ver Detalhes
-                            </DropdownMenuItem>
-                            
-                            {/* AIDEV-NOTE: Opção específica para detalhes ASAAS */}
-                            {movement.source === ReconciliationSource.ASAAS && (
-                              <DropdownMenuItem 
-                                onClick={() => handleViewAsaasDetails(movement)}
-                                className="flex items-center gap-2 text-blue-600"
-                              >
-                                <img src="/logos/Integrações/asaas.png" alt="Asaas" className="w-4 h-4" />
-                                Detalhes ASAAS
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                    <TableRow
+                      movement={movement}
+                      isSelected={isSelected}
+                      hasSelection={!!onSelectionChange}
+                      onSelect={handleSelectMovement}
+                      onAction={onAction}
+                      isExpanded={isExpanded}
+                      onToggleExpansion={toggleRowExpansion}
+                      onViewAsaasDetails={handleViewAsaasDetails}
+                      getSourceBadge={getSourceBadge}
+                    />
                     
-                    {/* Expanded Row Details */}
+                    {/* AIDEV-NOTE: Linha expandida com detalhes completos */}
                     {isExpanded && (
-                      <TableRow className="bg-slate-50">
-                        <TableCell colSpan={13} className="py-2 sm:py-3">
-                          <div className="p-3 space-y-2">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                              <div>
-                                <span className="font-medium text-slate-600">Cliente:</span>
-                                <p>{movement.customerName || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <span className="font-medium text-slate-600">Documento:</span>
-                                <p className="font-mono">{movement.customerDocument || 'N/A'}</p>
-                              </div>
-                              <div>
-                                <span className="font-medium text-slate-600">Importado em:</span>
-                                <p>{formatDate(movement.importedAt)}</p>
-                              </div>
-                              <div>
-                                <span className="font-medium text-slate-600">Conciliado por:</span>
-                                <p>{movement.reconciledBy || 'N/A'}</p>
-                              </div>
-                            </div>
-                            
-                            {/* AIDEV-NOTE: Seção de status de importação */}
-                            {movement.charge_id && movement.imported_at && (
-                              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
-                                <h4 className="font-medium text-green-800 mb-2 flex items-center gap-2">
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  Status de Importação
-                                </h4>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                                  <div>
-                                    <span className="font-medium text-slate-600">ID da Cobrança:</span>
-                                    <p className="font-mono text-green-700">{movement.charge_id}</p>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-slate-600">Data de Importação:</span>
-                                    <p className="text-green-700">{formatDate(movement.imported_at)}</p>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-slate-600">Status:</span>
-                                    <div className="flex items-center gap-1">
-                                      <CheckCircle2 className="h-3 w-3 text-green-600" />
-                                      <span className="text-green-600 font-medium">Importado com Sucesso</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* AIDEV-NOTE: Seção específica para dados ASAAS */}
-                            {movement.source === ReconciliationSource.ASAAS && (
-                              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
-                                  <img src="/logos/Integrações/asaas.png" alt="Asaas" className="w-4 h-4" />
-                                  Detalhes ASAAS
-                                </h4>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                                  <div>
-                                    <span className="font-medium text-slate-600">Nosso Número:</span>
-                                    <p className="font-mono">{movement.externalReference || 'N/A'}</p>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-slate-600">Linha Digitável:</span>
-                                    <p className="font-mono text-xs break-all">
-                                      {movement.description?.includes('linha:') ? 
-                                        movement.description.split('linha:')[1]?.trim() || 'N/A' : 'N/A'}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <span className="font-medium text-slate-600">Tipo de Cobrança:</span>
-                                    <p>
-                                      {movement.description?.includes('PIX') ? 'PIX' : 
-                                       movement.description?.includes('BOLETO') ? 'BOLETO' : 
-                                       movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {movement.description && (
-                              <div>
-                                <span className="font-medium text-slate-600">Descrição:</span>
-                                <p className="text-sm mt-1">{movement.description}</p>
-                              </div>
-                            )}
-                            
-                            {movement.observations && (
-                              <div>
-                                <span className="font-medium text-slate-600">Observações:</span>
-                                <p className="text-sm mt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
-                                  {movement.observations}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <ExpandedRowDetails 
+                        movement={movement}
+                        formatDate={formatDate}
+                      />
                     )}
                   </React.Fragment>
                 );
               })}
-              
-              {/* AIDEV-NOTE: Linhas vazias para manter altura consistente quando há poucos dados - ajustado para 8 linhas */}
-              {movements.length < 8 && Array.from({ length: 8 - movements.length }).map((_, index) => (
-                <TableRow key={`empty-${index}`} className="h-11">
-                  <TableCell colSpan={16} className="py-2">
-                    {/* Linha vazia - apenas espaço em branco */}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
+              </TableBody>
             </Table>
           </div>
         </div>
         
-        {/* AIDEV-NOTE: Rodapé com paginação e contador de itens */}
+        {/* AIDEV-NOTE: Paginação com props obrigatórias */}
         {pagination && (
-          <div className="flex items-center justify-between p-4 border-t bg-slate-50/50 rounded-b-lg">
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-slate-600 font-medium">
-                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} movimentações
-              </div>
-              
-              {/* Seletor de itens por página */}
-              {pagination.onLimitChange && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-500">Itens por página:</span>
-                  <select
-                    value={pagination.limit}
-                    onChange={(e) => pagination.onLimitChange!(Number(e.target.value))}
-                    className="text-sm border border-slate-200 rounded px-2 py-1 bg-white"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.onPageChange(pagination.page - 1)}
-                disabled={pagination.page === 1}
-                className="h-8"
-              >
-                Anterior
-              </Button>
-              
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, Math.ceil(pagination.total / pagination.limit)) }, (_, i) => {
-                  const page = i + 1;
-                  return (
-                    <Button
-                      key={page}
-                      variant={page === pagination.page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => pagination.onPageChange(page)}
-                      className="w-8 h-8 p-0"
-                    >
-                      {page}
-                    </Button>
-                  );
-                })}
-              </div>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => pagination.onPageChange(pagination.page + 1)}
-                disabled={pagination.page >= Math.ceil(pagination.total / pagination.limit)}
-                className="h-8"
-              >
-                Próxima
-              </Button>
-            </div>
-          </div>
+          <PaginationFooter
+            currentPage={pagination.page}
+            totalPages={Math.ceil(pagination.total / pagination.limit)}
+            pageSize={pagination.limit}
+            totalItems={pagination.total}
+            onPageChange={pagination.onPageChange}
+            onPageSizeChange={pagination.onLimitChange || (() => {})}
+          />
         )}
       </CardContent>
-      
-      {/* AIDEV-NOTE: Modal de detalhes ASAAS */}
+
       <AsaasDetailsModal
         isOpen={asaasDetailsModal.isOpen}
-        onClose={handleCloseAsaasDetails}
         movement={asaasDetailsModal.movement}
+        onClose={handleCloseAsaasDetails}
       />
     </Card>
   );
 };
-
 export default ReconciliationTable;

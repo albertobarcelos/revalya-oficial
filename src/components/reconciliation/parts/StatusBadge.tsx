@@ -107,4 +107,4 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
   return getReconciliationStatusBadge(status);
 };
 
-export default StatusBadge;
+export { StatusBadge };

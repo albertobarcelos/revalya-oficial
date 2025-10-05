@@ -50,9 +50,11 @@ export interface ValueCellProps {
 
 export interface SelectionCheckboxProps {
   checked: boolean;
-  indeterminate?: boolean;
   onChange: (checked: boolean) => void;
+  type?: 'individual' | 'selectAll';
   disabled?: boolean;
+  className?: string;
+  'aria-label'?: string;
 }
 
 // Componente para controles de paginação

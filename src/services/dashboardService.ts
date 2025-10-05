@@ -203,7 +203,7 @@ export const dashboardService = {
       // Agora vamos calcular o MRR e o MRC com base em contratos
       const contracts = contractsResult.data || [];
       let mrrTotal = 0;
-      let mrcTotal = 0;
+      const mrcTotal = 0;
 
       // Calcular MRR baseado nos contratos ativos
       contracts.forEach(contract => {

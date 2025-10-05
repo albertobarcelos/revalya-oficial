@@ -1,0 +1,203 @@
+// =====================================================
+// AIDEV-NOTE: TableRow Component
+// =====================================================
+// Componente extraído de ReconciliationTable.tsx para gerenciar
+// as linhas da tabela de reconciliação
+// Centraliza a renderização de dados e lógica de interação
+// =====================================================
+
+import React from 'react';
+import { TableCell, TableRow as ShadcnTableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Eye, CheckCircle2, CheckCircle } from 'lucide-react';
+import { SelectionCheckbox } from './SelectionCheckbox';
+import { StatusBadge } from './StatusBadge';
+import { ActionButtons } from './ActionButtons';
+import { ValueCell } from './ValueCell';
+import { TableRowProps } from '../types/table-parts';
+import { ReconciliationSource, ReconciliationAction } from '@/types/reconciliation';
+import { formatDate } from '@/lib/utils';
+
+interface TableRowComponentProps extends TableRowProps {
+  isExpanded?: boolean;
+  onToggleExpansion?: (id: string) => void;
+  onViewAsaasDetails?: (movement: any) => void;
+  getSourceBadge?: (source: ReconciliationSource) => React.ReactNode;
+}
+
+export function TableRow({ 
+  movement, 
+  isSelected, 
+  hasSelection, 
+  onSelect, 
+  onAction,
+  isExpanded,
+  onToggleExpansion,
+  onViewAsaasDetails,
+  getSourceBadge
+}: TableRowExtendedProps) {
+  
+  // AIDEV-NOTE: Cálculo de diferença para destacar visualmente
+  const hasDifference = movement.difference && Math.abs(movement.difference) > 0.01;
+
+  return (
+    <ShadcnTableRow 
+      className={`
+        ${isSelected ? 'bg-blue-50' : ''}
+        ${hasDifference ? 'border-l-4 border-l-orange-400' : ''}
+        hover:bg-slate-50 transition-colors
+      `}
+    >
+      {/* AIDEV-NOTE: Coluna de seleção - sticky left */}
+      <TableCell className="sticky left-0 bg-white z-10 py-1 sm:py-2 text-center">
+        {hasSelection && (
+          <SelectionCheckbox
+            checked={isSelected}
+            onChange={(checked) => onSelect(movement.id, checked)}
+            type="individual"
+            aria-label={`Selecionar movimento ${movement.externalId}`}
+          />
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Origem */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        {getSourceBadge(movement.source)}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna ID Externo com botão de expansão */}
+      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
+        <div className="flex items-center gap-2">
+          {movement.externalId}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggleExpansion(movement.id)}
+            className="h-6 w-6 p-0"
+          >
+            <Eye className="h-3 w-3" />
+          </Button>
+        </div>
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Nosso Número - específica para ASAAS */}
+      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
+        {movement.source === ReconciliationSource.ASAAS && movement.externalReference ? (
+          <span className="text-slate-700">{movement.externalReference}</span>
+        ) : (
+          <span className="text-slate-400">-</span>
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Nome do Cliente - específica para ASAAS */}
+      <TableCell className="py-1 sm:py-2 text-left">
+        {movement.source === ReconciliationSource.ASAAS && movement.customerName ? (
+          <span className="text-slate-700 font-medium">{movement.customerName}</span>
+        ) : (
+          <span className="text-slate-400">-</span>
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna CNPJ/CPF - específica para ASAAS */}
+      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
+        {movement.source === ReconciliationSource.ASAAS && movement.customerDocument ? (
+          <span className="text-slate-700">{movement.customerDocument}</span>
+        ) : (
+          <span className="text-slate-400">-</span>
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Tipo de Cobrança - específica para ASAAS */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        {movement.source === ReconciliationSource.ASAAS ? (
+          <Badge variant="outline" className="text-xs">
+            {movement.description?.includes('PIX') ? 'PIX' : 
+             movement.description?.includes('BOLETO') ? 'BOLETO' : 
+             movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
+          </Badge>
+        ) : (
+          <span className="text-slate-400">-</span>
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Valor Cobrança */}
+      <TableCell className="py-1 sm:py-2 text-right">
+        <ValueCell 
+          value={movement.chargeAmount} 
+          type="optional"
+          className=""
+        />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Valor Pago */}
+      <TableCell className="font-semibold py-1 sm:py-2 text-right">
+        <ValueCell 
+          value={movement.paidAmount} 
+          type="semibold"
+          className=""
+        />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Diferença */}
+      <TableCell className="py-1 sm:py-2 text-right">
+        <ValueCell 
+          value={movement.difference} 
+          type="difference"
+          className=""
+          showEmptyState={true}
+        />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Status */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        <div className="flex items-center justify-center gap-2">
+          <StatusBadge status={movement.reconciliationStatus} />
+          {/* AIDEV-NOTE: Indicador visual de importação para charges */}
+          {movement.charge_id && movement.imported_at && (
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3 text-green-600" />
+              <span className="text-xs text-green-600 font-medium">Importado</span>
+            </div>
+          )}
+        </div>
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Pagamento */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        <StatusBadge status={movement.reconciliationStatus} paymentStatus={movement.paymentStatus} />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Contrato */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        {movement.hasContract ? (
+          <div className="flex items-center justify-center gap-1">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-mono">{movement.contractId}</span>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-sm">Sem contrato</span>
+        )}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Vencimento */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        {movement.dueDate ? formatDate(movement.dueDate) : '-'}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Data Pagamento */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        {movement.paymentDate ? formatDate(movement.paymentDate) : '-'}
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Ações - sticky right */}
+      <TableCell className="sticky right-0 bg-white z-20 py-1 sm:py-2 text-center border-l border-slate-200">
+        <ActionButtons 
+          movement={movement}
+          onAction={onAction}
+          onViewAsaasDetails={onViewAsaasDetails}
+        />
+      </TableCell>
+    </ShadcnTableRow>
+  );
+}

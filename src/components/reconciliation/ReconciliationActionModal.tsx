@@ -212,7 +212,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
       await onActionComplete(movement, action, formData);
       
       // Log da ação
-      await logAction({
+      await logAction('USER_ACTION', {
         action: `reconciliation_${action.toLowerCase()}`,
         resource: 'conciliation_staging',
         resourceId: movement.id,

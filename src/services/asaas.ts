@@ -82,7 +82,7 @@ class AsaasService {
     try {
       let offset = 0;
       const limit = 100; // Usar limite maior para buscar mais rápido
-      let found = false;
+      const found = false;
       let attempts = 0;
       const maxAttempts = 50; // Máximo 5000 clientes
       

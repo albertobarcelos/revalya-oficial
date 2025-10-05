@@ -44,7 +44,7 @@ function generateLargeCSV(count: number): string {
 describe('Sistema de Importação - Testes de Integração', () => {
   let testTenantId: string
   let testUserId: string
-  let testJobIds: string[] = []
+  const testJobIds: string[] = []
 
   beforeAll(async () => {
     // AIDEV-NOTE: Configuração de tenant e usuário de teste
