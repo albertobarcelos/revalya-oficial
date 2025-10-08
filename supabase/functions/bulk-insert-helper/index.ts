@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
       const batch = data.slice(start, end);
 
       try {
-        let query = supabaseClient.from(table);
+        const query = supabaseClient.from(table);
         
         // 🔧 [DEBUG-EDGE] Log do batch antes da inserção
         console.log(`🔧 [DEBUG-EDGE] Batch ${i + 1} - Primeiro registro:`, {
@@ -211,7 +211,7 @@ Deno.serve(async (req: Request) => {
           const recordIndex = start + j;
           
           try {
-            let query = supabaseClient.from(table);
+            const query = supabaseClient.from(table);
             
             if (upsert && onConflict) {
               const { error } = await query.upsert([record], { onConflict });

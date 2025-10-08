@@ -2,6 +2,28 @@
 
 ## 📋 Resumo das Melhorias Implementadas
 
+### 🚨 **Versão 4.0 - Correções Críticas (2025-01-21)**
+
+#### 1. Validação de templateId Corrigida
+- **Problema**: Validação inconsistente entre linha 340 e 257
+- **Solução**: Lógica unificada - `templateId OU customMessage` é obrigatório
+- **Impacto**: Elimina falhas de validação que impediam envio de mensagens
+
+#### 2. getInstanceName com Fallback Robusto
+- **Problema**: Função podia retornar `null` sem tratamento adequado
+- **Solução**: Fallback para `EVOLUTION_INSTANCE_ENV` + mensagem de erro clara
+- **Impacto**: Garante que sempre há uma instância configurada ou erro explicativo
+
+#### 3. Tratamento de Erros da Evolution API
+- **Problema**: Falhas de rede/API não eram tratadas adequadamente
+- **Solução**: Sistema de retry (3 tentativas) + diferenciação de erros 4xx/5xx
+- **Impacto**: Maior taxa de sucesso em envios + logs detalhados de falhas
+
+#### 4. Validação de Variáveis de Ambiente
+- **Problema**: `requireEnv` falhava com `undefined` em alguns casos
+- **Solução**: Verificação robusta com `?.trim()` e mensagens claras
+- **Impacto**: Inicialização mais confiável da edge function
+
 ### 🔧 **Versão 3.0 - Refatoração Completa**
 **Data:** 2025-01-21  
 **Autor:** Barcelitos AI Agent

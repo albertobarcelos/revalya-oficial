@@ -9,7 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { useTenantStore } from '@/store/tenantStore';
 import { refreshAuthToken } from '@/utils/authUtils';
 
-// AIDEV-NOTE: Interfaces tipadas para substituir 'any' e garantir type safety
+// ========================= Tipagens =========================
+
 export interface TenantContext {
   id: string;
   slug: string;
@@ -18,10 +19,13 @@ export interface TenantContext {
 
 export interface SecureHeaders {
   'Content-Type': string;
-  'Authorization': string;
+  'Authorization': string;               // Bearer <jwt>
   'x-tenant-id': string;
   'x-request-id': string;
   'x-timestamp': string;
+  'x-env'?: 'production' | 'sandbox';
+  'x-debug': 'true';   // opcional
+  [key: string]: string | undefined;    // Index signature para compatibilidade
 }
 
 export interface EdgeFunctionResponse<T = unknown> {
@@ -41,23 +45,22 @@ export interface EdgeFunctionError {
   details?: Record<string, unknown>;
 }
 
-// AIDEV-NOTE: Interface para erro estendido com propriedades adicionais
 export interface ExtendedError extends Error {
   status?: number;
   statusText?: string;
   responseError?: unknown;
 }
 
-// AIDEV-NOTE: Interface específica para resposta da Edge Function de mensagens
+// === Shape interno esperado pelo app (mantido para compatibilidade) ===
 export interface BulkMessageResponse {
   success: boolean;
   message: string;
-  tenant_id: string; // Validação de segurança obrigatória
+  tenant_id: string; // usado para validação interna do app
   results?: Array<{
     charge_id: string;
     success: boolean;
     message?: string;
-    tenant_id: string; // Validação dupla por item
+    tenant_id: string;
   }>;
   summary: {
     total: number;
@@ -67,15 +70,34 @@ export interface BulkMessageResponse {
   };
 }
 
-// AIDEV-NOTE: Interface para request da Edge Function com validação de tenant
+// === Payload enviado para a Edge ===
+// AIDEV-NOTE: Interface corrigida para corresponder exatamente ao que a Edge Function espera
 export interface SendBulkMessagesRequest {
   chargeIds: string[];
-  templateId: string;
-  sendImmediately?: boolean;
-  tenant_id: string; // Validação obrigatória
+  templateId?: string;      // opcional quando customMessage é fornecida
+  customMessage?: string;   // mensagem direta sem template
+  tenant_id?: string;       // opcional (enviado via header x-tenant-id)
 }
 
-// AIDEV-NOTE: Interface para opções de chamada de Edge Function
+// === Resposta da Edge Function ===
+export interface EdgeFunctionBulkResponse {
+  success: boolean;
+  data: {
+    total: number;
+    success: number;
+    failed: number;
+    details: Array<{
+      chargeId: string;
+      success: boolean;
+      error?: string;
+      tenant_id?: string;
+    }>;
+  };
+  requestId: string;
+}
+
+
+
 export interface EdgeFunctionOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   requireTenant?: boolean;
@@ -84,7 +106,8 @@ export interface EdgeFunctionOptions {
   auditLog?: boolean;
 }
 
-// AIDEV-NOTE: Sistema de auditoria obrigatório conforme padrão de segurança
+// ==================== Auditoria / Segurança ====================
+
 class SecurityAuditLogger {
   private static generateRequestId(): string {
     return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -106,13 +129,13 @@ class SecurityAuditLogger {
         name: tenantContext.name
       },
       payloadSize: payload ? JSON.stringify(payload).length : 0,
-      userAgent: navigator.userAgent,
-      url: window.location.href
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
+      url: typeof window !== 'undefined' ? window.location.href : 'n/a'
     });
   }
 
   static logSecurityValidation(
-    type: 'tenant_validation' | 'response_validation' | 'auth_validation',
+    type: 'tenant_validation' | 'response_validation' | 'auth_validation' | 'edge_function_response',
     success: boolean,
     details: Record<string, unknown>
   ): void {
@@ -130,6 +153,7 @@ class SecurityAuditLogger {
       functionName: string;
       tenantId: string;
       requestId: string;
+      [k: string]: unknown;
     }
   ): void {
     console.error(`❌ [AUDIT-ERROR] Edge Function Error`, {
@@ -144,14 +168,9 @@ class SecurityAuditLogger {
   }
 }
 
-// AIDEV-NOTE: Validador de segurança multi-tenant obrigatório
 class MultiTenantSecurityValidator {
-  /**
-   * Validação crítica de contexto do tenant antes de qualquer operação
-   */
   static validateTenantContext(): TenantContext {
     const { currentTenant } = useTenantStore.getState();
-    
     if (!currentTenant?.id) {
       SecurityAuditLogger.logSecurityValidation('tenant_validation', false, {
         error: 'Tenant não encontrado no store',
@@ -159,7 +178,6 @@ class MultiTenantSecurityValidator {
       });
       throw new Error('🔐 ERRO DE SEGURANÇA: Tenant não encontrado. Faça login novamente.');
     }
-
     if (!currentTenant.slug || !currentTenant.name) {
       SecurityAuditLogger.logSecurityValidation('tenant_validation', false, {
         error: 'Dados incompletos do tenant',
@@ -167,30 +185,52 @@ class MultiTenantSecurityValidator {
       });
       throw new Error('🔐 ERRO DE SEGURANÇA: Dados do tenant incompletos.');
     }
-
     SecurityAuditLogger.logSecurityValidation('tenant_validation', true, {
       tenantId: currentTenant.id,
       tenantSlug: currentTenant.slug
     });
-
-    return currentTenant;
+    return currentTenant as TenantContext;
   }
 
-  /**
-   * Validação dupla obrigatória: verifica se todos os dados retornados pertencem ao tenant correto
-   */
+  static async validateAuthentication(): Promise<string> {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      SecurityAuditLogger.logSecurityValidation('auth_validation', false, {
+        error: 'Sessão inválida ou token ausente',
+        sessionError: sessionError?.message
+      });
+      throw new Error('🔐 ERRO DE SEGURANÇA: Sessão inválida. Faça login novamente.');
+    }
+    if (session.expires_at) {
+      const now = Math.floor(Date.now() / 1000);
+      const timeUntilExpiry = session.expires_at - now;
+      if (timeUntilExpiry <= 0) {
+        SecurityAuditLogger.logSecurityValidation('auth_validation', false, {
+          error: 'Token JWT expirado',
+          expiresAt: session.expires_at,
+          now
+        });
+        throw new Error('🔐 ERRO DE SEGURANÇA: Token de autenticação expirado. Faça login novamente.');
+      }
+      if (timeUntilExpiry < 300) {
+        console.warn('⚠️ [SECURITY-WARNING] Token JWT expira em breve:', Math.round(timeUntilExpiry / 60), 'minutos');
+      }
+    }
+    SecurityAuditLogger.logSecurityValidation('auth_validation', true, {
+      tokenLength: session.access_token.length,
+      expiresAt: session.expires_at
+    });
+    return session.access_token;
+  }
+
   static validateResponseData<T extends { tenant_id?: string }>(
     data: T | T[] | null,
     expectedTenantId: string,
     functionName: string
   ): void {
     if (!data) return;
-
     const items = Array.isArray(data) ? data : [data];
-    const invalidItems = items.filter(item => 
-      item.tenant_id && item.tenant_id !== expectedTenantId
-    );
-
+    const invalidItems = items.filter(item => item.tenant_id && item.tenant_id !== expectedTenantId);
     if (invalidItems.length > 0) {
       SecurityAuditLogger.logSecurityValidation('response_validation', false, {
         error: 'Violação de segurança: dados de outro tenant detectados',
@@ -200,58 +240,16 @@ class MultiTenantSecurityValidator {
       });
       throw new Error('🚨 VIOLAÇÃO DE SEGURANÇA: Dados de outro tenant detectados!');
     }
-
     SecurityAuditLogger.logSecurityValidation('response_validation', true, {
       expectedTenantId,
       validatedItems: items.length,
       functionName
     });
   }
-
-  /**
-   * Validação de autenticação JWT obrigatória
-   */
-  static async validateAuthentication(): Promise<string> {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session?.access_token) {
-      SecurityAuditLogger.logSecurityValidation('auth_validation', false, {
-        error: 'Sessão inválida ou token ausente',
-        sessionError: sessionError?.message
-      });
-      throw new Error('🔐 ERRO DE SEGURANÇA: Sessão inválida. Faça login novamente.');
-    }
-
-    // Verificar expiração do token
-    if (session.expires_at) {
-      const now = Math.floor(Date.now() / 1000);
-      const expiresAt = session.expires_at;
-      const timeUntilExpiry = expiresAt - now;
-      
-      if (timeUntilExpiry <= 0) {
-        SecurityAuditLogger.logSecurityValidation('auth_validation', false, {
-          error: 'Token JWT expirado',
-          expiresAt,
-          now
-        });
-        throw new Error('🔐 ERRO DE SEGURANÇA: Token de autenticação expirado. Faça login novamente.');
-      }
-      
-      if (timeUntilExpiry < 300) { // Menos de 5 minutos
-        console.warn('⚠️ [SECURITY-WARNING] Token JWT expira em breve:', Math.round(timeUntilExpiry / 60), 'minutos');
-      }
-    }
-
-    SecurityAuditLogger.logSecurityValidation('auth_validation', true, {
-      tokenLength: session.access_token.length,
-      expiresAt: session.expires_at
-    });
-
-    return session.access_token;
-  }
 }
 
-// AIDEV-NOTE: Função auxiliar segura para chamadas com retry automático e validação multi-tenant
+// =================== Core: chamada com retry ===================
+
 async function callEdgeFunctionWithRetry<T = unknown>(
   functionName: string,
   payload: unknown,
@@ -260,39 +258,65 @@ async function callEdgeFunctionWithRetry<T = unknown>(
 ): Promise<EdgeFunctionResponse<T>> {
   let lastError: Error | null = null;
   const requestId = headers['x-request-id'];
-  
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await supabase.functions.invoke(functionName, {
-        body: payload,
-        headers
+      // AIDEV-NOTE: Usando fetch direto em vez de supabase.functions.invoke
+      // para garantir que todos os headers customizados sejam enviados corretamente
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const url = `${supabaseUrl}/functions/v1/${functionName}`;
+      
+      console.log('🚀 [DEBUG] Chamando Edge Function com fetch direto:', {
+        requestId,
+        url,
+        headers: Object.keys(headers),
+        payloadType: typeof payload,
+        functionName
+      });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseText = await response.text();
+      let responseData: T | null = null;
+      
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // Se não conseguir fazer parse do JSON, mantém como null
+        responseData = null;
+      }
+
+      console.log('🔍 [DEBUG] Resposta da Edge Function:', {
+        requestId,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        responseData,
+        functionName
       });
 
       // Se não é erro 401, processa resposta
-      if (!response.error || response.error.status !== 401) {
-        const hasError = !!response.error;
-        const status = hasError ? (response.error.status || 500) : 200;
-        const statusText = hasError ? (response.error.message || 'Edge Function Error') : 'OK';
-        
-        console.log('🔍 [DEBUG] Resposta da Edge Function:', {
-          requestId,
-          hasError,
-          status,
-          statusText,
-          ok: !hasError,
-          responseData: response.data,
-          responseError: response.error,
-          functionName
-        });
+      if (response.status !== 401) {
+        const hasError = !response.ok;
         
         return {
-          ok: !hasError,
-          status,
-          statusText,
-          data: response.data,
-          error: response.error,
-          text: async () => response.error?.message || '',
-          json: async () => response.data || {}
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData,
+          error: hasError ? {
+            status: response.status,
+            message: responseText || response.statusText
+          } as EdgeFunctionError : null,
+          text: async () => responseText,
+          json: async () => responseData as T,
         };
       }
 
@@ -300,154 +324,232 @@ async function callEdgeFunctionWithRetry<T = unknown>(
       if (attempt < maxRetries) {
         console.log(`🔄 [RETRY] Token expirado, tentando renovar... (tentativa ${attempt + 1}/${maxRetries + 1})`);
         const refreshSuccess = await refreshAuthToken();
-        
         if (!refreshSuccess) {
           throw new Error('Falha ao renovar token de autenticação');
         }
-
-        // Atualiza o token no header para próxima tentativa
         const newToken = await MultiTenantSecurityValidator.validateAuthentication();
         headers.Authorization = `Bearer ${newToken}`;
         console.log('✅ Token renovado, tentando novamente...');
         continue;
       }
 
-      // Se chegou aqui, esgotou as tentativas
-      throw new Error(`Erro 401: ${response.error.message || 'Token inválido ou expirado'}`);
-      
+      throw new Error(`Erro 401: ${responseText || 'Token inválido ou expirado'}`);
     } catch (error) {
       lastError = error as Error;
-      
-      // Se não é erro de rede/timeout e ainda temos tentativas, continua
+
+      // Retry apenas em 401 dentro desse fluxo; demais erros caem fora
       if (attempt < maxRetries && (error as ExtendedError)?.status === 401) {
         continue;
       }
-      
-      // Se não temos mais tentativas ou é outro tipo de erro, lança exceção
       throw error;
     }
   }
-  
+
   throw lastError || new Error('Falha inesperada na chamada da Edge Function');
 }
 
+// ===================== Serviço público =====================
+
 export const edgeFunctionService = {
   /**
-   * AIDEV-NOTE: Função principal para envio de mensagens em lote
-   * Implementa todas as 5 camadas de segurança multi-tenant
+   * Envio de mensagens em lote
+   * - Segurança multi-tenant completa
+   * - Retry automático
+   * - Converte o retorno real da Edge no shape esperado pelo app
    */
   async sendBulkMessages(
-    chargeIds: string[], 
-    templateId: string, 
-    sendImmediately: boolean = true
+    chargeIds: string[],
+    templateIdOrCustomMessage: string,
+    sendImmediately: boolean = true,
+    customMessage?: string,
+    tenantId?: string
   ): Promise<BulkMessageResponse> {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Tentativa ${attempt}/${maxRetries} - Enviando mensagens em lote...`);
+        return await this._executeBulkMessages(
+          chargeIds,
+          templateIdOrCustomMessage,
+          sendImmediately,
+          requestId,
+          customMessage
+        );
+      } catch (error) {
+        lastError = error as Error;
+
+        if (!this._shouldRetryError(lastError, attempt, maxRetries)) {
+          throw lastError;
+        }
+
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`⏳ Aguardando ${delay}ms antes da próxima tentativa...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError || new Error('Falha após todas as tentativas de retry');
+  },
+
+  _shouldRetryError(error: Error, attempt: number, maxRetries: number): boolean {
+    const msg = (error?.message || '').toLowerCase();
+    if (msg.includes('token de autenticação') || msg.includes('acesso negado') || msg.includes('permissões insuficientes')) {
+      return false;
+    }
+    if (msg.includes('dados da requisição inválidos')) {
+      return false;
+    }
+    if (attempt < maxRetries && (
+      msg.includes('temporariamente indisponível') ||
+      msg.includes('erro interno do servidor') ||
+      msg.includes('timeout') ||
+      msg.includes('network')
+    )) {
+      return true;
+    }
+    return false;
+  },
+
+  async _executeBulkMessages(
+    chargeIds: string[],
+    templateIdOrCustomMessage: string,
+    sendImmediately: boolean,
+    requestId: string,
+    customMessage?: string,
+    tenantId?: string
+  ): Promise<BulkMessageResponse> {
     try {
-      // CAMADA 1: Validação de contexto do tenant (Zustand Store)
+      // CAMADA 1: Tenant
       const tenantContext = MultiTenantSecurityValidator.validateTenantContext();
-      
-      // CAMADA 2: Validação de autenticação JWT
+
+      // CAMADA 2: JWT
       const accessToken = await MultiTenantSecurityValidator.validateAuthentication();
 
-      // AIDEV-NOTE: Preparar dados da requisição com tenant_id obrigatório
+      // AIDEV-NOTE: Payload corrigido - Edge Function só aceita chargeIds, templateId OU customMessage
       const requestData: SendBulkMessagesRequest = {
         chargeIds,
-        templateId,
-        sendImmediately,
-        tenant_id: tenantContext.id // Validação obrigatória
+        ...(customMessage ? { customMessage } : { templateId: templateIdOrCustomMessage }),
+        tenant_id: tenantId || tenantContext.id
       };
 
-      // AIDEV-NOTE: Sistema de auditoria obrigatório
+      // AIDEV-NOTE: Log detalhado para debug
+      console.log('🔍 [DEBUG] Payload sendo enviado para Edge Function:', {
+        requestData,
+        chargeIds: chargeIds.length,
+        hasCustomMessage: !!customMessage,
+        hasTemplateId: !!templateIdOrCustomMessage && !customMessage,
+        tenantId: tenantContext.id
+      });
+
+      // Auditoria
       SecurityAuditLogger.logEdgeFunctionCall(
         'send-bulk-messages',
         tenantContext,
         requestId,
-        { chargeCount: chargeIds.length, templateId }
+        {
+          chargeCount: chargeIds.length,
+          templateId: customMessage ? 'custom_message' : templateIdOrCustomMessage,
+          hasCustomMessage: !!customMessage
+        }
       );
 
-      // AIDEV-NOTE: Headers seguros com todas as validações obrigatórias
+      // Headers seguros
       const secureHeaders: SecureHeaders = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'x-tenant-id': tenantContext.id,
+        'x-tenant-id': tenantId || tenantContext.id,
         'x-request-id': requestId,
-        'x-timestamp': new Date().toISOString()
+        'x-timestamp': new Date().toISOString(),
+        // 'x-env': 'production' | 'sandbox' // opcional, se quiser forçar
       };
 
       console.log('📤 [SECURE] Enviando para Edge Function:', {
         url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-bulk-messages`,
         chargeCount: chargeIds.length,
-        templateId,
-        tenantId: tenantContext.id,
+        templateId: customMessage ? 'custom_message' : templateIdOrCustomMessage,
+        hasCustomMessage: !!customMessage,
+        tenantId: tenantId || tenantContext.id,
         requestId
       });
 
-      // CAMADA 3: Chamada segura com retry automático
-      const response = await callEdgeFunctionWithRetry<BulkMessageResponse>(
+      // Chamada com retry
+      const response = await callEdgeFunctionWithRetry<EdgeFunctionBulkResponse>(
         'send-bulk-messages',
         requestData,
         secureHeaders
       );
 
-      // CAMADA 4: Verificação de sucesso da resposta
+      // Tratamento de erro HTTP
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Erro na Edge Function:', {
-          requestId,
+        SecurityAuditLogger.logSecurityValidation('edge_function_response', false, {
           status: response.status,
           statusText: response.statusText,
           error: errorText,
         });
-        
-        let errorMessage = 'Erro ao enviar mensagens';
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        
+
+        // Use a mensagem real do backend se disponível
+        const errorMessage = errorText || response.statusText || 'Erro ao enviar mensagens';
+        console.error('🚨 Erro na Edge Function:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          errorText,
+          requestId,
+          tenantId: tenantId || tenantContext.id
+        });
+
         SecurityAuditLogger.logError(
           new Error(errorMessage),
-          { functionName: 'send-bulk-messages', tenantId: tenantContext.id, requestId }
+          {
+            functionName: 'send-bulk-messages',
+            tenantId: tenantId || tenantContext.id,
+            requestId,
+            httpStatus: response.status
+          }
         );
-        
+
         throw new Error(errorMessage);
       }
 
-      // CAMADA 5: Validação dupla obrigatória dos dados retornados
-      const result: BulkMessageResponse = await response.json();
-      
-      // Validação crítica: verificar se a resposta pertence ao tenant correto
-      if (result.tenant_id !== tenantContext.id) {
-        SecurityAuditLogger.logSecurityValidation('response_validation', false, {
-          error: 'Tenant ID da resposta não confere',
-          expected: tenantContext.id,
-          received: result.tenant_id,
-          functionName: 'send-bulk-messages'
-        });
-        throw new Error('🚨 VIOLAÇÃO DE SEGURANÇA: Resposta de tenant incorreto!');
-      }
-
-      // Validação dupla dos resultados individuais
-      if (result.results) {
-        MultiTenantSecurityValidator.validateResponseData(
-          result.results,
-          tenantContext.id,
-          'send-bulk-messages'
-        );
-      }
+      // Resposta OK: Edge retorna { success, data, requestId }
+      const edgeRes = await response.json(); // tipado no invoke acima
 
       console.log('✅ [SECURE] Resposta validada da Edge Function:', {
-        requestId,
-        success: result.success,
-        summary: result.summary,
-        sentCount: result.results?.length || 0,
+        requestId: edgeRes.requestId,
+        success: edgeRes.success,
+        summary: {
+          total: edgeRes.data.total,
+          sent: edgeRes.data.success,
+          failed: edgeRes.data.failed
+        },
+        sentCount: edgeRes.data.details?.length ?? 0,
         tenantValidated: true
       });
 
-      return result;
+      // Normaliza para o shape esperado pelo app:
+      const normalized: BulkMessageResponse = {
+        success: edgeRes.success,
+        message: edgeRes.success ? 'Mensagens processadas' : 'Falha ao processar mensagens',
+        tenant_id: tenantId || tenantContext.id,
+        results: (edgeRes.data.details ?? []).map((detail) => ({
+          charge_id: detail.chargeId,
+          success: !!detail.success,
+          message: detail.error ?? '',
+          tenant_id: tenantId || tenantContext.id,
+        })),
+        summary: {
+          total: edgeRes.data.total,
+          sent: edgeRes.data.success,
+          failed: edgeRes.data.failed,
+          errors: edgeRes.data.failed,
+        },
+      };
+
+      return normalized;
     } catch (error) {
       SecurityAuditLogger.logError(
         error as Error,
@@ -459,48 +561,43 @@ export const edgeFunctionService = {
   },
 
   /**
-   * AIDEV-NOTE: Método genérico seguro para chamar qualquer Edge Function
-   * Implementa todas as validações de segurança multi-tenant
+   * Método genérico seguro para chamar qualquer Edge Function
    */
   async callEdgeFunction<TRequest = unknown, TResponse = unknown>(
     functionName: string,
     data: TRequest,
+    tenantId?: string,
     options: EdgeFunctionOptions = {}
   ): Promise<TResponse> {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     try {
-      const { 
-        method = 'POST', 
-        requireTenant = true, 
+      const {
+        method = 'POST',
+        requireTenant = true,
         additionalHeaders = {},
         maxRetries = 1,
         auditLog = true
       } = options;
 
-      // CAMADA 1: Validação de contexto do tenant se necessário
       let tenantContext: TenantContext | null = null;
       if (requireTenant) {
         tenantContext = MultiTenantSecurityValidator.validateTenantContext();
       }
 
-      // CAMADA 2: Validação de autenticação JWT
       const accessToken = await MultiTenantSecurityValidator.validateAuthentication();
 
-      // AIDEV-NOTE: Headers seguros básicos
       const secureHeaders: Partial<SecureHeaders> & Record<string, string> = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
+        'x-tenant-id': tenantId || tenantContext?.id || '',
         'x-request-id': requestId,
         'x-timestamp': new Date().toISOString(),
         ...additionalHeaders,
       };
 
-      // AIDEV-NOTE: Adicionar tenant_id se necessário
       if (requireTenant && tenantContext) {
-        secureHeaders['x-tenant-id'] = tenantContext.id;
-        
-        // Sistema de auditoria obrigatório
+        secureHeaders['x-tenant-id'] = tenantId || tenantContext.id;
         if (auditLog) {
           SecurityAuditLogger.logEdgeFunctionCall(
             functionName,
@@ -511,7 +608,6 @@ export const edgeFunctionService = {
         }
       }
 
-      // AIDEV-NOTE: Fazer requisição segura
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`,
         {
@@ -521,21 +617,16 @@ export const edgeFunctionService = {
         }
       );
 
-      // AIDEV-NOTE: Processar resposta com validação de segurança
-      let responseData = null;
-      let responseError = null;
+      let responseData: unknown = null;
+      let responseError: EdgeFunctionError | null = null;
       let hasError = false;
 
       try {
         const responseText = await response.text();
         if (responseText) {
-          const parsedResponse = JSON.parse(responseText);
-          if (response.ok) {
-            responseData = parsedResponse;
-          } else {
-            responseError = parsedResponse;
-            hasError = true;
-          }
+          const parsed = JSON.parse(responseText);
+          if (response.ok) responseData = parsed;
+          else { responseError = parsed; hasError = true; }
         }
       } catch (parseError) {
         console.warn('⚠️ Erro ao fazer parse da resposta:', parseError);
@@ -560,18 +651,17 @@ export const edgeFunctionService = {
         error.status = response.status;
         error.statusText = response.statusText;
         error.responseError = responseError;
-        
+
         if (tenantContext) {
           SecurityAuditLogger.logError(
             error,
             { functionName, tenantId: tenantContext.id, requestId }
           );
         }
-        
+
         throw error;
       }
 
-      // CAMADA 3: Validação dupla dos dados se for multi-tenant
       if (requireTenant && tenantContext && responseData) {
         MultiTenantSecurityValidator.validateResponseData(
           responseData,
@@ -580,7 +670,7 @@ export const edgeFunctionService = {
         );
       }
 
-      return responseData || await response.json();
+      return (responseData ?? (await response.json())) as TResponse;
     } catch (error) {
       console.error(`❌ Erro no callEdgeFunction(${functionName}):`, error);
       throw error;

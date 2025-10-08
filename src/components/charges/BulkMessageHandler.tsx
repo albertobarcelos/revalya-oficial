@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from '@/lib/supabase';
 import { processMessageTags } from '@/utils/messageUtils';
 import { BulkMessageDialog } from './BulkMessageDialog';
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
 import { useEvolutionApiConfig } from '@/hooks/useEvolutionApiConfig';
 import { edgeFunctionService } from '@/services/edgeFunctionService';
+import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates';
 import type { Cobranca } from '@/types/database';
 // AIDEV-NOTE: Hook obrigatório para segurança multi-tenant e serviço Edge Function
 
@@ -25,6 +25,10 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
   const { toast } = useToast();
   const { currentTenant } = useCurrentTenant();
   const evolutionConfig = useEvolutionApiConfig();
+  
+  // 🛡️ HOOK SEGURO PARA TEMPLATES - Implementa todas as 5 camadas de segurança
+  // AIDEV-NOTE: Removido createTemplate e deleteTemplate pois não são mais necessários para mensagens customizadas
+  const { } = useSecureNotificationTemplates();
 
   const handleSendBulkMessages = async (templateId: string, customMessage?: string) => {
     try {
@@ -46,81 +50,43 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
         throw new Error('Tenant não definido - violação de segurança');
       }
 
-      // AIDEV-NOTE: Verificar se é mensagem customizada
-      let finalTemplateId = templateId;
-      
-      if (customMessage && templateId.startsWith('custom_')) {
-        console.log('📝 Criando template temporário para mensagem customizada');
-        
-        // AIDEV-NOTE: Criar template temporário para mensagem customizada
-        const { data: tempTemplate, error: tempTemplateError } = await supabase
-          .from('notification_templates')
-          .insert({
-            tenant_id: currentTenant.id,
-            name: `Mensagem Customizada - ${new Date().toLocaleString('pt-BR')}`,
-            message: customMessage,
-            is_temporary: true,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (tempTemplateError) {
-          console.error('❌ Erro ao criar template temporário:', tempTemplateError);
-          throw new Error('Erro ao criar template temporário para mensagem customizada');
-        }
-
-        finalTemplateId = tempTemplate.id;
-        console.log('✅ Template temporário criado:', finalTemplateId);
-      }
-
-      // AIDEV-NOTE: Chamar Edge Function com segurança JWT + RLS
+      // AIDEV-NOTE: Processar mensagem customizada diretamente sem criar template temporário
       console.log('🔄 Chamando Edge Function send-bulk-messages...');
       const result = await edgeFunctionService.sendBulkMessages(
         selectedCharges,
-        finalTemplateId,
-        true // sendImmediately
+        templateId,
+        true, // sendImmediately
+        customMessage // Passar mensagem customizada diretamente
       );
 
       console.log('✅ Resultado da Edge Function:', result);
 
       // AIDEV-NOTE: Processar resultado e exibir feedback detalhado
       if (result.success) {
-        const { summary } = result;
+        const { summary, results } = result;
         
         toast({
           title: 'Mensagens processadas',
           description: `${summary.sent} mensagens enviadas com sucesso de ${summary.total} total. ${summary.failed > 0 ? `${summary.failed} falharam.` : ''}`,
         });
 
-        // AIDEV-NOTE: Log detalhado para debug
-        if (summary.failed > 0) {
-          console.warn('⚠️ Algumas mensagens falharam:', result.results.failed);
-        }
-        
-        if (result.results.processingErrors.length > 0) {
-          console.warn('⚠️ Erros de processamento:', result.results.processingErrors);
+        // AIDEV-NOTE: Log detalhado para debug - usando o shape correto do BulkMessageResponse
+        if (summary.failed > 0 && results) {
+          const failedResults = results.filter(r => !r.success);
+          console.warn('⚠️ Algumas mensagens falharam:', failedResults);
+          
+          // Log das mensagens de erro específicas
+          failedResults.forEach(failed => {
+            if (failed.message) {
+              console.warn(`❌ Cobrança ${failed.charge_id}: ${failed.message}`);
+            }
+          });
         }
       } else {
         throw new Error('Edge Function retornou sucesso = false');
       }
 
-      // AIDEV-NOTE: Limpar template temporário se foi criado
-      if (customMessage && templateId.startsWith('custom_') && finalTemplateId !== templateId) {
-        try {
-          await supabase
-            .from('notification_templates')
-            .delete()
-            .eq('id', finalTemplateId)
-            .eq('tenant_id', currentTenant.id)
-            .eq('is_temporary', true);
-          
-          console.log('🗑️ Template temporário removido:', finalTemplateId);
-        } catch (cleanupError) {
-          console.warn('⚠️ Erro ao limpar template temporário:', cleanupError);
-          // Não falhar o processo por causa da limpeza
-        }
-      }
+      // AIDEV-NOTE: Não há mais necessidade de limpeza de templates temporários
 
     } catch (error) {
       console.error('❌ Erro detalhado no envio de mensagens:', error);

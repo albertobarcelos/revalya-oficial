@@ -22,49 +22,43 @@ export const messageService = {
   lastCustomMessage: '',
 
   /**
-   * AIDEV-NOTE: Envia mensagens em massa usando Edge Function
-   * Migrado de N8N direto para Edge Function com segurança JWT + RLS
+   * AIDEV-NOTE: Envia mensagens em massa usando Edge Function simplificada
+   * Suporta tanto templates quanto mensagens diretas sem processamento complexo
    */
-  async sendBulkMessages(chargeIds: string[], templateIdOrCustom: string, customMessage?: string) {
-    // AIDEV-NOTE: Verificação crítica - se for um template customizado mas a mensagem estiver vazia, buscar do elemento DOM
-    if ((customMessage === '' || customMessage === undefined) && templateIdOrCustom.startsWith('custom_')) {
-      // Tentar buscar diretamente do textarea
-      const textareaElement = document.getElementById('custom-message') as HTMLTextAreaElement;
-      if (textareaElement && textareaElement.value) {
-        customMessage = textareaElement.value;
-        console.log('🔄 Recuperando mensagem diretamente do DOM:', customMessage);
-      }
-    }
-
-    // AIDEV-NOTE: Determinar se é mensagem customizada
-    const isCustom = customMessage || templateIdOrCustom.startsWith('custom_');
-    const directMessage = customMessage || '';
-    console.log('📌 Mensagem original recebida:', directMessage);
-    
+  async sendBulkMessages(chargeIds: string[], templateIdOrCustomMessage: string, customMessage?: string) {
     try {
-      // AIDEV-NOTE: Determinar o templateId final
-      let finalTemplateId = templateIdOrCustom;
-      
-      if (isCustom) {
-        // AIDEV-NOTE: Para mensagens customizadas, usar apenas ID temporário para identificação
-        // Não é necessário inserir na tabela notification_templates
-        const tempTemplateId = uuidv4();
-        console.log('📝 Usando template temporário para mensagem customizada:', tempTemplateId);
-        
-        finalTemplateId = tempTemplateId;
+      // AIDEV-NOTE: Validar chargeIds como array não vazio
+      if (!Array.isArray(chargeIds) || chargeIds.length === 0) {
+        throw new Error('chargeIds deve ser um array não vazio de strings');
       }
 
-      console.log('📤 Enviando para Edge Function:', {
+      // AIDEV-NOTE: Determinar se é mensagem customizada com validação rigorosa
+      const hasValidCustomMessage = customMessage && customMessage.trim().length > 0;
+      const hasValidTemplateMessage = templateIdOrCustomMessage && 
+                                     !templateIdOrCustomMessage.startsWith('custom_') && 
+                                     templateIdOrCustomMessage.trim().length > 0;
+      
+      // AIDEV-NOTE: Verificar se temos pelo menos uma mensagem válida
+      if (!hasValidCustomMessage && !hasValidTemplateMessage) {
+        throw new Error('É necessário fornecer templateId válido ou customMessage com conteúdo');
+      }
+
+      const isCustomMessage = hasValidCustomMessage;
+      const directMessage = hasValidCustomMessage ? customMessage : undefined;
+      
+      console.log('📤 Enviando mensagens:', {
         chargeCount: chargeIds.length,
-        templateId: finalTemplateId,
-        isCustom,
+        isCustomMessage,
+        hasDirectMessage: !!directMessage,
+        templateId: isCustomMessage ? 'custom' : templateIdOrCustomMessage
       });
 
-      // AIDEV-NOTE: Chamar Edge Function com segurança JWT + RLS
+      // AIDEV-NOTE: Chamar Edge Function com payload corrigido
       const result = await edgeFunctionService.sendBulkMessages(
         chargeIds,
-        finalTemplateId,
-        true // sendImmediately = true
+        templateIdOrCustomMessage,
+        true, // sendImmediately (processado internamente, não enviado para Edge)
+        directMessage // customMessage
       );
 
       console.log('✅ Resposta da Edge Function:', {
@@ -190,22 +184,35 @@ export const messageService = {
 
   /**
    * Registra o histórico das mensagens no banco de dados
+   * AIDEV-NOTE: Função corrigida para segurança multi-tenant com filtros tenant_id obrigatórios
    */
-  async recordMessageHistory(charges: Cobranca[], messages: { 
-    charge: {
-      id: string;
-    };
-    template: {
-      message: string;
-    };
-  }[], templateId: string, templateName: string) {
+  async recordMessageHistory(
+    tenantId: string,
+    charges: Cobranca[], 
+    messages: { 
+      charge: {
+        id: string;
+      };
+      template: {
+        message: string;
+      };
+    }[], 
+    templateId: string, 
+    templateName: string
+  ) {
     console.log('📝 Registrando histórico com templateId:', templateId);
     
+    // AIDEV-NOTE: Validação obrigatória de tenant_id
+    if (!tenantId) {
+      throw new Error('tenant_id é obrigatório para recordMessageHistory');
+    }
+    
     try {
-      // Sempre buscar um template válido existente para usar como fallback
+      // AIDEV-NOTE: Buscar template válido APENAS do tenant correto para usar como fallback
       const { data: validTemplates } = await supabase
         .from('notification_templates')
         .select('id')
+        .eq('tenant_id', tenantId)
         .limit(1);
         
       // ID de template válido ou null se não encontrar nenhum
@@ -215,21 +222,22 @@ export const messageService = {
       // Verificar se é uma mensagem personalizada
       const isCustomMessage = templateId.startsWith('custom_') || this.lastCustomMessage;
       
-      // Verificar se o templateId existe na tabela
+      // AIDEV-NOTE: Verificar se o templateId existe na tabela APENAS para o tenant correto
       if (!isCustomMessage) {
         const { data: templateCheck } = await supabase
           .from('notification_templates')
           .select('id')
           .eq('id', templateId)
+          .eq('tenant_id', tenantId)
           .single();
           
         if (!templateCheck) {
-          console.log('⚠️ Template ID não existe na tabela, usando fallback');
+          console.log('⚠️ Template ID não existe na tabela para este tenant, usando fallback');
           templateId = fallbackTemplateId;
         }
       }
       
-      // Para mensagens personalizadas ou templates inválidos, usar fallback
+      // AIDEV-NOTE: Para mensagens personalizadas ou templates inválidos, usar fallback
       const historyRecords = charges.map(charge => {
         const messageObj = messages.find(m => m.charge.id === charge.id);
         
@@ -240,7 +248,8 @@ export const messageService = {
           status: 'success',
           message_content: messageObj?.template.message || this.lastCustomMessage || '',
           customer_name: charge.customer?.name || 'Cliente',
-          customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000'
+          customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000',
+          tenant_id: tenantId // AIDEV-NOTE: Campo obrigatório para RLS multi-tenant
         };
       });
       
@@ -268,8 +277,9 @@ export const messageService = {
   },
 
   /**
-   * Envia uma mensagem de texto via WhatsApp
-   * AIDEV-NOTE: Método para envio de mensagens com isolamento por tenant
+   * Envia uma mensagem de texto via WhatsApp usando Edge Function
+   * AIDEV-NOTE: Método seguro para envio de mensagens individuais via Edge Function
+   * Não expõe credenciais da Evolution API no client
    */
   async sendMessage(
     tenantSlug: string, 
@@ -288,56 +298,87 @@ export const messageService = {
         throw new Error('Parâmetros obrigatórios não fornecidos: tenantSlug, phoneNumber, message');
       }
 
-      // AIDEV-NOTE: Buscar instância ativa para o tenant
-      const instanceName = await whatsappService.getFullInstanceName(tenantSlug);
-      if (!instanceName) {
-        throw new Error(`Nenhuma instância ativa encontrada para o tenant: ${tenantSlug}`);
+      // AIDEV-NOTE: Buscar tenant_id pelo slug para segurança
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('slug', tenantSlug)
+        .single();
+
+      if (tenantError || !tenant) {
+        throw new Error(`Tenant não encontrado para slug: ${tenantSlug}`);
       }
 
-      // AIDEV-NOTE: Verificar se a instância está conectada
-      const status = await whatsappService.checkInstanceStatus(instanceName);
-      if (status !== 'open') {
-        throw new Error(`Instância ${instanceName} não está conectada. Status: ${status}`);
-      }
+      // AIDEV-NOTE: Configurar contexto de tenant para segurança
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenant.id 
+      });
 
+      // AIDEV-NOTE: Criar uma cobrança temporária para usar a Edge Function
+      // Isso permite reutilizar a infraestrutura existente de forma segura
+      const tempChargeId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       // AIDEV-NOTE: Formatar número de telefone (garantir formato internacional)
       const formattedNumber = phoneNumber.startsWith('55') ? phoneNumber : `55${phoneNumber}`;
       
-      logService.info('MessageService', `Enviando mensagem via ${instanceName} para ${formattedNumber}`);
+      logService.info('MessageService', `Enviando mensagem via Edge Function para ${formattedNumber}`);
 
-      // AIDEV-NOTE: Preparar payload para envio de mensagem
-      const messagePayload = {
-        number: formattedNumber,
-        text: message,
-        delay: options?.delay || 1000,
-        linkPreview: options?.linkPreview ?? true,
-        mentionsEveryOne: options?.mentionsEveryOne ?? false,
-        ...(options?.mentioned && { mentioned: options.mentioned })
-      };
+      // AIDEV-NOTE: Usar Edge Function para envio seguro
+      // Cria uma entrada temporária em charges para usar a infraestrutura existente
+      const { data: tempCharge, error: chargeError } = await supabase
+        .from('charges')
+        .insert({
+          id: tempChargeId,
+          tenant_id: tenant.id,
+          customer_name: 'Mensagem Direta',
+          customer_phone: formattedNumber,
+          amount: 0,
+          due_date: new Date().toISOString(),
+          status: 'temp_message',
+          description: 'Mensagem direta via API'
+        })
+        .select('id')
+        .single();
 
-      // AIDEV-NOTE: Enviar mensagem via Evolution API usando o whatsappService
-      const response = await (whatsappService as any).callEvolutionApi(
-        `/message/sendText/${instanceName}`,
-        'POST',
-        messagePayload
-      );
-
-      // AIDEV-NOTE: Validar resposta da API
-      if (!response || !response.key) {
-        throw new Error('Resposta inválida da Evolution API');
+      if (chargeError) {
+        throw new Error('Erro ao criar entrada temporária para mensagem');
       }
 
-      logService.info('MessageService', `Mensagem enviada com sucesso:`, {
-        messageId: response.key.id,
-        instanceName,
-        phoneNumber: formattedNumber,
-        tenant: tenantSlug
-      });
+      try {
+        // AIDEV-NOTE: Usar Edge Function send-bulk-messages com mensagem customizada
+        const result = await edgeFunctionService.sendBulkMessages(
+          [tempChargeId],
+          'direct_message', // templateId para identificar como mensagem direta
+          true, // sendImmediately
+          message // customMessage
+        );
 
-      return {
-        success: true,
-        messageId: response.key.id
-      };
+        // AIDEV-NOTE: Verificar resultado do envio
+        if (result.success && result.summary.sent > 0) {
+          logService.info('MessageService', `Mensagem enviada com sucesso via Edge Function:`, {
+            tempChargeId,
+            phoneNumber: formattedNumber,
+            tenant: tenantSlug,
+            summary: result.summary
+          });
+
+          return {
+            success: true,
+            messageId: result.results?.[0]?.charge_id || tempChargeId
+          };
+        } else {
+          const errorMsg = result.results?.[0]?.message || 'Erro desconhecido no envio via Edge Function';
+          throw new Error(errorMsg);
+        }
+
+      } finally {
+        // AIDEV-NOTE: Limpar entrada temporária após envio
+        await supabase
+          .from('charges')
+          .delete()
+          .eq('id', tempChargeId)
+          .eq('tenant_id', tenant.id);
+      }
 
     } catch (error) {
       logService.error('MessageService', `Erro ao enviar mensagem para ${phoneNumber} via tenant ${tenantSlug}:`, error);

@@ -44,7 +44,13 @@ class TenantSecurityMonitor {
 
     // Log no console para desenvolvimento
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[TenantSecurity]', securityEvent);
+      // AIDEV-NOTE: Sanitizar evento antes de logar para evitar referências circulares
+      const { sanitizeSecurityMetadata } = require('@/utils/jsonSanitizer');
+      const sanitizedEvent = {
+        ...securityEvent,
+        details: sanitizeSecurityMetadata(securityEvent.details)
+      };
+      console.warn('[TenantSecurity]', sanitizedEvent);
     }
 
     // Verificar se precisa alertar
@@ -93,12 +99,15 @@ class TenantSecurityMonitor {
    */
   private async sendToBackend(event: SecurityEvent) {
     try {
+      // AIDEV-NOTE: Usar sanitização para evitar erro "Converting circular structure to JSON"
+      const { safeJSONStringify } = await import('@/utils/jsonSanitizer');
+      
       await fetch('/api/security/events', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(event)
+        body: safeJSONStringify(event)
       });
     } catch (error) {
       console.error('Erro ao enviar evento de segurança:', error);

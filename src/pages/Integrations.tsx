@@ -387,14 +387,7 @@ export default function Templates() {
                         <div className="text-sm text-muted-foreground line-clamp-3">
                           {template.message}
                         </div>
-                        <div className="flex flex-wrap gap-1">
-                          {template.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              <Tag className="mr-1 h-3 w-3" />
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
+                        {/* AIDEV-NOTE: Tags removidas da visualização principal - apenas visíveis no modo de edição */}
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-2">

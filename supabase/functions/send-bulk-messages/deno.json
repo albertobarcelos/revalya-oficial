@@ -1,14 +1,10 @@
 {
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+  },
   "compilerOptions": {
     "allowJs": true,
-    "lib": ["deno.window", "deno.ns", "dom", "deno.unstable"],
-    "strict": true,
-    "types": ["https://deno.land/x/types/deno.d.ts"]
-  },
-  "imports": {
-    "deno-std/http": "https://deno.land/std@0.168.0/http/server.ts",
-    "supabase": "https://esm.sh/@supabase/supabase-js@2",
-    "cors": "../_shared/cors.ts",
-    "validation": "../_shared/validation.ts"
+    "lib": ["deno.window"],
+    "strict": true
   }
 }

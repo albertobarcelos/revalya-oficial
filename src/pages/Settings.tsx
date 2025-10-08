@@ -27,8 +27,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 // AIDEV-NOTE: Importando hooks de segurança multi-tenant obrigatórios
 import { useTenantAccessGuard, useSecureTenantQuery } from "@/hooks/templates/useSecureTenantQuery";
 
-const DEFAULT_EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolution.nexsyn.com.br/api';
-const DEFAULT_EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY;
+const DEFAULT_EVOLUTION_API_URL = import.meta.env.EVOLUTION_API_URL || 'https://evolution.nexsyn.com.br';
+const DEFAULT_EVOLUTION_API_KEY = import.meta.env.EVOLUTION_API_KEY;
 
 const MODULE_NAME = 'Settings';
 

@@ -1,903 +1,655 @@
-// =====================================================
-// EDGE FUNCTION: Send Bulk Messages - Refatorado
-// Descrição: Processa envio de mensagens em massa via Evolution API
-// Autor: Barcelitos AI Agent
-// Data: 2025-01-21
-// Versão: 3.0 - Refatoração completa com melhorias de performance e segurança
-// =====================================================
-
-/// <reference types="https://deno.land/x/types/deno.d.ts" />
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
-import { validateRequest } from "../_shared/validation.ts";
-
-// =====================================================
-// INTERFACES E TIPOS SEGUROS
-// =====================================================
-
-/**
- * AIDEV-NOTE: Interface para dados do cliente com validação de tenant
- */
-interface CustomerData {
-  id: string;
-  name?: string;
-  email?: string;
-  phone?: string;
-  cpf_cnpj?: string;
-  company?: string;
-  tenant_id: string;
+// AIDEV-NOTE: Edge Function para envio de mensagens em massa via WhatsApp (Evolution)
+// Versão 6.0 - Config multi-tenant via public.tenant_integrations (JSON config), environment-aware e overrides por header
+// Data: 2025-10-08
+import { serve } from "https://deno.land/std@0.182.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+/** =========================
+ *  ENV Helpers
+ *  ========================= */ function requireEnv(name, value) {
+  if (!value?.trim()) throw new Error(`Variável de ambiente ${name} é obrigatória`);
+  return value.trim();
 }
-
-/**
- * AIDEV-NOTE: Interface para dados da cobrança com validação de tenant
- */
-interface ChargeData {
-  id: string;
-  customer_id: string;
-  valor: number;
-  data_vencimento: string;
-  descricao?: string;
-  link_pagamento?: string;
-  codigo_barras?: string;
-  tenant_id: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para template de mensagem com validação de tenant
- */
-interface MessageTemplate {
-  id: string;
-  name: string;
-  content: string;
-  tenant_id: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para requisição de envio de mensagens
- */
-interface SendMessageRequest {
-  chargeIds: string[];
-  templateId: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para mensagem processada
- */
-interface ProcessedMessage {
-  customerId: string;
-  customerPhone: string;
-  message: string;
-  chargeId: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para resultado de envio
- */
-interface SendResult {
-  chargeId: string;
-  customerId: string;
-  phone: string;
-  success: boolean;
-  messageId?: string;
-  error?: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para contexto de validação
- */
-interface ValidationContext {
-  isValid: boolean;
-  error?: string;
-  status?: number;
-  user?: {
-    id: string;
-    email: string;
-  };
-  tenantId?: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para resposta da Evolution API
- */
-interface EvolutionApiResponse {
-  success: boolean;
-  messageId?: string;
-  id?: string;
-  message?: string;
-  error?: string;
-}
-
-/**
- * AIDEV-NOTE: Interface para log de auditoria
- */
-interface AuditLogEntry {
-  operationId: string;
-  tenantId: string;
-  userId?: string;
-  userEmail?: string;
-  action: string;
-  details: Record<string, unknown>;
-  timestamp: string;
-  level: 'info' | 'warn' | 'error' | 'security';
-}
-
-// =====================================================
-// CONFIGURAÇÃO DE AMBIENTE
-// =====================================================
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
-const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
-
-// =====================================================
-// CLASSE DE AUDITORIA E LOGS DE SEGURANÇA
-// =====================================================
-
-/**
- * AIDEV-NOTE: Classe responsável por logs de auditoria e segurança
- * Implementa padrões de auditoria conforme guia multi-tenant seguro
- */
-class SecurityAuditLogger {
-  private operationId: string;
-
-  constructor() {
-    this.operationId = crypto.randomUUID();
+// Lê a primeira variável disponível de uma lista (aceita VITE_* e nomes legados)
+function getFirstEnv(names, { required = true } = {}) {
+  for (const n of names){
+    const v = Deno.env.get(n);
+    if (v && v.trim()) return v.trim();
   }
-
-  /**
-   * AIDEV-NOTE: Log de validação de segurança bem-sucedida
-   */
-  logSecurityValidationSuccess(context: ValidationContext): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId: context.tenantId || 'unknown',
-      userId: context.user?.id,
-      userEmail: context.user?.email,
-      action: 'SECURITY_VALIDATION_SUCCESS',
-      details: {
-        securityLayers: {
-          authentication: '✅',
-          tenantAccess: '✅',
-          roleValidation: '✅',
-          httpMethod: '✅',
-          headers: '✅'
-        }
-      },
-      timestamp: new Date().toISOString(),
-      level: 'info'
-    };
-
-    console.log('✅ [AUDIT-SECURITY] Validação de segurança aprovada:', logEntry);
+  if (required) throw new Error(`Variável(veis) de ambiente obrigatória(s) ausente(s): ${names.join(" ou ")}`);
+  return "";
+}
+/** =========================
+ *  Config & Constantes
+ *  ========================= */ const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-timestamp, x-tenant-id, x-wa-instance, x-wa-api-base-url, x-wa-api-key, x-country-code, x-dry-run, x-throttle-ms, x-batch-size, x-concurrency, x-env",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+const SUPABASE_URL = requireEnv("SUPABASE_URL", Deno.env.get("SUPABASE_URL"));
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+// Fallback global (só se não houver registro em tenant_integrations)
+const FALLBACK_EVOLUTION_API_BASE_URL = getFirstEnv([
+  "VITE_EVOLUTION_API_URL",
+  "EVOLUTION_API_BASE_URL"
+], {
+  required: false
+})?.replace?.(/\/+$/, "") || "";
+const FALLBACK_EVOLUTION_API_KEY = getFirstEnv([
+  "VITE_EVOLUTION_API_KEY",
+  "EVOLUTION_API_KEY"
+], {
+  required: false
+}) || "";
+// Fallback opcional de instância via env (raramente necessário)
+const EVOLUTION_INSTANCE_ENV = (Deno.env.get("EVOLUTION_INSTANCE") || "").trim();
+const DEFAULT_COUNTRY_CODE = "55"; // Brasil
+const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_BATCH_SIZE = 10;
+const DEFAULT_CONCURRENCY = 3;
+const DEFAULT_INTER_BATCH_DELAY_MS = 1000;
+const MAX_RETRIES = 3;
+/** =========================
+ *  Auditoria / Logs
+ *  ========================= */ class Audit {
+  static opStart(meta) {
+    console.log(`[AUDIT] start`, JSON.stringify(meta));
   }
-
-  /**
-   * AIDEV-NOTE: Log de violação de segurança
-   */
-  logSecurityViolation(error: string, details: Record<string, unknown>): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId: 'unknown',
-      action: 'SECURITY_VIOLATION',
-      details: {
-        error,
-        ...details
-      },
-      timestamp: new Date().toISOString(),
-      level: 'security'
-    };
-
-    console.error('🚨 [AUDIT-SECURITY] Violação de segurança detectada:', logEntry);
+  static opDone(meta) {
+    console.log(`[AUDIT] done`, JSON.stringify(meta));
   }
-
-  /**
-   * AIDEV-NOTE: Log de início de operação
-   */
-  logOperationStart(tenantId: string, userId: string | undefined, userEmail: string | undefined, details: Record<string, unknown>): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId,
-      userId,
-      userEmail,
-      action: 'BULK_MESSAGE_OPERATION_START',
-      details,
-      timestamp: new Date().toISOString(),
-      level: 'info'
-    };
-
-    console.log('🚀 [AUDIT-OPERATION] Iniciando operação de envio em massa:', logEntry);
+  static error(err, ctx) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error(`[AUDIT] error`, JSON.stringify({
+      error: errorMsg,
+      stack,
+      ...ctx,
+      ts: new Date().toISOString()
+    }));
   }
-
-  /**
-   * AIDEV-NOTE: Log de conclusão de operação
-   */
-  logOperationComplete(tenantId: string, userId: string | undefined, userEmail: string | undefined, results: Record<string, unknown>): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId,
-      userId,
-      userEmail,
-      action: 'BULK_MESSAGE_OPERATION_COMPLETE',
-      details: results,
-      timestamp: new Date().toISOString(),
-      level: 'info'
-    };
-
-    console.log('🎯 [AUDIT-OPERATION] Operação concluída:', logEntry);
-  }
-
-  /**
-   * AIDEV-NOTE: Log de erro crítico
-   */
-  logCriticalError(error: Error, context: Record<string, unknown>): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId: 'unknown',
-      action: 'CRITICAL_ERROR',
-      details: {
-        error: error.message,
-        stack: error.stack,
-        context
-      },
-      timestamp: new Date().toISOString(),
-      level: 'error'
-    };
-
-    console.error('💥 [AUDIT-ERROR] Erro crítico:', logEntry);
-  }
-
-  /**
-   * AIDEV-NOTE: Log de acesso a dados
-   */
-  logDataAccess(tenantId: string, dataType: string, itemCount: number): void {
-    const logEntry: AuditLogEntry = {
-      operationId: this.operationId,
-      tenantId,
-      action: 'DATA_ACCESS',
-      details: {
-        dataType,
-        itemCount
-      },
-      timestamp: new Date().toISOString(),
-      level: 'info'
-    };
-
-    console.log(`🔍 [AUDIT-DATA] Acesso a dados - ${dataType}:`, logEntry);
+  static sec(msg, ctx) {
+    console.log(`[AUDIT] sec`, JSON.stringify({
+      message: msg,
+      ...ctx
+    }));
   }
 }
-
-// =====================================================
-// CLASSE DE VALIDAÇÃO DE SEGURANÇA MULTI-TENANT
-// =====================================================
-
-/**
- * AIDEV-NOTE: Classe responsável por validações de segurança multi-tenant
- * Implementa validação dupla conforme guia de segurança
- */
-class MultiTenantSecurityValidator {
-  private auditLogger: SecurityAuditLogger;
-
-  constructor(auditLogger: SecurityAuditLogger) {
-    this.auditLogger = auditLogger;
-  }
-
-  /**
-   * AIDEV-NOTE: Validação dupla de dados de tenant
-   * Verifica se todos os dados retornados pertencem ao tenant correto
-   */
-  validateTenantData<T extends { tenant_id: string; id: string }>(
-    data: T[], 
-    tenantId: string, 
-    dataType: string
-  ): void {
-    if (!data || !Array.isArray(data)) return;
-    
-    const invalidData = data.filter(item => item.tenant_id !== tenantId);
-    if (invalidData.length > 0) {
-      this.auditLogger.logSecurityViolation(
-        `Dados de tenant incorreto detectados em ${dataType}`,
-        {
-          dataType,
-          expectedTenantId: tenantId,
-          invalidItems: invalidData.map(item => ({
-            id: item.id,
-            tenant_id: item.tenant_id
-          }))
-        }
-      );
-      throw new Error(`Violação de segurança: ${dataType} contém dados de tenant incorreto`);
-    }
-    
-    this.auditLogger.logDataAccess(tenantId, dataType, data.length);
-  }
-
-  /**
-   * AIDEV-NOTE: Validação de template de tenant
-   */
-  validateTemplateOwnership(template: MessageTemplate, tenantId: string): void {
-    if (template.tenant_id !== tenantId) {
-      this.auditLogger.logSecurityViolation(
-        'Template de tenant incorreto',
-        {
-          templateId: template.id,
-          expectedTenantId: tenantId,
-          actualTenantId: template.tenant_id
-        }
-      );
-      throw new Error('Violação de segurança: template de tenant incorreto');
-    }
-  }
-}
-
-// =====================================================
-// CLASSE DE PROCESSAMENTO DE MENSAGENS
-// =====================================================
-
-/**
- * AIDEV-NOTE: Classe responsável pelo processamento de templates de mensagem
- * Migrada e otimizada do messageUtils.ts
- */
-class MessageProcessor {
-  /**
-   * AIDEV-NOTE: Processa tags em mensagens substituindo por dados reais
-   */
-  static processMessageTags(message: string, customer: CustomerData, charge: ChargeData): string {
-    if (!message) return '';
-
-    const formatFirstName = (fullName?: string): string => {
-      if (!fullName) return '';
-      const firstName = fullName.split(' ')[0];
-      return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-    };
-
-    const formatDate = (dateString: string): string => {
-      if (!dateString) return '';
-      const [year, month, day] = dateString.split('-').map(Number);
-      return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-    };
-
-    const calculateDaysOverdue = (dueDate: string): number => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dueDateParts = dueDate.split('-').map(Number);
-      const dueDateTime = new Date(dueDateParts[0], dueDateParts[1] - 1, dueDateParts[2]);
-      return dueDateTime < today ? Math.floor((today.getTime() - dueDateTime.getTime()) / (1000 * 60 * 60 * 24)) : 0;
-    };
-
-    let processedMessage = message;
-    const daysOverdue = calculateDaysOverdue(charge.data_vencimento);
-    
-    // AIDEV-NOTE: Substituição de tags do cliente
-    const customerName = formatFirstName(customer?.name);
-    processedMessage = processedMessage.replace(/{cliente\.nome}/g, customerName || 'Cliente');
-    processedMessage = processedMessage.replace(/{cliente\.email}/g, customer?.email || 'email@exemplo.com');
-    processedMessage = processedMessage.replace(/{cliente\.telefone}/g, customer?.phone || '(11) 99999-9999');
-    processedMessage = processedMessage.replace(/{cliente\.cpf}/g, customer?.cpf_cnpj || '000.000.000-00');
-    processedMessage = processedMessage.replace(/{cliente\.cpf_cnpj}/g, customer?.cpf_cnpj || '000.000.000-00');
-    processedMessage = processedMessage.replace(/{cliente\.empresa}/g, customer?.company || 'Empresa não informada');
-    
-    // AIDEV-NOTE: Substituição de tags da cobrança
-    processedMessage = processedMessage.replace(/{cobranca\.valor}/g, charge?.valor?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'R$ 0,00');
-    processedMessage = processedMessage.replace(/{cobranca\.vencimento}/g, formatDate(charge?.data_vencimento) || '00/00/0000');
-    processedMessage = processedMessage.replace(/{cobranca\.descricao}/g, charge?.descricao || 'Cobrança');
-    processedMessage = processedMessage.replace(/{cobranca\.link}/g, charge?.link_pagamento || 'Link não disponível');
-    processedMessage = processedMessage.replace(/{cobranca\.codigo_barras}/g, charge?.codigo_barras || 'Código não disponível');
-    processedMessage = processedMessage.replace(/{cobranca\.dias_atraso}/g, daysOverdue.toString());
-
-    return processedMessage;
-  }
-}
-
-// =====================================================
-// CLASSE DE INTEGRAÇÃO COM EVOLUTION API
-// =====================================================
-
-/**
- * AIDEV-NOTE: Classe responsável pela integração com Evolution API
- * Implementa rate limiting e retry logic
- */
-class EvolutionApiClient {
-  private static readonly DELAY_BETWEEN_MESSAGES = 1000; // 1 segundo
-  private static readonly MAX_RETRIES = 3;
-
-  /**
-   * AIDEV-NOTE: Envia mensagem via Evolution API com retry automático
-   */
-  static async sendMessage(
-    phone: string, 
-    message: string, 
-    chargeId: string,
-    retryCount = 0
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    
-    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
-      console.warn('⚠️ Evolution API não configurada, simulando envio...');
-      return { 
-        success: true, 
-        messageId: `sim_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
-      };
-    }
-
-    try {
-      const response = await fetch(`${EVOLUTION_API_URL}/message/sendText`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `${EVOLUTION_API_KEY}`,
-        },
-        body: JSON.stringify({
-          number: phone,
-          text: message,
-          delay: this.DELAY_BETWEEN_MESSAGES,
-        }),
-      });
-
-      const result: EvolutionApiResponse = await response.json();
-
-      if (!response.ok) {
-        // AIDEV-NOTE: Retry em caso de erro temporário
-        if (retryCount < this.MAX_RETRIES && response.status >= 500) {
-          console.warn(`⚠️ Tentativa ${retryCount + 1}/${this.MAX_RETRIES} falhou, tentando novamente...`);
-          await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1))); // Backoff exponencial
-          return this.sendMessage(phone, message, chargeId, retryCount + 1);
-        }
-
-        return { 
-          success: false, 
-          error: result.message || result.error || 'Erro na Evolution API' 
-        };
-      }
-
-      return { 
-        success: true, 
-        messageId: result.messageId || result.id 
-      };
-
-    } catch (error) {
-      console.error('❌ Erro ao enviar mensagem via Evolution API:', error);
-      
-      // AIDEV-NOTE: Retry em caso de erro de rede
-      if (retryCount < this.MAX_RETRIES) {
-        console.warn(`⚠️ Tentativa ${retryCount + 1}/${this.MAX_RETRIES} falhou, tentando novamente...`);
-        await new Promise(resolve => setTimeout(resolve, 2000 * (retryCount + 1)));
-        return this.sendMessage(phone, message, chargeId, retryCount + 1);
-      }
-
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      };
-    }
-  }
-
-  /**
-   * AIDEV-NOTE: Aplica delay entre mensagens para rate limiting
-   */
-  static async applyRateLimit(): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, this.DELAY_BETWEEN_MESSAGES));
-  }
-}
-
-// =====================================================
-// CLASSE PRINCIPAL DE SERVIÇO
-// =====================================================
-
-/**
- * AIDEV-NOTE: Classe principal que orquestra o envio de mensagens em massa
- * Implementa todas as validações de segurança e otimizações de performance
- */
-class BulkMessageService {
-  private supabase: SupabaseClient;
-  private auditLogger: SecurityAuditLogger;
-  private securityValidator: MultiTenantSecurityValidator;
-
-  constructor(supabase: SupabaseClient, auditLogger: SecurityAuditLogger) {
-    this.supabase = supabase;
-    this.auditLogger = auditLogger;
-    this.securityValidator = new MultiTenantSecurityValidator(auditLogger);
-  }
-
-  /**
-   * AIDEV-NOTE: Busca dados de cobranças com validação dupla de segurança
-   */
-  private async fetchChargesData(
-    chargeIds: string[], 
-    tenantId: string
-  ): Promise<{ charges: ChargeData[]; customers: CustomerData[] }> {
-    
-    const { data: charges, error: chargesError } = await this.supabase
-      .from('charges')
-      .select('*')
-      .in('id', chargeIds)
-      .eq('tenant_id', tenantId);
-
-    if (chargesError) {
-      throw new Error(`Erro ao buscar cobranças: ${chargesError.message}`);
-    }
-
-    // VALIDAÇÃO DUPLA: Verificar se todos os dados pertencem ao tenant correto
-    this.securityValidator.validateTenantData(charges, tenantId, 'charges');
-
-    const customerIds = charges.map(charge => charge.customer_id);
-    
-    const { data: customers, error: customersError } = await this.supabase
-      .from('customers')
-      .select('*')
-      .in('id', customerIds)
-      .eq('tenant_id', tenantId);
-
-    if (customersError) {
-      throw new Error(`Erro ao buscar clientes: ${customersError.message}`);
-    }
-
-    // VALIDAÇÃO DUPLA: Verificar se todos os dados pertencem ao tenant correto
-    this.securityValidator.validateTenantData(customers, tenantId, 'customers');
-
-    return { charges, customers };
-  }
-
-  /**
-   * AIDEV-NOTE: Busca template de mensagem com validação dupla de segurança
-   */
-  private async fetchMessageTemplate(
-    templateId: string, 
-    tenantId: string
-  ): Promise<MessageTemplate> {
-    
-    const { data: template, error } = await this.supabase
-      .from('message_templates')
-      .select('*')
-      .eq('id', templateId)
-      .eq('tenant_id', tenantId)
-      .single();
-
-    if (error) {
-      throw new Error(`Template não encontrado: ${error.message}`);
-    }
-
-    // VALIDAÇÃO DUPLA: Verificar se o template pertence ao tenant correto
-    this.securityValidator.validateTemplateOwnership(template, tenantId);
-
-    return template;
-  }
-
-  /**
-   * AIDEV-NOTE: Registra log de envio de mensagem para auditoria
-   */
-  private async logMessageSent(
-    tenantId: string,
-    customerId: string,
-    chargeId: string,
-    templateId: string,
-    message: string,
-    phone: string,
-    success: boolean,
-    messageId?: string,
-    error?: string
-  ): Promise<void> {
-    try {
-      await this.supabase
-        .from('message_logs')
-        .insert({
-          tenant_id: tenantId,
-          customer_id: customerId,
-          charge_id: chargeId,
-          template_id: templateId,
-          message_content: message,
-          phone_number: phone,
-          status: success ? 'sent' : 'failed',
-          external_message_id: messageId,
-          error_message: error,
-          sent_at: new Date().toISOString(),
-        });
-    } catch (logError) {
-      console.error('❌ Erro ao registrar log:', logError);
-      // Não falha a operação principal por erro de log
-    }
-  }
-
-  /**
-   * AIDEV-NOTE: Processa mensagens em lotes para otimizar performance
-   */
-  private async processMessagesInBatches(
-    charges: ChargeData[],
-    customers: CustomerData[],
-    template: MessageTemplate,
-    tenantId: string,
-    templateId: string
-  ): Promise<SendResult[]> {
-    const results: SendResult[] = [];
-    const BATCH_SIZE = 10; // Processa 10 mensagens por vez
-
-    for (let i = 0; i < charges.length; i += BATCH_SIZE) {
-      const batchCharges = charges.slice(i, i + BATCH_SIZE);
-      const batchPromises = batchCharges.map(async (charge) => {
-        const customer = customers.find(c => c.id === charge.customer_id);
-        
-        if (!customer) {
-          console.warn(`⚠️ Cliente não encontrado para cobrança ${charge.id}`);
-          return null;
-        }
-
-        if (!customer.phone) {
-          console.warn(`⚠️ Telefone não encontrado para cliente ${customer.id}`);
-          return null;
-        }
-
-        // AIDEV-NOTE: Processa template com dados do cliente e cobrança
-        const processedMessage = MessageProcessor.processMessageTags(template.content, customer, charge);
-        
-        // AIDEV-NOTE: Envia mensagem via Evolution API
-        const sendResult = await EvolutionApiClient.sendMessage(
-          customer.phone,
-          processedMessage,
-          charge.id
-        );
-
-        // AIDEV-NOTE: Registra log da tentativa de envio
-        await this.logMessageSent(
-          tenantId,
-          customer.id,
-          charge.id,
-          templateId,
-          processedMessage,
-          customer.phone,
-          sendResult.success,
-          sendResult.messageId,
-          sendResult.error
-        );
-
-        return {
-          chargeId: charge.id,
-          customerId: customer.id,
-          phone: customer.phone,
-          success: sendResult.success,
-          messageId: sendResult.messageId,
-          error: sendResult.error,
-        };
-      });
-
-      // AIDEV-NOTE: Processa lote atual
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults.filter(result => result !== null) as SendResult[]);
-
-      // AIDEV-NOTE: Aplica rate limiting entre lotes
-      if (i + BATCH_SIZE < charges.length) {
-        await EvolutionApiClient.applyRateLimit();
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * AIDEV-NOTE: Método principal para processar envio de mensagens em massa
-   */
-  async processBulkMessages(
-    chargeIds: string[],
-    templateId: string,
-    tenantId: string,
-    userId?: string
-  ): Promise<{
-    success: boolean;
-    message: string;
-    results: {
-      total: number;
-      successful: number;
-      failed: number;
-      details: SendResult[];
-    };
-    timestamp: string;
-  }> {
-    // AIDEV-NOTE: Busca dados necessários em paralelo para otimizar performance
-    const [{ charges, customers }, template] = await Promise.all([
-      this.fetchChargesData(chargeIds, tenantId),
-      this.fetchMessageTemplate(templateId, tenantId),
-    ]);
-
-    // AIDEV-NOTE: Processa mensagens em lotes otimizados
-    const results = await this.processMessagesInBatches(
-      charges,
-      customers,
-      template,
-      tenantId,
-      templateId
-    );
-
-    const successCount = results.filter(r => r.success).length;
-    const failureCount = results.filter(r => !r.success).length;
-
-    return {
-      success: true,
-      message: `Envio concluído: ${successCount} mensagens enviadas, ${failureCount} falhas`,
-      results: {
-        total: results.length,
-        successful: successCount,
-        failed: failureCount,
-        details: results,
-      },
-      timestamp: new Date().toISOString()
-    };
-  }
-}
-
-// =====================================================
-// FUNÇÃO PRINCIPAL DA EDGE FUNCTION
-// =====================================================
-
-/**
- * AIDEV-NOTE: Função principal da Edge Function com arquitetura refatorada
- * Implementa todas as camadas de segurança e otimizações de performance
- */
-serve(async (req) => {
-  // AIDEV-NOTE: Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  const auditLogger = new SecurityAuditLogger();
-
+async function validateRequest(req, opts) {
   try {
-    // AIDEV-NOTE: Validação da requisição com autenticação JWT e roles
-    // Seguindo padrão multi-tenant seguro com 6 camadas de validação
-    const validation: ValidationContext = await validateRequest(req, {
-      allowedMethods: ['POST'],
-      requireAuth: true,
-      requireTenant: true,
-      allowedRoles: ['admin', 'manager', 'operator'],
-      maxBodySize: 1024 * 1024, // 1MB máximo para o body
-      requiredHeaders: ['content-type']
+    if (!opts.methods.includes(req.method)) {
+      return {
+        ok: false,
+        error: `Método ${req.method} não permitido`,
+        status: 405
+      };
+    }
+    if (opts.maxBodyBytes && req.headers.get("content-length")) {
+      const len = parseInt(req.headers.get("content-length") || "0");
+      if (len > opts.maxBodyBytes) return {
+        ok: false,
+        error: "Body muito grande",
+        status: 413
+      };
+    }
+    if (opts.requireAuth) {
+      const auth = req.headers.get("authorization");
+      if (!auth?.startsWith("Bearer ")) {
+        return {
+          ok: false,
+          error: "Token de autorização obrigatório",
+          status: 401
+        };
+      }
+    }
+    let tenantId;
+    if (opts.requireTenant) {
+      tenantId = (req.headers.get("x-tenant-id") || "").trim();
+      if (!tenantId) return {
+        ok: false,
+        error: "Header x-tenant-id obrigatório",
+        status: 400
+      };
+    }
+    return {
+      ok: true,
+      tenantId
+    };
+  } catch (error) {
+    Audit.error(error, {
+      where: "validateRequest"
     });
-
-    if (!validation.isValid) {
-      auditLogger.logSecurityViolation(
-        validation.error || 'Falha na validação de segurança',
-        {
-          status: validation.status,
-          method: req.method,
-          clientInfo: {
-            userAgent: req.headers.get('user-agent'),
-            origin: req.headers.get('origin'),
-            referer: req.headers.get('referer')
-          },
+    return {
+      ok: false,
+      error: "Erro na validação da requisição",
+      status: 500
+    };
+  }
+}
+/** =========================
+ *  Telefones / Normalização
+ *  ========================= */ // Evolution aceita número com DDI (E.164 sem '+'), ex.: 5565999999999
+function normalizeToE164(numberRaw, countryCode = DEFAULT_COUNTRY_CODE) {
+  const digits = numberRaw.replace(/\D/g, "");
+  if (digits.startsWith(countryCode)) return digits;
+  return `${countryCode}${digits}`;
+}
+function isValidArrayOfStrings(arr) {
+  return Array.isArray(arr) && arr.length > 0 && arr.every((s)=>typeof s === "string" && !!s.trim());
+}
+/** =========================
+ *  Evolution API Client (por tenant)
+ *  ========================= */ async function fetchJsonWithTimeout(input, init, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const id = setTimeout(()=>controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(input, {
+      ...init,
+      signal: controller.signal
+    });
+    const data = await res.json().catch(()=>({}));
+    return {
+      res,
+      data
+    };
+  } finally{
+    clearTimeout(id);
+  }
+}
+async function getEvolutionConfig(supabase, tenantId, envOverride, headerOverrides) {
+  const desiredEnv = (envOverride || "production").toLowerCase();
+  if (![
+    "production",
+    "sandbox"
+  ].includes(desiredEnv)) {
+    throw new Error("x-env inválido. Use 'production' ou 'sandbox'.");
+  }
+  // Busca a integração ativa do tipo 'evolution' para o ambiente desejado
+  const { data, error } = await supabase.from("tenant_integrations").select("environment, is_active, config").eq("tenant_id", tenantId).eq("integration_type", "whatsapp").eq("is_active", true).eq("environment", desiredEnv).maybeSingle();
+  if (error) {
+    Audit.error(error, {
+      where: "getEvolutionConfig",
+      tenantId,
+      desiredEnv
+    });
+    throw new Error("Erro ao buscar integração Evolution");
+  }
+  let cfg = data?.config || {};
+  // Tenta ler keys usuais (com sinônimos)
+  const pick = (obj, keys, def = "")=>keys.reduce((acc, k)=>acc || obj?.[k] || obj?.[k.toLowerCase()] || obj?.[k.toUpperCase()], "") || def;
+  const dbBaseUrl = String(pick(cfg, [
+    "api_url",
+    "base_url",
+    "evolution_url",
+    "url"
+  ], "")).replace(/\/+$/, "");
+  const dbApiKey = String(pick(cfg, [
+    "api_key",
+    "apikey",
+    "token"
+  ], ""));
+  const dbInstance = String(pick(cfg, [
+    "instance_name",
+    "instance",
+    "evolution_instance"
+  ], ""));
+  // Overrides por header (se vierem)
+  const apiBaseUrl = (headerOverrides?.baseUrl?.trim() || dbBaseUrl || FALLBACK_EVOLUTION_API_BASE_URL).replace(/\/+$/, "");
+  const apiKey = headerOverrides?.apiKey?.trim() || dbApiKey || FALLBACK_EVOLUTION_API_KEY;
+  const instanceName = headerOverrides?.instanceName?.trim() || dbInstance || EVOLUTION_INSTANCE_ENV || "";
+  if (!apiBaseUrl) throw new Error("API URL não encontrada para Evolution (verifique tenant_integrations.config.api_url ou header x-wa-api-base-url).");
+  if (!apiKey) throw new Error("API Key não encontrada para Evolution (verifique tenant_integrations.config.api_key ou header x-wa-api-key).");
+  if (!instanceName) throw new Error("Instance Name não encontrado (verifique tenant_integrations.config.instance_name ou header x-wa-instance).");
+  return {
+    apiBaseUrl,
+    apiKey,
+    instanceName,
+    environment: desiredEnv
+  };
+}
+class EvolutionApi {
+  static async sendText(opts) {
+    const url = `${opts.baseUrl}/message/sendText/${opts.instance}`;
+    let lastError = "";
+    for(let attempt = 1; attempt <= MAX_RETRIES; attempt++){
+      try {
+        Audit.opStart({
+          where: "sendText",
+          url,
+          attempt,
+          number: opts.number,
+          requestId: opts.requestId
+        });
+        const { res, data } = await fetchJsonWithTimeout(url, {
+          method: "POST",
           headers: {
-            authorization: req.headers.get('authorization') ? 'presente' : 'ausente',
-            tenantId: req.headers.get('x-tenant-id'),
-            contentType: req.headers.get('content-type'),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "apikey": opts.apiKey,
+            "x-request-id": opts.requestId
+          },
+          body: JSON.stringify({
+            number: opts.number,
+            text: opts.text,
+            linkPreview: opts.linkPreview ?? false,
+            delay: opts.delay ?? 0
+          })
+        }, DEFAULT_TIMEOUT_MS);
+        const ok = res.ok && (data?.key?.id || data?.messageId || data?.id);
+        if (ok) {
+          const messageId = data?.key?.id || data?.messageId || data?.id;
+          Audit.opDone({
+            where: "sendText",
+            attempt,
+            messageId,
+            number: opts.number,
+            requestId: opts.requestId
+          });
+          return {
+            ok: true,
+            messageId: String(messageId)
+          };
+        }
+        lastError = data?.message || `HTTP ${res.status}: ${res.statusText}`;
+        Audit.error(lastError, {
+          where: "sendText",
+          status: res.status,
+          attempt,
+          data,
+          requestId: opts.requestId
+        });
+        if (res.status >= 400 && res.status < 500) return {
+          ok: false,
+          error: lastError
+        };
+        if (attempt < MAX_RETRIES) await new Promise((r)=>setTimeout(r, Math.pow(2, attempt) * 1000));
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        Audit.error(err, {
+          where: "sendText",
+          attempt,
+          requestId: opts.requestId
+        });
+        if (attempt < MAX_RETRIES) await new Promise((r)=>setTimeout(r, Math.pow(2, attempt) * 1000));
+      }
+    }
+    return {
+      ok: false,
+      error: lastError || "Falha desconhecida ao enviar mensagem"
+    };
+  }
+}
+class BulkService {
+  supabase;
+  constructor(supabase){
+    this.supabase = supabase;
+  }
+  async fetchChargesAndCustomers(chargeIds, tenantId) {
+    const [chargesResult, customersResult] = await Promise.all([
+      this.supabase.from("charges").select(`
+          id, customer_id, valor, data_vencimento, status, tipo, descricao,
+           customers!inner(id, name, phone, email)
+        `).in("id", chargeIds).eq("tenant_id", tenantId),
+      this.supabase.from("customers").select("id, name, phone, email").eq("tenant_id", tenantId)
+    ]);
+    if (chargesResult.error) throw new Error(`Erro ao buscar cobranças: ${chargesResult.error.message}`);
+    if (customersResult.error) throw new Error(`Erro ao buscar clientes: ${customersResult.error.message}`);
+    const charges = chargesResult.data ?? [];
+    const customers = customersResult.data ?? [];
+    const customersById = new Map(customers.map((c)=>[
+        c.id,
+        c
+      ]));
+    return {
+      charges,
+      customersById
+    };
+  }
+  async getTemplate(templateId, tenantId) {
+    const { data, error } = await this.supabase.from("notification_templates").select("message").eq("id", templateId).eq("tenant_id", tenantId).single();
+    if (error) throw new Error(`Template não encontrado: ${error.message}`);
+    if (!data?.message?.trim()) throw new Error("Template não encontrado");
+    return data.message;
+  }
+  async logMessage(payload) {
+    try {
+      const { error } = await this.supabase.from("message_history").insert({
+        tenant_id: payload.tenantId,
+        customer_id: payload.customerId ?? null,
+        charge_id: payload.chargeId ?? null,
+        template_id: payload.templateId ?? null,
+        message: payload.message,
+        phone: payload.phone,
+        success: payload.success,
+        message_id: payload.messageId ?? null,
+        error: payload.error ?? null,
+        sent_at: new Date().toISOString(),
+        request_id: payload.requestId,
+        dry_run: payload.dryRun ?? false
+      });
+      if (error) Audit.error(error, {
+        where: "logMessage",
+        requestId: payload.requestId
+      });
+    } catch (err) {
+      Audit.error(err, {
+        where: "logMessage",
+        requestId: payload.requestId
+      });
+    }
+  }
+  renderMessage(tpl, customer, charge) {
+    // AIDEV-NOTE: Preparação dos dados para substituição nas tags
+    const nome = customer?.name || "Cliente";
+    const empresa = customer?.company || "";
+    const cpfCnpj = customer?.cpf_cnpj || "";
+    const telefone = customer?.phone || "";
+    const email = customer?.email || "";
+    
+    const valorNum = Number(charge?.valor ?? 0);
+    const valor = isFinite(valorNum) ? valorNum.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    }) : "R$ 0,00";
+    
+    const vencimento = charge?.data_vencimento ? new Date(charge.data_vencimento).toLocaleDateString("pt-BR") : "";
+    const descricao = charge?.descricao || "";
+    const status = charge?.status || "";
+    
+    // AIDEV-NOTE: Suporte para tags do frontend ({cliente.nome}, {cobranca.valor}, etc.)
+    let message = tpl
+      // Tags de cliente
+      .replace(/\{cliente\.nome\}/g, nome)
+      .replace(/\{cliente\.empresa\}/g, empresa)
+      .replace(/\{cliente\.cpf_cnpj\}/g, cpfCnpj)
+      .replace(/\{cliente\.telefone\}/g, telefone)
+      .replace(/\{cliente\.email\}/g, email)
+      // Tags de cobrança
+      .replace(/\{cobranca\.valor\}/g, valor)
+      .replace(/\{cobranca\.vencimento\}/g, vencimento)
+      .replace(/\{cobranca\.descricao\}/g, descricao)
+      .replace(/\{cobranca\.status\}/g, status)
+      // Manter compatibilidade com tags antigas ({{nome}}, {{valor}}, etc.)
+      .replace(/\{\{nome\}\}/g, nome)
+      .replace(/\{\{valor\}\}/g, valor)
+      .replace(/\{\{vencimento\}\}/g, vencimento)
+      .replace(/\{\{telefone\}\}/g, telefone)
+      .replace(/\{\{email\}\}/g, email);
+    
+    return message;
+  }
+  async run(input) {
+    const { chargeIds, tenantId, templateId, customMessage, countryCode, throttleMs, batchSize, concurrency, dryRun, requestId, evoCfg } = input;
+    Audit.opStart({
+      where: "BulkService.run",
+      tenantId,
+      chargeCount: chargeIds.length,
+      hasTemplate: !!templateId,
+      hasCustomMessage: !!customMessage,
+      environment: evoCfg.environment,
+      instance: evoCfg.instanceName,
+      dryRun: !!dryRun,
+      requestId
+    });
+    if (!templateId && !customMessage?.trim()) {
+      throw new Error("É necessário fornecer um templateId ou customMessage");
+    }
+    const { charges, customersById } = await this.fetchChargesAndCustomers(chargeIds, tenantId);
+    if (charges.length === 0) throw new Error("Nenhuma cobrança encontrada com os IDs fornecidos");
+    let templateContent = "";
+    if (templateId && !customMessage) templateContent = await this.getTemplate(templateId, tenantId);
+    const results = {
+      total: charges.length,
+      success: 0,
+      failed: 0,
+      details: []
+    };
+    const BATCH = Math.max(1, Math.min(Number(batchSize ?? DEFAULT_BATCH_SIZE), 100));
+    const CONC = Math.max(1, Math.min(Number(concurrency ?? DEFAULT_CONCURRENCY), 10));
+    const INTER_DELAY = DEFAULT_INTER_BATCH_DELAY_MS;
+    const THROTTLE = Math.max(0, Number(throttleMs ?? 0));
+    for(let i = 0; i < charges.length; i += BATCH){
+      const batch = charges.slice(i, i + BATCH);
+      const queue = [
+        ...batch
+      ];
+      const workers = new Array(CONC).fill(0).map(async ()=>{
+        while(queue.length){
+          const charge = queue.shift();
+          if (!charge) break;
+          try {
+            const customer = customersById.get(charge.customer_id);
+            if (!customer) throw new Error(`Cliente não encontrado (charge ${charge.id})`);
+            if (!customer.phone?.trim()) throw new Error("Cliente sem telefone cadastrado");
+            const msg = (customMessage?.trim() || this.renderMessage(templateContent, customer, charge)).trim();
+            const normalizedPhone = normalizeToE164(customer.phone, countryCode || DEFAULT_COUNTRY_CODE);
+            let sendResult = {
+              ok: true,
+              messageId: "DRY_RUN",
+              error: undefined
+            };
+            if (!dryRun) {
+              sendResult = await EvolutionApi.sendText({
+                baseUrl: evoCfg.apiBaseUrl,
+                apiKey: evoCfg.apiKey,
+                instance: evoCfg.instanceName,
+                number: normalizedPhone,
+                text: msg,
+                requestId
+              });
+            }
+            await this.logMessage({
+              tenantId,
+              customerId: customer.id,
+              chargeId: charge.id,
+              templateId: templateId || null,
+              message: msg,
+              phone: normalizedPhone,
+              success: sendResult.ok,
+              messageId: sendResult.messageId,
+              error: sendResult.error,
+              requestId,
+              dryRun: !!dryRun
+            });
+            const row = {
+              chargeId: charge.id,
+              customerId: customer.id,
+              phone: normalizedPhone,
+              success: sendResult.ok,
+              messageId: sendResult.messageId,
+              error: sendResult.error
+            };
+            results.details.push(row);
+            if (sendResult.ok) results.success++;
+            else results.failed++;
+            if (THROTTLE) await new Promise((r)=>setTimeout(r, THROTTLE));
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            Audit.error(err, {
+              where: "BulkService.run",
+              requestId,
+              chargeId: charge?.id,
+              customerId: charge?.customer_id
+            });
+            results.details.push({
+              chargeId: charge?.id ?? null,
+              customerId: charge?.customer_id ?? null,
+              phone: "",
+              success: false,
+              error: msg
+            });
+            results.failed++;
+            if (THROTTLE) await new Promise((r)=>setTimeout(r, THROTTLE));
           }
         }
-      );
-      
-      return new Response(
-        JSON.stringify({ 
-          error: validation.error,
-          timestamp: new Date().toISOString()
-        }),
-        {
-          status: validation.status || 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        }
-      );
+      });
+      await Promise.all(workers);
+      if (i + BATCH < charges.length) await new Promise((r)=>setTimeout(r, INTER_DELAY));
     }
-
-    // AIDEV-NOTE: Log de auditoria para validação bem-sucedida
-    auditLogger.logSecurityValidationSuccess(validation);
-
-    // AIDEV-NOTE: Extração dos dados da requisição
-    const { chargeIds, templateId }: SendMessageRequest = await req.json();
-    const tenantId = validation.tenantId!;
-    const userId = validation.user?.id;
-
-    // AIDEV-NOTE: Log de auditoria para início da operação
-    auditLogger.logOperationStart(tenantId, userId, validation.user?.email, {
-      chargeIds: chargeIds?.length,
-      templateId,
-      requestOrigin: req.headers.get('origin') || 'unknown'
-    });
-
-    // AIDEV-NOTE: Validação dos parâmetros
-    if (!chargeIds || !Array.isArray(chargeIds) || chargeIds.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'chargeIds é obrigatório e deve ser um array não vazio' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        }
-      );
-    }
-
-    if (!templateId) {
-      return new Response(
-        JSON.stringify({ error: 'templateId é obrigatório' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        }
-      );
-    }
-
-    // AIDEV-NOTE: Criação do cliente Supabase com service role para RLS
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    // AIDEV-NOTE: Definir contexto de tenant antes de fazer consultas RLS
-    const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', {
-      p_tenant_id: tenantId,
-      p_user_id: userId || null
-    });
-
-    if (contextError || !contextResult?.success) {
-      console.error('❌ Erro ao definir contexto de tenant:', contextError || contextResult);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Erro interno: falha ao definir contexto de tenant',
-          details: contextError?.message || contextResult?.error || 'Contexto não definido'
-        }),
-        {
-          status: contextError ? 500 : 403,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        }
-      );
-    }
-
-    // AIDEV-NOTE: Criação do serviço principal e processamento
-    const bulkMessageService = new BulkMessageService(supabase, auditLogger);
-    const result = await bulkMessageService.processBulkMessages(
-      chargeIds,
-      templateId,
+    Audit.opDone({
+      where: "BulkService.run",
       tenantId,
-      userId
-    );
-
-    // AIDEV-NOTE: Log de auditoria para conclusão da operação
-    auditLogger.logOperationComplete(tenantId, userId, validation.user?.email, {
-      templateId,
-      results: {
-        total: result.results.total,
-        successful: result.results.successful,
-        failed: result.results.failed,
-        successRate: `${((result.results.successful / result.results.total) * 100).toFixed(2)}%`
-      },
-      performance: {
-        totalCharges: chargeIds.length,
-        processedMessages: result.results.total,
-        skippedMessages: chargeIds.length - result.results.total
+      requestId,
+      summary: {
+        total: results.total,
+        success: results.success,
+        failed: results.failed
       }
     });
-
-    return new Response(
-      JSON.stringify(result),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      }
-    );
-
-  } catch (error) {
-    // AIDEV-NOTE: Log de auditoria para erro crítico
-    auditLogger.logCriticalError(error as Error, {
-      method: req.method,
-      url: req.url,
-      userAgent: req.headers.get('user-agent'),
-      origin: req.headers.get('origin')
+    return results;
+  }
+}
+/** =========================
+ *  HTTP Handler
+ *  ========================= */ serve(async (req)=>{
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders
     });
-    
-    return new Response(
-      JSON.stringify({ 
-        error: 'Erro interno do servidor',
-        details: error instanceof Error ? error.message : 'Erro desconhecido',
-        timestamp: new Date().toISOString()
-      }),
-      {
+  }
+  const requestId = (req.headers.get("x-request-id") || crypto.randomUUID()).trim();
+  try {
+    const validation = await validateRequest(req, {
+      methods: [
+        "POST"
+      ],
+      requireAuth: true,
+      requireTenant: true,
+      maxBodyBytes: 1024 * 1024
+    });
+    if (!validation.ok) {
+      return new Response(JSON.stringify({
+        error: validation.error
+      }), {
+        status: validation.status,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+          "x-request-id": requestId
+        }
+      });
+    }
+    let body;
+    try {
+      body = await req.json();
+    } catch  {
+      return new Response(JSON.stringify({
+        error: "JSON inválido no body da requisição"
+      }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+          "x-request-id": requestId
+        }
+      });
+    }
+    const { chargeIds, templateId, customMessage } = body ?? {};
+    if (!isValidArrayOfStrings(chargeIds)) {
+      return new Response(JSON.stringify({
+        error: "chargeIds deve ser um array não vazio de strings"
+      }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+          "x-request-id": requestId
+        }
+      });
+    }
+    if (!templateId && !customMessage?.trim()) {
+      return new Response(JSON.stringify({
+        error: "É necessário fornecer templateId ou customMessage"
+      }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+          "x-request-id": requestId
+        }
+      });
+    }
+    // Overrides por header
+    const envHeader = (req.headers.get("x-env") || "production").toLowerCase();
+    const instanceOverride = req.headers.get("x-wa-instance");
+    const baseUrlOverride = req.headers.get("x-wa-api-base-url");
+    const apiKeyOverride = req.headers.get("x-wa-api-key");
+    const countryCode = req.headers.get("x-country-code") || DEFAULT_COUNTRY_CODE;
+    const dryRun = (req.headers.get("x-dry-run") || "").toLowerCase() === "true";
+    const throttleMs = Number(req.headers.get("x-throttle-ms") || 0);
+    const batchSize = Number(req.headers.get("x-batch-size") || DEFAULT_BATCH_SIZE);
+    const concurrency = Number(req.headers.get("x-concurrency") || DEFAULT_CONCURRENCY);
+    // Supabase Service Role (Edge) + contexto de tenant (RLS)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { error: ctxErr } = await supabase.rpc("set_tenant_context_simple", {
+      p_tenant_id: validation.tenantId
+    });
+    if (ctxErr) {
+      Audit.error(ctxErr, {
+        where: "set_tenant_context_simple",
+        requestId,
+        tenantId: validation.tenantId
+      });
+      return new Response(JSON.stringify({
+        error: "Erro ao configurar contexto do tenant"
+      }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+          "x-request-id": requestId
+        }
+      });
+    }
+    // Carrega a config Evolution a partir de tenant_integrations
+    const evoCfg = await getEvolutionConfig(supabase, validation.tenantId, envHeader, {
+      baseUrl: baseUrlOverride,
+      apiKey: apiKeyOverride,
+      instanceName: instanceOverride
+    });
+    const svc = new BulkService(supabase);
+    const results = await svc.run({
+      chargeIds,
+      tenantId: validation.tenantId,
+      templateId: templateId ?? null,
+      customMessage: customMessage ?? null,
+      countryCode,
+      throttleMs,
+      batchSize,
+      concurrency,
+      dryRun,
+      requestId,
+      evoCfg
+    });
+    return new Response(JSON.stringify({
+      success: true,
+      data: results,
+      requestId
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders,
+        "x-request-id": requestId
       }
-    );
+    });
+  } catch (error) {
+    Audit.error(error, {
+      where: "serve",
+      requestId
+    });
+    const msg = error instanceof Error ? error.message : "Erro interno do servidor";
+    return new Response(JSON.stringify({
+      success: false,
+      error: msg,
+      requestId
+    }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders,
+        "x-request-id": requestId
+      }
+    });
   }
 });

@@ -17,6 +17,9 @@ interface UseWhatsAppConnectionProps {
   updateCanalState?: (canal: 'whatsapp', isActive: boolean) => void;
 }
 
+const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolution.nexsyn.com.br';
+const EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY || 'd93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a';
+
 export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
   const { toast } = useToast();
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
@@ -42,8 +45,8 @@ export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
         }
 
         // Configurar credenciais do serviço
-        const apiUrl = existingConfig?.api_url || import.meta.env.VITE_EVOLUTION_API_URL || '';
-        const apiKey = existingConfig?.api_key || import.meta.env.VITE_EVOLUTION_API_KEY || '';
+        const apiUrl = existingConfig?.api_url || EVOLUTION_API_URL || '';
+        const apiKey = existingConfig?.api_key || EVOLUTION_API_KEY || '';
         
         whatsappService.setCredentials(apiUrl, apiKey);
 
@@ -120,8 +123,8 @@ export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
       );
 
       // AIDEV-NOTE: Configurar credenciais do serviço com dados do tenant
-      const apiUrl = existingConfig?.api_url || import.meta.env.VITE_EVOLUTION_API_URL || '';
-      const apiKey = existingConfig?.api_key || import.meta.env.VITE_EVOLUTION_API_KEY || '';
+      const apiUrl = existingConfig?.api_url || EVOLUTION_API_URL || '';
+      const apiKey = existingConfig?.api_key || EVOLUTION_API_KEY || '';
       
       whatsappService.setCredentials(apiUrl, apiKey);
 
