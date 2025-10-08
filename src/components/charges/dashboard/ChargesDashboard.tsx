@@ -22,6 +22,7 @@ import type { Cobranca } from '@/types/database';
 import { Search, Bell, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { processMessageTags } from '@/utils/messageUtils';
+import { messageService } from '@/services/messageService';
 
 // AIDEV-NOTE: Interface para agrupamento de cobranças por categoria
 interface GroupedCharges {
@@ -202,8 +203,8 @@ export function ChargesDashboard() {
     setIsDetailDrawerOpen(true);
   };
 
-  // AIDEV-NOTE: Handler para envio de mensagens em massa
-  const handleSendMessages = async (templateId: string) => {
+  // AIDEV-NOTE: Handler para envio de mensagens em massa - corrigido para usar messageService
+  const handleSendMessages = async (templateId: string, customMessage?: string) => {
     if (selectedCharges.length === 0) {
       toast({
         title: "Nenhuma cobrança selecionada",
@@ -215,32 +216,38 @@ export function ChargesDashboard() {
 
     setIsSending(true);
     try {
-      const chargesToSend = selectedGroup 
-        ? groupedCharges[selectedGroup].charges.filter(c => selectedCharges.includes(c.id))
-        : [];
+      console.log('🚀 [CHARGES-DASHBOARD] Iniciando envio de mensagens via messageService');
+      console.log('📝 [CHARGES-DASHBOARD] Template ID:', templateId);
+      console.log('📝 [CHARGES-DASHBOARD] Mensagem customizada:', customMessage ? 'Sim' : 'Não');
+      console.log('🎯 [CHARGES-DASHBOARD] Cobranças selecionadas:', selectedCharges);
 
-      for (const charge of chargesToSend) {
-        if (charge.customer?.phone) {
-          const processedMessage = processMessageTags(templateId, charge);
-          // Implementar envio de mensagem aqui
-        }
-      }
-
-      toast({
-        title: "Mensagens enviadas",
-        description: `${selectedCharges.length} mensagens foram enviadas com sucesso.`,
-      });
+      // AIDEV-NOTE: Usar messageService.sendBulkMessages que chama a Edge Function corretamente
+      const result = await messageService.sendBulkMessages(selectedCharges, templateId, customMessage);
       
+      console.log('✅ [CHARGES-DASHBOARD] Resultado do messageService:', result);
+
+      // Limpar seleção após o envio
       setSelectedCharges([]);
       setIsMessageDialogOpen(false);
+
+      toast({
+        title: "Mensagens enviadas com sucesso",
+        description: `${result.count} mensagens foram enviadas.`,
+        variant: "default",
+      });
+      
+      return result.data;
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [CHARGES-DASHBOARD] Erro ao enviar mensagens:', error);
+      console.error('❌ [CHARGES-DASHBOARD] Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+      
       toast({
         title: "Erro ao enviar mensagens",
-        description: "Ocorreu um erro ao enviar as mensagens. Tente novamente.",
+        description: error instanceof Error ? error.message : "Ocorreu um erro ao enviar as mensagens.",
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 [CHARGES-DASHBOARD] Finalizando processo de envio');
       setIsSending(false);
     }
   };

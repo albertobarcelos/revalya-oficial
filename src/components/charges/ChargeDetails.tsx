@@ -15,6 +15,7 @@ import { ChargePaymentDetails } from './ChargePaymentDetails';
 import { ChargeMessageHistory } from './ChargeMessageHistory';
 import { ChargePaymentHistory } from './ChargePaymentHistory';
 import { ChargeItemsList } from './ChargeItemsList';
+import { SendMessageModal } from './SendMessageModal';
 
 interface ChargeDetailsProps {
   charge: {
@@ -30,6 +31,7 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
   const [isCancelling, setIsCancelling] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [showPaymentTypeModal, setShowPaymentTypeModal] = useState(false);
+  const [showSendMessageModal, setShowSendMessageModal] = useState(false);
 
   const { chargeDetails, isLoading: isLoadingCharge, refreshChargeDetails } = useChargeDetails(charge?.id || null);
   const { messageHistory, isLoading: isLoadingMessages } = useMessageHistory(charge?.id || null);
@@ -80,11 +82,18 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
     }
   };
 
-  const handleSendMessage = async () => {
+  // AIDEV-NOTE: Abre o modal de envio de mensagem ao invés de enviar diretamente
+  const handleSendMessage = () => {
+    setShowSendMessageModal(true);
+  };
+
+  // AIDEV-NOTE: Função para processar o envio de mensagem com template ou mensagem customizada
+  const handleConfirmSendMessage = async (templateId?: string, customMessage?: string) => {
     setIsSendingMessage(true);
     try {
-      await sendMessage(charge.id);
+      await sendMessage(charge.id, templateId, customMessage);
       refreshChargeDetails();
+      setShowSendMessageModal(false);
     } finally {
       setIsSendingMessage(false);
     }
@@ -293,6 +302,15 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AIDEV-NOTE: Modal para envio de mensagem com seleção de template ou mensagem customizada */}
+      <SendMessageModal
+        isOpen={showSendMessageModal}
+        onClose={() => setShowSendMessageModal(false)}
+        onSendMessage={handleConfirmSendMessage}
+        isLoading={isSendingMessage}
+        charge={chargeDetails}
+      />
     </div>
   );
 }

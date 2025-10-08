@@ -394,7 +394,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
       });
 
       // AIDEV-NOTE: Atualização direta no Supabase - sem necessidade de endpoint Next.js
-      let updateData: any = {
+      const updateData: any = {
         updated_at: new Date().toISOString()
       };
 

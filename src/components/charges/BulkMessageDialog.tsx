@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { TagSelector } from "./TagSelector";
 import { useToast } from '@/components/ui/use-toast';
 import { processMessageTags } from '@/utils/messageUtils';
-import { useCurrentTenant } from '@/hooks/useZustandTenant';
-import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hooks seguros para multi-tenant
+import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates'; // AIDEV-NOTE: Hook seguro para templates
+import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hooks seguros para validação multi-tenant
+import { supabase } from '@/lib/supabase'; // AIDEV-NOTE: Cliente Supabase para queries
 
 interface MessageTemplate {
   id: string;
@@ -34,7 +35,7 @@ interface BulkMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCharges: string[];
-  onSendMessages: (templateId: string, customMessage?: string) => Promise<any>;
+  onSendMessages: (templateId: string, customMessage?: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -45,149 +46,66 @@ export function BulkMessageDialog({
   onSendMessages,
   isLoading
 }: BulkMessageDialogProps) {
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [messageMode, setMessageMode] = useState<'template' | 'custom'>('template');
   const [customMessage, setCustomMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null); // AIDEV-NOTE: Ref para acesso direto ao textarea
-  // AIDEV-NOTE: Estado do popover removido - agora gerenciado pelo TagSelector
   const [previewMessage, setPreviewMessage] = useState("");
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard(); // AIDEV-NOTE: Hook seguro para validação multi-tenant
+  
+  // 🛡️ HOOKS SEGUROS PARA VALIDAÇÃO MULTI-TENANT - Implementa todas as 5 camadas de segurança
+  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+  
+  // 🛡️ HOOK SEGURO PARA TEMPLATES - Implementa todas as 5 camadas de segurança
+  const {
+    templates,
+    isLoading: isLoadingTemplates,
+    error: templatesError
+  } = useSecureNotificationTemplates({
+    active: true // Apenas templates ativos
+  });
 
-  // AIDEV-NOTE: Validação crítica de segurança - bloquear acesso se não autorizado
+  // AIDEV-NOTE: Validação crítica de segurança - verificar se há erro de acesso
   useEffect(() => {
-    if (!hasAccess && accessError) {
-      console.error('🚨 [SECURITY] Acesso negado ao BulkMessageDialog:', accessError);
+    if (templatesError) {
+      console.error('🚨 [SECURITY] Erro ao acessar templates:', templatesError);
       toast({
-        title: "Acesso Negado",
-        description: accessError,
+        title: "Erro de Acesso",
+        description: "Não foi possível carregar os templates. Verifique suas permissões.",
         variant: "destructive"
       });
       onOpenChange(false);
     }
-  }, [hasAccess, accessError, onOpenChange, toast]);
+  }, [templatesError, onOpenChange, toast]);
 
-  // AIDEV-NOTE: Lista de tags disponíveis com estrutura compatível com TagSelector
-  const availableTags = [
-    { id: "{cliente.nome}", name: "Nome do Cliente", color: "#3b82f6" },
-    { id: "{cliente.empresa}", name: "Empresa", color: "#10b981" },
-    { id: "{cliente.cpf_cnpj}", name: "CPF/CNPJ", color: "#f59e0b" },
-    { id: "{cliente.email}", name: "Email", color: "#ef4444" },
-    { id: "{cliente.telefone}", name: "Telefone", color: "#8b5cf6" },
-    { id: "{cobranca.valor}", name: "Valor da Cobrança", color: "#06b6d4" },
-    { id: "{cobranca.vencimento}", name: "Data de Vencimento", color: "#f97316" },
-    { id: "{cobranca.descricao}", name: "Descrição", color: "#84cc16" },
-    { id: "{cobranca.status}", name: "Status", color: "#ec4899" },
-    { id: "{cobranca.link_pagamento}", name: "Link de Pagamento", color: "#6366f1" },
-  ];
-
-  useEffect(() => {
-    if (open) {
-      loadTemplates();
-    } else {
-      // Reset fields when dialog closes
-      setSelectedTemplateId("");
-      setCustomMessage("");
-      setPreviewMessage("");
-      setMessageMode('template');
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (selectedTemplateId && templates.length > 0) {
-      const template = templates.find(t => t.id === selectedTemplateId);
-      if (template) {
-        generatePreview(template.message);
+  // AIDEV-NOTE: Query segura para buscar dados de preview das cobranças selecionadas
+  const { data: previewChargeData, isLoading: isLoadingPreview, error: previewError } = useSecureTenantQuery(
+    ['charge-preview', selectedCharges?.[0], currentTenant?.id],
+    async () => {
+      if (!selectedCharges || selectedCharges.length === 0) {
+        console.log('🔍 [PREVIEW QUERY] Nenhuma cobrança selecionada para preview');
+        return null;
       }
-    }
-  }, [selectedTemplateId, templates]);
-
-  // Carregar templates de mensagem
-  const loadTemplates = async () => {
-    setIsLoadingTemplates(true);
-    try {
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .select('*')
-        .eq('tenant_id', currentTenant?.id) // AIDEV-NOTE: Filtro obrigatório por tenant
-        .order('name');
-
-      if (error) throw error;
       
-      setTemplates(data || []);
-      // Set default template if available
-      if (data && data.length > 0) {
-        setSelectedTemplateId(data[0].id);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar templates:', error);
-      toast({
-        title: "Erro ao carregar templates",
-        description: "Não foi possível carregar os templates de mensagem.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingTemplates(false);
-    }
-  };
-
-  // AIDEV-NOTE: Função otimizada para inserir tags usando useRef
-  const insertTag = (tag: string) => {
-    console.log('🏷️ [TAG INSERT] Iniciando inserção:', tag);
-    
-    if (!textareaRef.current) {
-      console.error('❌ [TAG INSERT] Textarea ref não disponível');
-      return;
-    }
-    
-    const textarea = textareaRef.current;
-    const start = textarea.selectionStart || 0;
-    const end = textarea.selectionEnd || 0;
-    
-    console.log('📝 [TAG INSERT] Estado atual:', {
-      currentText: customMessage.substring(0, 50) + '...',
-      selectionStart: start,
-      selectionEnd: end,
-      tagToInsert: tag
-    });
-    
-    // AIDEV-NOTE: Construir novo texto com a tag inserida
-    const newText = customMessage.substring(0, start) + tag + customMessage.substring(end);
-    
-    // AIDEV-NOTE: Atualizar estado
-    setCustomMessage(newText);
-    generatePreview(newText);
-    
-    // AIDEV-NOTE: Focar e posicionar cursor após inserção
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const newCursorPosition = start + tag.length;
-      textarea.setSelectionRange(newCursorPosition, newCursorPosition);
-      console.log('✅ [TAG INSERT] Tag inserida com sucesso. Nova posição:', newCursorPosition);
-    });
-    
-    // AIDEV-NOTE: Popover será fechado pelo evento de clique
-  };
-
-  // AIDEV-NOTE: Hook seguro para buscar dados da cobrança para preview
-  const { data: previewChargeData, isLoading: isLoadingPreview } = useSecureTenantQuery(
-    ['charge-preview', currentTenant?.id, selectedCharges?.[0]],
-    async (supabase, tenantId) => {
-      if (!selectedCharges || selectedCharges.length === 0) return null;
-      
-      console.log('🔍 [PREVIEW DEBUG] Buscando dados para preview:', {
-        tenantId,
-        chargeId: selectedCharges[0]
+      console.log('🔍 [PREVIEW QUERY] Iniciando query para cobrança:', {
+        chargeId: selectedCharges[0],
+        tenantId: currentTenant?.id,
+        hasAccess,
+        selectedChargesCount: selectedCharges.length
       });
       
       const { data, error } = await supabase
         .from('charges')
         .select(`
-          *,
-          customers(
+          id,
+          valor,
+          data_vencimento,
+          descricao,
+          link_pagamento,
+          tenant_id,
+          customers (
+            id,
             name,
             email,
             phone,
@@ -195,24 +113,38 @@ export function BulkMessageDialog({
             company
           )
         `)
-        .eq('tenant_id', tenantId)
         .eq('id', selectedCharges[0])
         .single();
-        
+      
       if (error) {
-        console.error('❌ [PREVIEW ERROR] Erro ao buscar cobrança:', error);
+        console.error('🚨 [PREVIEW QUERY ERROR] Erro na query de preview:', {
+          error,
+          chargeId: selectedCharges[0],
+          tenantId: currentTenant?.id
+        });
         throw error;
       }
+      
+      console.log('✅ [PREVIEW QUERY SUCCESS] Dados carregados com sucesso:', {
+        chargeId: data?.id,
+        hasCustomer: !!data?.customers,
+        customerName: data?.customers?.name,
+        tenantId: data?.tenant_id
+      });
       
       return data;
     },
     {
-      enabled: !!(selectedCharges && selectedCharges.length > 0 && currentTenant?.id && hasAccess)
+      enabled: !!(selectedCharges && selectedCharges.length > 0 && currentTenant?.id && hasAccess),
+      retry: 1,
+      onError: (error) => {
+        console.error('🚨 [PREVIEW QUERY] Erro capturado pelo onError:', error);
+      }
     }
   );
 
-  // Gerar preview da mensagem
-  const generatePreview = async (text: string) => {
+  // AIDEV-NOTE: Função para gerar preview da mensagem - definida antes dos useEffects que a utilizam
+  const generatePreview = useCallback(async (text: string) => {
     try {
       // AIDEV-NOTE: Validação crítica de segurança multi-tenant
       if (!hasAccess) {
@@ -229,6 +161,14 @@ export function BulkMessageDialog({
       
       // Se houver cobranças selecionadas, usar dados reais para preview
       if (selectedCharges && selectedCharges.length > 0) {
+        console.log('🔍 [GENERATE PREVIEW] Estado da query:', {
+          isLoadingPreview,
+          hasPreviewChargeData: !!previewChargeData,
+          previewError: previewError?.message,
+          selectedChargesCount: selectedCharges.length,
+          firstChargeId: selectedCharges[0]
+        });
+        
         if (isLoadingPreview) {
           setPreviewMessage('⏳ Carregando dados para preview...');
         } else if (previewChargeData) {
@@ -260,38 +200,70 @@ export function BulkMessageDialog({
             currency: 'BRL'
           }).format(chargeData.valor);
 
-          const processedMessage = processMessageTags(text, {
-            customerData: chargeData.customers,
-            chargeData: {
-              ...chargeData,
-              data_vencimento_formatada: formattedDate,
-              valor_formatado: formattedValue
+          // AIDEV-NOTE: Log para debug dos dados antes de processar
+          console.log('🔍 [PREVIEW DEBUG] Dados da cobrança completos:', chargeData);
+          console.log('🔍 [PREVIEW DEBUG] Dados do customer:', chargeData.customers);
+          
+          // AIDEV-NOTE: Estrutura de dados correta para processMessageTags - mapeamento explícito
+          const dataForProcessing = {
+            customer: {
+              name: chargeData.customers?.name,
+              email: chargeData.customers?.email,
+              phone: chargeData.customers?.phone,
+              cpf_cnpj: chargeData.customers?.cpf_cnpj,
+              // AIDEV-NOTE: Mapear Company (maiúsculo do banco) para company (minúsculo esperado pela função)
+              company: chargeData.customers?.company
+            },
+            charge: {
+              valor: chargeData.valor,
+              data_vencimento: dueDate,
+              descricao: chargeData.descricao,
+              link_pagamento: chargeData.link_pagamento,
+              codigo_barras: chargeData.codigo_barras
             }
+          };
+          
+          console.log('🔍 [PREVIEW DEBUG] Dados sendo enviados para processMessageTags:', dataForProcessing);
+          console.log('🔍 [PREVIEW DEBUG] Verificação específica do campo company:', {
+            'chargeData.customers?.Company (original)': chargeData.customers?.Company,
+            'dataForProcessing.customer.company (mapeado)': dataForProcessing.customer.company,
+            'typeof Company': typeof chargeData.customers?.company,
+            'typeof company': typeof dataForProcessing.customer.company
           });
+          
+          const processedMessage = processMessageTags(text, dataForProcessing);
 
           setPreviewMessage(processedMessage);
         } else {
-          setPreviewMessage('❌ Erro ao carregar dados da cobrança para preview');
+          const errorMessage = previewError 
+            ? `❌ Erro ao carregar dados da cobrança: ${previewError.message}`
+            : '❌ Erro ao carregar dados da cobrança para preview';
+          
+          console.error('🚨 [GENERATE PREVIEW] Falha ao carregar dados:', {
+            previewError,
+            selectedCharges,
+            currentTenant: currentTenant?.id,
+            hasAccess
+          });
+          
+          setPreviewMessage(errorMessage);
         }
       } else {
-        // Preview com dados fictícios se não houver cobranças selecionadas
+        // AIDEV-NOTE: Preview com dados fictícios usando estrutura correta
         const processedMessage = processMessageTags(text, {
-          customerData: {
+          customer: {
             name: 'João Silva',
             email: 'joao@email.com',
             phone: '(11) 99999-9999',
             cpf_cnpj: '123.456.789-00',
             company: 'Empresa Exemplo Ltda'
           },
-          chargeData: {
-            id: 'exemplo-123',
-            numero_cobranca: 'COB-001',
+          charge: {
             valor: 150.00,
-            valor_formatado: 'R$ 150,00',
             data_vencimento: '2024-01-15',
-            data_vencimento_formatada: 'segunda-feira, 15 de janeiro de 2024',
-            status: 'pendente',
-            descricao: 'Serviço de exemplo'
+            descricao: 'Serviço de exemplo',
+            link_pagamento: 'https://exemplo.com/pagamento',
+            codigo_barras: '00000000000000000000000000000000000000000000'
           }
         });
         setPreviewMessage(processedMessage);
@@ -300,10 +272,111 @@ export function BulkMessageDialog({
       console.error('Erro ao gerar preview:', error);
       setPreviewMessage(text);
     }
+  }, [hasAccess, accessError, currentTenant, selectedCharges, isLoadingPreview, previewChargeData]);
+
+  // AIDEV-NOTE: Lista de tags disponíveis com estrutura compatível com TagSelector
+  const availableTags = [
+    { id: "{cliente.nome}", name: "Nome do Cliente", color: "#3b82f6" },
+    { id: "{cliente.empresa}", name: "Empresa", color: "#10b981" },
+    { id: "{cliente.cpf_cnpj}", name: "CPF/CNPJ", color: "#f59e0b" },
+    { id: "{cliente.email}", name: "Email", color: "#ef4444" },
+    { id: "{cliente.telefone}", name: "Telefone", color: "#8b5cf6" },
+    { id: "{cobranca.valor}", name: "Valor da Cobrança", color: "#06b6d4" },
+    { id: "{cobranca.vencimento}", name: "Data de Vencimento", color: "#f97316" },
+    { id: "{cobranca.descricao}", name: "Descrição", color: "#84cc16" },
+    { id: "{cobranca.status}", name: "Status", color: "#ec4899" },
+    { id: "{cobranca.link_pagamento}", name: "Link de Pagamento", color: "#6366f1" },
+  ];
+
+  useEffect(() => {
+    if (!open) {
+      // Reset fields when dialog closes
+      setSelectedTemplateId("");
+      setCustomMessage("");
+      setPreviewMessage("");
+      setMessageMode('template');
+    }
+  }, [open]);
+
+  // AIDEV-NOTE: useEffect para atualizar preview quando template é selecionado
+  useEffect(() => {
+    if (messageMode === 'template' && selectedTemplateId && templates.length > 0) {
+      const template = templates.find(t => t.id === selectedTemplateId);
+      if (template) {
+        generatePreview(template.message);
+      }
+    }
+  }, [selectedTemplateId, templates, generatePreview, messageMode]);
+
+  // AIDEV-NOTE: useEffect para atualizar preview quando mensagem customizada é alterada
+  useEffect(() => {
+    if (messageMode === 'custom' && customMessage) {
+      generatePreview(customMessage);
+    }
+  }, [customMessage, generatePreview, messageMode]);
+
+  // AIDEV-NOTE: useEffect para limpar e atualizar preview quando o modo muda
+  useEffect(() => {
+    if (messageMode === 'template') {
+      // Se mudou para template, gerar preview do template selecionado
+      if (selectedTemplateId && templates.length > 0) {
+        const template = templates.find(t => t.id === selectedTemplateId);
+        if (template) {
+          generatePreview(template.message);
+        } else {
+          setPreviewMessage("");
+        }
+      } else {
+        setPreviewMessage("");
+      }
+    } else if (messageMode === 'custom') {
+      // Se mudou para custom, gerar preview da mensagem digitada
+      if (customMessage.trim()) {
+        generatePreview(customMessage);
+      } else {
+        setPreviewMessage("");
+      }
+    }
+  }, [messageMode, selectedTemplateId, templates, customMessage, generatePreview]);
+
+  // AIDEV-NOTE: Templates são carregados automaticamente pelo hook seguro
+
+  // AIDEV-NOTE: Função otimizada para inserir tags usando useRef
+  const insertTag = (tag: string) => {
+    if (!textareaRef.current) return;
+
+    const textarea = textareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentValue = customMessage;
+    
+    // AIDEV-NOTE: Inserir tag na posição do cursor
+    const newValue = currentValue.substring(0, start) + tag + currentValue.substring(end);
+    setCustomMessage(newValue);
+    
+    // AIDEV-NOTE: Restaurar foco e posição do cursor após a inserção
+    setTimeout(() => {
+      textarea.focus();
+      const newPosition = start + tag.length;
+      textarea.setSelectionRange(newPosition, newPosition);
+    }, 0);
   };
 
+
+
+
+
   const handleSendMessage = async () => {
+    console.log('🚀 [BULK-MESSAGE-DIALOG] Iniciando handleSendMessage');
+    console.log('📋 [BULK-MESSAGE-DIALOG] Estado atual:', {
+      messageMode,
+      selectedTemplateId,
+      customMessage: customMessage.substring(0, 50) + '...',
+      selectedChargesCount: selectedCharges?.length || 0
+    });
+
     if (messageMode === 'template' && !selectedTemplateId) {
+      console.log('❌ [BULK-MESSAGE-DIALOG] Erro: Template não selecionado');
       toast({
         title: "Selecione um template",
         description: "Por favor, selecione um modelo de mensagem.",
@@ -313,6 +386,7 @@ export function BulkMessageDialog({
     }
 
     if (messageMode === 'custom' && !customMessage.trim()) {
+      console.log('❌ [BULK-MESSAGE-DIALOG] Erro: Mensagem customizada vazia');
       toast({
         title: "Digite uma mensagem",
         description: "Por favor, digite uma mensagem para enviar.",
@@ -323,48 +397,98 @@ export function BulkMessageDialog({
 
     try {
       setIsSubmitting(true);
-      console.log(`Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
+      console.log(`📝 [BULK-MESSAGE-DIALOG] Modo: ${messageMode}, Mensagem: ${customMessage.substring(0, 30)}...`);
       
       if (messageMode === 'template') {
+        console.log('🎯 [BULK-MESSAGE-DIALOG] Chamando onSendMessages com template:', selectedTemplateId);
         await onSendMessages(selectedTemplateId);
+        console.log('✅ [BULK-MESSAGE-DIALOG] onSendMessages (template) executado com sucesso');
       } else {
         // Enviar mensagem customizada com um ID temporário
         const tempTemplateId = 'custom_' + Date.now();
-        console.log('Enviando mensagem customizada:', tempTemplateId, customMessage);
+        console.log('🎯 [BULK-MESSAGE-DIALOG] Chamando onSendMessages com mensagem customizada:', tempTemplateId, customMessage);
         
         await onSendMessages(tempTemplateId, customMessage);
+        console.log('✅ [BULK-MESSAGE-DIALOG] onSendMessages (custom) executado com sucesso');
       }
       
+      console.log('🎉 [BULK-MESSAGE-DIALOG] Processo concluído, fechando diálogo');
       // Após o envio bem-sucedido, fechar o diálogo
       onOpenChange(false);
       
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [BULK-MESSAGE-DIALOG] Erro detalhado no handleSendMessage:', error);
+      console.error('❌ [BULK-MESSAGE-DIALOG] Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+      
+      // AIDEV-NOTE: Feedback específico baseado no tipo de erro
+      let title = "Erro ao enviar mensagem";
+      let description = "Não foi possível enviar a mensagem. Tente novamente.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Token de autenticação')) {
+          title = "Sessão expirada";
+          description = "Sua sessão expirou. Faça login novamente.";
+        } else if (error.message.includes('Acesso negado') || error.message.includes('permissões insuficientes')) {
+          title = "Acesso negado";
+          description = "Você não tem permissão para enviar mensagens. Contate o administrador.";
+        } else if (error.message.includes('Dados da requisição inválidos')) {
+          title = "Dados inválidos";
+          description = "Verifique se todas as cobranças e o template estão corretos.";
+        } else if (error.message.includes('Erro interno do servidor')) {
+          title = "Erro de configuração";
+          description = "Problema na configuração do sistema. Contate o suporte técnico.";
+        } else if (error.message.includes('Serviço temporariamente indisponível')) {
+          title = "Serviço indisponível";
+          description = "O serviço está temporariamente indisponível. Tente novamente em alguns minutos.";
+        } else if (error.message.includes('Falha após todas as tentativas')) {
+          title = "Falha persistente";
+          description = "Múltiplas tentativas falharam. Verifique sua conexão e tente novamente.";
+        } else {
+          // Usar a mensagem de erro específica se disponível
+          description = error.message || description;
+        }
+      }
+      
       toast({
-        title: "Erro ao enviar mensagem",
-        description: "Não foi possível enviar a mensagem. Tente novamente.",
+        title,
+        description,
         variant: "destructive",
       });
     } finally {
+      console.log('🏁 [BULK-MESSAGE-DIALOG] Finalizando handleSendMessage');
       setIsSubmitting(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col relative !fixed !left-[50%] !top-[50%] !translate-x-[-50%] !translate-y-[-50%]">
+        {/* AIDEV-NOTE: Overlay de carregamento durante envio */}
+        {isSubmitting && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+            <div className="flex flex-col items-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="font-medium">Enviando mensagens...</p>
+                <p className="text-sm text-muted-foreground">Processando {selectedCharges?.length || 0} cobranças</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Enviar mensagem ({selectedCharges?.length || 0})</DialogTitle>
           <DialogDescription>
             Selecione um modelo de mensagem para enviar para as cobranças selecionadas.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="template" onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}>
-          <TabsList className="grid grid-cols-2">
-            <TabsTrigger value="template">Usar Modelo</TabsTrigger>
-            <TabsTrigger value="custom">Digitar Mensagem</TabsTrigger>
-          </TabsList>
+        <div className="flex-1 overflow-y-auto">
+          <Tabs defaultValue="template" onValueChange={(value) => setMessageMode(value as 'template' | 'custom')}>
+            <TabsList className="grid grid-cols-2">
+              <TabsTrigger value="template">Usar Modelo</TabsTrigger>
+              <TabsTrigger value="custom">Digitar Mensagem</TabsTrigger>
+            </TabsList>
           
           <TabsContent value="template">
             <div className="py-4">
@@ -415,7 +539,7 @@ export function BulkMessageDialog({
                 value={customMessage}
                 onChange={(e) => {
                   setCustomMessage(e.target.value);
-                  generatePreview(e.target.value);
+                  // AIDEV-NOTE: Removido generatePreview daqui - agora é gerenciado pelo useEffect
                 }}
               />
               
@@ -429,22 +553,34 @@ export function BulkMessageDialog({
               )}
             </div>
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </div>
         
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button 
             onClick={handleSendMessage} 
             disabled={isSubmitting || isLoading || (messageMode === 'template' && !selectedTemplateId) || (messageMode === 'custom' && !customMessage.trim())}
+            className="min-w-[140px]"
           >
-            {(isSubmitting || isLoading) ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Enviando mensagem...
+                Processando...
               </>
-            ) : 'Enviar Mensagem'}
+            ) : isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Carregando...
+              </>
+            ) : (
+              <>
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Enviar Mensagem
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

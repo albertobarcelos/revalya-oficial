@@ -46,7 +46,9 @@ export class SecurityLogger {
     };
     
     // Log estruturado para auditoria
-    console.log('SECURITY_AUDIT:', JSON.stringify(event));
+    // AIDEV-NOTE: Usar sanitização para evitar erro "Converting circular structure to JSON"
+    const { safeJSONStringify } = require('@/utils/jsonSanitizer');
+    console.log('SECURITY_AUDIT:', safeJSONStringify(event));
     
     // Em produção, enviar para sistema de monitoramento
     // await sendToMonitoringSystem(event);
@@ -74,7 +76,9 @@ export class SecurityLogger {
       }
     };
     
-    console.warn('SECURITY_ALERT:', JSON.stringify(event));
+    // AIDEV-NOTE: Usar sanitização para evitar erro "Converting circular structure to JSON"
+    const { safeJSONStringify } = require('@/utils/jsonSanitizer');
+    console.warn('SECURITY_ALERT:', safeJSONStringify(event));
   }
 
   /**
