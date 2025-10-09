@@ -116,7 +116,7 @@ export default async function handler(
       valor_cobranca: parseFloat(payment.value || '0'),
       valor_pago: parseFloat(payment.netValue || payment.value || '0'),
       status_externo: payment.status || 'PENDING',
-      status_conciliacao: 'NAO_CONCILIADO',
+      status_conciliacao: 'PENDING',
       juros_multa_diferenca: (parseFloat(payment.interestValue || '0') + parseFloat(payment.fineValue || '0') - parseFloat(payment.discountValue || '0')),
       data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString() : null,
       data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,

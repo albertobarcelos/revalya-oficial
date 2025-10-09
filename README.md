@@ -324,6 +324,125 @@ Corrigimos um problema crítico onde a função `createService` no hook `useServ
 #### 📋 **Anchor Comment Adicionado**
 
 ```typescript
+// AIDEV-NOTE: Configuração de contexto de tenant obrigatória antes de operações DML
+await supabase.rpc('set_config', {
+  parameter_name: 'app.current_tenant_id',
+  parameter_value: tenantId
+});
+```
+
+### Janeiro 2025: Refatoração Completa da ReconciliationTable
+
+Realizamos uma refatoração completa da `ReconciliationTable.tsx`, extraindo componentes para melhorar a manutenibilidade, legibilidade e seguir os padrões de Clean Code do projeto.
+
+#### 🎯 **Objetivo da Refatoração**
+
+- **Modularização**: Quebrar um componente monolítico de 576 linhas em componentes menores e especializados
+- **Responsabilidade Única**: Cada componente com uma responsabilidade específica
+- **Manutenibilidade**: Facilitar futuras modificações e correções
+- **Padrões do Projeto**: Seguir as diretrizes estabelecidas no Revalya
+
+#### 🔧 **Componentes Extraídos**
+
+1. **TableHeader** (`src/components/reconciliation/parts/TableHeader.tsx`)
+   - **Responsabilidade**: Renderização do cabeçalho da tabela com colunas configuráveis
+   - **Props**: `columns` (array de configurações de coluna)
+   - **Funcionalidades**: Tooltips, ordenação, responsividade
+
+2. **StatusBadge** (`src/components/reconciliation/parts/StatusBadge.tsx`)
+   - **Responsabilidade**: Exibição visual dos status de conciliação
+   - **Props**: `status` (ReconciliationStatus)
+   - **Funcionalidades**: Cores e ícones específicos por status, animações
+
+3. **ValueCell** (`src/components/reconciliation/parts/ValueCell.tsx`)
+   - **Responsabilidade**: Formatação e exibição de valores monetários
+   - **Props**: `value` (number), `className?` (string)
+   - **Funcionalidades**: Formatação BRL, cores condicionais, alinhamento
+
+4. **TableRow** (`src/components/reconciliation/parts/TableRow.tsx`)
+   - **Responsabilidade**: Renderização de uma linha da tabela com todos os dados
+   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`, `isSelected`, `onSelectionChange`
+   - **Funcionalidades**: Seleção, ações, detalhes, responsividade
+
+5. **ActionButtons** (`src/components/reconciliation/parts/ActionButtons.tsx`)
+   - **Responsabilidade**: Menu dropdown com ações disponíveis por movimento
+   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`
+   - **Funcionalidades**: Ações dinâmicas baseadas no status, integração ASAAS
+
+#### ✅ **Benefícios Alcançados**
+
+1. **Código Limpo**:
+   - Componente principal reduzido de 576 para ~400 linhas
+   - Cada componente com responsabilidade única
+   - Funções com máximo de 20 linhas (padrão do projeto)
+
+2. **Manutenibilidade**:
+   - Modificações isoladas em componentes específicos
+   - Testes unitários mais focados
+   - Debugging simplificado
+
+3. **Reutilização**:
+   - Componentes podem ser reutilizados em outras tabelas
+   - StatusBadge e ValueCell aplicáveis em outros contextos
+   - ActionButtons configurável para diferentes entidades
+
+4. **Performance**:
+   - Componentes menores com re-renders otimizados
+   - Memoização mais efetiva
+   - Bundle splitting natural
+
+#### 🛡️ **Segurança Multi-Tenant Mantida**
+
+- **Contexto de Tenant**: Todos os componentes respeitam o tenant ativo
+- **RLS**: Políticas de Row-Level Security preservadas
+- **Validação**: Guards de acesso mantidos em todas as operações
+- **Auditoria**: Logs de ações preservados
+
+#### 🔧 **Detalhes Técnicos**
+
+- **Arquivos Criados**: 5 novos componentes em `src/components/reconciliation/parts/`
+- **Imports Corrigidos**: Ajustes em paths relativos para absolutos
+- **TypeScript**: Interfaces específicas para cada componente
+- **Padrões UI**: Shadcn/UI + Tailwind + Framer Motion mantidos
+
+#### 🐛 **Correções Realizadas**
+
+1. **Import Paths**: Correção de imports relativos para absolutos usando alias `@/`
+2. **TableRow Conflict**: Resolução de conflito entre componente customizado e Shadcn TableRow
+3. **Build Errors**: Correção de erros de compilação e validação TypeScript
+4. **Runtime Errors**: Correção do erro "TableRow is not defined" em linhas vazias
+
+#### 📊 **Validações Realizadas**
+
+- ✅ **TypeScript Check**: `npm run type-check` - sem erros
+- ✅ **Build**: `npm run build` - compilação bem-sucedida  
+- ✅ **Dev Server**: Aplicação rodando sem erros
+- ✅ **Funcionalidade**: Filtros e ações funcionando corretamente
+- ✅ **UI/UX**: Interface responsiva e animações preservadas
+
+#### 📁 **Estrutura Final**
+
+```
+src/components/reconciliation/
+├── ReconciliationTable.tsx          # Componente principal (refatorado)
+├── parts/
+│   ├── TableHeader.tsx              # Cabeçalho da tabela
+│   ├── StatusBadge.tsx              # Badge de status
+│   ├── ValueCell.tsx                # Célula de valores
+│   ├── TableRow.tsx                 # Linha da tabela
+│   └── ActionButtons.tsx            # Botões de ação
+└── types/
+    └── table-parts.ts               # Interfaces dos componentes
+```
+
+#### 🎯 **Próximos Passos**
+
+- Aplicar o mesmo padrão de refatoração em outras tabelas do sistema
+- Criar biblioteca de componentes reutilizáveis
+- Implementar testes unitários para cada componente extraído
+- Documentar padrões de componentização para a equipe
+
+```typescript
 // AIDEV-NOTE: Configuração obrigatória do contexto do tenant antes de operações de inserção
 // Garante que o RLS (Row Level Security) funcione corretamente
 ```

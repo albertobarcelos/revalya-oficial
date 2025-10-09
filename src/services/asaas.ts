@@ -26,6 +26,11 @@ class AsaasService {
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         ...options.headers,
       };
+
+      // AIDEV-NOTE: Adicionar tenant_id no header x-tenant-id conforme esperado pelo asaas-proxy
+      if (tenantId) {
+        headers['x-tenant-id'] = tenantId;
+      }
       
       // AIDEV-NOTE: Verificação via MCP Supabase confirmou que a integração ASAAS está ativa
       // para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 com credenciais válidas
@@ -273,6 +278,54 @@ class AsaasService {
       }, tenantId);
     } catch (error) {
       console.error('Erro ao criar cliente:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cria um novo pagamento/cobrança no Asaas
+   * AIDEV-NOTE: Método implementado para resolver erro de tenant_id no CreateChargeForm
+   */
+  async createPayment(data: {
+    customer: string;
+    billingType: string;
+    value: number;
+    dueDate: string;
+    description: string;
+  }, tenantId?: string): Promise<any> {
+    try {
+      const paymentData = {
+        customer: data.customer,
+        billingType: data.billingType.toUpperCase(),
+        value: data.value,
+        dueDate: data.dueDate,
+        description: data.description
+      };
+
+      return this.request('/payments', {
+        method: 'POST',
+        body: JSON.stringify(paymentData),
+      }, tenantId);
+    } catch (error) {
+      console.error('Erro ao criar pagamento:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Busca pagamentos com paginação
+   */
+  async getPayments(offset: number = 0, limit: number = 20, tenantId?: string): Promise<{ data: any[], hasMore: boolean, totalCount: number }> {
+    try {
+      const response = await this.request<{ data: any[], hasMore: boolean, totalCount: number }>(`/payments?offset=${offset}&limit=${limit}`, {}, tenantId);
+      
+      return {
+        data: response.data || [],
+        hasMore: response.hasMore || false,
+        totalCount: response.totalCount || 0
+      };
+    } catch (error) {
+      console.error('Erro ao buscar pagamentos:', error);
       throw error;
     }
   }

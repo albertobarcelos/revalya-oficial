@@ -14,12 +14,16 @@ import { useAsaasCustomers } from '@/hooks/useAsaasData';
 import { CreateClientForm } from '@/components/clients/CreateClientForm';
 import { ClientSelect } from './form/ClientSelect';
 import { PaymentDetails } from './form/PaymentDetails';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 
 interface CreateChargeFormProps {
   onSuccess?: () => void;
 }
 
 export function CreateChargeForm({ onSuccess }: CreateChargeFormProps) {
+  // 🛡️ GUARD DE ACESSO OBRIGATÓRIO
+  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  
   const [formData, setFormData] = useState({
     customer: '',
     billingType: 'BOLETO',
@@ -35,7 +39,13 @@ export function CreateChargeForm({ onSuccess }: CreateChargeFormProps) {
   const customers = customersData?.pages.flatMap(page => page.data) || [];
 
   const createChargeMutation = useMutation({
-    mutationFn: (data: typeof formData) => asaasService.createPayment(data),
+    mutationFn: (data: typeof formData) => {
+      // AIDEV-NOTE: Passando tenantId para resolver erro de "Tenant ID não fornecido"
+      if (!currentTenant?.id) {
+        throw new Error('Tenant não definido');
+      }
+      return asaasService.createPayment(data, currentTenant.id);
+    },
     onSuccess: () => {
       // AIDEV-NOTE: Invalidar cache das cobranças para atualizar a lista
       queryClient.invalidateQueries({ queryKey: ['charges'] });
@@ -58,6 +68,17 @@ export function CreateChargeForm({ onSuccess }: CreateChargeFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 🚨 GUARD CLAUSE - Verificar acesso antes de prosseguir
+    if (!hasAccess) {
+      toast({
+        title: 'Acesso negado',
+        description: 'Você não tem permissão para criar cobranças.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     if (!formData.customer || !formData.value || !formData.dueDate) {
       toast({
         title: 'Campos obrigatórios',

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { logService } from "@/services/logService";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { SetupAsaasWebhook } from "@/components/asaas/setup-asaas-webhook";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -369,7 +376,13 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* AsaaS */}
-        <div className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer">
+        <div 
+          className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer hover:border-blue-500 transition-colors"
+          onClick={async () => {
+            await carregarConfigAsaas();
+            setShowAsaasConfig(true);
+          }}
+        >
           {!servicosAtivos.asaas && (
             <Badge className="absolute top-3 right-3 bg-blue-500">Configurar</Badge>
           )}
@@ -397,20 +410,15 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
           <div className="mt-auto flex items-center gap-2">
             <Switch
               checked={servicosAtivos.asaas}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggle('asaas');
-              }}
               disabled={loadingServicos.asaas}
+              onCheckedChange={(checked) => {
+                // Previne a propagação do evento para não abrir o modal
+                event?.stopPropagation();
+                handleToggleServico('asaas', checked);
+              }}
             />
-            {loadingServicos.asaas ? (
-              <span className="text-sm text-muted-foreground flex items-center gap-2 ml-2">
-                <Spinner size="sm" /> Processando...
-              </span>
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {servicosAtivos.asaas ? 'Ativo' : 'Inativo'}
-              </span>
+            {loadingServicos.asaas && (
+              <Loader2 className="h-4 w-4 animate-spin" />
             )}
           </div>
         </div>
@@ -534,110 +542,138 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
       </div>
 
       {/* AIDEV-NOTE: Modal de configuração do AsaaS */}
-      <Dialog open={showAsaasConfig} onOpenChange={setShowAsaasConfig}>
-        <DialogContent className="sm:max-w-[500px]">
+      <Dialog open={showAsaasConfig} onOpenChange={(open) => {
+        if (open) {
+          carregarConfigAsaas();
+        }
+        setShowAsaasConfig(open);
+      }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Configurar AsaaS
-            </DialogTitle>
+            <DialogTitle>Configurar AsaaS</DialogTitle>
             <DialogDescription>
-              Configure as credenciais de acesso à API do AsaaS para seu tenant.
+              Configure as credenciais de acesso à API do AsaaS e o webhook para seu tenant.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="instanceName">Nome da Instância *</Label>
-              <Input
-                id="instanceName"
-                placeholder="Ex: Minha Empresa - AsaaS"
-                value={asaasConfig.instanceName}
-                onChange={(e) => setAsaasConfig(prev => ({ ...prev, instanceName: e.target.value }))}
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="environment">Ambiente</Label>
-              <Select 
-                value={asaasConfig.environment} 
-                onValueChange={(value: 'sandbox' | 'production') => 
-                  setAsaasConfig(prev => ({ ...prev, environment: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sandbox">Sandbox (Testes)</SelectItem>
-                  <SelectItem value="production">Produção</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="apiKey">API Key *</Label>
-              <div className="relative">
-                <Input
-                  id="apiKey"
-                  type={showApiKey ? "text" : "password"}
-                  placeholder="Sua API Key do AsaaS"
-                  value={asaasConfig.apiKey}
-                  onChange={(e) => setAsaasConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                >
-                  {showApiKey ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </Button>
+          <Tabs defaultValue={servicosAtivos.asaas ? "webhook" : "credentials"}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="credentials">Credenciais</TabsTrigger>
+              <TabsTrigger value="webhook" disabled={!servicosAtivos.asaas}>
+                Webhook
+              </TabsTrigger>
+            </TabsList>
+          
+            <TabsContent value="credentials">
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="instanceName">Nome da Instância *</Label>
+                  <Input
+                    id="instanceName"
+                    value={asaasConfig.instanceName}
+                    onChange={(e) => setAsaasConfig({
+                      ...asaasConfig,
+                      instanceName: e.target.value
+                    })}
+                    placeholder="Ex: ASAAS Principal"
+                    disabled={servicosAtivos.asaas}
+                    className={servicosAtivos.asaas ? "bg-muted" : ""}
+                  />
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label htmlFor="apiKey">Chave API *</Label>
+                  <div className="relative">
+                    <Input
+                      id="apiKey"
+                      type={showApiKey ? "text" : "password"}
+                      value={servicosAtivos.asaas ? "••••••••••••••••" : asaasConfig.apiKey}
+                      onChange={(e) => setAsaasConfig({
+                        ...asaasConfig,
+                        apiKey: e.target.value
+                      })}
+                      placeholder="$aact_YturanABCDEF..."
+                      disabled={servicosAtivos.asaas}
+                      className={servicosAtivos.asaas ? "bg-muted" : ""}
+                    />
+                    {!servicosAtivos.asaas && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid gap-2">
+                  <Label>Ambiente</Label>
+                  <Select
+                    value={asaasConfig.environment}
+                    onValueChange={(value) => setAsaasConfig({
+                      ...asaasConfig,
+                      environment: value as 'sandbox' | 'production'
+                    })}
+                    disabled={servicosAtivos.asaas}
+                  >
+                    <SelectTrigger className={servicosAtivos.asaas ? "bg-muted" : ""}>
+                      <SelectValue placeholder="Selecione o ambiente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sandbox">Sandbox (Testes)</SelectItem>
+                      <SelectItem value="production">Produção</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="apiUrl">URL da API</Label>
+                  <Input
+                    id="apiUrl"
+                    value={asaasConfig.environment === 'production' 
+                      ? 'https://api.asaas.com' 
+                      : 'https://sandbox.asaas.com'
+                    }
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A URL é definida automaticamente baseada no ambiente selecionado.
+                  </p>
+                </div>
               </div>
-            </div>
+            </TabsContent>
             
-            <div className="grid gap-2">
-              <Label htmlFor="apiUrl">URL da API</Label>
-              <Input
-                id="apiUrl"
-                value={asaasConfig.environment === 'production' 
-                  ? 'https://api.asaas.com' 
-                  : 'https://sandbox.asaas.com'
-                }
-                disabled
-                className="bg-muted"
-              />
-              <p className="text-xs text-muted-foreground">
-                A URL é definida automaticamente baseada no ambiente selecionado.
-              </p>
-            </div>
-          </div>
+            <TabsContent value="webhook">
+              {servicosAtivos.asaas ? (
+                <SetupAsaasWebhook 
+                  tenantId={tenantId} 
+                  environment={asaasConfig.environment} 
+                />
+              ) : (
+                <div className="py-4 text-center text-muted-foreground">
+                  Configure primeiro as credenciais do ASAAS
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
           
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAsaasConfig(false)}
-              disabled={savingConfig}
-            >
+            <Button onClick={() => setShowAsaasConfig(false)} variant="outline">
               Cancelar
             </Button>
-            <Button 
-              onClick={salvarConfigAsaas}
-              disabled={savingConfig}
-            >
-              {savingConfig ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Salvando...
-                </>
-              ) : (
-                'Salvar Configuração'
-              )}
+            <Button onClick={salvarConfigAsaas} disabled={savingConfig}>
+              {savingConfig && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
