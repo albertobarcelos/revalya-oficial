@@ -14,7 +14,9 @@ import { Plus, Search, Filter, Copy, Edit, Trash2 } from 'lucide-react';
 import type { MessageTemplate } from '@/types/template';
 import { AVAILABLE_TAGS } from '@/types/settings';
 // 🔐 IMPORTS DE SEGURANÇA MULTI-TENANT OBRIGATÓRIOS
-import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
+import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { motion } from 'framer-motion';
 // 🏗️ IMPORT DO LAYOUT PRINCIPAL
 import { Layout } from '@/components/layout/Layout';
 
@@ -59,90 +61,36 @@ const TemplateCardSkeleton = () => {
 };
 
 export default function Templates() {
-  // 🔐 VALIDAÇÃO DE ACESSO MULTI-TENANT OBRIGATÓRIA
+  // 🛡️ TODOS OS HOOKS DEVEM VIR PRIMEIRO - Regras do React
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
-  
-  // ✅ REMOÇÃO DO useState ANTIGO - Agora usando dados do useSecureTenantQuery
-  // const [templates, setTemplates] = useState<MessageTemplate[]>([]);
-  // const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const { toast } = useToast();
-  
-  // 🚨 GUARD CLAUSE: Bloquear acesso se tenant inválido
-  if (!hasAccess) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-red-600">🚨 Acesso Negado</CardTitle>
-            <CardDescription>
-              {accessError || 'Você não tem permissão para acessar esta página.'}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-  
-  // 🔍 LOG DE AUDITORIA: Acesso à página de templates
-  console.log(`📋 [AUDIT] Acesso à página Templates - Tenant: ${currentTenant?.name} (${currentTenant?.id})`);
-
-  const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null);
+  // AIDEV-NOTE: Estado do formulário alinhado com schema da tabela notification_templates
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    message: "",
-    category: "cobranca",
-    days_offset: 0,
-    is_before_due: true,
-    active: true,
-    tags: [] as string[],
+    name: "",                    // Campo obrigatório - string vazia para input
+    description: "",             // Campo opcional - string vazia para manter input controlado
+    message: "",                 // Campo obrigatório - string vazia para input
+    category: "cobranca",        // Campo obrigatório - valor padrão válido
+    days_offset: 0,              // Campo obrigatório - corresponde ao padrão da tabela (0)
+    is_before_due: true,         // Campo opcional - corresponde ao padrão da tabela (true)
+    active: true,                // Campo opcional - corresponde ao padrão da tabela (true)
+    tags: [] as string[],        // Campo obrigatório - array vazio corresponde ao padrão da tabela
+    settings: {} as Record<string, Record<string, unknown>>, // Campo opcional - objeto vazio corresponde ao padrão da tabela
   });
 
-  // ✅ REMOÇÃO DO useEffect ANTIGO - Agora usando useSecureTenantQuery
-  // O carregamento de templates é feito automaticamente pelo hook seguro
-
-  // 🔐 CONSULTA SEGURA DE TEMPLATES COM TENANT_ID
+  // 🛡️ HOOK SEGURO PARA TEMPLATES - Implementa todas as 5 camadas de segurança
   const {
-    data: templates = [],
+    templates,
     isLoading: loading,
     error: templatesError,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
     refetch: refetchTemplates
-  } = useSecureTenantQuery(
-    ['templates'], // Query key base
-    async (supabase, tenantId) => {
-      console.log(`🔍 [AUDIT] Carregando templates para tenant: ${tenantId}`);
-      
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .select('*')
-        .eq('tenant_id', tenantId) // 🔑 REGRA DE OURO: SEMPRE FILTRAR POR TENANT_ID
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('🚨 [SECURITY] Erro ao carregar templates:', error);
-        throw new Error(`Erro ao carregar templates: ${error.message}`);
-      }
-      
-      // 🛡️ VALIDAÇÃO DUPLA: Verificar se todos os registros pertencem ao tenant
-      const invalidRecords = data?.filter(template => template.tenant_id !== tenantId) || [];
-      if (invalidRecords.length > 0) {
-        console.error('🚨 [SECURITY BREACH] Templates de outros tenants detectados:', invalidRecords);
-        throw new Error('Erro de segurança: dados de outros tenants detectados');
-      }
-      
-      console.log(`✅ [AUDIT] ${data?.length || 0} templates carregados com segurança para tenant: ${tenantId}`);
-      return data || [];
-    },
-    {
-      enabled: !!currentTenant?.id,
-      staleTime: 5 * 60 * 1000, // 5 minutos
-      refetchOnWindowFocus: false
-    }
-  );
+  } = useSecureNotificationTemplates();
   
   // 🚨 TRATAMENTO DE ERRO DE CONSULTA
   useEffect(() => {
@@ -156,121 +104,64 @@ export default function Templates() {
     }
   }, [templatesError, toast]);
 
-  // 🔐 MUTAÇÃO SEGURA PARA CRIAÇÃO DE TEMPLATES
-  const createTemplateMutation = useSecureTenantMutation(
-    async (supabase, tenantId, templateData: any) => {
-      console.log(`✏️ [AUDIT] Criando template para tenant: ${tenantId}`, templateData);
-      
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .insert({
-          ...templateData,
-          tenant_id: tenantId, // 🔑 REGRA DE OURO: SEMPRE INCLUIR TENANT_ID
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('🚨 [SECURITY] Erro ao criar template:', error);
-        throw new Error(`Erro ao criar template: ${error.message}`);
-      }
-      
-      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template criado pertence ao tenant correto
-      if (data.tenant_id !== tenantId) {
-        console.error('🚨 [SECURITY BREACH] Template criado com tenant_id incorreto:', data);
-        throw new Error('Erro de segurança: tenant_id incorreto no template criado');
-      }
-      
-      console.log(`✅ [AUDIT] Template criado com sucesso para tenant: ${tenantId}`, data);
-      return data;
-    },
-    {
-      onSuccess: () => {
-        toast({
-          title: "Template criado",
-          description: "Template criado com sucesso!",
-        });
-        resetForm();
-        refetchTemplates(); // Recarregar lista
-      },
-      onError: (error) => {
-        console.error('🚨 [SECURITY] Erro na criação de template:', error);
-        toast({
-          title: "Erro de Segurança",
-          description: "Não foi possível criar o template com segurança",
-          variant: "destructive",
-        });
-      },
-      invalidateQueries: ['templates']
-    }
-  );
+  // 🚨 EARLY RETURN OBRIGATÓRIO - Não renderizar sem acesso
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="text-red-600 text-lg font-semibold">
+              🚨 Acesso Negado
+            </div>
+            <div className="text-gray-600">
+              {accessError || 'Você não tem permissão para acessar esta página'}
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
   
+  // 🔍 AUDIT LOG OBRIGATÓRIO - Rastreamento de acesso
+  console.log(`[AUDIT] Acessando Templates - Tenant: ${currentTenant?.name} (${currentTenant?.id})`);
+
   const handleCreate = async () => {
-    createTemplateMutation.mutate(formData);
+    try {
+      // 🔍 DEBUG LOG - Verificar dados do formulário antes de enviar
+      console.log('🔍 [DEBUG] handleCreate - Dados do formulário:', {
+        formData,
+        name: formData.name,
+        nameType: typeof formData.name,
+        nameLength: formData.name?.length,
+        extractedTags: extractTags(formData.message)
+      });
+
+      const dataToSend = {
+        ...formData,
+        tags: extractTags(formData.message),
+      };
+
+      console.log('🔍 [DEBUG] handleCreate - Dados a serem enviados:', dataToSend);
+
+      await createTemplate(dataToSend);
+      
+      toast({
+        title: "Template criado",
+        description: "Template criado com sucesso!",
+      });
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('🚨 [SECURITY] Erro na criação de template:', error);
+      toast({
+        title: "Erro de Segurança",
+        description: "Não foi possível criar o template com segurança",
+        variant: "destructive",
+      });
+    }
   };
 
-  // 🔐 MUTAÇÃO SEGURA PARA EDIÇÃO DE TEMPLATES
-  const updateTemplateMutation = useSecureTenantMutation(
-    async (supabase, tenantId, { templateId, templateData }: { templateId: string, templateData: any }) => {
-      console.log(`✏️ [AUDIT] Atualizando template ${templateId} para tenant: ${tenantId}`, templateData);
-      
-      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template pertence ao tenant antes de atualizar
-      const { data: existingTemplate, error: checkError } = await supabase
-        .from('notification_templates')
-        .select('tenant_id')
-        .eq('id', templateId)
-        .eq('tenant_id', tenantId) // 🔑 REGRA DE OURO: SEMPRE FILTRAR POR TENANT_ID
-        .single();
-      
-      if (checkError || !existingTemplate) {
-        console.error('🚨 [SECURITY] Template não encontrado ou não pertence ao tenant:', { templateId, tenantId });
-        throw new Error('Template não encontrado ou acesso negado');
-      }
-      
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .update({
-          ...templateData,
-          tenant_id: tenantId, // 🔑 REGRA DE OURO: SEMPRE MANTER TENANT_ID
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', templateId)
-        .eq('tenant_id', tenantId) // 🔑 DUPLA VALIDAÇÃO NO UPDATE
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('🚨 [SECURITY] Erro ao atualizar template:', error);
-        throw new Error(`Erro ao atualizar template: ${error.message}`);
-      }
-      
-      console.log(`✅ [AUDIT] Template ${templateId} atualizado com sucesso para tenant: ${tenantId}`);
-      return data;
-    },
-    {
-      onSuccess: () => {
-        toast({
-          title: "Template atualizado",
-          description: "Template atualizado com sucesso!",
-        });
-        setIsDialogOpen(false);
-        setEditingTemplate(null);
-        resetForm();
-        refetchTemplates();
-      },
-      onError: (error) => {
-        console.error('🚨 [SECURITY] Erro na atualização de template:', error);
-        toast({
-          title: "Erro de Segurança",
-          description: "Não foi possível atualizar o template com segurança",
-          variant: "destructive",
-        });
-      },
-      invalidateQueries: ['templates']
-    }
-  );
+
   
   const handleEdit = (template: MessageTemplate) => {
     setEditingTemplate(template);
@@ -289,126 +180,93 @@ export default function Templates() {
 
   const handleUpdate = async () => {
     if (!editingTemplate) return;
-    updateTemplateMutation.mutate({
-      templateId: editingTemplate.id,
-      templateData: {
+    
+    try {
+      // 🔍 DEBUG LOG - Verificar dados do formulário antes de atualizar
+      console.log('🔍 [DEBUG] handleUpdate - Dados do formulário:', {
+        formData,
+        name: formData.name,
+        nameType: typeof formData.name,
+        nameLength: formData.name?.length,
+        editingTemplate: editingTemplate,
+        extractedTags: extractTags(formData.message)
+      });
+
+      const dataToSend = {
         ...formData,
         tags: extractTags(formData.message),
-      }
-    });
+      };
+
+      console.log('🔍 [DEBUG] handleUpdate - Dados a serem enviados:', dataToSend);
+
+      // AIDEV-NOTE: Corrigindo assinatura - hook espera { id, ...templateData } em um único objeto
+      await updateTemplate({ id: editingTemplate.id, ...dataToSend });
+      
+      toast({
+        title: "Template atualizado",
+        description: "Template atualizado com sucesso!",
+      });
+      setIsDialogOpen(false);
+      setEditingTemplate(null);
+      resetForm();
+    } catch (error) {
+      console.error('🚨 [SECURITY] Erro na atualização de template:', error);
+      toast({
+        title: "Erro de Segurança",
+        description: "Não foi possível atualizar o template com segurança",
+        variant: "destructive",
+      });
+    }
   };
 
-  // 🔐 MUTAÇÃO SEGURA PARA EXCLUSÃO DE TEMPLATES
-  const deleteTemplateMutation = useSecureTenantMutation(
-    async (supabase, tenantId, templateId: string) => {
-      console.log(`🗑️ [AUDIT] Excluindo template ${templateId} para tenant: ${tenantId}`);
-      
-      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template pertence ao tenant antes de excluir
-      const { data: existingTemplate, error: checkError } = await supabase
-        .from('notification_templates')
-        .select('tenant_id, name')
-        .eq('id', templateId)
-        .eq('tenant_id', tenantId) // 🔑 REGRA DE OURO: SEMPRE FILTRAR POR TENANT_ID
-        .single();
-      
-      if (checkError || !existingTemplate) {
-        console.error('🚨 [SECURITY] Template não encontrado ou não pertence ao tenant:', { templateId, tenantId });
-        throw new Error('Template não encontrado ou acesso negado');
-      }
-      
-      const { error } = await supabase
-        .from('notification_templates')
-        .delete()
-        .eq('id', templateId)
-        .eq('tenant_id', tenantId); // 🔑 DUPLA VALIDAÇÃO NO DELETE
-      
-      if (error) {
-        console.error('🚨 [SECURITY] Erro ao excluir template:', error);
-        throw new Error(`Erro ao excluir template: ${error.message}`);
-      }
-      
-      console.log(`✅ [AUDIT] Template '${existingTemplate.name}' excluído com sucesso para tenant: ${tenantId}`);
-      return templateId;
-    },
-    {
-      onSuccess: () => {
-        toast({
-          title: "Template excluído",
-          description: "Template excluído com sucesso!",
-        });
-        refetchTemplates();
-      },
-      onError: (error) => {
-        console.error('🚨 [SECURITY] Erro na exclusão de template:', error);
-        toast({
-          title: "Erro de Segurança",
-          description: "Não foi possível excluir o template com segurança",
-          variant: "destructive",
-        });
-      },
-      invalidateQueries: ['templates']
-    }
-  );
+
   
-  // 🔐 MUTAÇÃO SEGURA PARA CÓPIA DE TEMPLATES
-  const copyTemplateMutation = useSecureTenantMutation(
-    async (supabase, tenantId, template: MessageTemplate) => {
-      console.log(`📋 [AUDIT] Copiando template ${template.id} para tenant: ${tenantId}`);
-      
-      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template original pertence ao tenant
-      if (template.tenant_id !== tenantId) {
-        console.error('🚨 [SECURITY] Tentativa de copiar template de outro tenant:', { templateId: template.id, originalTenant: template.tenant_id, currentTenant: tenantId });
-        throw new Error('Não é possível copiar template de outro tenant');
-      }
-      
-      const { data, error } = await supabase
-        .from('notification_templates')
-        .insert({
-          name: `${template.name} (Cópia)`,
-          message: template.message,
-          category: template.category,
-          tags: template.tags,
-          tenant_id: tenantId, // 🔑 REGRA DE OURO: SEMPRE INCLUIR TENANT_ID
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error('🚨 [SECURITY] Erro ao copiar template:', error);
-        throw new Error(`Erro ao copiar template: ${error.message}`);
-      }
-      
-      console.log(`✅ [AUDIT] Template '${template.name}' copiado com sucesso para tenant: ${tenantId}`);
-      return data;
-    },
-    {
-      onSuccess: () => {
-        toast({
-          title: "Template copiado",
-          description: "Template copiado com sucesso!",
-        });
-        refetchTemplates();
-      },
-      onError: (error) => {
-        console.error('🚨 [SECURITY] Erro na cópia de template:', error);
-        toast({
-          title: "Erro de Segurança",
-          description: "Não foi possível copiar o template com segurança",
-          variant: "destructive",
-        });
-      },
-      invalidateQueries: ['templates']
-    }
-  );
+
 
   const handleDelete = async (templateId: string) => {
-    deleteTemplateMutation.mutate(templateId);
+    try {
+      await deleteTemplate(templateId);
+      toast({
+        title: "Template excluído",
+        description: "Template excluído com sucesso!",
+      });
+    } catch (error) {
+      console.error('🚨 [SECURITY] Erro na exclusão de template:', error);
+      toast({
+        title: "Erro de Segurança",
+        description: "Não foi possível excluir o template com segurança",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleCopy = (template: MessageTemplate) => {
-    copyTemplateMutation.mutate(template);
+  // AIDEV-NOTE: Função de cópia com todos os campos necessários do schema
+  const handleCopy = async (template: MessageTemplate) => {
+    try {
+      await createTemplate({
+        name: `${template.name} (Cópia)`,
+        message: template.message,
+        category: template.category,
+        description: template.description,
+        days_offset: template.days_offset,
+        is_before_due: template.is_before_due,
+        active: template.active,
+        tags: template.tags || [],
+        settings: template.settings || {}, // Campo settings incluído
+      });
+      
+      toast({
+        title: "Template copiado",
+        description: "Template copiado com sucesso!",
+      });
+    } catch (error) {
+      console.error('🚨 [SECURITY] Erro na cópia de template:', error);
+      toast({
+        title: "Erro de Segurança",
+        description: "Não foi possível copiar o template com segurança",
+        variant: "destructive",
+      });
+    }
   };
 
   const extractTags = (message: string): string[] => {
@@ -416,18 +274,20 @@ export default function Templates() {
     return tags.filter(tag => message.includes(tag));
   };
 
+  // AIDEV-NOTE: Reset do formulário com valores padrão alinhados ao schema da tabela
   const resetForm = () => {
     setFormData({
-      name: "",
-      description: "",
-      message: "",
-      category: "cobranca",
-      days_offset: 0,
-      is_before_due: true,
-      active: true,
-      tags: [],
+      name: "",                    // Campo obrigatório - string vazia para input
+      description: "",             // Campo opcional - string vazia para manter input controlado
+      message: "",                 // Campo obrigatório - string vazia para input
+      category: "cobranca",        // Campo obrigatório - valor padrão válido
+      days_offset: 0,              // Campo obrigatório - corresponde ao padrão da tabela (0)
+      is_before_due: true,         // Campo opcional - corresponde ao padrão da tabela (true)
+      active: true,                // Campo opcional - corresponde ao padrão da tabela (true)
+      tags: [] as string[],        // Campo obrigatório - array vazio corresponde ao padrão da tabela
+      settings: {} as Record<string, Record<string, unknown>>, // Campo opcional - objeto vazio corresponde ao padrão da tabela
     });
-    setSelectedTemplate(null);
+    setEditingTemplate(null);
   };
 
   const filteredTemplates = templates.filter(template =>
@@ -454,7 +314,7 @@ export default function Templates() {
               open={isDialogOpen}
               onOpenChange={setIsDialogOpen}
               loading={loading}
-              selectedTemplate={selectedTemplate}
+              selectedTemplate={editingTemplate}
               formData={formData}
               setFormData={setFormData}
               handleCreate={handleCreate}

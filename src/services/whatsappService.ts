@@ -6,12 +6,10 @@ import { supabase } from '@/lib/supabase';
 import { API_TIMEOUT, WHATSAPP, MAX_RETRIES, RETRY_DELAY } from '@/config/constants';
 import { logService } from './logService';
 import { rateLimitService } from './rateLimitService';
-import { executeWithAuth, checkAuthentication } from '@/utils/authUtils';
+import { executeWithAuth, checkAuthentication, logAccess } from '@/utils/authUtils';
 
 // URL e chave padrão da Evolution API (pode ser alterada nas configurações)
 // Usando URL sem barra no final para evitar problemas de path
-const DEFAULT_EVOLUTION_API_URL = 'https://evolution.nexsyn.com.br';
-const DEFAULT_EVOLUTION_API_KEY = 'd93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a';
 
 /**
  * Interface que define a estrutura de uma instância do WhatsApp
@@ -28,8 +26,8 @@ class WhatsAppService {
   private readonly MODULE_NAME = 'WhatsApp';
 
   constructor() {
-    this.apiUrl = import.meta.env.VITE_EVOLUTION_API_URL || DEFAULT_EVOLUTION_API_URL;
-    this.apiKey = import.meta.env.VITE_EVOLUTION_API_KEY || DEFAULT_EVOLUTION_API_KEY;
+    this.apiUrl = import.meta.env.VITE_EVOLUTION_API_URL;
+    this.apiKey = import.meta.env.VITE_EVOLUTION_API_KEY;
     
     if (!this.apiUrl || !this.apiKey) {
       logService.error(this.MODULE_NAME, 'Credenciais da API não configuradas');
@@ -166,6 +164,12 @@ class WhatsAppService {
             // Se não for JSON, obter o texto da resposta
             const text = await response.text();
             
+            // AIDEV-NOTE: Verificar se a resposta é HTML (indica instância não existente)
+            if (text.trim().startsWith('<!DOCTYPE html>') || text.trim().startsWith('<html')) {
+              logService.error(this.MODULE_NAME, `API retornou HTML em vez de JSON para ${endpoint}. Isso geralmente indica que a instância não existe.`);
+              throw new Error('Instância não encontrada - API retornou HTML em vez de JSON');
+            }
+            
             // Log da resposta de texto
             logService.debug(this.MODULE_NAME, `Resposta da API (texto) (${endpoint}):`, text);
             
@@ -293,7 +297,7 @@ class WhatsAppService {
       const data: any = {
         instanceName: instanceName,
         integration: "WHATSAPP-BAILEYS", // Campo obrigatório para definir o tipo de integração
-        qrcode: false, // Não criar QR code automaticamente após a criação
+        qrcode: true, // criar QR code automaticamente após a criação
         
         // Configurações recomendadas para melhorar a experiência
         reject_call: true, // Rejeitar chamadas automaticamente
@@ -403,7 +407,7 @@ class WhatsAppService {
           const value = response[key];
           if (typeof value === 'string' && 
              (value.startsWith('data:image') || 
-              value.includes('base64') || 
+              value.includes('png;base64') || 
               value.startsWith('1@') || 
               value.startsWith('https://wa.me/'))) {
             logService.info(this.MODULE_NAME, `QR Code encontrado na propriedade: ${key}`);
@@ -856,9 +860,9 @@ class WhatsAppService {
         throw new Error(`Usuário não autenticado: ${authCheck.error}`);
       }
 
-      // Executar consulta com proteção de autenticação
+      // AIDEV-NOTE: Executar consulta com proteção de autenticação
       return await executeWithAuth(async () => {
-        // Primeiro tenta buscar pelo slug exato
+        // AIDEV-NOTE: Primeiro tenta buscar pelo slug exato
         const { data, error } = await supabase
           .from('tenants')
           .select('*')
@@ -868,7 +872,7 @@ class WhatsAppService {
         if (error) {
           logService.warn(this.MODULE_NAME, `Tenant não encontrado pelo slug exato ${tenantSlug}, erro:`, error);
           
-          // Se não encontrar pelo slug exato, tenta buscar o primeiro tenant que corresponda
+          // AIDEV-NOTE: Se não encontrar pelo slug exato, tenta buscar o primeiro tenant que corresponda
           const { data: tenants, error: likeError } = await supabase
             .from('tenants')
             .select('*')
@@ -880,13 +884,37 @@ class WhatsAppService {
             return null;
           }
 
-          logService.info(this.MODULE_NAME, `Tenant encontrado por correspondência parcial: ${tenants[0].slug} (ID: ${tenants[0].id})`);
-          return tenants[0];
+          const foundTenant = tenants[0];
+          
+          // AIDEV-NOTE: Configurar contexto de tenant após encontrar
+          await supabase.rpc('set_tenant_context_simple', { 
+            p_tenant_id: foundTenant.id 
+          });
+
+          // AIDEV-NOTE: Log de auditoria para acesso ao tenant
+          await logAccess(foundTenant.id, 'tenant_access', 'read', {
+            slug: foundTenant.slug,
+            search_method: 'partial_match'
+          });
+
+          logService.info(this.MODULE_NAME, `Tenant encontrado por correspondência parcial: ${foundTenant.slug} (ID: ${foundTenant.id})`);
+          return foundTenant;
         }
+        
+        // AIDEV-NOTE: Configurar contexto de tenant após encontrar
+        await supabase.rpc('set_tenant_context_simple', { 
+          p_tenant_id: data.id 
+        });
+
+        // AIDEV-NOTE: Log de auditoria para acesso ao tenant
+        await logAccess(data.id, 'tenant_access', 'read', {
+          slug: data.slug,
+          search_method: 'exact_match'
+        });
         
         logService.info(this.MODULE_NAME, `Tenant encontrado: ${data.slug} (ID: ${data.id})`);
         return data;
-      }, 2, `getTenantBySlug_${tenantSlug}`);
+      }, 3, `getTenantBySlug_${tenantSlug}`);
     } catch (error) {
       logService.error(this.MODULE_NAME, `Erro ao buscar tenant ${tenantSlug}:`, error);
       return null;
@@ -971,8 +999,49 @@ class WhatsAppService {
         
         if (!instanceExists) {
           logService.warn(this.MODULE_NAME, `Instância ${instanceName} não encontrada na API. Criando nova instância.`);
-          // Criar nova instância já que não existe
-          return this.manageInstance(tenantSlug, 'create');
+          
+          // AIDEV-NOTE: Criar nova instância diretamente sem recursão
+          try {
+            logService.info(this.MODULE_NAME, `Criando instância ${instanceName} para ${tenantSlug}`);
+            const instance = await this.createInstance(tenantSlug);
+            
+            // Salvar configuração no Supabase
+            await this.saveInstanceConfig(tenantSlug, instance.instanceName, true);
+            
+            logService.info(this.MODULE_NAME, `Instância criada: ${instance.instanceName}`);
+            
+            // AIDEV-NOTE: Aguardar mais tempo para a API processar a criação (5 segundos)
+            logService.info(this.MODULE_NAME, `Aguardando 5 segundos para a API processar a criação da instância...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            
+            // AIDEV-NOTE: Verificar múltiplas vezes se a instância foi criada
+            let attempts = 0;
+            const maxAttempts = 5;
+            let newInstanceExists = false;
+            
+            while (attempts < maxAttempts && !newInstanceExists) {
+              attempts++;
+              logService.info(this.MODULE_NAME, `Verificando existência da instância (tentativa ${attempts}/${maxAttempts})`);
+              
+              newInstanceExists = await this.instanceExists(instanceName);
+              
+              if (!newInstanceExists && attempts < maxAttempts) {
+                logService.warn(this.MODULE_NAME, `Instância ainda não existe, aguardando mais 2 segundos...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+            }
+            
+            if (!newInstanceExists) {
+              logService.error(this.MODULE_NAME, `Falha ao criar instância ${instanceName} após ${maxAttempts} tentativas`);
+              return { success: false, error: 'Falha ao criar instância - instância não foi encontrada após criação' };
+            }
+            
+            logService.info(this.MODULE_NAME, `Instância ${instanceName} criada e verificada com sucesso. Continuando processo de conexão.`);
+            
+          } catch (createError) {
+            logService.error(this.MODULE_NAME, `Erro ao criar instância ${instanceName}:`, createError);
+            return { success: false, error: `Erro ao criar instância: ${createError instanceof Error ? createError.message : 'Erro desconhecido'}` };
+          }
         }
         
         // Verificar status atual da instância antes de tentar conectar
@@ -982,8 +1051,7 @@ class WhatsAppService {
         // Se já estiver conectada, não gerar QR Code
         if (currentStatus === 'open' || currentStatus === 'connected') {
           logService.info(this.MODULE_NAME, `Instância ${instanceName} já está conectada (${currentStatus})`);
-          // Atualizar configuração no Supabase para refletir o status conectado
-          await this.saveInstanceConfig(tenantSlug, instanceName, true);
+          // AIDEV-NOTE: Removido saveInstanceConfig - agora é responsabilidade do useWhatsAppToggle
           return { success: true, qrCode: null, error: 'WhatsApp já está conectado' };
         }
         
@@ -1022,6 +1090,8 @@ class WhatsAppService {
                 }
               } 
             }
+            
+            // AIDEV-NOTE: Removido monitorConnectionAndSave - agora é responsabilidade do useWhatsAppToggle
             
             return { success: true, qrCode };
           } else {
@@ -1076,8 +1146,7 @@ class WhatsAppService {
         if (instancesToDisconnect.length === 0) {
           logService.warn(this.MODULE_NAME, `Nenhuma instância encontrada para desconectar para o tenant: ${tenantSlug}`);
           
-          // Atualizar configuração no Supabase mesmo assim
-          await this.saveInstanceConfig(tenantSlug, '', false);
+          // AIDEV-NOTE: Removido saveInstanceConfig - agora é responsabilidade do useWhatsAppToggle
           return { success: true };
         }
         
@@ -1158,9 +1227,8 @@ class WhatsAppService {
           }
         }
         
-        // Atualizar configuração no Supabase
-        await this.saveInstanceConfig(tenantSlug, '', false);
-        logService.info(this.MODULE_NAME, `Configuração atualizada: WhatsApp desativado para ${tenantSlug}`);
+        // AIDEV-NOTE: Removido saveInstanceConfig - agora é responsabilidade do useWhatsAppToggle
+        logService.info(this.MODULE_NAME, `Instâncias desconectadas para ${tenantSlug}`);
         return { success: true };
       }
       
@@ -1336,40 +1404,171 @@ class WhatsAppService {
 
   private saveInstanceConfig = async (tenantSlug: string, instanceName: string, isActive: boolean) => {
     try {
-      const tenant = await this.getTenantBySlug(tenantSlug);
-      if (!tenant || !tenant.id) {
-        logService.error(this.MODULE_NAME, `Tenant não encontrado para o slug: ${tenantSlug}`);
-        return;
+      // AIDEV-NOTE: Validação de entrada obrigatória
+      if (!tenantSlug || !instanceName) {
+        const error = 'TenantSlug e instanceName são obrigatórios';
+        logService.error(this.MODULE_NAME, error);
+        throw new Error(error);
       }
 
-      // AIDEV-NOTE: Usar executeWithAuth para proteger operação de update no Supabase
-      // AIDEV-NOTE: Atualizar registro existente ao invés de fazer upsert que pode violar RLS
-      await executeWithAuth(async () => {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .update({
-            config: { 
-              instance_name: instanceName,
-              api_key: this.apiKey,
-              api_url: this.apiUrl,
-              environment: 'production'
-            },
-            is_active: isActive,
-            updated_at: new Date().toISOString()
-          })
-          .eq('tenant_id', tenant.id)
-          .eq('integration_type', 'whatsapp');
+      logService.info(this.MODULE_NAME, `Iniciando saveInstanceConfig para ${tenantSlug}, instância: ${instanceName}, ativo: ${isActive}`);
 
-        if (error) {
-          logService.error(this.MODULE_NAME, `Erro ao salvar configuração da instância:`, error);
-          throw error;
+      const tenant = await this.getTenantBySlug(tenantSlug);
+      if (!tenant || !tenant.id) {
+        const error = `Tenant não encontrado para o slug: ${tenantSlug}`;
+        logService.error(this.MODULE_NAME, error);
+        throw new Error(error);
+      }
+
+      logService.info(this.MODULE_NAME, `Tenant encontrado: ${tenant.id}`);
+
+      // AIDEV-NOTE: Usar executeWithAuth para proteger operação de update no Supabase
+      // AIDEV-NOTE: Configurar contexto de tenant obrigatório antes da operação
+      await executeWithAuth(async () => {
+        // AIDEV-NOTE: Configuração de contexto de tenant obrigatória ANTES de qualquer operação
+        const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
+          p_tenant_id: tenant.id 
+        });
+
+        if (contextError) {
+          logService.error(this.MODULE_NAME, `Erro ao configurar contexto de tenant:`, contextError);
+          throw contextError;
         }
 
-        logService.info(this.MODULE_NAME, `Configuração da instância ${instanceName} salva para o tenant ${tenantSlug}`);
-      }, 2, `saveInstanceConfig_${tenantSlug}_${instanceName}`);
+        logService.info(this.MODULE_NAME, `Contexto de tenant configurado: ${tenant.id}`);
+
+        // AIDEV-NOTE: Verificar se já existe um registro para fazer update ou insert
+        const { data: existingIntegration, error: selectError } = await supabase
+          .from('tenant_integrations')
+          .select('id')
+          .eq('tenant_id', tenant.id)
+          .eq('integration_type', 'whatsapp')
+          .maybeSingle(); // Usar maybeSingle para evitar erro se não encontrar
+
+        if (selectError) {
+          logService.error(this.MODULE_NAME, `Erro ao verificar integração existente:`, selectError);
+          throw selectError;
+        }
+
+        const configData = {
+          instance_name: instanceName,
+          api_key: this.apiKey,
+          api_url: this.apiUrl,
+          environment: 'production'
+        };
+
+        logService.info(this.MODULE_NAME, `Config data preparada:`, configData);
+
+        let result;
+        
+        if (existingIntegration) {
+          logService.info(this.MODULE_NAME, `Atualizando integração existente ID: ${existingIntegration.id}`);
+          // AIDEV-NOTE: Atualizar registro existente
+          result = await supabase
+            .from('tenant_integrations')
+            .update({
+              config: configData,
+              is_active: isActive,
+              updated_at: new Date().toISOString()
+            })
+            .eq('tenant_id', tenant.id)
+            .eq('integration_type', 'whatsapp')
+            .select();
+        } else {
+          logService.info(this.MODULE_NAME, `Criando nova integração para tenant: ${tenant.id}`);
+          // AIDEV-NOTE: Criar novo registro seguindo padrões de segurança multi-tenant
+          // AIDEV-NOTE: Garantir que tenant_id está explicitamente definido
+          const insertData = {
+            tenant_id: tenant.id,
+            integration_type: 'whatsapp' as const,
+            config: configData,
+            is_active: isActive,
+            environment: 'production' as const,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          logService.info(this.MODULE_NAME, `Dados para inserção:`, insertData);
+
+          result = await supabase
+            .from('tenant_integrations')
+            .insert(insertData)
+            .select();
+        }
+
+        if (result.error) {
+          logService.error(this.MODULE_NAME, `Erro ao salvar configuração da instância:`, result.error);
+          throw result.error;
+        }
+
+        logService.info(this.MODULE_NAME, `Resultado da operação:`, result.data);
+
+        // AIDEV-NOTE: Log de auditoria obrigatório para operações críticas
+        // AIDEV-NOTE: Corrigir ordem dos parâmetros: (action, resource, tenantId, details)
+        await logAccess(
+          existingIntegration ? 'update' : 'create',
+          'whatsapp_instance_config',
+          tenant.id,
+          {
+            instance_name: instanceName,
+            is_active: isActive,
+            tenant_slug: tenantSlug
+          }
+        );
+
+        logService.info(this.MODULE_NAME, `Configuração da instância ${instanceName} ${existingIntegration ? 'atualizada' : 'criada'} para o tenant ${tenantSlug}`);
+      }, 3, `saveInstanceConfig_${tenantSlug}_${instanceName}`);
     } catch (error) {
       logService.error(this.MODULE_NAME, `Erro ao salvar configuração da instância ${instanceName} para ${tenantSlug}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Monitora o status de uma instância e salva a configuração quando conectada
+   * AIDEV-NOTE: Método para garantir persistência após conexão bem-sucedida
+   */
+  private monitorConnectionAndSave = async (tenantSlug: string, instanceName: string): Promise<void> => {
+    try {
+      logService.info(this.MODULE_NAME, `Iniciando monitoramento de conexão para ${instanceName}`);
+      
+      // Monitorar por até 30 segundos
+      const maxAttempts = 30;
+      let attempts = 0;
+      
+      const checkInterval = setInterval(async () => {
+        attempts++;
+        
+        try {
+          const status = await this.checkInstanceStatus(instanceName);
+          logService.info(this.MODULE_NAME, `Status da instância ${instanceName} (tentativa ${attempts}): ${status}`);
+          
+          if (status === 'open' || status === 'connected') {
+            logService.info(this.MODULE_NAME, `Instância ${instanceName} conectada! Salvando configuração...`);
+            
+            // Salvar configuração no banco
+            await this.saveInstanceConfig(tenantSlug, instanceName, true);
+            
+            clearInterval(checkInterval);
+            logService.info(this.MODULE_NAME, `Configuração salva com sucesso para ${instanceName}`);
+            return;
+          }
+          
+          if (attempts >= maxAttempts) {
+            logService.warn(this.MODULE_NAME, `Timeout no monitoramento de conexão para ${instanceName}`);
+            clearInterval(checkInterval);
+          }
+        } catch (error) {
+          logService.error(this.MODULE_NAME, `Erro ao verificar status da instância ${instanceName}:`, error);
+          
+          if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+          }
+        }
+      }, 1000); // Verificar a cada segundo
+      
+    } catch (error) {
+      logService.error(this.MODULE_NAME, `Erro no monitoramento de conexão para ${instanceName}:`, error);
     }
   }
 
@@ -1428,6 +1627,35 @@ class WhatsAppService {
     } catch (error) {
       logService.error(this.MODULE_NAME, `Erro ao reiniciar instância ${instanceName}:`, error);
       return false;
+    }
+  }
+
+  /**
+   * Verifica o status atual de uma instância WhatsApp
+   * AIDEV-NOTE: Método para verificação de status em tempo real
+   */
+  getInstanceStatus = async (tenantSlug: string, instanceName: string): Promise<{ status: string; isConnected: boolean }> => {
+    try {
+      logService.info(this.MODULE_NAME, `Verificando status da instância: ${instanceName} para tenant: ${tenantSlug}`);
+      
+      // AIDEV-NOTE: Chamar endpoint de status da Evolution API
+      const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET');
+      
+      const status = response?.instance?.state || 'disconnected';
+      const isConnected = status === 'open' || status === 'connected';
+      
+      logService.info(this.MODULE_NAME, `Status da instância ${instanceName}: ${status} (conectado: ${isConnected})`);
+      
+      return {
+        status,
+        isConnected
+      };
+    } catch (error) {
+      logService.error(this.MODULE_NAME, `Erro ao verificar status da instância ${instanceName}:`, error);
+      return {
+        status: 'disconnected',
+        isConnected: false
+      };
     }
   }
 }

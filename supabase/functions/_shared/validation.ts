@@ -35,9 +35,26 @@ export async function validateRequest(
     requiredHeaders = [],
   } = options;
 
+  // AIDEV-NOTE: Implementação de validação segura multi-tenant para Edge Functions
+  // Segue padrões estabelecidos no guia de implementação multi-tenant seguro
+  
+  const requestId = crypto.randomUUID();
+  const timestamp = new Date().toISOString();
+  
   try {
+    // 🔍 [AUDIT LOG] Log obrigatório de início de validação
+    console.log(`🛡️ [AUDIT-${requestId}] ${timestamp} - Iniciando validação de request`, {
+      method: req.method,
+      url: req.url,
+      userAgent: req.headers.get('user-agent'),
+      origin: req.headers.get('origin'),
+      requireAuth,
+      requireTenant
+    });
+
     // Validate HTTP method
     if (!allowedMethods.includes(req.method)) {
+      console.warn(`❌ [AUDIT-${requestId}] Método não permitido: ${req.method}`);
       return {
         isValid: false,
         error: `Method ${req.method} not allowed`,
@@ -48,6 +65,7 @@ export async function validateRequest(
     // Validate required headers
     for (const header of requiredHeaders) {
       if (!req.headers.get(header)) {
+        console.warn(`❌ [AUDIT-${requestId}] Header obrigatório ausente: ${header}`);
         return {
           isValid: false,
           error: `Missing required header: ${header}`,
@@ -60,6 +78,7 @@ export async function validateRequest(
     if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
       const contentLength = req.headers.get('content-length');
       if (contentLength && parseInt(contentLength) > maxBodySize) {
+        console.warn(`❌ [AUDIT-${requestId}] Body muito grande: ${contentLength} bytes`);
         return {
           isValid: false,
           error: `Request body too large. Maximum size: ${maxBodySize} bytes`,
@@ -70,12 +89,14 @@ export async function validateRequest(
 
     // Skip auth validation if not required
     if (!requireAuth) {
+      console.log(`✅ [AUDIT-${requestId}] Validação concluída - Auth não requerida`);
       return { isValid: true };
     }
 
-    // Get authorization header
+    // CAMADA 1: Validação do Authorization Header
     const authHeader = req.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error(`❌ [AUDIT-${requestId}] Authorization header inválido ou ausente`);
       return {
         isValid: false,
         error: 'Missing or invalid authorization header',
@@ -83,10 +104,49 @@ export async function validateRequest(
       };
     }
 
-    // Initialize Supabase client
+    // CAMADA 2: Validação de Tenant ID (se requerido)
+    let tenantId: string | undefined;
+    if (requireTenant) {
+      tenantId = req.headers.get('x-tenant-id') || undefined;
+      if (!tenantId) {
+        console.error(`❌ [AUDIT-${requestId}] Tenant ID ausente no header x-tenant-id`);
+        return {
+          isValid: false,
+          error: 'Missing tenant ID header (x-tenant-id)',
+          status: 400,
+        };
+      }
+      
+      // Validação de formato UUID do tenant
+      if (!validateUUID(tenantId)) {
+        console.error(`❌ [AUDIT-${requestId}] Tenant ID com formato inválido: ${tenantId}`);
+        return {
+          isValid: false,
+          error: 'Invalid tenant ID format',
+          status: 400,
+        };
+      }
+    }
+
+    // CAMADA 3: Inicialização do Supabase Client com SERVICE_ROLE_KEY
+    // AIDEV-NOTE: Usando SERVICE_ROLE_KEY para Edge Functions conforme padrão seguro
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error(`❌ [AUDIT-${requestId}] Variáveis de ambiente ausentes`);
+      return {
+        isValid: false,
+        error: 'Server configuration error',
+        status: 500,
+      };
+    }
+
+    // Cliente administrativo para validação de JWT
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // Cliente com token do usuário para validação de acesso
+    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
       global: {
         headers: {
           authorization: authHeader,
@@ -94,10 +154,15 @@ export async function validateRequest(
       },
     });
 
-    // Verify user authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // CAMADA 4: Validação do JWT Token
+    console.log(`🔐 [AUDIT-${requestId}] Validando JWT token...`);
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     
     if (authError || !user) {
+      console.error(`❌ [AUDIT-${requestId}] Falha na autenticação JWT:`, {
+        error: authError?.message || 'No user returned',
+        status: authError?.status || 401,
+      });
       return {
         isValid: false,
         error: 'Invalid or expired token',
@@ -105,22 +170,46 @@ export async function validateRequest(
       };
     }
 
-    // Get tenant ID
-    let tenantId: string | undefined;
-    if (requireTenant) {
-      tenantId = req.headers.get('x-tenant-id') || undefined;
-      if (!tenantId) {
+    console.log(`✅ [AUDIT-${requestId}] JWT válido para usuário: ${user.id}`);
+
+    // CAMADA 5: Validação de Acesso ao Tenant (se requerido)
+    if (requireTenant && tenantId) {
+      console.log(`🔍 [AUDIT-${requestId}] Validando acesso ao tenant: ${tenantId}`);
+      
+      // Verificar se o usuário tem acesso ao tenant especificado
+      const { data: userTenantAccess, error: tenantError } = await supabaseAdmin
+        .from('user_tenants')
+        .select('tenant_id, role, is_active')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
+
+      if (tenantError || !userTenantAccess) {
+        console.error(`❌ [AUDIT-${requestId}] Usuário sem acesso ao tenant:`, {
+          userId: user.id,
+          tenantId,
+          error: tenantError?.message
+        });
         return {
           isValid: false,
-          error: 'Missing tenant ID header (x-tenant-id)',
-          status: 400,
+          error: 'Access denied to specified tenant',
+          status: 403,
         };
       }
+
+      console.log(`✅ [AUDIT-${requestId}] Acesso ao tenant validado:`, {
+        userId: user.id,
+        tenantId,
+        role: userTenantAccess.role
+      });
     }
 
-    // Validate user roles if specified
+    // CAMADA 6: Validação de Roles (se especificado)
     if (allowedRoles.length > 0) {
-      const { data: userRoles, error: rolesError } = await supabase
+      console.log(`🔍 [AUDIT-${requestId}] Validando roles permitidas...`);
+      
+      const { data: userRoles, error: rolesError } = await supabaseAdmin
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
@@ -128,7 +217,7 @@ export async function validateRequest(
         .eq('is_active', true);
 
       if (rolesError) {
-        console.error('Error fetching user roles:', rolesError);
+        console.error(`❌ [AUDIT-${requestId}] Erro ao buscar roles do usuário:`, rolesError);
         return {
           isValid: false,
           error: 'Error validating user permissions',
@@ -140,13 +229,42 @@ export async function validateRequest(
       const hasValidRole = allowedRoles.some(role => userRoleNames.includes(role));
       
       if (!hasValidRole) {
+        console.error(`❌ [AUDIT-${requestId}] Permissões insuficientes:`, {
+          userId: user.id,
+          tenantId,
+          userRoles: userRoleNames,
+          requiredRoles: allowedRoles
+        });
         return {
           isValid: false,
           error: `Insufficient permissions. Required roles: ${allowedRoles.join(', ')}`,
           status: 403,
         };
       }
+
+      console.log(`✅ [AUDIT-${requestId}] Roles validadas com sucesso:`, {
+        userId: user.id,
+        tenantId,
+        userRoles: userRoleNames,
+        matchedRoles: allowedRoles.filter(role => userRoleNames.includes(role))
+      });
     }
+
+    // SUCESSO: Todas as validações passaram
+    console.log(`🎉 [AUDIT-${requestId}] Validação concluída com sucesso:`, {
+      userId: user.id,
+      userEmail: user.email,
+      tenantId,
+      timestamp: new Date().toISOString(),
+      validationLayers: {
+        httpMethod: '✅',
+        headers: '✅',
+        bodySize: '✅',
+        authorization: '✅',
+        tenantAccess: requireTenant ? '✅' : 'N/A',
+        roleValidation: allowedRoles.length > 0 ? '✅' : 'N/A'
+      }
+    });
 
     return {
       isValid: true,
@@ -154,7 +272,11 @@ export async function validateRequest(
       tenantId,
     };
   } catch (error) {
-    console.error('Validation error:', error);
+    console.error(`💥 [AUDIT-${requestId}] Erro interno na validação:`, {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
     return {
       isValid: false,
       error: 'Internal validation error',

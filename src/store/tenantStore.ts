@@ -296,7 +296,7 @@ export const useTenantStore = create<TenantState>((set, get) => ({
       
       // 🚨 CORREÇÃO: NÃO definir currentTenant automaticamente
       // Deixar que o sistema de auto-seleção baseado na URL faça isso
-      let currentTenant = null;
+      const currentTenant = null;
       console.log('🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL');
 
       // Salvar no cache antes de atualizar o estado

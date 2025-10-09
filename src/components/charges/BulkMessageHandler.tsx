@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from '@/lib/supabase';
 import { processMessageTags } from '@/utils/messageUtils';
 import { BulkMessageDialog } from './BulkMessageDialog';
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
+import { useEvolutionApiConfig } from '@/hooks/useEvolutionApiConfig';
+import { edgeFunctionService } from '@/services/edgeFunctionService';
+import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates';
 import type { Cobranca } from '@/types/database';
-// AIDEV-NOTE: Hook obrigatório para segurança multi-tenant
+// AIDEV-NOTE: Hook obrigatório para segurança multi-tenant e serviço Edge Function
 
 interface BulkMessageHandlerProps {
   selectedCharges: string[];
@@ -22,127 +24,90 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const { currentTenant } = useCurrentTenant();
+  const evolutionConfig = useEvolutionApiConfig();
+  
+  // 🛡️ HOOK SEGURO PARA TEMPLATES - Implementa todas as 5 camadas de segurança
+  // AIDEV-NOTE: Removido createTemplate e deleteTemplate pois não são mais necessários para mensagens customizadas
+  const { } = useSecureNotificationTemplates();
 
-  const handleSendBulkMessages = async (templateId: string) => {
+  const handleSendBulkMessages = async (templateId: string, customMessage?: string) => {
     try {
-      console.log('🚀 Iniciando envio de mensagens em massa');
+      console.log('🚀 Iniciando envio de mensagens em massa via Edge Function');
       console.log('📝 Template ID:', templateId);
+      console.log('📝 Mensagem customizada:', customMessage ? 'Sim' : 'Não');
       console.log('🎯 Cobranças selecionadas:', selectedCharges);
       
       setIsSending(true);
+
+      // AIDEV-NOTE: Validação de configuração Evolution API
+      if (!evolutionConfig.isConfigured) {
+        console.error('❌ Configuração Evolution API inválida:', evolutionConfig.errors);
+        throw new Error(`Configuração Evolution API inválida: ${evolutionConfig.errors.join(', ')}`);
+      }
 
       // AIDEV-NOTE: Validação de segurança multi-tenant obrigatória
       if (!currentTenant?.id) {
         throw new Error('Tenant não definido - violação de segurança');
       }
-      
-      const { data: selectedChargesData, error: chargesError } = await supabase
-        .from('charges')
-        .select(`
-          *,
-          customers(
-            name,
-            email,
-            phone,
-            cpf_cnpj,
-            company
-          )
-        `)
-        .eq('tenant_id', currentTenant.id)
-        .in('id', selectedCharges);
 
-      if (chargesError) {
-        console.error('❌ Erro ao buscar dados das cobranças:', chargesError);
-        throw new Error('Erro ao buscar dados das cobranças');
-      }
+      // AIDEV-NOTE: Processar mensagem customizada diretamente sem criar template temporário
+      console.log('🔄 Chamando Edge Function send-bulk-messages...');
+      const result = await edgeFunctionService.sendBulkMessages(
+        selectedCharges,
+        templateId,
+        true, // sendImmediately
+        customMessage // Passar mensagem customizada diretamente
+      );
 
-      console.log('✅ Dados das cobranças carregados:', selectedChargesData);
+      console.log('✅ Resultado da Edge Function:', result);
 
-      const { data: templateData, error: templateError } = await supabase
-        .from('notification_templates')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .eq('id', templateId)
-        .single();
-
-      if (templateError) {
-        console.error('❌ Erro ao buscar template:', templateError);
-        throw new Error('Erro ao buscar template');
-      }
-
-      console.log('✅ Template carregado:', templateData);
-
-      const messages = selectedChargesData.map(charge => {
-        const processedMessage = processMessageTags(templateData.message, {
-          customer: charge.customer || {},
-          charge: charge
+      // AIDEV-NOTE: Processar resultado e exibir feedback detalhado
+      if (result.success) {
+        const { summary, results } = result;
+        
+        toast({
+          title: 'Mensagens processadas',
+          description: `${summary.sent} mensagens enviadas com sucesso de ${summary.total} total. ${summary.failed > 0 ? `${summary.failed} falharam.` : ''}`,
         });
 
-        return {
-          customer: {
-            name: charge.customer?.name,
-            phone: charge.customer?.phone?.replace(/\D/g, ''),
-            document: charge.customer?.cpf_cnpj?.toString().replace(/\D/g, '') || '',
-          },
-          charge: {
-            id: charge.id,
-            amount: charge.valor,
-            dueDate: charge.data_vencimento,
-            status: charge.status,
-          },
-          template: {
-            id: templateId,
-            message: processedMessage,
-          }
-        };
-      });
-
-      console.log('✅ Mensagens processadas:', messages);
-      console.log('🌐 Enviando requisição para:', 'https://n8n-wh.nexsyn.com.br/webhook/asaas/messages');
-      console.log('📦 Payload:', JSON.stringify({
-        messages,
-        templateId,
-      }, null, 2));
-
-      const response = await fetch('https://n8n-wh.nexsyn.com.br/webhook/asaas/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          messages,
-          templateId,
-        }),
-      });
-
-      console.log('📡 Status da resposta:', response.status);
-      const responseText = await response.text();
-      console.log('📡 Resposta completa:', responseText);
-
-      if (!response.ok) {
-        console.error('❌ Erro na resposta do servidor:', response.status, responseText);
-        throw new Error(responseText || `Failed to send messages: ${response.statusText}`);
+        // AIDEV-NOTE: Log detalhado para debug - usando o shape correto do BulkMessageResponse
+        if (summary.failed > 0 && results) {
+          const failedResults = results.filter(r => !r.success);
+          console.warn('⚠️ Algumas mensagens falharam:', failedResults);
+          
+          // Log das mensagens de erro específicas
+          failedResults.forEach(failed => {
+            if (failed.message) {
+              console.warn(`❌ Cobrança ${failed.charge_id}: ${failed.message}`);
+            }
+          });
+        }
+      } else {
+        throw new Error('Edge Function retornou sucesso = false');
       }
 
-      let result;
-      try {
-        result = JSON.parse(responseText);
-        console.log('✅ Resultado do envio:', result);
-      } catch (e) {
-        console.warn('⚠️ Resposta não é um JSON válido:', responseText);
-      }
+      // AIDEV-NOTE: Não há mais necessidade de limpeza de templates temporários
 
-      toast({
-        title: 'Mensagens enviadas',
-        description: 'As mensagens foram enviadas com sucesso!',
-      });
     } catch (error) {
-      console.error('❌ Erro detalhado:', error);
+      console.error('❌ Erro detalhado no envio de mensagens:', error);
       console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
+      
+      // AIDEV-NOTE: Tratamento de erro mais específico
+      let errorMessage = 'Ocorreu um erro ao enviar as mensagens. Tente novamente.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Tenant não encontrado')) {
+          errorMessage = 'Sessão expirada. Faça login novamente.';
+        } else if (error.message.includes('EVOLUTION_API')) {
+          errorMessage = 'Configuração da API Evolution não encontrada. Verifique as configurações.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: 'Erro ao enviar mensagens',
-        description: error instanceof Error ? error.message : 'Ocorreu um erro ao enviar as mensagens. Tente novamente.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -159,9 +124,14 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
           <Button
             variant="outline"
             onClick={() => setShowBulkMessageDialog(true)}
+            disabled={!evolutionConfig.isConfigured}
+            title={!evolutionConfig.isConfigured ? `Configuração Evolution API inválida: ${evolutionConfig.errors.join(', ')}` : undefined}
           >
             <MessageSquare className="mr-2 h-4 w-4" />
             Enviar Mensagem ({selectedCharges.length})
+            {!evolutionConfig.isConfigured && (
+              <span className="ml-2 text-red-500">⚠️</span>
+            )}
           </Button>
         </div>
       )}

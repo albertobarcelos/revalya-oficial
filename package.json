@@ -23,6 +23,8 @@
     "db:migrate": "supabase migration up",
     "db:seed": "supabase seed",
     "setup:asaas-webhook": "tsx scripts/setup-asaas-webhook.ts",
+    "diagnose:evolution": "tsx scripts/diagnose-evolution-api.ts",
+    "test:edge-function": "tsx scripts/test-edge-function.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky install",
