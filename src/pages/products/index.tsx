@@ -324,7 +324,7 @@ export default function ProductsPage() {
                   </TableCell>
                   <TableCell>
                     <span className="font-semibold text-green-600">
-                      {formatCurrency(product.price)}
+                      {formatCurrency(product.unit_price)}
                     </span>
                   </TableCell>
                   <TableCell>

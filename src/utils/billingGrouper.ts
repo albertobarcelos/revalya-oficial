@@ -1,6 +1,41 @@
 // AIDEV-NOTE: Utilitário para agrupar serviços e produtos com métodos de pagamento iguais
 // Implementa a lógica de juntar cobranças quando as condições de pagamento são idênticas
 
+/**
+ * AIDEV-NOTE: Utilitário para agrupamento de serviços e produtos por configuração de pagamento
+ * 
+ * Este módulo é responsável por agrupar serviços e produtos que possuem configurações
+ * de pagamento idênticas, permitindo a criação de cobranças consolidadas.
+ * 
+ * Funcionalidades principais:
+ * - Geração de chave única baseada na configuração de pagamento
+ * - Agrupamento de itens com configurações idênticas
+ * - Cálculo de valores totais por grupo
+ * - Geração de descrições e datas de vencimento
+ * 
+ * CORREÇÕES IMPLEMENTADAS (2025-01-27):
+ * =====================================
+ * 
+ * PROBLEMA IDENTIFICADO:
+ * - Serviços e produtos não estavam sendo agrupados mesmo com configurações idênticas
+ * - Causa: Inconsistência nos valores padrão entre serviços e produtos
+ * - Serviços: due_days = undefined, due_next_month = undefined
+ * - Produtos: due_days = 5, due_next_month = false
+ * - Resultado: Chaves de agrupamento diferentes impediam consolidação
+ * 
+ * SOLUÇÃO IMPLEMENTADA:
+ * - Padronização de valores padrão para ambos os tipos:
+ *   * due_days: 5 (quando não especificado)
+ *   * due_next_month: false (quando não especificado)
+ * - Remoção de warnings desnecessários para produtos
+ * - Adição de logs para monitorar agrupamento misto (serviços + produtos)
+ * 
+ * RESULTADO ESPERADO:
+ * - Serviços e produtos com configurações equivalentes agora são agrupados
+ * - Redução no número de cobranças geradas
+ * - Melhor organização financeira para o cliente
+ */
+
 export interface PaymentGroup {
   id: string;
   payment_method: string;
@@ -105,9 +140,9 @@ export function groupItemsByPaymentConfig(
       recurrence_frequency: service.recurrence_frequency,
       installments: service.installments || 1,
       due_date_type: service.due_date_type || 'days_after_billing',
-      due_days: service.due_days,
+      due_days: service.due_days !== undefined ? service.due_days : 5, // AIDEV-NOTE: Padronizar com produtos
       due_day: service.due_day,
-      due_next_month: service.due_next_month
+      due_next_month: service.due_next_month || false // AIDEV-NOTE: Padronizar com produtos
     };
 
     // AIDEV-NOTE: Gerar chave única baseada em TODAS as configurações
@@ -138,13 +173,9 @@ export function groupItemsByPaymentConfig(
   });
 
   // AIDEV-NOTE: Processar produtos - usar configurações financeiras salvas no produto
+  // IMPORTANTE: Usar EXATAMENTE os mesmos valores padrão que serviços para permitir agrupamento
   products.forEach((product, index) => {
-    // AIDEV-NOTE: Log para debug - verificar se produto tem configurações financeiras
-    if (!product.payment_method) {
-      console.warn(`⚠️ Produto ${product.product?.name || product.description || product.id} sem configuração de pagamento - usando fallback 'Boleto'`);
-    }
-    
-    // AIDEV-NOTE: Usar configurações financeiras do produto ou fallback para boleto
+    // AIDEV-NOTE: Usar configurações financeiras do produto ou fallback idêntico aos serviços
     const config: PaymentConfig = {
       payment_method: product.payment_method || 'Boleto',
       card_type: product.card_type,
@@ -152,9 +183,9 @@ export function groupItemsByPaymentConfig(
       recurrence_frequency: product.recurrence_frequency,
       installments: product.installments || 1,
       due_date_type: product.due_date_type || 'days_after_billing',
-      due_days: product.due_days !== undefined ? product.due_days : 5,
+      due_days: product.due_days !== undefined ? product.due_days : 5, // AIDEV-NOTE: Idêntico aos serviços
       due_day: product.due_day,
-      due_next_month: product.due_next_month || false
+      due_next_month: product.due_next_month || false // AIDEV-NOTE: Idêntico aos serviços
     };
     
     console.log(`💰 Produto ${product.product?.name || product.description}: payment_method=${config.payment_method}, valor=${product.total_amount || (product.quantity * product.unit_price)}`);
@@ -186,7 +217,20 @@ export function groupItemsByPaymentConfig(
     group.total_amount += itemTotal;
   });
 
-  return Array.from(groups.values());
+  // AIDEV-NOTE: Retornar grupos organizados por chave de pagamento
+  const result = Array.from(groups.values());
+  console.log(`📊 Agrupamento concluído: ${result.length} grupos criados`);
+  
+  // AIDEV-NOTE: Log detalhado para verificar agrupamento de serviços e produtos
+  result.forEach((group, index) => {
+    const servicesCount = group.items.filter(item => item.type === 'service').length;
+    const productsCount = group.items.filter(item => item.type === 'product').length;
+    if (servicesCount > 0 && productsCount > 0) {
+      console.log(`✅ Grupo ${index + 1}: ${servicesCount} serviços + ${productsCount} produtos agrupados com sucesso`);
+    }
+  });
+  
+  return result;
 }
 
 /**

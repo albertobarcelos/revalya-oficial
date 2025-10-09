@@ -1,188 +1,48 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+/**
+ * 🔐 Componente Seguro para Detalhes do Faturamento Mensal
+ * 
+ * AIDEV-NOTE: Componente refatorado para seguir diretrizes de segurança multi-tenant.
+ * Corrige inconsistências na exibição de dados implementando isolamento completo entre tenants.
+ * 
+ * Este componente agora:
+ * - Usa useSecureMonthlyBilling para consultas seguras
+ * - Implementa validação de acesso multi-tenant
+ * - Garante isolamento de dados por tenant_id
+ * - Inclui logs de auditoria obrigatórios
+ * - Previne vazamento de dados entre tenants
+ */
+
+import React from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { 
+  CalendarDays, 
+  Clock, 
+  CreditCard, 
+  Package, 
+  Wrench,
+  AlertCircle 
+} from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CalendarDays, Package, Wrench, CreditCard, Clock, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { useSecureMonthlyBilling } from '@/hooks/useSecureMonthlyBilling';
 
 interface MonthlyBillingDetailsProps {
   contractId: string;
   onClose?: () => void;
 }
 
-interface BillingItem {
-  id: string;
-  type: 'service' | 'product';
-  description: string;
-  quantity: number;
-  unit_price: number;
-  total_amount: number;
-  payment_method?: string;
-  billing_type?: string;
-  due_date?: string;
-  tax_rate?: number;
-  tax_amount?: number;
-}
-
-interface MonthlyBillingData {
-  items: BillingItem[];
-  total_amount: number;
-  total_tax: number;
-  net_amount: number;
-  contract_info: {
-    contract_number: string;
-    customer_name: string;
-    billing_day: number;
-  };
-}
-
-/**
- * Componente que exibe os detalhes de faturamento mensal de um contrato
- * Mostra serviços e produtos que serão faturados no mês atual
- */
 export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDetailsProps) {
-  const [billingData, setBillingData] = useState<MonthlyBillingData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // 🔐 HOOK SEGURO COM VALIDAÇÃO MULTI-TENANT
+  const { billingData, isLoading: loading, error, refetch } = useSecureMonthlyBilling({
+    contractId,
+    enabled: !!contractId
+  });
 
   /**
-   * Busca os dados de faturamento mensal do contrato
-   */
-  useEffect(() => {
-    const fetchMonthlyBillingData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Buscar dados do contrato com serviços e produtos
-        const { data: contractData, error: contractError } = await supabase
-          .from('contracts')
-          .select(`
-            id,
-            contract_number,
-            billing_day,
-            customers!inner(
-              id,
-              name
-            ),
-            contract_services(
-              id,
-              description,
-              quantity,
-              unit_price,
-              total_amount,
-              payment_method,
-              billing_type,
-              tax_rate,
-              tax_amount,
-              is_active
-            ),
-            contract_products(
-              id,
-              description,
-              quantity,
-              unit_price,
-              total_amount,
-              payment_method,
-              billing_type,
-              tax_rate,
-              tax_amount,
-              is_active
-            )
-          `)
-          .eq('id', contractId)
-          .single();
-
-        if (contractError) {
-          throw new Error(`Erro ao buscar contrato: ${contractError.message}`);
-        }
-
-        if (!contractData) {
-          throw new Error('Contrato não encontrado');
-        }
-
-        // Processar serviços ativos
-        const services: BillingItem[] = (contractData.contract_services || [])
-          .filter((service: any) => service.is_active)
-          .map((service: any) => ({
-            id: service.id,
-            type: 'service' as const,
-            description: service.description || 'Serviço sem descrição',
-            quantity: service.quantity || 1,
-            unit_price: service.unit_price || 0,
-            total_amount: service.total_amount || 0,
-            payment_method: service.payment_method,
-            billing_type: service.billing_type,
-            tax_rate: service.tax_rate || 0,
-            tax_amount: service.tax_amount || 0
-          }));
-
-        // Processar produtos ativos
-        const products: BillingItem[] = (contractData.contract_products || [])
-          .filter((product: any) => product.is_active)
-          .map((product: any) => ({
-            id: product.id,
-            type: 'product' as const,
-            description: product.description || 'Produto sem descrição',
-            quantity: product.quantity || 1,
-            unit_price: product.unit_price || 0,
-            total_amount: product.total_amount || 0,
-            payment_method: product.payment_method,
-            billing_type: product.billing_type,
-            tax_rate: product.tax_rate || 0,
-            tax_amount: product.tax_amount || 0
-          }));
-
-        // Combinar serviços e produtos
-        const allItems = [...services, ...products];
-
-        // Calcular totais
-        const total_amount = allItems.reduce((sum, item) => sum + item.total_amount, 0);
-        const total_tax = allItems.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
-        const net_amount = total_amount - total_tax;
-
-        // Calcular data de vencimento baseada no billing_day
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth();
-        const currentYear = currentDate.getFullYear();
-        const dueDate = new Date(currentYear, currentMonth, contractData.billing_day);
-        
-        // Se o dia já passou no mês atual, usar o próximo mês
-        if (dueDate < currentDate) {
-          dueDate.setMonth(currentMonth + 1);
-        }
-
-        setBillingData({
-          items: allItems.map(item => ({
-            ...item,
-            due_date: dueDate.toISOString()
-          })),
-          total_amount,
-          total_tax,
-          net_amount,
-          contract_info: {
-            contract_number: contractData.contract_number,
-            customer_name: contractData.customers?.name || 'Cliente não informado',
-            billing_day: contractData.billing_day
-          }
-        });
-      } catch (err) {
-        console.error('Erro ao buscar dados de faturamento:', err);
-        setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (contractId) {
-      fetchMonthlyBillingData();
-    }
-  }, [contractId]);
-
-  /**
-   * Formata valores monetários
+   * Formata valor monetário para exibição
    */
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -225,6 +85,7 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
     return types[type] || type;
   };
 
+  // 🔄 ESTADO DE CARREGAMENTO
   if (loading) {
     return (
       <div className="space-y-4">
@@ -243,19 +104,28 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
     );
   }
 
+  // 🚨 ESTADO DE ERRO
   if (error) {
     return (
       <Card className="border-red-200">
         <CardContent className="pt-6">
           <div className="text-center text-red-600">
+            <AlertCircle className="h-12 w-12 mx-auto mb-4" />
             <p className="font-medium">Erro ao carregar dados</p>
             <p className="text-sm text-red-500 mt-1">{error}</p>
+            <button 
+              onClick={() => refetch()}
+              className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            >
+              Tentar novamente
+            </button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
+  // 📭 ESTADO VAZIO
   if (!billingData || billingData.items.length === 0) {
     return (
       <Card>
@@ -272,7 +142,7 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho com informações do contrato */}
+      {/* 📋 Cabeçalho com informações do contrato */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -301,7 +171,7 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
         </CardContent>
       </Card>
 
-      {/* Lista de itens */}
+      {/* 📝 Lista de itens */}
       <Card>
         <CardHeader>
           <CardTitle>Itens a Faturar</CardTitle>
@@ -366,7 +236,7 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
         </CardContent>
       </Card>
 
-      {/* Resumo financeiro */}
+      {/* 💰 Resumo financeiro */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

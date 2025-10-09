@@ -1,5 +1,8 @@
 import { useCharges } from "@/hooks/useCharges";
 import { useToast } from "@/components/ui/use-toast";
+import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
+import { supabase } from "@/lib/supabase";
+import { edgeFunctionService } from "@/services/edgeFunctionService";
 import type { Cobranca } from "@/types/database";
 
 /**
@@ -9,6 +12,7 @@ import type { Cobranca } from "@/types/database";
 export function useChargeActions() {
   const { toast } = useToast();
   const { updateCharge, isUpdating, cancelCharge, isCancelling } = useCharges();
+  const { user, currentTenant } = useTenantAccessGuard();
 
   /**
    * Marca uma cobrança como recebida em dinheiro
@@ -163,21 +167,84 @@ export function useChargeActions() {
   };
 
   /**
-   * AIDEV-NOTE: Envia mensagem para o cliente (placeholder - implementar integração)
+   * AIDEV-NOTE: Função para enviar mensagem individual para o cliente
+   * Utiliza a edge function send-bulk-messages que pode processar uma única cobrança
    */
-  const sendMessage = async (chargeId: string) => {
-    try {
-      // TODO: Implementar integração com sistema de mensagens
-      console.log("Enviando mensagem para cobrança:", chargeId);
-      toast({
-        title: "Mensagem enviada",
-        description: "A mensagem foi enviada para o cliente.",
-      });
-    } catch (error) {
-      console.error("Erro ao enviar mensagem:", error);
+  const sendMessage = async (chargeId: string, templateId?: string, customMessage?: string) => {
+    if (!user || !currentTenant) {
       toast({
         title: "Erro",
-        description: "Não foi possível enviar a mensagem.",
+        description: "Usuário ou tenant não identificado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      console.log('🚀 Enviando mensagem para cobrança:', chargeId);
+      console.log('📋 Parâmetros:', { templateId, customMessage: customMessage ? 'presente' : 'ausente' });
+      
+      // AIDEV-NOTE: Configurar contexto de tenant para segurança
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant.id 
+      });
+
+      // AIDEV-NOTE: Buscar dados da cobrança para validação
+      const { data: charge, error: chargeError } = await supabase
+        .from('charges')
+        .select('id, customer_name, customer_phone, amount, due_date, status')
+        .eq('id', chargeId)
+        .eq('tenant_id', currentTenant.id)
+        .single();
+
+      if (chargeError || !charge) {
+        throw new Error('Cobrança não encontrada ou sem permissão de acesso');
+      }
+
+      // AIDEV-NOTE: Verificar se o cliente tem telefone para envio
+      if (!charge.customer_phone) {
+        toast({
+          title: "Erro",
+          description: "Cliente não possui telefone cadastrado para envio de mensagem",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // AIDEV-NOTE: Usar edgeFunctionService para envio de mensagem individual
+      // Se customMessage for fornecida, usar diretamente; senão usar templateId
+      const result = await edgeFunctionService.sendBulkMessages(
+        [chargeId],
+        templateId || 'default_charge_reminder',
+        true, // sendImmediately
+        customMessage // customMessage será processada diretamente
+      );
+
+      // AIDEV-NOTE: Verificar resultado do envio
+      if (result.success && result.summary.sent > 0) {
+        toast({
+          title: "Sucesso",
+          description: "Mensagem enviada com sucesso para o cliente!",
+        });
+        console.log('✅ Mensagem enviada:', result);
+        
+        // AIDEV-NOTE: Log de auditoria para rastreabilidade
+        console.log(`📋 [AUDIT] Mensagem enviada - Charge: ${chargeId}, Tenant: ${currentTenant.id}, User: ${user.id}, Template: ${templateId || 'custom'}`);
+      } else {
+        const errorMsg = result.results?.[0]?.message || 'Erro desconhecido no envio';
+        toast({
+          title: "Erro",
+          description: `Erro ao enviar mensagem: ${errorMsg}`,
+          variant: "destructive",
+        });
+        console.error('❌ Falha no envio:', result);
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao enviar mensagem:', error);
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : 'Erro ao enviar mensagem',
         variant: "destructive",
       });
     }

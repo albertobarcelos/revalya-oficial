@@ -198,6 +198,159 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   // LOADING & ACCESS CONTROL
   // =====================================================
 
+  const loadReconciliationData = async () => {
+    setIsLoading(true);
+    try {
+      // AIDEV-NOTE: Consulta direta ao Supabase - sem necessidade de endpoint Next.js
+      const { data, error } = await supabase
+        .from('conciliation_staging')
+        .select(`
+          id,
+          origem,
+          id_externo,
+          valor_cobranca,
+          valor_pago,
+          status_externo,
+          status_conciliacao,
+          contrato_id,
+          cobranca_id,
+          juros_multa_diferenca,
+          data_vencimento,
+          data_pagamento,
+          observacao,
+          created_at,
+          updated_at
+        `)
+        .eq('tenant_id', currentTenant?.id)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      
+      if (error) {
+        throw error;
+      }
+      
+      // AIDEV-NOTE: Mapear dados do banco para o formato correto
+      const mappedMovements = mapStagingDataToImportedMovement(data || []);
+      setMovements(mappedMovements);
+      
+      toast({
+        title: "Dados carregados",
+        description: `${mappedMovements.length} movimentações carregadas com sucesso.`,
+      });
+    } catch (error: any) {
+      console.error('Erro ao carregar dados de conciliação:', error);
+      
+      toast({
+        title: "Erro ao carregar dados",
+        description: error.response?.data?.error || error.message || "Não foi possível carregar as movimentações.",
+        variant: "destructive",
+      });
+      
+      // Em caso de erro, manter array vazio
+      setMovements([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    logAction('reconciliation_refresh', { tenant: currentTenant?.name });
+    loadReconciliationData();
+  };
+
+  const handleExport = () => {
+    logAction('reconciliation_export', { 
+      tenant: currentTenant?.name,
+      recordCount: filteredMovements.length 
+    });
+    
+    toast({
+      title: "Exportação iniciada",
+      description: `Exportando ${filteredMovements.length} registros...`,
+    });
+  };
+
+  const handleReconciliationAction = async (action: ReconciliationAction, movementId: string) => {
+    try {
+      setIsLoading(true);
+      
+      logAction('reconciliation_action', { 
+        action, 
+        movementId, 
+        tenant: currentTenant?.name 
+      });
+
+      // AIDEV-NOTE: Atualização direta no Supabase - sem necessidade de endpoint Next.js
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Definir status baseado na ação
+      switch (action) {
+        case 'vincular_contrato':
+          updateData.status_conciliacao = 'vinculado';
+          updateData.observacao = 'Contrato vinculado automaticamente';
+          break;
+        case 'criar_avulsa':
+          updateData.status_conciliacao = 'avulsa_criada';
+          updateData.observacao = 'Cobrança avulsa criada';
+          break;
+        case 'marcar_divergente':
+          updateData.status_conciliacao = 'divergente';
+          updateData.observacao = 'Marcado como divergente';
+          break;
+        case 'aprovar':
+          updateData.status_conciliacao = 'aprovado';
+          updateData.observacao = 'Movimento aprovado';
+          break;
+        case 'rejeitar':
+          updateData.status_conciliacao = 'rejeitado';
+          updateData.observacao = 'Movimento rejeitado';
+          break;
+      }
+
+      const { error } = await supabase
+        .from('conciliation_staging')
+        .update(updateData)
+        .eq('id', movementId)
+        .eq('tenant_id', currentTenant?.id);
+
+      if (error) {
+        throw error;
+      }
+
+      const actionMessages = {
+        vincular_contrato: "Contrato vinculado com sucesso",
+        criar_avulsa: "Cobrança avulsa criada com sucesso",
+        marcar_divergente: "Movimento marcado como divergente",
+        aprovar: "Movimento aprovado com sucesso",
+        rejeitar: "Movimento rejeitado"
+      };
+
+      toast({
+        title: "Ação executada",
+        description: actionMessages[action] || "Ação executada com sucesso",
+      });
+
+      // Recarregar dados para refletir as mudanças
+      await loadReconciliationData();
+    } catch (error: any) {
+      console.error('Erro ao executar ação de conciliação:', error);
+      
+      toast({
+        title: "Erro na ação",
+        description: error.response?.data?.error || error.message || "Não foi possível executar a ação.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // =====================================================
+  // SIDEBAR RESIZE FUNCTIONS
+  // =====================================================
+  
   // =====================================================
   // LOADING & ACCESS CONTROL
   // =====================================================

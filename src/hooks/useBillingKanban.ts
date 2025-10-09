@@ -49,9 +49,11 @@ export function useBillingKanban() {
    * Contratos com billing_day igual ao dia atual que ainda não têm cobranças no mês atual
    */
   const fetchContractsToInvoiceToday = useCallback(async (tenantId: string): Promise<KanbanContract[]> => {
+    // AIDEV-NOTE: Usar formato consistente de data para evitar problemas de comparação
     const today = new Date().getDate();
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const startMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd') + ' 23:59:59';
     
     console.log('🔍 Buscando contratos para faturar hoje:', { tenantId, today, startMonth, endMonth });
     
@@ -73,7 +75,7 @@ export function useBillingKanban() {
       .eq('tenant_id', tenantId)
       .eq('billing_day', today)
       .eq('status', 'ACTIVE')
-      .gt('final_date', format(new Date(), 'yyyy-MM-dd')); // Não expirados
+      .gt('final_date', todayStr); // Não expirados
 
     console.log('📋 Contratos encontrados para faturar hoje:', contracts);
 
@@ -121,9 +123,11 @@ export function useBillingKanban() {
    * Contratos com billing_day menor que hoje e ainda não têm cobranças no mês atual
    */
   const fetchPendingInvoices = useCallback(async (tenantId: string): Promise<KanbanContract[]> => {
+    // AIDEV-NOTE: Usar formato consistente de data para evitar problemas de comparação
     const today = new Date().getDate();
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const startMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd') + ' 23:59:59';
     
     console.log('🔍 Buscando contratos pendentes:', { tenantId, today, startMonth, endMonth });
     
@@ -145,7 +149,7 @@ export function useBillingKanban() {
       .eq('tenant_id', tenantId)
       .lt('billing_day', today)
       .eq('status', 'ACTIVE')
-      .gt('final_date', format(new Date(), 'yyyy-MM-dd')); // Não expirados
+      .gt('final_date', todayStr); // Não expirados
 
     console.log('📋 Contratos pendentes encontrados:', contracts);
 
@@ -194,7 +198,7 @@ export function useBillingKanban() {
    */
   const fetchInvoicedThisMonth = useCallback(async (tenantId: string): Promise<KanbanContract[]> => {
     const startMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    const endMonth = format(endOfMonth(new Date()), 'yyyy-MM-dd') + ' 23:59:59';
     
     console.log('🔍 Buscando contratos faturados no mês:', { tenantId, startMonth, endMonth });
     

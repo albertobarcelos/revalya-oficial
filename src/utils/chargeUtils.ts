@@ -1,9 +1,11 @@
 /**
  * AIDEV-NOTE: Utilitários para criação de cobranças contornando problemas de RLS
  * Este arquivo contém funções para inserir cobranças quando há problemas de autenticação
+ * Inclui invalidação de cache para garantir atualização do Kanban após faturamento
  */
 
 import { supabase } from '@/lib/supabase';
+import { queryClient } from '@/lib/queryClient';
 
 export interface ChargeData {
   tenant_id: string;
@@ -47,6 +49,11 @@ export async function insertChargeWithAuthContext(chargeData: ChargeData) {
       throw error;
     }
 
+    // AIDEV-NOTE: Invalidar cache após inserção bem-sucedida para atualizar Kanban
+    queryClient.invalidateQueries({ queryKey: ['charges'] });
+    queryClient.invalidateQueries({ queryKey: ['contracts'] });
+    queryClient.invalidateQueries({ queryKey: ['kanban'] });
+
     return { data, error: null };
   } catch (error) {
     console.error('Erro na função insertChargeWithAuthContext:', error);
@@ -69,6 +76,13 @@ export async function insertMultipleCharges(chargesData: ChargeData[]) {
     if (result.error) {
       errorCount++;
     }
+  }
+
+  // AIDEV-NOTE: Invalidar cache apenas se houve pelo menos uma inserção bem-sucedida
+  if (results.length - errorCount > 0) {
+    queryClient.invalidateQueries({ queryKey: ['charges'] });
+    queryClient.invalidateQueries({ queryKey: ['contracts'] });
+    queryClient.invalidateQueries({ queryKey: ['kanban'] });
   }
 
   return {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, Locale } from "date-fns";
+import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, parseISO, Locale } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { pt } from 'date-fns/locale';
 import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText } from "lucide-react";
@@ -68,9 +68,13 @@ export function ContractBasicInfo({
   const getMinDate = () => new Date();
 
   // Função para formatar a data de forma amigável
+  // AIDEV-NOTE: Corrigido problema de timezone - usar parseISO para strings de data
   const formatDate = (date: Date | string | null | undefined, formatStr = 'PPP') => {
     if (!date) return '';
-    return format(new Date(date), formatStr, { locale: ptBR });
+    
+    // Se for string, usar parseISO para evitar problemas de timezone
+    const dateObj = typeof date === 'string' ? parseISO(date) : date;
+    return format(dateObj, formatStr, { locale: ptBR });
   };
 
   // AIDEV-NOTE: Efeito para sincronizar cliente selecionado quando customer_id mudar

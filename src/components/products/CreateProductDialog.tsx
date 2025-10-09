@@ -265,14 +265,28 @@ export function CreateProductDialog({
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="unit">Unidade de Medida</Label>
-                  <Input
-                    id="unit"
-                    name="unit"
-                    value={formData.unit || ''}
-                    onChange={handleChange}
-                    placeholder="Ex: UN, KG, L"
-                  />
+                  <Label htmlFor="unit_of_measure">Unidade de Medida</Label>
+                  <Select
+                    value={formData.unit_of_measure || ''}
+                    onValueChange={(value) => handleChange({
+                      target: { name: 'unit_of_measure', value }
+                    } as any)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="un">Unidade (un)</SelectItem>
+                      <SelectItem value="kg">Quilograma (kg)</SelectItem>
+                      <SelectItem value="g">Grama (g)</SelectItem>
+                      <SelectItem value="l">Litro (l)</SelectItem>
+                      <SelectItem value="ml">Mililitro (ml)</SelectItem>
+                      <SelectItem value="m">Metro (m)</SelectItem>
+                      <SelectItem value="cm">Centímetro (cm)</SelectItem>
+                      <SelectItem value="m2">Metro Quadrado (m²)</SelectItem>
+                      <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </motion.div>

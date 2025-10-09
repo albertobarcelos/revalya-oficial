@@ -30,15 +30,17 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { ContractFormValues } from "../schema/ContractFormSchema";
 import { ContractServices } from "./ContractServices";
+import { ContractProducts } from "./ContractProducts";
 
 interface ContractTabsProps {
   activeTab: string;
   setActiveTab: (value: string) => void;
   services: any[];
+  products?: any[]; // AIDEV-NOTE: Adicionando produtos para integração com ContractProducts
   compact?: boolean;
 }
 
-export function ContractTabs({ activeTab, setActiveTab, services, compact = false }: ContractTabsProps) {
+export function ContractTabs({ activeTab, setActiveTab, services, products = [], compact = false }: ContractTabsProps) {
   const form = useFormContext<ContractFormValues>();
 
   return (
@@ -122,9 +124,7 @@ export function ContractTabs({ activeTab, setActiveTab, services, compact = fals
       </TabsContent>
       
       <TabsContent value="produtos" className="mt-4">
-        <div className="p-4 text-center text-muted-foreground">
-          Funcionalidade de Produtos em desenvolvimento.
-        </div>
+        <ContractProducts products={products} />
       </TabsContent>
       
       <TabsContent value="descontos" className="mt-4">

@@ -4,6 +4,7 @@ import type { Cobranca } from '@/types/database';
 import { v4 as uuidv4 } from 'uuid';
 import { logService } from './logService';
 import { whatsappService } from './whatsappService';
+import { edgeFunctionService } from './edgeFunctionService';
 
 interface MessageRecord {
   charge_id: string;
@@ -21,174 +22,66 @@ export const messageService = {
   lastCustomMessage: '',
 
   /**
-   * Envia mensagens em massa e registra no histórico
+   * AIDEV-NOTE: Envia mensagens em massa usando Edge Function simplificada
+   * Suporta tanto templates quanto mensagens diretas sem processamento complexo
    */
-  async sendBulkMessages(chargeIds: string[], templateIdOrCustom: string, customMessage?: string) {
-    // Verificação crítica - se for um template customizado mas a mensagem estiver vazia, buscar do elemento DOM
-    if ((customMessage === '' || customMessage === undefined) && templateIdOrCustom.startsWith('custom_')) {
-      // Tentar buscar diretamente do textarea
-      const textareaElement = document.getElementById('custom-message') as HTMLTextAreaElement;
-      if (textareaElement && textareaElement.value) {
-        customMessage = textareaElement.value;
-        console.log('🔄 Recuperando mensagem diretamente do DOM:', customMessage);
-      }
-    }
-
-    // Armazenar e logar a mensagem personalizada
-    const isCustom = customMessage || templateIdOrCustom.startsWith('custom_');
-    const directMessage = customMessage || '';
-    console.log('📌 Mensagem original recebida:', directMessage);
-    
+  async sendBulkMessages(chargeIds: string[], templateIdOrCustomMessage: string, customMessage?: string) {
     try {
-      // 1. Buscar dados das cobranças
-      const { data: selectedChargesData, error: chargesError } = await supabase
-        .from('charges')
-        .select(`*,
-          customers(name, email, phone, cpf_cnpj, company)
-        `)
-        .in('id', chargeIds);
-
-      if (chargesError) {
-        throw new Error('Erro ao buscar dados das cobranças');
+      // AIDEV-NOTE: Validar chargeIds como array não vazio
+      if (!Array.isArray(chargeIds) || chargeIds.length === 0) {
+        throw new Error('chargeIds deve ser um array não vazio de strings');
       }
 
-      // 2. Gerar UUID e preparar dados
-      const actualTemplateId = uuidv4();
-      let templateData;
+      // AIDEV-NOTE: Determinar se é mensagem customizada com validação rigorosa
+      const hasValidCustomMessage = customMessage && customMessage.trim().length > 0;
+      const hasValidTemplateMessage = templateIdOrCustomMessage && 
+                                     !templateIdOrCustomMessage.startsWith('custom_') && 
+                                     templateIdOrCustomMessage.trim().length > 0;
       
-      if (isCustom) {
-        templateData = {
-          id: actualTemplateId,
-          name: 'Mensagem Personalizada',
-          message: directMessage
-        };
-      } else {
-        // Buscar template existente do banco de dados
-        const { data, error: templateError } = await supabase
-          .from('notification_templates')
-          .select('*')
-          .eq('id', templateIdOrCustom)
-          .single();
-
-        if (templateError) {
-          throw new Error('Erro ao buscar template');
-        }
-        templateData = data;
+      // AIDEV-NOTE: Verificar se temos pelo menos uma mensagem válida
+      if (!hasValidCustomMessage && !hasValidTemplateMessage) {
+        throw new Error('É necessário fornecer templateId válido ou customMessage com conteúdo');
       }
+
+      const isCustomMessage = hasValidCustomMessage;
+      const directMessage = hasValidCustomMessage ? customMessage : undefined;
       
-      // 3. Processar manualmente as mensagens
-      const directMessages = selectedChargesData.map(charge => {
-        // Preparar os dados para substituição
-        const dueDate = charge.data_vencimento.split('T')[0];
-        
-        // Formatar a data no formato brasileiro e incluir o dia da semana
-        const dateOptions = { weekday: 'long' as const };
-        const dateParts = dueDate.split('-');
-        const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-        
-        // Obter o dia da semana em português
-        let weekDay = '';
-        try {
-          const date = new Date(dueDate);
-          weekDay = date.toLocaleDateString('pt-BR', dateOptions);
-          weekDay = weekDay.charAt(0).toUpperCase() + weekDay.slice(1); // Capitalizar
-        } catch (error) {
-          console.error('Erro ao formatar data com dia da semana:', error);
-        }
-        
-        // Data formatada completa (ex: 09/03/2025, Domingo)
-        const fullFormattedDate = weekDay ? `${formattedDate}, ${weekDay}` : formattedDate;
-        
-        const customerName = charge.customer?.name || 'Cliente';
-        const customerPhone = charge.customer?.phone || '';
-        const chargeAmount = new Intl.NumberFormat('pt-BR', {
-          style: 'currency',
-          currency: 'BRL'
-        }).format(charge.valor || 0);
-        const paymentLink = charge.link_pagamento || '';
-        const description = charge.descricao || 'Sem descrição';
-        
-        // Processar a mensagem manualmente para garantir que funcionem
-        let finalMessage = isCustom ? directMessage : templateData.message;
-        
-        // Substituições diretas para garantir que funcionem
-        // Incluir múltiplas versões da mesma tag (camelCase, snake_case, etc.)
-        finalMessage = finalMessage
-          // Cliente
-          .replace(/\{cliente\.nome\}/gi, customerName)
-          .replace(/\{cliente\.telefone\}/gi, customerPhone)
-          .replace(/\{cliente\.company\}/gi, charge.customer?.company || '')
-          .replace(/\{cliente\.empresa\}/gi, charge.customer?.company || '')
-          .replace(/\{cliente\.cpf_cnpj\}/gi, charge.customer?.cpf_cnpj?.toString() || '')
-          .replace(/\{cliente\.email\}/gi, charge.customer?.email || '')
-          
-          // Cobrança - valores
-          .replace(/\{cobranca\.valor\}/gi, chargeAmount)
-          
-          // Cobrança - datas (múltiplos formatos)
-          .replace(/\{cobranca\.vencimento\}/gi, formattedDate) // Formato simples: 09/03/2025
-          .replace(/\{cobranca\.data_vencimento\}/gi, formattedDate)
-          .replace(/\{cobranca\.dataVencimento\}/gi, formattedDate)
-          .replace(/\{cobranca\.vencimento_completo\}/gi, fullFormattedDate) // Formato completo com dia da semana
-          
-          // Cobrança - links e descrições
-          .replace(/\{cobranca\.link_pagamento\}/gi, paymentLink)
-          .replace(/\{cobranca\.linkPagamento\}/gi, paymentLink)
-          .replace(/\{cobranca\.link\}/gi, paymentLink)
-          .replace(/\{cobranca\.descricao\}/gi, description)
-          .replace(/\{cobranca\.descrição\}/gi, description);
-        
-        console.log('✅ Mensagem processada final:', finalMessage);
-        
-        // Construir objeto para envio
-        return {
-          customer: {
-            name: customerName,
-            phone: customerPhone.replace(/\D/g, ''),
-            document: charge.customer?.cpf_cnpj?.toString().replace(/\D/g, '') || '',
-          },
-          charge: {
-            id: charge.id,
-            amount: charge.valor,
-            dueDate: dueDate,
-            status: charge.status,
-            paymentLink: paymentLink,
-            description: description
-          },
-          template: {
-            id: actualTemplateId,
-            message: finalMessage,
-          }
-        };
+      console.log('📤 Enviando mensagens:', {
+        chargeCount: chargeIds.length,
+        isCustomMessage,
+        hasDirectMessage: !!directMessage,
+        templateId: isCustomMessage ? 'custom' : templateIdOrCustomMessage
       });
-      
-      // 4. Log final antes de enviar
-      console.log('📦 Conteúdo exato a ser enviado:', JSON.stringify({
-        messageCount: directMessages.length,
-        sampleMessage: directMessages[0]?.template?.message
-      }));
-      
-      // 5. Enviar diretamente para o serviço de mensagens
-      const response = await whatsappService.sendBulkMessages({
-        messages: directMessages,
-        templateId: actualTemplateId,
+
+      // AIDEV-NOTE: Chamar Edge Function com payload corrigido
+      const result = await edgeFunctionService.sendBulkMessages(
+        chargeIds,
+        templateIdOrCustomMessage,
+        true, // sendImmediately (processado internamente, não enviado para Edge)
+        directMessage // customMessage
+      );
+
+      console.log('✅ Resposta da Edge Function:', {
+        success: result.success,
+        summary: result.summary,
       });
-      
-      if (!response.ok) {
-        throw new Error(`Erro ao enviar mensagens: ${response.status}`);
+
+      // AIDEV-NOTE: Verificar se houve sucesso
+      if (!result.success) {
+        throw new Error('Falha no envio de mensagens pela Edge Function');
       }
-      
-      // 6. Registrar no histórico
-      await this.recordMessageHistory(selectedChargesData, directMessages, actualTemplateId, 
-        isCustom ? 'Mensagem Personalizada' : templateData.name);
-      
+
+      // AIDEV-NOTE: Retornar formato compatível com o frontend
       return {
         success: true,
-        count: directMessages.length,
-        data: await response.json()
+        count: result.summary.sent,
+        data: {
+          summary: result.summary,
+          results: result.results,
+        }
       };
     } catch (error) {
-      console.error('❌ Erro:', error);
+      console.error('❌ Erro no messageService.sendBulkMessages:', error);
       throw error;
     }
   },
@@ -279,22 +172,35 @@ export const messageService = {
 
   /**
    * Registra o histórico das mensagens no banco de dados
+   * AIDEV-NOTE: Função corrigida para segurança multi-tenant com filtros tenant_id obrigatórios
    */
-  async recordMessageHistory(charges: Cobranca[], messages: { 
-    charge: {
-      id: string;
-    };
-    template: {
-      message: string;
-    };
-  }[], templateId: string, templateName: string) {
+  async recordMessageHistory(
+    tenantId: string,
+    charges: Cobranca[], 
+    messages: { 
+      charge: {
+        id: string;
+      };
+      template: {
+        message: string;
+      };
+    }[], 
+    templateId: string, 
+    templateName: string
+  ) {
     console.log('📝 Registrando histórico com templateId:', templateId);
     
+    // AIDEV-NOTE: Validação obrigatória de tenant_id
+    if (!tenantId) {
+      throw new Error('tenant_id é obrigatório para recordMessageHistory');
+    }
+    
     try {
-      // Sempre buscar um template válido existente para usar como fallback
+      // AIDEV-NOTE: Buscar template válido APENAS do tenant correto para usar como fallback
       const { data: validTemplates } = await supabase
         .from('notification_templates')
         .select('id')
+        .eq('tenant_id', tenantId)
         .limit(1);
         
       // ID de template válido ou null se não encontrar nenhum
@@ -304,21 +210,22 @@ export const messageService = {
       // Verificar se é uma mensagem personalizada
       const isCustomMessage = templateId.startsWith('custom_') || this.lastCustomMessage;
       
-      // Verificar se o templateId existe na tabela
+      // AIDEV-NOTE: Verificar se o templateId existe na tabela APENAS para o tenant correto
       if (!isCustomMessage) {
         const { data: templateCheck } = await supabase
           .from('notification_templates')
           .select('id')
           .eq('id', templateId)
+          .eq('tenant_id', tenantId)
           .single();
           
         if (!templateCheck) {
-          console.log('⚠️ Template ID não existe na tabela, usando fallback');
+          console.log('⚠️ Template ID não existe na tabela para este tenant, usando fallback');
           templateId = fallbackTemplateId;
         }
       }
       
-      // Para mensagens personalizadas ou templates inválidos, usar fallback
+      // AIDEV-NOTE: Para mensagens personalizadas ou templates inválidos, usar fallback
       const historyRecords = charges.map(charge => {
         const messageObj = messages.find(m => m.charge.id === charge.id);
         
@@ -329,7 +236,8 @@ export const messageService = {
           status: 'success',
           message_content: messageObj?.template.message || this.lastCustomMessage || '',
           customer_name: charge.customer?.name || 'Cliente',
-          customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000'
+          customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000',
+          tenant_id: tenantId // AIDEV-NOTE: Campo obrigatório para RLS multi-tenant
         };
       });
       
@@ -357,8 +265,9 @@ export const messageService = {
   },
 
   /**
-   * Envia uma mensagem de texto via WhatsApp
-   * AIDEV-NOTE: Método para envio de mensagens com isolamento por tenant
+   * Envia uma mensagem de texto via WhatsApp usando Edge Function
+   * AIDEV-NOTE: Método seguro para envio de mensagens individuais via Edge Function
+   * Não expõe credenciais da Evolution API no client
    */
   async sendMessage(
     tenantSlug: string, 
@@ -377,56 +286,87 @@ export const messageService = {
         throw new Error('Parâmetros obrigatórios não fornecidos: tenantSlug, phoneNumber, message');
       }
 
-      // AIDEV-NOTE: Buscar instância ativa para o tenant
-      const instanceName = await whatsappService.getFullInstanceName(tenantSlug);
-      if (!instanceName) {
-        throw new Error(`Nenhuma instância ativa encontrada para o tenant: ${tenantSlug}`);
+      // AIDEV-NOTE: Buscar tenant_id pelo slug para segurança
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('slug', tenantSlug)
+        .single();
+
+      if (tenantError || !tenant) {
+        throw new Error(`Tenant não encontrado para slug: ${tenantSlug}`);
       }
 
-      // AIDEV-NOTE: Verificar se a instância está conectada
-      const status = await whatsappService.checkInstanceStatus(instanceName);
-      if (status !== 'open') {
-        throw new Error(`Instância ${instanceName} não está conectada. Status: ${status}`);
-      }
+      // AIDEV-NOTE: Configurar contexto de tenant para segurança
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenant.id 
+      });
 
+      // AIDEV-NOTE: Criar uma cobrança temporária para usar a Edge Function
+      // Isso permite reutilizar a infraestrutura existente de forma segura
+      const tempChargeId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
       // AIDEV-NOTE: Formatar número de telefone (garantir formato internacional)
       const formattedNumber = phoneNumber.startsWith('55') ? phoneNumber : `55${phoneNumber}`;
       
-      logService.info('MessageService', `Enviando mensagem via ${instanceName} para ${formattedNumber}`);
+      logService.info('MessageService', `Enviando mensagem via Edge Function para ${formattedNumber}`);
 
-      // AIDEV-NOTE: Preparar payload para envio de mensagem
-      const messagePayload = {
-        number: formattedNumber,
-        text: message,
-        delay: options?.delay || 1000,
-        linkPreview: options?.linkPreview ?? true,
-        mentionsEveryOne: options?.mentionsEveryOne ?? false,
-        ...(options?.mentioned && { mentioned: options.mentioned })
-      };
+      // AIDEV-NOTE: Usar Edge Function para envio seguro
+      // Cria uma entrada temporária em charges para usar a infraestrutura existente
+      const { data: tempCharge, error: chargeError } = await supabase
+        .from('charges')
+        .insert({
+          id: tempChargeId,
+          tenant_id: tenant.id,
+          customer_name: 'Mensagem Direta',
+          customer_phone: formattedNumber,
+          amount: 0,
+          due_date: new Date().toISOString(),
+          status: 'temp_message',
+          description: 'Mensagem direta via API'
+        })
+        .select('id')
+        .single();
 
-      // AIDEV-NOTE: Enviar mensagem via Evolution API usando o whatsappService
-      const response = await (whatsappService as any).callEvolutionApi(
-        `/message/sendText/${instanceName}`,
-        'POST',
-        messagePayload
-      );
-
-      // AIDEV-NOTE: Validar resposta da API
-      if (!response || !response.key) {
-        throw new Error('Resposta inválida da Evolution API');
+      if (chargeError) {
+        throw new Error('Erro ao criar entrada temporária para mensagem');
       }
 
-      logService.info('MessageService', `Mensagem enviada com sucesso:`, {
-        messageId: response.key.id,
-        instanceName,
-        phoneNumber: formattedNumber,
-        tenant: tenantSlug
-      });
+      try {
+        // AIDEV-NOTE: Usar Edge Function send-bulk-messages com mensagem customizada
+        const result = await edgeFunctionService.sendBulkMessages(
+          [tempChargeId],
+          'direct_message', // templateId para identificar como mensagem direta
+          true, // sendImmediately
+          message // customMessage
+        );
 
-      return {
-        success: true,
-        messageId: response.key.id
-      };
+        // AIDEV-NOTE: Verificar resultado do envio
+        if (result.success && result.summary.sent > 0) {
+          logService.info('MessageService', `Mensagem enviada com sucesso via Edge Function:`, {
+            tempChargeId,
+            phoneNumber: formattedNumber,
+            tenant: tenantSlug,
+            summary: result.summary
+          });
+
+          return {
+            success: true,
+            messageId: result.results?.[0]?.charge_id || tempChargeId
+          };
+        } else {
+          const errorMsg = result.results?.[0]?.message || 'Erro desconhecido no envio via Edge Function';
+          throw new Error(errorMsg);
+        }
+
+      } finally {
+        // AIDEV-NOTE: Limpar entrada temporária após envio
+        await supabase
+          .from('charges')
+          .delete()
+          .eq('id', tempChargeId)
+          .eq('tenant_id', tenant.id);
+      }
 
     } catch (error) {
       logService.error('MessageService', `Erro ao enviar mensagem para ${phoneNumber} via tenant ${tenantSlug}:`, error);

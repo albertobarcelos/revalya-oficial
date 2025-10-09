@@ -58,7 +58,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Save, X, AlertCircle, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { getEditConfig } from './EditModalConfigs';
+import { getEditConfig, getDynamicServiceConfig } from './EditModalConfigs';
 
 // AIDEV-NOTE: Tipos para configuração dinâmica de campos
 export interface FieldConfig {
@@ -397,8 +397,12 @@ export function EditModal<T = any>({
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // AIDEV-NOTE: Obter configuração baseada no tipo de entidade ou usar campos customizados
+  // Para serviços, usa configuração dinâmica baseada na unidade de cobrança
+  const [dynamicFields, setDynamicFields] = useState<FieldConfig[]>([]);
+  
   const config = entityType ? getEditConfig(entityType) : null;
-  const fields = customFields || config?.fields || [];
+  const baseFields = customFields || config?.fields || [];
+  const fields = entityType === 'service' ? dynamicFields : baseFields;
   const validationSchema = customValidation || config?.validation;
 
   // AIDEV-NOTE: Configuração do formulário com React Hook Form + Zod
@@ -422,6 +426,24 @@ export function EditModal<T = any>({
       form.reset(processedData);
     }
   }, [data, form]);
+
+  // AIDEV-NOTE: Inicializar campos dinâmicos para serviços
+  useEffect(() => {
+    if (entityType === 'service') {
+      const initialUnitType = data?.unit_type;
+      const dynamicConfig = getDynamicServiceConfig(initialUnitType);
+      setDynamicFields(dynamicConfig.fields);
+    }
+  }, [entityType, data]);
+
+  // AIDEV-NOTE: Atualizar campos dinâmicos para serviços baseado na unidade de cobrança
+  useEffect(() => {
+    if (entityType === 'service') {
+      const unitType = form.watch('unit_type');
+      const dynamicConfig = getDynamicServiceConfig(unitType);
+      setDynamicFields(dynamicConfig.fields);
+    }
+  }, [entityType, form.watch('unit_type')]);
 
   // AIDEV-NOTE: Limpeza do timeout quando o modal fecha
   useEffect(() => {

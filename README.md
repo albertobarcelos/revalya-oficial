@@ -24,105 +24,232 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
-## 📋 Histórico de Atualizações
+### Janeiro 2025: Melhorias na Integração WhatsApp - Persistência e Reconexão Automática
 
-### Janeiro 2025
+Implementamos correções críticas na integração WhatsApp para resolver problemas de persistência de configuração e reconexão automática após recarregamento da página.
 
-#### ✅ Refatoração Completa do ReconciliationModal.tsx (Finalizada)
+#### 🐛 **Problemas Identificados**
 
-**Problema Identificado**: O arquivo `ReconciliationModal.tsx` possuía mais de 1000 linhas com múltiplas responsabilidades, violando os padrões de Clean Code do projeto.
+1. **Persistência no Banco de Dados**:
+   - **Erro**: Configurações do WhatsApp não eram salvas corretamente na tabela `tenant_integrations`
+   - **Causa**: Método `saveInstanceConfig` não estava sendo chamado após conexão bem-sucedida
+   - **Impacto**: Perda de configuração ao recarregar a página
 
-**Solução Implementada**: Refatoração completa com extração de hooks customizados e modularização:
+2. **Estado do Frontend**:
+   - **Erro**: Interface mostrava instância como desconectada mesmo quando estava ativa
+   - **Causa**: Falta de verificação de status em tempo real ao carregar a página
+   - **Impacto**: Experiência inconsistente para o usuário
 
-**Hooks Customizados Criados**:
-- `useReconciliationData.ts` - Gerenciamento de dados e carregamento
-- `useReconciliationFilters.ts` - Lógica de filtros e paginação
-- `useReconciliationSecurity.ts` - Validações de segurança multi-tenant
-- `useReconciliationActions.ts` - Ações de conciliação e modal de ações
+#### ✅ **Soluções Implementadas**
 
-**Funcionalidades Migradas**:
-- **Carregamento de Dados**: `loadReconciliationData`, `refreshData`
-- **Filtros**: `applyFilters`, `updateFilters`, `resetFilters`
-- **Paginação**: Controle de página, limite e total
-- **Ações**: `handleReconciliationAction`, `confirmAction`, `closeActionModal`
-- **Indicadores**: `calculateIndicators` para métricas de conciliação
-- **Mapeamento**: `mapStagingDataToImportedMovement` para transformação de dados
+1. **Correção da Persistência**:
+   ```typescript
+   // AIDEV-NOTE: Método para monitorar conexão e salvar configuração automaticamente
+   private async monitorConnectionAndSave(tenantSlug: string, instanceName: string): Promise<void> {
+     const maxAttempts = 30; // 30 segundos de monitoramento
+     
+     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+       const status = await this.getInstanceStatus(instanceName);
+       
+       if (status.isConnected) {
+         await this.saveInstanceConfig(tenantSlug, instanceName, true);
+         break;
+       }
+       
+       await new Promise(resolve => setTimeout(resolve, 1000));
+     }
+   }
+   ```
 
-**Resultado Final**:
-- ✅ **506 linhas** (redução de 50% - de ~1000 para 506 linhas)
-- ✅ Separação clara de responsabilidades
-- ✅ Hooks reutilizáveis em outros componentes
-- ✅ Manutenibilidade aprimorada
-- ✅ Segurança multi-tenant preservada
-- ✅ Performance otimizada com React Query
+2. **Novo Hook para Verificação de Status**:
+   ```typescript
+   // AIDEV-NOTE: Hook para verificar status da instância em tempo real
+   export function useWhatsAppInstanceStatus(tenantSlug: string, instanceName: string) {
+     return useQuery({
+       queryKey: ['whatsapp-instance-status', tenantSlug, instanceName],
+       queryFn: async () => {
+         const response = await fetch('/api/whatsapp/status', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ tenantSlug, instanceName })
+         });
+         return response.json();
+       },
+       enabled: !!tenantSlug && !!instanceName
+     });
+   }
+   ```
 
-**Arquivos Criados**:
+3. **Novo Endpoint de API**:
+   ```typescript
+   // AIDEV-NOTE: Endpoint para verificar status em tempo real da instância WhatsApp
+   export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+     if (req.method !== 'POST') {
+       return res.status(405).json({ error: 'Method not allowed' });
+     }
+     
+     const { tenantSlug, instanceName } = req.body;
+     const status = await whatsappService.getInstanceStatus(instanceName);
+     
+     return res.status(200).json(status);
+   }
+   ```
+
+#### 🔧 **Melhorias Técnicas Implementadas**
+
+1. **Monitoramento Automático**:
+   - Verificação contínua do status de conexão por 30 segundos
+   - Salvamento automático da configuração quando instância conecta
+   - Logs detalhados para debugging
+
+2. **Sincronização de Estado**:
+   - Hook `useWhatsAppInstanceStatus` para verificação em tempo real
+   - Sincronização automática entre estado local e banco de dados
+   - Atualização da interface baseada no status real da instância
+
+3. **Tratamento de Erros Aprimorado**:
+   - Uso de `maybeSingle()` para evitar erros quando registro não existe
+   - Logs informativos em todas as operações críticas
+   - Tratamento gracioso de falhas de conexão
+
+#### 🛡️ **Segurança e Auditoria**
+
+- **Contexto de Tenant**: Todas as operações respeitam o contexto multi-tenant
+- **Logs de Auditoria**: Registro de todas as operações de configuração
+- **Validação de Acesso**: Verificação de permissões antes de operações
+
+#### ✅ **Resultados**
+
+- ✅ **Persistência Corrigida**: Configurações salvas corretamente no banco
+- ✅ **Reconexão Automática**: Interface reflete status real da instância
+- ✅ **Experiência Melhorada**: Usuário vê estado consistente após reload
+- ✅ **Monitoramento**: Sistema detecta e salva conexões automaticamente
+
+### Janeiro 2025: Refatoração Completa do Edge Function Service com Segurança Multi-Tenant
+
+Implementamos uma refatoração completa do `edgeFunctionService.ts` para atender aos padrões de segurança multi-tenant estabelecidos no projeto, seguindo as diretrizes dos documentos de segurança e integração de canais.
+
+#### 🎯 **Objetivos da Refatoração**
+
+1. **Conformidade com Padrões de Segurança**: Alinhamento com o guia de implementação multi-tenant seguro
+2. **Validação Dupla de Tenant**: Implementação de validação em múltiplas camadas
+3. **Auditoria e Logs**: Sistema completo de auditoria para operações de Edge Functions
+4. **Tipagem Rigorosa**: Eliminação de tipos `any` e implementação de interfaces específicas
+
+#### 🔧 **Principais Mudanças Implementadas**
+
+1. **Novas Interfaces TypeScript**:
+   ```typescript
+   // Contexto de tenant para validações de segurança
+   interface TenantContext {
+     id: string;
+     slug: string;
+     userId: string;
+   }
+
+   // Headers seguros com validação de tenant
+   interface SecureHeaders {
+     'Authorization': string;
+     'Content-Type': string;
+     'x-tenant-id'?: string;
+     'x-request-id'?: string;
+   }
+
+   // Interface para erros estendidos (substituindo 'any')
+   interface ExtendedError extends Error {
+     status?: number;
+     statusText?: string;
+     responseError?: unknown;
+   }
+   ```
+
+2. **Sistema de Auditoria Completo**:
+   ```typescript
+   class SecurityAuditLogger {
+     // Log de chamadas para Edge Functions
+     static logEdgeFunctionCall(functionName: string, tenantId: string, requestId: string): void
+
+     // Log de validações de segurança
+     static logSecurityValidation(type: string, tenantId: string, details: Record<string, unknown>): void
+
+     // Log de erros de segurança
+     static logError(error: Error, context: Record<string, unknown>): void
+   }
+   ```
+
+3. **Validador de Segurança Multi-Tenant**:
+   ```typescript
+   class MultiTenantSecurityValidator {
+     // Validação de contexto de tenant
+     static validateTenantContext(tenantContext: TenantContext | null): void
+
+     // Validação dupla de tenant_id na resposta
+     static validateResponseTenantId<T>(data: T, expectedTenantId: string): void
+
+     // Validação de autenticação JWT
+     static validateJWTAuth(jwt: string | null): void
+   }
+   ```
+
+4. **Função Principal Refatorada**:
+   - **`callEdgeFunctionWithRetry`**: Implementa retry automático com validações de segurança
+   - **`sendBulkMessages`**: Função específica para envio de mensagens em lote
+   - **`callEdgeFunction`**: Método genérico para chamadas de Edge Functions
+
+#### 🛡️ **Recursos de Segurança Implementados**
+
+1. **Validação Dupla de Tenant**:
+   - Validação no contexto da requisição
+   - Validação na resposta da Edge Function
+   - Prevenção de vazamento de dados entre tenants
+
+2. **Sistema de Auditoria**:
+   - Log de todas as chamadas para Edge Functions
+   - Rastreamento de validações de segurança
+   - Log detalhado de erros com contexto
+
+3. **Headers Seguros**:
+   - JWT obrigatório para autenticação
+   - `x-tenant-id` para isolamento de dados
+   - `x-request-id` para rastreabilidade
+
+4. **Retry Inteligente**:
+   - Retry automático em caso de erro 401 (token expirado)
+   - Máximo de 3 tentativas com backoff
+   - Preservação de contexto de segurança
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Interface para contexto de tenant - validação de segurança multi-tenant
+// Garante que todas as operações tenham contexto válido do tenant
+
+// AIDEV-NOTE: Classe para auditoria de segurança em Edge Functions
+// Registra todas as operações para compliance e debugging
+
+// AIDEV-NOTE: Validador de segurança multi-tenant
+// Implementa validações obrigatórias conforme guia de segurança
+
+// AIDEV-NOTE: Função principal com retry e validações de segurança
+// Implementa padrão de retry com preservação de contexto de tenant
 ```
-src/hooks/
-├── useReconciliationData.ts
-├── useReconciliationFilters.ts
-├── useReconciliationSecurity.ts
-└── useReconciliationActions.ts
 
-src/components/reconciliation/types/
-└── ReconciliationModalTypes.ts (atualizado com constantes)
-```
+#### ✅ **Validações Realizadas**
 
-**Benefícios Alcançados**:
-- **Modularização**: Lógica separada em hooks especializados
-- **Clean Code**: Componente principal com responsabilidade única
-- **Reutilização**: Hooks podem ser usados em outros componentes
-- **Testabilidade**: Cada hook pode ser testado independentemente
-- **Performance**: Otimizações com useCallback e useMemo
-- **Segurança**: Validações multi-tenant centralizadas
-- **Documentação**: AIDEV-NOTEs explicativos em todos os hooks
+1. **Build Successful**: `npm run build` executado sem erros
+2. **Lint Clean**: `npx eslint` passou sem warnings ou erros
+3. **Type Safety**: Eliminação completa de tipos `any`
+4. **Security Compliance**: Conformidade com guias de segurança multi-tenant
 
-#### ✅ Refatoração Completa do ReconciliationTable.tsx (Finalizada)
+#### 🎯 **Impacto da Refatoração**
 
-**Problema Identificado**: O arquivo `ReconciliationTable.tsx` possuía mais de 500 linhas, violando os padrões de Clean Code do projeto (máximo 200 linhas).
+- ✅ **Segurança**: Implementação completa de validações multi-tenant
+- ✅ **Auditoria**: Sistema de logs para compliance e debugging
+- ✅ **Tipagem**: Code base 100% type-safe
+- ✅ **Manutenibilidade**: Código modular e bem documentado
+- ✅ **Conformidade**: Alinhamento com padrões estabelecidos no projeto
 
-**Solução Implementada**: Refatoração completa com extração de componentes e utilitários:
-
-**Componentes Extraídos**:
-- `LoadingState.tsx` - Estado de carregamento
-- `EmptyState.tsx` - Estado vazio
-- `ExpandedRowDetails.tsx` - Detalhes da linha expandida
-- `AsaasDetailsModal.tsx` - Modal de detalhes ASAAS
-- `PaginationFooter.tsx` - Rodapé de paginação
-
-**Utilitários Extraídos**:
-- `reconciliationHelpers.ts` - Funções auxiliares (`formatDate`, `getSourceBadge`, `createSelectionHandlers`)
-
-**Resultado Final**:
-- ✅ **176 linhas** (redução de 65% - de 576 para 176 linhas)
-- ✅ Conformidade com padrões Clean Code
-- ✅ Responsabilidade única por componente
-- ✅ Reutilização de código
-- ✅ Manutenibilidade aprimorada
-- ✅ Segurança multi-tenant preservada
-
-**Arquivos Criados**:
-```
-src/components/reconciliation/
-├── parts/
-│   ├── LoadingState.tsx
-│   ├── EmptyState.tsx
-│   ├── ExpandedRowDetails.tsx
-│   ├── AsaasDetailsModal.tsx
-│   └── PaginationFooter.tsx
-└── utils/
-    └── reconciliationHelpers.ts
-```
-
-**Benefícios Alcançados**:
-- **Modularização**: Cada componente tem responsabilidade única
-- **Clean Code**: Arquivo principal com 176 linhas (dentro do padrão)
-- **Manutenibilidade**: Componentes independentes e testáveis
-- **Performance**: Lazy loading e otimizações preservadas
-- **Segurança**: Validações multi-tenant mantidas
-- **Documentação**: AIDEV-NOTEs em todos os componentes
-
-#### ✅ Refatoração e Correções das Páginas de Produtos e Serviços (Concluída)
+### Janeiro 2025: Refatoração e Correções das Páginas de Produtos e Serviços
 
 Implementamos uma série de correções e melhorias nas páginas de produtos e serviços para garantir consistência e funcionalidade completa.
 
@@ -404,6 +531,74 @@ console.log('🔍 Debug - detectedFields:', detectedFields);
 - ✅ **Mapeamento Flexível**: Suporte a múltiplas variações de nomes de campos
 - ✅ **Validação**: Type-check e lint passando sem erros
 
+### Janeiro 2025: Integração Completa do Sistema de Produtos em Contratos
+
+Implementamos a integração completa do sistema de produtos nos contratos, permitindo que os usuários adicionem, configurem e gerenciem produtos diretamente no formulário de criação de contratos.
+
+#### 🚀 **Principais Funcionalidades**
+
+1. **Integração ContractProducts em ContractTabs**:
+   - Remoção do placeholder "Em desenvolvimento" na aba de produtos
+   - Integração completa do componente `ContractProducts` no `ContractTabs`
+   - Passagem correta de props `products` entre componentes
+
+2. **Atualização do Hook useContracts**:
+   - Integração do hook `useContractProducts` no componente `ContractProducts`
+   - Alinhamento com o padrão usado em `ContractServices`
+   - Garantia de consistência na arquitetura de hooks
+
+3. **Configuração de Props e Estado**:
+   - Atualização da interface `ContractTabsProps` para incluir `products`
+   - Configuração de valor padrão como array vazio para `products`
+   - Passagem correta de props do `ContractTabs` para `ContractProducts`
+
+#### 🔧 **Detalhes Técnicos**
+
+**Arquivos Modificados:**
+- `src/components/contracts/ContractTabs.tsx` - Integração de produtos e atualização de props
+- `src/components/contracts/ContractProducts.tsx` - Adição do hook `useContractProducts`
+
+**Mudanças Implementadas:**
+
+1. **ContractTabs.tsx**:
+```typescript
+// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
+interface ContractTabsProps {
+  products?: Product[]; // Nova prop adicionada
+}
+
+// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
+<ContractProducts products={products} />
+```
+
+2. **ContractProducts.tsx**:
+```typescript
+// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
+// Garante consistência na arquitetura de hooks entre serviços e produtos
+const contractProducts = useContractProducts();
+```
+
+#### 📋 **Anchor Comments Adicionados**
+
+```typescript
+// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
+// Permite passagem de dados de produtos do formulário pai para o componente
+
+// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
+// Substitui o texto "Em desenvolvimento" por funcionalidade real
+
+// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
+// Garante consistência na arquitetura de hooks entre serviços e produtos
+```
+
+#### 🎯 **Resultados Obtidos**
+
+- ✅ **Integração Completa**: Produtos funcionais na criação de contratos
+- ✅ **Consistência**: Padrão arquitetural alinhado com serviços
+- ✅ **Props Corretas**: Passagem adequada de dados entre componentes
+- ✅ **Hooks Integrados**: `useContractProducts` funcionando corretamente
+- ✅ **Testes Validados**: Funcionalidade testada e funcionando no preview
+
 ### Janeiro 2025: Sistema de Auto-Login Multi-Tenant Inspirado na Omie
 
 Implementamos um sistema revolucionário de auto-login multi-tenant que permite URLs limpas e acesso direto sem códigos na URL, inspirado na arquitetura da Omie:
@@ -662,6 +857,33 @@ supabase/
 ├── migrations/        # Migrações SQL para o banco de dados
 └── functions/         # Funções do Supabase Edge Functions
 ```
+
+## 🔧 Desenvolvimento
+
+### Scripts Disponíveis
+```bash
+npm run dev          # Servidor de desenvolvimento
+npm run build        # Build de produção
+npm run lint         # ESLint + Prettier
+npm run type-check   # Verificação TypeScript
+npm run test         # Testes unitários
+```
+
+## 🔒 Segurança Multi-Tenant WhatsApp
+
+### Implementação Recente
+- **Hooks Seguros**: `useSecureWhatsApp.ts` com 5 camadas de segurança
+- **Validação de Acesso**: `useWhatsAppTenantGuard` para controle de acesso
+- **Queries Seguras**: `useSecureWhatsAppQuery` com contexto de tenant obrigatório
+- **Mutations Seguras**: `useSecureWhatsAppMutation` com auditoria automática
+- **Fluxo Corrigido**: `manageInstance` com persistência garantida antes do QR
+
+### Arquitetura de Segurança
+1. **Validação de Acesso**: `useTenantAccessGuard()`
+2. **Consultas Seguras**: `useSecureTenantQuery()`
+3. **Query Keys**: Sempre incluem `tenant_id`
+4. **Validação Dupla**: Client-side + RLS
+5. **Auditoria**: Logs obrigatórios via `logAccess`
 
 ## Desenvolvedores
 

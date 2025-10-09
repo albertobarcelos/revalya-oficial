@@ -591,23 +591,40 @@ class FinancialNotificationService {
     }
   }
 
-  // Criar template de notificação
+  // 🔐 Criar template de notificação com validação de tenant_id obrigatória
   async createNotificationTemplate(
     template: Omit<NotificationTemplate, 'id' | 'created_at' | 'updated_at'>,
     userId: string
   ): Promise<NotificationTemplate | null> {
+    if (!template.tenant_id) {
+      console.error('🚨 [SECURITY] Tentativa de criar template sem tenant_id');
+      throw new Error('tenant_id é obrigatório para criar templates');
+    }
+
     try {
+      console.log(`✏️ [AUDIT] Criando template para tenant: ${template.tenant_id}`, { name: template.name, type: template.type });
+      
       const { data, error } = await supabase
         .from('notification_templates')
         .insert({
           ...template,
+          tenant_id: template.tenant_id, // 🔑 REGRA DE OURO: SEMPRE INCLUIR TENANT_ID
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('🚨 [SECURITY] Erro ao criar template:', error);
+        throw error;
+      }
+
+      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template criado pertence ao tenant correto
+      if (data.tenant_id !== template.tenant_id) {
+        console.error('🚨 [SECURITY BREACH] Template criado com tenant_id incorreto:', data);
+        throw new Error('Erro de segurança: tenant_id incorreto no template criado');
+      }
 
       // Log de auditoria
       await financialAuditService.logAuditEntry({
@@ -629,16 +646,23 @@ class FinancialNotificationService {
     }
   }
 
-  // Buscar templates
+  // 🔐 Buscar templates com validação de tenant_id obrigatória
   async getNotificationTemplates(
     tenantId: string,
     type?: NotificationType
   ): Promise<NotificationTemplate[]> {
+    if (!tenantId) {
+      console.error('🚨 [SECURITY] Tentativa de buscar templates sem tenant_id');
+      throw new Error('tenant_id é obrigatório para buscar templates');
+    }
+
     try {
+      console.log(`🔍 [AUDIT] Buscando templates para tenant: ${tenantId}`, { type });
+      
       let query = supabase
         .from('notification_templates')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .eq('tenant_id', tenantId) // 🔑 REGRA DE OURO: SEMPRE FILTRAR POR TENANT_ID
         .eq('is_active', true);
 
       if (type) {
@@ -647,10 +671,22 @@ class FinancialNotificationService {
 
       const { data, error } = await query.order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('🚨 [SECURITY] Erro ao buscar templates:', error);
+        throw error;
+      }
+
+      // 🛡️ VALIDAÇÃO DUPLA: Verificar se todos os registros pertencem ao tenant
+      const invalidRecords = data?.filter(template => template.tenant_id !== tenantId) || [];
+      if (invalidRecords.length > 0) {
+        console.error('🚨 [SECURITY BREACH] Templates de outros tenants detectados:', invalidRecords);
+        throw new Error('Erro de segurança: dados de outros tenants detectados');
+      }
+
+      console.log(`✅ [AUDIT] ${data?.length || 0} templates carregados com segurança para tenant: ${tenantId}`);
       return data || [];
     } catch (error) {
-      console.error('Erro ao buscar templates:', error);
+      console.error('🚨 [SECURITY] Erro ao buscar templates:', error);
       return [];
     }
   }
@@ -712,19 +748,41 @@ class FinancialNotificationService {
     return processed;
   }
 
-  // Buscar template por ID
-  async getNotificationTemplate(templateId: string): Promise<NotificationTemplate | null> {
+  // 🔐 Buscar template por ID com validação de tenant_id obrigatória
+  async getNotificationTemplate(templateId: string, tenantId: string): Promise<NotificationTemplate | null> {
+    if (!tenantId) {
+      console.error('🚨 [SECURITY] Tentativa de buscar template sem tenant_id');
+      throw new Error('tenant_id é obrigatório para buscar templates');
+    }
+
     try {
+      console.log(`🔍 [AUDIT] Buscando template ${templateId} para tenant: ${tenantId}`);
+      
       const { data, error } = await supabase
         .from('notification_templates')
         .select('*')
         .eq('id', templateId)
+        .eq('tenant_id', tenantId) // 🔑 REGRA DE OURO: SEMPRE FILTRAR POR TENANT_ID
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log(`⚠️ [AUDIT] Template ${templateId} não encontrado ou não pertence ao tenant: ${tenantId}`);
+          return null;
+        }
+        throw error;
+      }
+
+      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o template pertence ao tenant
+      if (data.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY BREACH] Template de outro tenant detectado:', { templateId, tenantId, actualTenantId: data.tenant_id });
+        throw new Error('Erro de segurança: template não pertence ao tenant');
+      }
+
+      console.log(`✅ [AUDIT] Template ${templateId} carregado com segurança para tenant: ${tenantId}`);
       return data;
     } catch (error) {
-      console.error('Erro ao buscar template:', error);
+      console.error('🚨 [SECURITY] Erro ao buscar template:', error);
       return null;
     }
   }

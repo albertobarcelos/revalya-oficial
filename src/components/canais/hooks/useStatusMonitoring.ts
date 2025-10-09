@@ -6,6 +6,7 @@ import { whatsappService } from '@/services/whatsappService';
 import { logService } from '@/services/logService';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
+import { executeWithAuth, logAccess } from '@/utils/authUtils';
 import { MODULE_NAME, TIMEOUTS } from '../constants';
 import { ConnectionStatus, TenantIntegration } from '../types';
 
@@ -84,21 +85,53 @@ export function useStatusMonitoring({
           if (status === 'connected') {
             logService.info(MODULE_NAME, 'WhatsApp conectado com sucesso!');
             
-            // Atualizar no banco de dados
+            // Atualizar no banco de dados com segurança multi-tenant
             const whatsappConfig = integrations?.find(
               integration => integration.integration_type === 'whatsapp'
             );
             
             if (whatsappConfig) {
-              await supabase
-                .from('tenant_integrations')
-                .update({
+              await executeWithAuth(async () => {
+                // AIDEV-NOTE: Configurar contexto de tenant obrigatório para RLS
+                const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+                  p_tenant_id: tenantId
+                });
+                
+                if (contextError) {
+                  logService.error(MODULE_NAME, `Erro ao configurar contexto de tenant: ${contextError.message}`);
+                  return;
+                }
+
+                const updateData = {
+                  tenant_id: tenantId, // AIDEV-NOTE: Explícito para RLS
                   connection_status: 'connected',
                   is_active: true,
                   updated_at: new Date().toISOString()
-                })
-                .eq('id', whatsappConfig.id)
-                .eq('tenant_id', tenantId);
+                };
+
+                const { error } = await supabase
+                  .from('tenant_integrations')
+                  .update(updateData)
+                  .eq('id', whatsappConfig.id)
+                  .eq('tenant_id', tenantId);
+                  
+                if (error) {
+                  logService.error(MODULE_NAME, `Erro ao atualizar status de conexão: ${error.message}`);
+                  return;
+                }
+
+                // AIDEV-NOTE: Log de auditoria obrigatório
+                await logAccess(
+                  'update',
+                  'whatsapp_integrations',
+                  tenantId,
+                  { 
+                    action: 'whatsapp_connected',
+                    connection_status: 'connected',
+                    is_active: true
+                  }
+                );
+              });
             }
             
             // AIDEV-NOTE: Atualizar estado local do canal para refletir na UI
@@ -125,21 +158,53 @@ export function useStatusMonitoring({
           if (status === 'disconnected' && lastStatus === 'connected') {
             logService.warn(MODULE_NAME, 'WhatsApp foi desconectado');
             
-            // Atualizar no banco de dados
+            // Atualizar no banco de dados com segurança multi-tenant
             const whatsappConfig = integrations?.find(
               integration => integration.integration_type === 'whatsapp'
             );
             
             if (whatsappConfig) {
-              await supabase
-                .from('tenant_integrations')
-                .update({
+              await executeWithAuth(async () => {
+                // AIDEV-NOTE: Configurar contexto de tenant obrigatório para RLS
+                const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+                  p_tenant_id: tenantId
+                });
+                
+                if (contextError) {
+                  logService.error(MODULE_NAME, `Erro ao configurar contexto de tenant: ${contextError.message}`);
+                  return;
+                }
+
+                const updateData = {
+                  tenant_id: tenantId, // AIDEV-NOTE: Explícito para RLS
                   connection_status: 'disconnected',
                   is_active: false,
                   updated_at: new Date().toISOString()
-                })
-                .eq('id', whatsappConfig.id)
-                .eq('tenant_id', tenantId);
+                };
+
+                const { error } = await supabase
+                  .from('tenant_integrations')
+                  .update(updateData)
+                  .eq('id', whatsappConfig.id)
+                  .eq('tenant_id', tenantId);
+                  
+                if (error) {
+                  logService.error(MODULE_NAME, `Erro ao atualizar status de desconexão: ${error.message}`);
+                  return;
+                }
+
+                // AIDEV-NOTE: Log de auditoria obrigatório
+                await logAccess(
+                  'update',
+                  'whatsapp_integrations',
+                  tenantId,
+                  { 
+                    action: 'whatsapp_disconnected',
+                    connection_status: 'disconnected',
+                    is_active: false
+                  }
+                );
+              });
             }
             
             // AIDEV-NOTE: Atualizar estado local do canal para refletir na UI

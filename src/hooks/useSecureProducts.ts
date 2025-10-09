@@ -16,6 +16,7 @@ export interface Product {
   stock_quantity: number;
   min_stock_quantity?: number;
   supplier?: string;
+  unit_of_measure?: string;
   is_active: boolean;
   tax_rate?: number;
   has_inventory?: boolean;
@@ -39,6 +40,7 @@ export interface CreateProductDTO {
   stock_quantity: number;
   min_stock_quantity?: number;
   supplier?: string;
+  unit_of_measure?: string;
   is_active?: boolean;
   tax_rate?: number;
   has_inventory?: boolean;

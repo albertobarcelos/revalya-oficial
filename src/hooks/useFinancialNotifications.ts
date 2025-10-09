@@ -119,6 +119,23 @@ interface NotificationPreview {
   estimatedDeliveryTime: string;
 }
 
+// AIDEV-NOTE: Função para sanitizar dados do NotificationTemplate, evitando referências circulares
+// Remove propriedades extras que não pertencem à tabela financial_notification_templates
+function sanitizeNotificationTemplate(template: Partial<NotificationTemplate>): Partial<NotificationTemplate> {
+  return {
+    name: template.name,
+    type: template.type,
+    channels: template.channels,
+    subject: template.subject,
+    emailTemplate: template.emailTemplate,
+    smsTemplate: template.smsTemplate,
+    pushTemplate: template.pushTemplate,
+    variables: template.variables,
+    isActive: template.isActive,
+    metadata: template.metadata
+  };
+}
+
 export const useFinancialNotifications = (): UseFinancialNotificationsReturn => {
   const { supabase, user } = useSupabase();
   const [notifications, setNotifications] = useState<FinancialNotification[]>([]);
@@ -507,10 +524,22 @@ export const useFinancialNotifications = (): UseFinancialNotificationsReturn => 
     setError(null);
 
     try {
+      // 🔧 SANITIZAR DADOS PARA EVITAR REFERÊNCIAS CIRCULARES
+      const sanitizedTemplate = sanitizeNotificationTemplate(template);
+
       const { data, error } = await supabase
         .from('financial_notification_templates')
         .insert({
-          ...template,
+          name: sanitizedTemplate.name,
+          type: sanitizedTemplate.type,
+          channels: sanitizedTemplate.channels,
+          subject: sanitizedTemplate.subject,
+          emailTemplate: sanitizedTemplate.emailTemplate,
+          smsTemplate: sanitizedTemplate.smsTemplate,
+          pushTemplate: sanitizedTemplate.pushTemplate,
+          variables: sanitizedTemplate.variables,
+          isActive: sanitizedTemplate.isActive,
+          metadata: sanitizedTemplate.metadata,
           tenant_id: user.user_metadata?.tenant_id,
           created_by: user.id,
         })
@@ -545,10 +574,22 @@ export const useFinancialNotifications = (): UseFinancialNotificationsReturn => 
     setError(null);
 
     try {
+      // 🔧 SANITIZAR DADOS PARA EVITAR REFERÊNCIAS CIRCULARES
+      const sanitizedTemplate = sanitizeNotificationTemplate(template);
+
       const { error } = await supabase
         .from('financial_notification_templates')
         .update({
-          ...template,
+          name: sanitizedTemplate.name,
+          type: sanitizedTemplate.type,
+          channels: sanitizedTemplate.channels,
+          subject: sanitizedTemplate.subject,
+          emailTemplate: sanitizedTemplate.emailTemplate,
+          smsTemplate: sanitizedTemplate.smsTemplate,
+          pushTemplate: sanitizedTemplate.pushTemplate,
+          variables: sanitizedTemplate.variables,
+          isActive: sanitizedTemplate.isActive,
+          metadata: sanitizedTemplate.metadata,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -561,7 +602,7 @@ export const useFinancialNotifications = (): UseFinancialNotificationsReturn => 
       // Update local state
       setTemplates(prev => 
         prev.map(t => 
-          t.id === id ? { ...t, ...template, updatedAt: new Date().toISOString() } : t
+          t.id === id ? { ...t, ...sanitizedTemplate, updatedAt: new Date().toISOString() } : t
         )
       );
 
