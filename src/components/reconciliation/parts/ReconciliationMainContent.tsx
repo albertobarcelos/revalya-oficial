@@ -1,12 +1,21 @@
-import { motion } from "framer-motion";
-import ReconciliationTable from "../ReconciliationTable";
-import type { ReconciliationMovement } from "../types/reconciliation";
+// =====================================================
+// AIDEV-NOTE: ReconciliationMainContent Component
+// =====================================================
+// Componente principal que renderiza o conteúdo da reconciliação
+// Gerencia a tabela de movimentos e paginação
+// =====================================================
 
-// AIDEV-NOTE: Interface para props do ReconciliationMainContent
+import React from 'react';
+import { motion } from 'framer-motion';
+import ReconciliationTable from '../ReconciliationTable';
+import { ReconciliationMovement, ReconciliationAction } from '@/types/reconciliation';
+
 interface ReconciliationMainContentProps {
   paginatedMovements: ReconciliationMovement[];
   isLoading: boolean;
-  onAction: (action: string, movement: ReconciliationMovement) => void;
+  onAction: (movement: ReconciliationMovement, action: ReconciliationAction) => void;
+  selectedMovements?: string[];
+  onSelectionChange?: (selected: string[]) => void;
   pagination: {
     page: number;
     limit: number;
@@ -16,16 +25,16 @@ interface ReconciliationMainContentProps {
   };
 }
 
-// AIDEV-NOTE: Componente extraído da área principal do ReconciliationModal
-// Responsável por renderizar a tabela de reconciliação com paginação
 export function ReconciliationMainContent({
   paginatedMovements,
   isLoading,
   onAction,
+  selectedMovements = [],
+  onSelectionChange,
   pagination
 }: ReconciliationMainContentProps) {
   return (
-    <div className="flex-1 flex flex-col overflow-hidden min-w-0 order-1 lg:order-1">
+    <div className="flex-1 flex flex-col overflow-hidden">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -36,6 +45,8 @@ export function ReconciliationMainContent({
           movements={paginatedMovements}
           isLoading={isLoading}
           onAction={onAction}
+          selectedMovements={selectedMovements}
+          onSelectionChange={onSelectionChange}
           pagination={pagination}
         />
       </motion.div>

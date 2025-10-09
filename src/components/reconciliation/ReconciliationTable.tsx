@@ -18,6 +18,7 @@ import { EmptyState } from './parts/EmptyState';
 import { ExpandedRowDetails } from './parts/ExpandedRowDetails';
 import { AsaasDetailsModal } from './parts/AsaasDetailsModal';
 import { PaginationFooter } from './parts/PaginationFooter';
+import { BulkActionsDropdown } from './parts/BulkActionsDropdown';
 
 // AIDEV-NOTE: Importações dos helpers extraídos
 import { 
@@ -67,6 +68,24 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     selectedMovements,
     onSelectionChange
   );
+
+  // AIDEV-NOTE: Handler para ações em lote
+  const handleBulkAction = useCallback((action: ReconciliationAction) => {
+    if (selectedMovements.length === 0) return;
+    
+    // Executar ação para todos os movimentos selecionados
+    selectedMovements.forEach(movementId => {
+      const movement = movements.find(m => m.id === movementId);
+      if (movement && onAction) {
+        onAction(action, movement);
+      }
+    });
+    
+    // Limpar seleção após executar ações
+    if (onSelectionChange) {
+      onSelectionChange([]);
+    }
+  }, [selectedMovements, movements, onAction, onSelectionChange]);
 
   const toggleRowExpansion = (movementId: string) => {
     const newExpanded = new Set(expandedRows);
@@ -122,9 +141,11 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
               <Badge variant="secondary">
                 {selectedMovements.length} selecionado{selectedMovements.length > 1 ? 's' : ''}
               </Badge>
-              <Button variant="outline" size="sm">
-                Ações em Lote
-              </Button>
+              <BulkActionsDropdown
+                selectedCount={selectedMovements.length}
+                onBulkAction={handleBulkAction}
+                disabled={isLoading}
+              />
             </div>
           )}
         </div>

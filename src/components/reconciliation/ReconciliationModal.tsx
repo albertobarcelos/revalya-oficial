@@ -177,6 +177,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
   
   // AIDEV-NOTE: Estados locais simplificados
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [selectedMovements, setSelectedMovements] = useState<string[]>([]);
   const [pagination, setPagination] = useState(INITIAL_PAGINATION_STATE);
 
   // AIDEV-NOTE: Configurações do ambiente
@@ -302,6 +303,8 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                   paginatedMovements={paginatedMovements}
                   isLoading={isLoading}
                   onAction={handleReconciliationAction}
+                  selectedMovements={selectedMovements}
+                  onSelectionChange={setSelectedMovements}
                   pagination={{
                     page: pagination.page,
                     limit: pagination.limit,
