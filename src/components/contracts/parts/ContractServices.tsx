@@ -42,6 +42,8 @@ interface SelectedService {
   due_days?: number; // Número de dias após faturamento
   due_day?: number; // Dia fixo do mês (1-31)
   due_next_month?: boolean; // Se vencimento é no próximo mês
+  // Campo de cobrança - AIDEV-NOTE: Controla se o serviço gera cobrança no faturamento
+  generate_billing?: boolean; // Se deve gerar cobrança no faturamento
   // Campos de impostos
   nbs_code?: string;
   deduction_value?: number;
@@ -135,6 +137,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     due_day: 10,
     due_next_month: false
   });
+
+  // Estado para configuração de cobrança - AIDEV-NOTE: Controla se o serviço gera cobrança no faturamento
+  const [billingData, setBillingData] = React.useState({
+    generate_billing: true // Padrão: sim, gerar cobrança
+  });
   
   // Hook para buscar serviços
   const { services = [], isLoading } = useServices();
@@ -199,6 +206,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       billing_type: "Único",
       recurrence_frequency: "",
       installments: 1,
+      // Campo de cobrança padrão - AIDEV-NOTE: Por padrão, gerar cobrança no faturamento
+      generate_billing: billingData.generate_billing,
       // Campos de impostos padrão
       discount_percentage: 0,
       tax_rate: 0,
@@ -254,6 +263,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     // AIDEV-NOTE: Sempre usar os dados do serviço (já mapeados pelo useContractEdit)
     setFinancialData(newFinancialData);
     
+    // AIDEV-NOTE: Carrega dados de cobrança do serviço para edição (preservar valor existente)
+    setBillingData({
+      generate_billing: service.generate_billing !== undefined ? service.generate_billing : true
+    });
+    
     // AIDEV-NOTE: Carrega dados de vencimento do serviço para edição (preservar valores existentes)
     // Buscar dados de vencimento do serviço no estado atual (selectedServices)
     const currentService = selectedServices.find(s => s.id === serviceId);
@@ -300,6 +314,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         due_days: dueDateData.due_days,
         due_day: dueDateData.due_day,
         due_next_month: dueDateData.due_next_month,
+        // Dados de cobrança - AIDEV-NOTE: Configuração se gera cobrança no faturamento
+        generate_billing: billingData.generate_billing,
         // Manter outros dados do serviço
         ...taxData
       };
@@ -361,27 +377,28 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         });
 
         // AIDEV-NOTE: Usa o hook updateContractServiceMutation para salvar no banco
+        // Corrigindo estrutura de dados para evitar erro PGRST116
         await updateContractServiceMutation.mutateAsync({
-          serviceId: currentService.id,
-          serviceData: {
-            // Manter dados básicos do serviço
-            description: currentService.description,
-            quantity: currentService.quantity,
-            unit_price: currentService.unit_price,
-            discount_percentage: currentService.discount_percentage || 0,
-            tax_rate: currentService.tax_rate || 0,
-            // Dados financeiros mapeados
-            payment_method: mappedPaymentMethod,
-            card_type: validatedCardType,
-            billing_type: financialData.billing_type || null,
-            recurrence_frequency: financialData.recurrence_frequency || null,
-            installments: financialData.installments || 1,
-            // Dados de vencimento
-            due_date_type: dueDateData.due_date_type,
-            due_days: dueDateData.due_days,
-            due_day: dueDateData.due_day,
-            due_next_month: dueDateData.due_next_month
-          }
+          id: currentService.id, // ID deve estar no nível raiz, não dentro de serviceData
+          // Manter dados básicos do serviço
+          description: currentService.description,
+          quantity: currentService.quantity,
+          unit_price: currentService.unit_price,
+          discount_percentage: currentService.discount_percentage || 0,
+          tax_rate: currentService.tax_rate || 0,
+          // Dados financeiros mapeados
+          payment_method: mappedPaymentMethod,
+          card_type: validatedCardType,
+          billing_type: financialData.billing_type || null,
+          recurrence_frequency: financialData.recurrence_frequency || null,
+          installments: financialData.installments || 1,
+          // Dados de vencimento
+          due_date_type: dueDateData.due_date_type,
+          due_days: dueDateData.due_days,
+          due_day: dueDateData.due_day,
+          due_next_month: dueDateData.due_next_month,
+          // AIDEV-NOTE: Campo de cobrança - corrige erro PGRST204 ao incluir generate_billing
+          generate_billing: billingData.generate_billing
         });
         
         console.log('Serviço atualizado com sucesso no banco!');
@@ -407,6 +424,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         due_days: dueDateData.due_days,
         due_day: dueDateData.due_day,
         due_next_month: dueDateData.due_next_month,
+        // AIDEV-NOTE: Campo de cobrança - incluir no estado local
+        generate_billing: billingData.generate_billing,
         ...taxData
       };
       
@@ -460,7 +479,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           card_type: existingFormService.card_type || selectedService.card_type,
           billing_type: existingFormService.billing_type || selectedService.billing_type,
           recurrence_frequency: existingFormService.recurrence_frequency || selectedService.recurrence_frequency,
-          installments: existingFormService.installments || selectedService.installments
+          installments: existingFormService.installments || selectedService.installments,
+          // AIDEV-NOTE: Preservar configuração de geração de cobrança do formulário
+          generate_billing: existingFormService.generate_billing !== undefined ? existingFormService.generate_billing : selectedService.generate_billing
         };
       }
       
@@ -898,6 +919,42 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       </p>
                     </div>
                   )}
+
+                  {/* Configuração de Cobrança - AIDEV-NOTE: Campo para controlar se gera cobrança no faturamento */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <h4 className="text-sm font-medium">Gerar cobrança no faturamento?</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="billing_yes"
+                          name="generate_billing"
+                          checked={billingData.generate_billing === true}
+                          onChange={() => setBillingData(prev => ({ ...prev, generate_billing: true }))}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                        />
+                        <Label htmlFor="billing_yes" className="text-sm">
+                          Sim
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="billing_no"
+                          name="generate_billing"
+                          checked={billingData.generate_billing === false}
+                          onChange={() => setBillingData(prev => ({ ...prev, generate_billing: false }))}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                        />
+                        <Label htmlFor="billing_no" className="text-sm">
+                          Não
+                        </Label>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Define se este serviço deve gerar cobrança automática no faturamento
+                    </p>
+                  </div>
                 </div>
               </div>
             </TabsContent>

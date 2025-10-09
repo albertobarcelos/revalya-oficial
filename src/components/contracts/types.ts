@@ -17,6 +17,8 @@ export interface ContractService {
   due_days?: number;
   due_day?: number;
   due_next_month?: boolean;
+  // AIDEV-NOTE: Campo de configuração de cobrança
+  generate_billing?: boolean;
   service?: {
     id: string;
     name: string;
@@ -43,6 +45,8 @@ export interface ContractFormValues {
   installments: number;
   anticipate_weekends: boolean;
   is_active: boolean;
+  // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobranças automaticamente
+  generate_billing?: boolean;
   created_at?: string;
   updated_at?: string;
   services: ContractService[];
@@ -83,6 +87,8 @@ export interface ExtendedContractService extends Omit<ContractService, 'id' | 'c
   due_days?: number;
   due_day?: number;
   due_next_month?: boolean;
+  // AIDEV-NOTE: Campo de configuração de cobrança
+  generate_billing?: boolean;
   
   // Campos adicionais específicos do ExtendedContractService
   tax_code?: string;

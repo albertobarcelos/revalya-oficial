@@ -349,15 +349,20 @@ export function ContractFormActions({
       if (data.services && data.services.length > 0 && savedContractId) {
         console.log('Salvando serviços do contrato:', data.services);
         
-        // Primeiro, limpar serviços existentes (em caso de edição)
+        // AIDEV-NOTE: Nova lógica - buscar serviços existentes para fazer UPDATE seletivo
+        let existingServices: any[] = [];
         if (contractId) {
-          const { error: deleteError } = await supabase
+          const { data: existingData, error: fetchError } = await supabase
             .from('contract_services')
-            .delete()
-            .eq('contract_id', contractId);
+            .select('*')
+            .eq('contract_id', contractId)
+            .eq('tenant_id', currentTenant.id);
             
-          if (deleteError) {
-            console.warn('Erro ao limpar serviços existentes:', deleteError);
+          if (fetchError) {
+            console.warn('Erro ao buscar serviços existentes:', fetchError);
+          } else {
+            existingServices = existingData || [];
+            console.log('🔍 Serviços existentes encontrados:', existingServices.length);
           }
         }
         
@@ -406,8 +411,13 @@ export function ContractFormActions({
           }
         }
         
-        // Preparar dados dos serviços para inserção
-        const servicesToInsert = data.services.map((service: any) => {
+        // AIDEV-NOTE: Nova lógica - processar serviços com UPDATE/INSERT/DELETE seletivo
+        const servicesToUpdate: any[] = [];
+        const servicesToInsert: any[] = [];
+        const existingServiceIds = existingServices.map(s => s.id);
+        
+        // Função para preparar dados do serviço
+        const prepareServiceData = (service: any) => {
           const rawBillingType = service.billing_type || service.financial?.billingType;
           const rawRecurrenceFrequency = service.recurrence_frequency || service.financial?.recurrenceFrequency;
           const rawPaymentMethod = service.payment_method || service.financial?.paymentMethod;
@@ -420,57 +430,142 @@ export function ContractFormActions({
           // Validar card_type conforme constraint: só pode ter valor se payment_method for 'Cartão'
           const validatedCardType = mappedPaymentMethod === 'Cartão' ? rawCardType : null;
           
-          console.log('🔍 DEBUG - Processando serviço para inserção:', {
-            serviceName: service.name,
-            serviceId: service.service_id,
-            financialConfig: {
-              payment_method_raw: rawPaymentMethod,
-              payment_method_mapped: mappedPaymentMethod,
-              card_type_raw: rawCardType,
-              card_type_validated: validatedCardType,
-              billing_type_raw: rawBillingType,
-              billing_type_mapped: mappedBillingType,
-              recurrence_frequency_raw: rawRecurrenceFrequency,
-              recurrence_frequency_mapped: mappedRecurrenceFrequency,
-              installments: service.installments || service.financial?.installments
-            }
-          });
-          
           return {
             contract_id: savedContractId,
-            service_id: service.service_id || genericServiceId, // Usar serviço genérico se não houver service_id
+            service_id: service.service_id || genericServiceId,
             description: service.description || service.name,
             quantity: service.quantity || 1,
             unit_price: service.unit_price || service.default_price || 0,
             discount_percentage: service.discount_percentage || 0,
             tax_rate: service.tax_rate || 0,
-            // Campos de configuração financeira - usar valores mapeados e validados
             payment_method: mappedPaymentMethod,
             card_type: validatedCardType,
             billing_type: mappedBillingType,
             recurrence_frequency: mappedRecurrenceFrequency,
             installments: service.installments || service.financial?.installments || 1,
-            // AIDEV-NOTE: Campos de vencimento - preservar configurações do frontend
             due_date_type: service.due_date_type || 'days_after_billing',
             due_days: service.due_days !== undefined && service.due_days !== null ? service.due_days : 5,
             due_day: service.due_day !== undefined && service.due_day !== null ? service.due_day : 10,
             due_next_month: service.due_next_month !== undefined && service.due_next_month !== null ? service.due_next_month : false,
-            // total_amount é calculado automaticamente pelo banco
+            generate_billing: service.generate_billing !== undefined ? service.generate_billing : true,
             is_active: service.is_active !== false,
             tenant_id: currentTenant.id
           };
+        };
+        
+        // AIDEV-NOTE: Lógica corrigida para lidar com múltiplos serviços do mesmo tipo
+        // Usar índices para mapear serviços existentes com os novos dados
+        const usedExistingServices = new Set<string>(); // Track de IDs já utilizados
+        
+        // Classificar serviços em UPDATE vs INSERT
+        data.services.forEach((service: any, index: number) => {
+          const serviceData = prepareServiceData(service);
+          
+          // AIDEV-NOTE: Buscar serviço existente que ainda não foi usado
+          // Para serviços com mesmo service_id, usar o primeiro disponível
+          const existingService = existingServices.find(existing => 
+            existing.service_id === serviceData.service_id &&
+            existing.contract_id === savedContractId &&
+            !usedExistingServices.has(existing.id)
+          );
+          
+          if (existingService) {
+            // Marcar como usado para evitar duplicação
+            usedExistingServices.add(existingService.id);
+            
+            // Serviço existe - preparar para UPDATE
+            servicesToUpdate.push({
+              id: existingService.id, // Preservar ID original
+              ...serviceData
+            });
+            console.log('🔄 Serviço para UPDATE:', { 
+              id: existingService.id, 
+              service_id: serviceData.service_id,
+              name: service.name,
+              index: index
+            });
+          } else {
+            // Serviço novo - preparar para INSERT
+            servicesToInsert.push(serviceData);
+            console.log('🆕 Serviço para INSERT:', { 
+              service_id: serviceData.service_id,
+              name: service.name,
+              index: index
+            });
+          }
         });
         
-        console.log('Inserindo serviços:', servicesToInsert);
+        // AIDEV-NOTE: Identificar serviços para DELETE (existem no banco mas não foram usados)
+        const servicesToDelete = existingServices.filter(existing => 
+          !usedExistingServices.has(existing.id)
+        );
         
-        // AIDEV-NOTE: Usar hook seguro para inserção de serviços (garante RLS)
-        try {
-          const insertedServices = await insertContractServicesMutation.mutateAsync(servicesToInsert);
-          console.log('✅ Serviços salvos com sucesso:', insertedServices);
-        } catch (error) {
-          console.error('❌ Erro ao salvar serviços:', error);
-          throw new Error(`Erro ao salvar serviços: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+        console.log('📊 Resumo das operações:', {
+          updates: servicesToUpdate.length,
+          inserts: servicesToInsert.length,
+          deletes: servicesToDelete.length
+        });
+        
+        // Executar UPDATEs
+        if (servicesToUpdate.length > 0) {
+          console.log('🔄 Executando UPDATEs...');
+          for (const serviceData of servicesToUpdate) {
+            const { id, ...updateData } = serviceData;
+            try {
+              const { error: updateError } = await supabase
+                .from('contract_services')
+                .update(updateData)
+                .eq('id', id)
+                .eq('tenant_id', currentTenant.id);
+                
+              if (updateError) {
+                console.error('❌ Erro ao atualizar serviço:', updateError);
+                throw updateError;
+              }
+              console.log('✅ Serviço atualizado:', id);
+            } catch (error) {
+              console.error('❌ Erro no UPDATE do serviço:', error);
+              throw error;
+            }
+          }
         }
+        
+        // Executar INSERTs
+        if (servicesToInsert.length > 0) {
+          console.log('🆕 Executando INSERTs...');
+          try {
+            const insertedServices = await insertContractServicesMutation.mutateAsync(servicesToInsert);
+            console.log('✅ Serviços inseridos com sucesso:', insertedServices);
+          } catch (error) {
+            console.error('❌ Erro ao inserir serviços:', error);
+            throw new Error(`Erro ao inserir serviços: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          }
+        }
+        
+        // Executar DELETEs
+        if (servicesToDelete.length > 0) {
+          console.log('🗑️ Executando DELETEs...');
+          for (const serviceToDelete of servicesToDelete) {
+            try {
+              const { error: deleteError } = await supabase
+                .from('contract_services')
+                .delete()
+                .eq('id', serviceToDelete.id)
+                .eq('tenant_id', currentTenant.id);
+                
+              if (deleteError) {
+                console.error('❌ Erro ao deletar serviço:', deleteError);
+                throw deleteError;
+              }
+              console.log('✅ Serviço deletado:', serviceToDelete.id);
+            } catch (error) {
+              console.error('❌ Erro no DELETE do serviço:', error);
+              throw error;
+            }
+          }
+        }
+        
+        console.log('✅ Todas as operações de serviços concluídas com sucesso!');
       }
 
       // Salvar os produtos do contrato na tabela contract_products

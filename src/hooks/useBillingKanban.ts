@@ -16,6 +16,8 @@ export interface KanbanContract {
   billing_id?: string;
   contract_status: string;
   final_date: string;
+  // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobranças automaticamente
+  generate_billing?: boolean;
 }
 
 export interface KanbanData {

@@ -67,6 +67,9 @@ export type ContractService = {
   recurrence_frequency?: string;
   installments?: number;
   
+  // Campo de configuração de cobrança
+  generate_billing?: boolean;
+  
   // Relacionamento
   service?: {
     id: string;

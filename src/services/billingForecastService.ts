@@ -39,7 +39,8 @@ class BillingForecastService {
       console.debug('[BillingForecast] Gerando previsões para', months_ahead, 'meses');
     }
 
-    // Buscar contratos ativos
+    // Buscar contratos ativos com faturamento automático habilitado
+    // AIDEV-NOTE: Filtrando apenas contratos com generate_billing = true para previsões
     const { data: contracts, error: contractsError } = await supabase
       .from('contracts')
       .select(`
@@ -48,7 +49,8 @@ class BillingForecastService {
         contract_services(*)
       `)
       .eq('tenant_id', tenant_id)
-      .eq('status', 'ACTIVE');
+      .eq('status', 'ACTIVE')
+      .eq('generate_billing', true);
 
     if (contractsError) {
       throw new Error(`Erro ao buscar contratos: ${contractsError.message}`);

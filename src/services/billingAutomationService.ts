@@ -91,6 +91,7 @@ class BillingAutomationService {
       const nextMonth = addMonths(currentMonth, 1);
 
       // Buscar contratos ativos que precisam de faturamento
+      // AIDEV-NOTE: Agora consideramos o campo generate_billing para controlar se o contrato deve gerar cobrança
       let contractsQuery = supabase
         .from('contracts')
         .select(`
@@ -120,7 +121,8 @@ class BillingAutomationService {
         `)
         .eq('tenant_id', options.tenant_id)
         .eq('status', 'ACTIVE')
-        .eq('auto_billing', true);
+        .eq('auto_billing', true)
+        .eq('generate_billing', true);
 
       if (options.contract_ids && options.contract_ids.length > 0) {
         contractsQuery = contractsQuery.in('id', options.contract_ids);
