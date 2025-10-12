@@ -26,6 +26,8 @@ import {
 import ReconciliationFilters from '@/components/reconciliation/ReconciliationFilters';
 import ReconciliationIndicators from '@/components/reconciliation/ReconciliationIndicators';
 import ReconciliationTable from '@/components/reconciliation/ReconciliationTable';
+import { LinkToContractModal } from '@/components/reconciliation/modals/LinkToContractModal';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Types
 import { 
@@ -62,28 +64,6 @@ const ReconciliationPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // AIDEV-NOTE: Validação de acesso - redireciona se não tiver permissão
-  if (!hasAccess) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-center text-red-600">Acesso Negado</CardTitle>
-          </CardHeader>
-          <CardContent className="text-center">
-            <p className="text-muted-foreground mb-4">
-              {accessError || 'Você não tem permissão para acessar esta página.'}
-            </p>
-            <Button onClick={() => navigate('/dashboard')} variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // =====================================================
   // STATE MANAGEMENT
   // =====================================================
@@ -110,6 +90,10 @@ const ReconciliationPage: React.FC = () => {
 
   // Selection state for bulk import
   const [selectedMovements, setSelectedMovements] = useState<string[]>([]);
+  
+  // AIDEV-NOTE: Estado para modal de vincular contrato
+  const [isLinkToContractModalOpen, setIsLinkToContractModalOpen] = useState(false);
+  const [movementsToLink, setMovementsToLink] = useState<ImportedMovement[]>([]);
 
   // =====================================================
   // COMPUTED VALUES
@@ -152,12 +136,34 @@ const ReconciliationPage: React.FC = () => {
       filters: filters,
       totalMovements: movements.length
     });
-  }, []);
+  }, [logAction, filters, movements.length]);
 
   useEffect(() => {
     // Reset pagination when filters change
     setCurrentPage(1);
   }, [filters]);
+
+  // AIDEV-NOTE: Validação de acesso - redireciona se não tiver permissão
+  if (!hasAccess) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center text-red-600">Acesso Negado</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-muted-foreground mb-4">
+              {accessError || 'Você não tem permissão para acessar esta página.'}
+            </p>
+            <Button onClick={() => navigate('/dashboard')} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // =====================================================
   // HANDLERS
@@ -313,11 +319,67 @@ const ReconciliationPage: React.FC = () => {
     }
   };
 
+  // AIDEV-NOTE: Handler para confirmar vinculação de contrato
+  const handleConfirmLinkToContract = useCallback(async (contractId: string, observations?: string) => {
+    setIsLoading(true);
+    
+    try {
+      // AIDEV-NOTE: Aplicar vinculação a todos os movimentos selecionados
+      const updatePromises = movementsToLink.map(async (movement) => {
+        return handleReconciliationAction(
+          ReconciliationAction.LINK_TO_CONTRACT,
+          movement,
+          { contractId, observations }
+        );
+      });
+      
+      await Promise.all(updatePromises);
+      
+      // Limpar seleção após sucesso
+      setSelectedMovements([]);
+      
+      toast({
+        title: "Contratos vinculados com sucesso",
+        description: `${movementsToLink.length} movimento(s) vinculado(s) ao contrato.`,
+        variant: "default"
+      });
+      
+    } catch (error) {
+      console.error('Erro ao vincular contratos:', error);
+      toast({
+        title: "Erro na vinculação",
+        description: "Não foi possível vincular os movimentos ao contrato.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [movementsToLink, handleReconciliationAction, toast]);
+
   const handleReconciliationAction = async (
-    movementId: string, 
     action: ReconciliationAction,
-    data?: any
+    movement: ImportedMovement,
+    data?: { contractId?: string; chargeId?: string; [key: string]: unknown }
   ) => {
+    // AIDEV-NOTE: Se for LINK_TO_CONTRACT e não tiver contractId, abrir modal para seleção
+    if (action === ReconciliationAction.LINK_TO_CONTRACT && !data?.contractId) {
+      // Verificar se é ação em lote (múltiplos movimentos selecionados)
+      const selectedMovementsList = selectedMovements.map(id => 
+        movements.find(m => m.id === id)
+      ).filter(Boolean) as ImportedMovement[];
+      
+      if (selectedMovementsList.length > 0) {
+        // Ação em lote - abrir modal com todos os movimentos selecionados
+        setMovementsToLink(selectedMovementsList);
+      } else {
+        // Ação individual - abrir modal com apenas este movimento
+        setMovementsToLink([movement]);
+      }
+      
+      setIsLinkToContractModalOpen(true);
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
@@ -325,9 +387,9 @@ const ReconciliationPage: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Update movement status
-      setMovements(prev => prev.map(movement => {
-        if (movement.id === movementId) {
-          const updatedMovement = { ...movement };
+      setMovements(prev => prev.map(mov => {
+        if (mov.id === movement.id) {
+          const updatedMovement = { ...mov };
           
           switch (action) {
             case ReconciliationAction.LINK_TO_CONTRACT:
@@ -358,7 +420,7 @@ const ReconciliationPage: React.FC = () => {
           
           return updatedMovement;
         }
-        return movement;
+        return mov;
       }).filter(Boolean) as ImportedMovement[]);
       
       const actionLabels = {
@@ -375,7 +437,7 @@ const ReconciliationPage: React.FC = () => {
       });
 
       logAction('reconciliation_action', 'reconciliation', {
-        movementId,
+        movementId: movement.id,
         action,
         data,
         timestamp: new Date().toISOString()
@@ -398,8 +460,89 @@ const ReconciliationPage: React.FC = () => {
 
   if (tenantLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="container mx-auto px-4 py-6 space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Skeleton className="h-9 w-20" />
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-96" />
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-24" />
+          </div>
+        </div>
+
+        {/* Filters Skeleton */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-6 w-6 rounded-full" />
+              </div>
+              <Skeleton className="h-8 w-16" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Indicators Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((index) => (
+            <Card key={index} className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                    <Skeleton className="h-4 w-4" />
+                  </div>
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-6 w-16" />
+                  <Skeleton className="h-2 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Table Skeleton */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="p-4 space-y-4">
+              {/* Table Header */}
+              <div className="grid grid-cols-6 gap-4 pb-2 border-b">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              
+              {/* Table Rows */}
+              {[1, 2, 3, 4, 5].map((index) => (
+                <div key={index} className="grid grid-cols-6 gap-4 py-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -409,9 +552,9 @@ const ReconciliationPage: React.FC = () => {
   // =====================================================
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
+    <div className="container mx-auto px-4 py-6 space-y-6 h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center space-x-4">
           <Button
             variant="ghost"
@@ -457,7 +600,7 @@ const ReconciliationPage: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <Card>
+      <Card className="flex-shrink-0">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg flex items-center space-x-2">
             <FileText className="h-5 w-5" />
@@ -473,7 +616,7 @@ const ReconciliationPage: React.FC = () => {
       </Card>
 
       {/* Quick Indicators */}
-      <Card>
+      <Card className="flex-shrink-0">
         <CardHeader className="pb-4">
           <CardTitle className="text-lg flex items-center space-x-2">
             <TrendingUp className="h-5 w-5" />
@@ -489,7 +632,7 @@ const ReconciliationPage: React.FC = () => {
       </Card>
 
       {/* Results Summary */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div className="flex items-center space-x-4">
           <Badge variant="outline" className="flex items-center space-x-1">
             <span>{filteredMovements.length}</span>
@@ -546,8 +689,8 @@ const ReconciliationPage: React.FC = () => {
       </div>
 
       {/* Main Table */}
-      <Card>
-        <CardContent className="p-0">
+      <Card className="flex-1 min-h-0">
+        <CardContent className="p-0 h-full">
           <ReconciliationTable
             movements={paginatedMovements}
             isLoading={isLoading || isRefreshing}
@@ -569,12 +712,21 @@ const ReconciliationPage: React.FC = () => {
       </Card>
 
       {/* Footer Info */}
-      <div className="text-center text-sm text-muted-foreground border-t pt-4">
+      <div className="text-center text-sm text-muted-foreground border-t pt-4 flex-shrink-0">
         <p>
           💡 <strong>Importante:</strong> Nada entra no financeiro sem passar por esta tela de conciliação.
           Uma vez conciliado, o item permanece no histórico para auditoria.
         </p>
       </div>
+
+      {/* AIDEV-NOTE: Modal para vincular contratos */}
+      <LinkToContractModal
+        isOpen={isLinkToContractModalOpen}
+        onClose={() => setIsLinkToContractModalOpen(false)}
+        selectedMovements={movementsToLink}
+        onConfirm={handleConfirmLinkToContract}
+        isLoading={isLoading}
+      />
     </div>
   );
 };

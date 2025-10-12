@@ -87,7 +87,7 @@ export default async function handler(
 
     // Verificar se todos os registros estão não conciliados
     const alreadyConciliated = stagingRecords.filter(
-      record => record.status_conciliacao === 'conciliado'
+      record => record.status_conciliacao === 'CONCILIADO' // AIDEV-NOTE: Comparação em MAIÚSCULO
     );
 
     if (alreadyConciliated.length > 0) {
@@ -98,7 +98,7 @@ export default async function handler(
     }
 
     const updateData: any = {
-      status_conciliacao: 'CONCILIADO',
+      status_conciliacao: 'CONCILIADO', // AIDEV-NOTE: Status em MAIÚSCULO
       observacao: observacao || null,
       updated_at: new Date().toISOString()
     };

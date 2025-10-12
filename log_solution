@@ -1,0 +1,2135 @@
+O cookie “__cf_bm” foi rejeitado por ter domínio inválido. websocket
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.391Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.392Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.392Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.449Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.449Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:54.458Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.458Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.482Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.482Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.482Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.540Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.540Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:54.550Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.550Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.581Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.581Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.581Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Resultado tenant_users: 
+Object { userTenants: (2) […], tenantsError: null }
+tenantStore.ts:164:25
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.641Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.641Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:54.649Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.649Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.676Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.677Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.677Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+[TENANT ACCESS GUARD] 🚨 [ACCESS DENIED] Tenant não definido (repetido 19x) undefined logThrottle.ts:25:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.746Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.746Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[TENANT AUTO-SELECT] undefined (repetido 19x) undefined 3 logThrottle.ts:25:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[TENANT ACCESS GUARD] Acesso liberado para tenant: nexsyn (repetido 627x) undefined logThrottle.ts:25:25
+[2025-10-12T02:10:54.769Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.769Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [DEBUG] undefined (repetido 609x) undefined logThrottle.ts:25:25
+[TENANT AUTO-SELECT] undefined (repetido 627x) undefined 2 logThrottle.ts:25:25
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.803Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.803Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.803Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.869Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.869Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:54.877Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.877Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:54.901Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:54.902Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.902Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:54.972Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.972Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:54.980Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:54.980Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.004Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.004Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.004Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.064Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.064Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.071Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.071Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.095Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.096Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.096Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.163Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.163Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.171Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.171Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.195Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.195Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.195Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.253Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.253Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.261Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.261Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.295Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.295Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.295Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.353Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.353Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.360Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.360Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.383Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.384Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.384Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.441Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.441Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.449Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.449Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.477Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.478Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.478Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.537Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.537Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.545Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.545Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.569Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.570Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.570Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.640Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.640Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.648Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.648Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.672Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.672Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.672Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.730Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.730Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.738Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.738Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.764Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.764Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.764Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.828Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.828Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.835Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.835Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.859Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.859Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.859Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:55.916Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.916Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[2025-10-12T02:10:55.923Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.923Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:55.947Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:55.948Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:55.948Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 0 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 0 useReconciliationFilters.ts:97:17
+🔍 [DEBUG] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 1396x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, hasCurrentTenant: true, isTenantActive: true, roleMatch: true }
+logThrottle.ts:25:25
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+`DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog errorHandler.ts:58:30
+✅ Movimentações carregadas: 823 useReconciliationData.ts:109:17
+[AUDIT] DATA_ACCESS: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.018Z", action: "reconciliation_data_loaded", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", records_count: 823 }
+useAuditLogger.ts:8:21
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 823 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 823 useReconciliationFilters.ts:97:17
+[TENANT ACCESS GUARD] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 2x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, requireTenant: true, hasCurrentTenant: true, isTenantActive: true, roleMatch: true, isGlobalAdminAccess: false }
+logThrottle.ts:25:25
+[TENANT ACCESS GUARD] ✅ [ACCESS GRANTED] Acesso liberado para tenant: nexsyn undefined logThrottle.ts:27:25
+[2025-10-12T02:10:56.063Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:56.063Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 [DEBUG] useSecureTenantQuery - Tenant: nexsyn (repetido 290x) 
+Object { tenantId: "8d2888f1-64a5-445f-84f5-2614d5160251", tenantName: "nexsyn", isValidTenant: true, queryKeyLength: 3, enabled: true }
+logThrottle.ts:25:25
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.325Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.338Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.375Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.488Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.489Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.537Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.679Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.884Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.928Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 2 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.993Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:56.993Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.080Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.087Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.291Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.660Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.776Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:57.888Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:57.956Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:57.956Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 [DEBUG] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 86x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, hasCurrentTenant: true, isTenantActive: true, roleMatch: true }
+logThrottle.ts:25:25
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.012Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.012Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[TENANT ACCESS GUARD] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 4x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, requireTenant: true, hasCurrentTenant: true, isTenantActive: true, roleMatch: true, isGlobalAdminAccess: false }
+logThrottle.ts:25:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.057Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.057Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 [DEBUG] useSecureTenantQuery - Tenant: nexsyn (repetido 24x) 
+Object { tenantId: "8d2888f1-64a5-445f-84f5-2614d5160251", tenantName: "nexsyn", isValidTenant: true, queryKeyLength: 3, enabled: true }
+logThrottle.ts:25:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.117Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.117Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.152Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.156Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.156Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.204Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.204Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 [DEBUG] Tenants processados: 
+Array [ {…}, {…} ]
+tenantStore.ts:197:25
+🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL tenantStore.ts:201:25
+📦 [CACHE] Dados salvos no cache local tenantStore.ts:102:25
+✅ [DEBUG] fetchPortalData concluído com sucesso tenantStore.ts:217:25
+[TENANT ACCESS GUARD] 🚨 [ACCESS DENIED] Tenant não definido (repetido 13x) undefined logThrottle.ts:25:25
+🚫 [SECURITY] Acesso negado à página de cobranças: Tenant não definido errorHandler.ts:58:30
+[2025-10-12T02:10:58.240Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.240Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[TENANT AUTO-SELECT] undefined (repetido 13x) undefined 3 logThrottle.ts:25:25
+🔄 [TenantAutoLoginRouter] Sincronizando tenant com store: 
+Object { id: "8d2888f1-64a5-445f-84f5-2614d5160251", slug: "nexsyn", name: "nexsyn" }
+TenantAutoLoginRouter.tsx:98:21
+[TENANT ACCESS GUARD] Acesso liberado para tenant: nexsyn (repetido 429x) undefined logThrottle.ts:25:25
+[2025-10-12T02:10:58.252Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.252Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 DEBUG - Aplicação de Filtros useReconciliationFilters.ts:34:17
+📊 Total de registros antes dos filtros: 823 useReconciliationFilters.ts:35:17
+🎛️ Filtros aplicados: 
+Object { status: "ALL", source: "ALL", hasContract: "ALL", dateFrom: "", dateTo: "", search: "", accountFilter: "", asaasNossoNumero: "", asaasBillingType: "ALL", asaasPaymentStatus: "ALL" }
+useReconciliationFilters.ts:36:17
+📊 Total de registros após filtros: 823 useReconciliationFilters.ts:97:17
+🔍 [DEBUG] undefined (repetido 417x) undefined logThrottle.ts:25:25
+[TENANT AUTO-SELECT] undefined (repetido 430x) undefined 2 logThrottle.ts:25:25
+🔧 Configurando contexto de tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useReconciliationSecurity.ts:26:21
+[AUDIT] security_reconciliation_access_granted: 
+Object { user_id: undefined, user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.278Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", tenant_name: "nexsyn", details: {…} }
+useAuditLogger.ts:8:21
+🚀 Inicializando fetch de dados de conciliação useReconciliationData.ts:24:21
+🏢 [AUDIT] Acessando página de cobranças - Tenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) Charges.tsx:41:21
+📊 [AUDIT] Aba ativa: dashboard Charges.tsx:42:21
+🧹 [AUDIT] Limpando cache de cobranças para tenant: nexsyn Charges.tsx:51:21
+[2025-10-12T02:10:58.279Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.279Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[TENANT ACCESS GUARD] ✅ [ACCESS GRANTED] Acesso liberado para tenant: nexsyn undefined logThrottle.ts:27:25
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object { page: 1, limit: 1000 }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+🔍 [CHARGES DEBUG] Iniciando busca de cobranças useCharges.ts:19:17
+🔍 [CHARGES DEBUG] TenantId recebido: 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:20:17
+🔍 [CHARGES DEBUG] CurrentTenant: nexsyn (8d2888f1-64a5-445f-84f5-2614d5160251) useCharges.ts:21:17
+🔍 [CHARGES DEBUG] Parâmetros da query: 
+Object {  }
+useCharges.ts:22:17
+🔍 [CHARGES DEBUG] HasAccess: true useCharges.ts:23:17
+🔍 [CHARGES DEBUG] AccessError: null useCharges.ts:24:17
+🔍 [CHARGES DEBUG] Executando query no Supabase... useCharges.ts:102:17
+[2025-10-12T02:10:58.353Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.353Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.438Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.439Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.531Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.532Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.563Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 2 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.564Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.567Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 2 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.568Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.568Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.569Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 2 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.569Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.570Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:58.571Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.625Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.625Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.671Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.671Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.753Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.753Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.789Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.789Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.836Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.836Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.865Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.865Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.898Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.898Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.956Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.956Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:58.990Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:58.990Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.061Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.061Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.098Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.098Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.155Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.155Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.190Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.190Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:10:59.237Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.240Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.240Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.269Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.269Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.316Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.316Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.355Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.355Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.402Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.402Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.430Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.430Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.473Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.474Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.501Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.502Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.536Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.536Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.568Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.568Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.606Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.606Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.639Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.639Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.678Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.678Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.706Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.706Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.745Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.745Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.777Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.777Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.817Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.817Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.846Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.846Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.886Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.886Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+[useZustandAuth] Sessão inicial carregada: 1f98885d-b3dd-4404-bf3a-63dd2937d1f6 useZustandAuth.ts:39:25
+[2025-10-12T02:10:59.919Z] [DEBUG] 
+Object { message: "Render - Estado atual do profile", metadata: {…} }
+logger.ts:111:25
+[2025-10-12T02:10:59.919Z] [DEBUG] 
+Object { message: "Render - Estado atual da session", metadata: {…} }
+logger.ts:111:25
+✅ [INIT] Contexto RPC configurado com sucesso para tenant: 8d2888f1-64a5-445f-84f5-2614d5160251 useContracts.ts:268:21
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21
+✅ Contexto configurado com sucesso: 
+Object { message: "Contexto definido com sucesso", success: true, user_id: null, tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251" }
+useReconciliationSecurity.ts:54:21
+[AUDIT] security_context_validated: 
+Object { user_id: "1f98885d-b3dd-4404-bf3a-63dd2937d1f6", user_email: "alberto.melo@nexsyn.com.br", timestamp: "2025-10-12T02:11:00.137Z", tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251", context_result: {…} }
+useAuditLogger.ts:8:21
+🔍 [DEBUG] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 1415x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, hasCurrentTenant: true, isTenantActive: true, roleMatch: true }
+logThrottle.ts:25:25
+🔍 [DEBUG] useSecureTenantQuery - Tenant: nexsyn (repetido 283x) 
+Object { tenantId: "8d2888f1-64a5-445f-84f5-2614d5160251", tenantName: "nexsyn", isValidTenant: true, queryKeyLength: 3, enabled: true }
+logThrottle.ts:25:25
+[TENANT ACCESS GUARD] 🔍 [TENANT ACCESS GUARD] Verificando acesso: (repetido 42x) 
+Object { currentTenant: {…}, userRole: "ADMIN", requiredRole: undefined, requireTenant: true, hasCurrentTenant: true, isTenantActive: true, roleMatch: true, isGlobalAdminAccess: false }
+logThrottle.ts:25:25
+🔍 [CHARGES DEBUG] Resultado da query: 
+Object { data: 0, total: 0, error: null, countError: null }
+useCharges.ts:139:17
+✅ [CHARGES DEBUG] Cobranças encontradas: 0 useCharges.ts:156:17
+⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 useCharges.ts:160:21

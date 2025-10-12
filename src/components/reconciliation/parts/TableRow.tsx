@@ -44,7 +44,6 @@ export function TableRow({
   return (
     <ShadcnTableRow 
       className={`
-        ${isSelected ? 'bg-blue-50' : ''}
         ${hasDifference ? 'border-l-4 border-l-orange-400' : ''}
         hover:bg-slate-50 transition-colors
       `}
@@ -81,27 +80,37 @@ export function TableRow({
         </div>
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Nosso Número - específica para ASAAS */}
-      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.externalReference ? (
-          <span className="text-slate-700">{movement.externalReference}</span>
+      {/* AIDEV-NOTE: Coluna Observações - exibe observacao da tabela conciliation_staging */}
+      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left max-w-[200px]">
+        {movement.observacao ? (
+          <span 
+            className="text-slate-700 block truncate" 
+            title={movement.observacao}
+          >
+            {movement.observacao}
+          </span>
         ) : (
           <span className="text-slate-400">-</span>
         )}
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Nome do Cliente - específica para ASAAS */}
-      <TableCell className="py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.customerName ? (
-          <span className="text-slate-700 font-medium">{movement.customerName}</span>
+      {/* AIDEV-NOTE: Coluna Nome do Cliente - exibe para todas as origens */}
+      <TableCell className="py-1 sm:py-2 text-left max-w-[180px]">
+        {movement.customerName ? (
+          <span 
+            className="text-slate-700 font-medium block truncate" 
+            title={movement.customerName}
+          >
+            {movement.customerName}
+          </span>
         ) : (
           <span className="text-slate-400">-</span>
         )}
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna CNPJ/CPF - específica para ASAAS */}
+      {/* AIDEV-NOTE: Coluna CNPJ/CPF - exibe para todas as origens */}
       <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.customerDocument ? (
+        {movement.customerDocument ? (
           <span className="text-slate-700">{movement.customerDocument}</span>
         ) : (
           <span className="text-slate-400">-</span>

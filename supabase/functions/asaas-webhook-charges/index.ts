@@ -121,7 +121,7 @@ async function handleGetRequest(req: Request, url: URL) {
     .from("tenant_integrations")
     .select("id, config")
     .eq("tenant_id", tenantId)
-    .eq("integration_type", "asaas")
+    .eq("integration_type", "asaas") // AIDEV-NOTE: Minúsculo conforme constraint tenant_integrations
     .eq("is_active", true)
     .maybeSingle();
 
@@ -190,7 +190,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
     .from("tenant_integrations")
     .select("id, webhook_token, config")
     .eq("tenant_id", tenantId)
-    .eq("integration_type", "asaas")
+    .eq("integration_type", "asaas") // AIDEV-NOTE: Minúsculo conforme constraint tenant_integrations
     .eq("is_active", true)
     .maybeSingle();
 
@@ -285,7 +285,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
   
   const { error: persistError } = await supabase.from("conciliation_staging").upsert({
     tenant_id: tenantId,
-    origem: "asaas",
+    origem: "ASAAS", // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
     id_externo: idExterno,
     asaas_customer_id: payment.customer,
     asaas_subscription_id: payment.subscription,
@@ -297,7 +297,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
     valor_multa: payment.fine?.value ?? 0,
     valor_desconto: payment.discount?.value ?? 0,
     status_externo: mapPaymentStatusToExternal(payment.status || "pending"),
-    status_conciliacao: "PENDING",
+    status_conciliacao: "PENDENTE", // AIDEV-NOTE: Status padrão em MAIÚSCULO
     data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString() : null,
     data_vencimento_original: payment.originalDueDate ? new Date(payment.originalDueDate).toISOString() : null,
     data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,

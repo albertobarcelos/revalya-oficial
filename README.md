@@ -24,6 +24,68 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Sistema de Monitoramento de Constraint Violations
+
+Implementamos um sistema completo de monitoramento e prevenção de violações de constraint na tabela `conciliation_staging`, especificamente para o erro `conciliation_staging_origem_check`.
+
+#### 🔍 **Problema Investigado**
+
+**Erro Principal**: `new row for relation "conciliation_staging" violates check constraint "conciliation_staging_origem_check"`
+
+**Investigação Realizada**:
+- ✅ Análise completa de logs do PostgreSQL
+- ✅ Verificação de todas as Edge Functions ASAAS
+- ✅ Auditoria de APIs de reconciliação
+- ✅ Busca por scripts de importação manual
+- ✅ Verificação de processos externos
+
+**Conclusão**: Nenhum código estava inserindo dados incorretos. Todos os sistemas estão corretamente configurados para usar `origem: 'ASAAS'` (maiúsculo).
+
+#### 🛠️ **Sistema de Monitoramento Implementado**
+
+1. **Tabela de Log de Violações**:
+   ```sql
+   CREATE TABLE constraint_violation_log (
+     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+     table_name TEXT NOT NULL,
+     constraint_name TEXT NOT NULL,
+     attempted_value TEXT,
+     tenant_id UUID,
+     error_message TEXT,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+2. **Edge Function de Monitoramento**:
+   - 🔍 Detecção automática de violações
+   - 📊 Análise de tendências e estatísticas
+   - 🚨 Sistema de alertas por severidade
+   - 📝 Logging completo de verificações
+
+3. **Trigger de Captura**:
+   ```sql
+   -- Captura tentativas de inserção inválidas antes que causem erro
+   CREATE TRIGGER conciliation_staging_violation_log
+   BEFORE INSERT OR UPDATE ON conciliation_staging
+   FOR EACH ROW EXECUTE FUNCTION trigger_log_conciliation_staging_violation();
+   ```
+
+#### 📊 **Níveis de Alerta**
+- 🔴 **CRÍTICO**: > 10 violações/hora
+- 🟡 **ATENÇÃO**: 5-10 violações/hora
+- 🟢 **NORMAL**: < 5 violações/hora
+
+#### 📚 **Documentação Criada**
+- [`TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md`](./TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md) - Guia completo de troubleshooting
+- [`MONITORAMENTO_CONSTRAINT_VIOLATIONS.md`](./MONITORAMENTO_CONSTRAINT_VIOLATIONS.md) - Sistema de monitoramento
+- [`SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md`](./SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md) - Documentação da solução final
+
+#### 🎯 **Resultados**
+- ✅ **Sistema preventivo** implementado
+- ✅ **Monitoramento automático** a cada 15 minutos
+- ✅ **Documentação completa** para troubleshooting
+- ✅ **Alertas proativos** para problemas futuros
+
 ### Janeiro 2025: Melhorias na Integração WhatsApp - Persistência e Reconexão Automática
 
 Implementamos correções críticas na integração WhatsApp para resolver problemas de persistência de configuração e reconexão automática após recarregamento da página.

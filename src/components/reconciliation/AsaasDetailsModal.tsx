@@ -273,16 +273,16 @@ export default function AsaasDetailsModal({ isOpen, onClose, movement }: AsaasDe
                     Dados ASAAS
                   </h3>
                   <div className="space-y-4">
-                    {/* Nosso Número */}
+                    {/* Observações */}
                     <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div>
-                        <span className="text-sm font-medium text-blue-800">Nosso Número</span>
-                        <p className="font-mono text-blue-900">{asaasData.nossoNumero}</p>
+                        <span className="text-sm font-medium text-blue-800">Observações</span>
+                        <p className="font-mono text-blue-900">{movement.observacao || 'N/A'}</p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(asaasData.nossoNumero)}
+                        onClick={() => copyToClipboard(movement.observacao || 'N/A')}
                         className="text-blue-600 hover:text-blue-800"
                       >
                         <Copy className="h-4 w-4" />

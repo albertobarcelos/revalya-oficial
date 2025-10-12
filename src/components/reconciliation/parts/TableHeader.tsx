@@ -42,7 +42,7 @@ export function TableHeader({
         {/* AIDEV-NOTE: Colunas de dados - larguras mínimas para responsividade */}
         <TableHead className="min-w-[80px] text-center">Origem</TableHead>
         <TableHead className="min-w-[120px] text-left">ID Externo</TableHead>
-        <TableHead className="min-w-[120px] text-left">Nosso Número</TableHead>
+        <TableHead className="min-w-[120px] text-left">Observações</TableHead>
         <TableHead className="min-w-[180px] text-left">Nome do Cliente</TableHead>
         <TableHead className="min-w-[140px] text-left">CNPJ/CPF</TableHead>
         <TableHead className="min-w-[100px] text-center">Tipo Cobrança</TableHead>

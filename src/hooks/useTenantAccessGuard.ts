@@ -20,51 +20,36 @@ import { throttledTenantGuard, throttledDebug } from '@/utils/logThrottle';
 export function useTenantAccessGuard(requiredRole?: string, requireTenant: boolean = true) {
   const { currentTenant, userRole } = useZustandTenant();
   
-  // 🔍 DEBUG: Log detalhado do tenant access guard (com throttling)
-  throttledTenantGuard('tenant_access_verification', `🔍 [TENANT ACCESS GUARD] Verificando acesso:`, {
-    currentTenant: currentTenant ? {
-      id: currentTenant.id,
-      name: currentTenant.name,
-      slug: currentTenant.slug,
-      active: currentTenant.active
-    } : null,
+  // 🔍 DEBUG: Log detalhado do tenant access guard (com throttling) - REDUZIDO
+  throttledTenantGuard('tenant_access_verification', `🔍 [TENANT ACCESS GUARD] Verificando acesso`, {
+    hasTenant: !!currentTenant?.id,
     userRole,
-    requiredRole,
-    requireTenant,
-    hasCurrentTenant: !!currentTenant?.id,
-    isTenantActive: currentTenant?.active,
-    roleMatch: !requiredRole || userRole === requiredRole,
-    isGlobalAdminAccess: !requireTenant && userRole === 'ADMIN'
+    requiredRole
   });
   
   const hasAccess = useMemo(() => {
     // AIDEV-NOTE: Verificação de role primeiro (mais restritiva)
     if (requiredRole && userRole !== requiredRole) {
-      throttledTenantGuard('access_denied_role', `🚨 [ACCESS DENIED] Permissão insuficiente: required=${requiredRole}, user=${userRole}`);
       return false;
     }
     
     // AIDEV-NOTE: Se não requer tenant e usuário é ADMIN, permite acesso global
     if (!requireTenant && userRole === 'ADMIN') {
-      throttledTenantGuard('access_granted_admin', `✅ [ACCESS GRANTED] Acesso global liberado para ADMIN`);
       return true;
     }
     
     // AIDEV-NOTE: Verificações de tenant (quando necessário)
     if (requireTenant) {
       if (!currentTenant?.id) {
-        throttledTenantGuard('access_denied_no_tenant', `🚨 [ACCESS DENIED] Tenant não definido`);
         return false;
       }
       if (!currentTenant.active) {
-        throttledTenantGuard('access_denied_inactive', `🚨 [ACCESS DENIED] Tenant inativo: ${currentTenant.name}`);
         return false;
       }
-      throttledTenantGuard('access_granted_tenant', `✅ [ACCESS GRANTED] Acesso liberado para tenant: ${currentTenant.name}`);
     }
     
     return true;
-  }, [currentTenant?.id, currentTenant?.active, userRole, requiredRole, requireTenant]);
+  }, [currentTenant?.id, currentTenant?.active, currentTenant?.name, userRole, requiredRole, requireTenant]);
   
   const accessError = useMemo(() => {
     if (requiredRole && userRole !== requiredRole) return 'Permissão insuficiente';

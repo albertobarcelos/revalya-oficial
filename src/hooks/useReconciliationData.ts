@@ -1,15 +1,14 @@
 // =====================================================
 // USE RECONCILIATION DATA HOOK
 // Descrição: Hook customizado para gerenciar dados de conciliação
-// Padrão: Clean Code + React Hooks Best Practices + Multi-tenant Security
+// Padrão: Clean Code + React Query + Multi-tenant Security
 // =====================================================
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/supabase';
-import { apiClient } from '@/lib/apiClient';
+import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
-import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 
 import { 
   ImportedMovement, 
@@ -19,30 +18,52 @@ import {
   ReconciliationSource
 } from '@/types/reconciliation';
 
-import {
-  UseReconciliationDataProps,
-  UseReconciliationDataReturn
-} from '@/components/reconciliation/types/ReconciliationModalTypes';
+// AIDEV-NOTE: Interface para dados de retorno da query
+interface ReconciliationData {
+  movements: ImportedMovement[];
+  indicators: ReconciliationIndicators;
+}
 
-// AIDEV-NOTE: Hook customizado para separar responsabilidades de dados
-export const useReconciliationData = ({
-  isOpen,
-  hasAccess,
-  currentTenant,
-  validateTenantContext,
-  logSecurityEvent,
-  validateDataAccess
-}: UseReconciliationDataProps): UseReconciliationDataReturn => {
+// AIDEV-NOTE: Interface simplificada para o hook
+interface UseReconciliationDataReturn {
+  movements: ImportedMovement[];
+  indicators: ReconciliationIndicators | null;
+  isLoading: boolean;
+  loadReconciliationData: () => Promise<void>;
+  refreshData: () => Promise<void>;
+  invalidateCache: () => Promise<void>;
+}
+
+// AIDEV-NOTE: Hook customizado usando padrão seguro com React Query
+export const useReconciliationData = (isOpen: boolean): UseReconciliationDataReturn => {
   const { toast } = useToast();
   const { logAction } = useAuditLogger();
+  const queryClient = useQueryClient();
   
-  // Estados locais
-  const [movements, setMovements] = useState<ImportedMovement[]>([]);
-  const [indicators, setIndicators] = useState<ReconciliationIndicators | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // AIDEV-NOTE: Hook de segurança obrigatório
+  const { hasAccess: guardAccess, currentTenant: guardTenant } = useTenantAccessGuard();
+
+  // AIDEV-NOTE: Estado para controlar quando fazer a requisição
+  const [shouldFetch, setShouldFetch] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // AIDEV-NOTE: Ativar fetch automaticamente quando o modal for aberto (apenas uma vez)
+  useEffect(() => {
+    if (isOpen && guardTenant?.id && !isInitialized) {
+      console.log('🚀 Inicializando fetch de dados de conciliação');
+      setShouldFetch(true);
+      setIsInitialized(true);
+    } else if (!isOpen) {
+      // AIDEV-NOTE: Reset estados quando modal fechar
+      setShouldFetch(false);
+      setIsInitialized(false);
+    }
+  }, [isOpen, guardTenant?.id, isInitialized]);
 
   // AIDEV-NOTE: Função para mapear status de pagamento do banco para enum válido
+  // Aceita valores em lowercase e uppercase para compatibilidade com dados reais
   const mapPaymentStatus = useCallback((status: string): PaymentStatus => {
+    const normalizedStatus = status?.toUpperCase() || '';
     const statusMap: Record<string, PaymentStatus> = {
       'RECEIVED': 'PAID',
       'CONFIRMED': 'PAID', 
@@ -50,7 +71,7 @@ export const useReconciliationData = ({
       'PENDING': 'PENDING',
       'CANCELLED': 'CANCELLED'
     };
-    return statusMap[status] || 'PENDING';
+    return statusMap[normalizedStatus] || 'PENDING';
   }, []);
 
   // AIDEV-NOTE: Função para mapear status de conciliação
@@ -89,40 +110,34 @@ export const useReconciliationData = ({
     };
   }, []);
 
-  // AIDEV-NOTE: Função principal para carregar dados de conciliação com segurança multi-tenant
-  const loadReconciliationData = useCallback(async (): Promise<void> => {
-    if (!hasAccess || !currentTenant) {
-      console.warn('🚫 Acesso negado ou tenant não encontrado');
-      return;
-    }
-
-    setIsLoading(true);
-    
-    try {
+  // AIDEV-NOTE: Query principal com cache otimizado e segurança multi-tenant
+  const reconciliationQuery = useSecureTenantQuery(
+    ['reconciliation-data'],
+    async (supabase, tenantId) => {
       console.log('🔄 Carregando movimentações de conciliação...');
       
-      // AIDEV-NOTE: Aguardar validação de contexto antes de prosseguir
-      const isValidContext = await validateTenantContext();
-      if (!isValidContext) {
-        console.error('❌ Contexto de tenant inválido, abortando carregamento');
-        return;
-      }
+      // AIDEV-NOTE: Configuração obrigatória do contexto de tenant antes da query
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId 
+      });
       
-      // AIDEV-NOTE: Query segura com RLS automático usando conciliation_staging
+      // AIDEV-NOTE: Query com joins otimizados para performance
       const { data: rawData, error } = await supabase
         .from('conciliation_staging')
         .select(`
           *,
-          contracts!left (
+          contracts!left(
             id,
             contract_number,
             customer_id,
-            customers!inner (
+            customers!left(
+              id,
               name,
               cpf_cnpj
             )
           )
         `)
+        .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -141,7 +156,7 @@ export const useReconciliationData = ({
         valor_cobranca: item.valor_cobranca,
         valor_pago: parseFloat(item.valor_pago) || 0,
         status_externo: item.status_externo,
-        status_conciliacao: mapReconciliationStatus(item.status_conciliacao || 'PENDING'),
+        status_conciliacao: mapReconciliationStatus(item.status_conciliacao || 'PENDENTE'), // AIDEV-NOTE: Valor padrão em MAIÚSCULO
         contrato_id: item.contrato_id,
         cobranca_id: item.cobranca_id,
         charge_id: item.charge_id,
@@ -166,76 +181,98 @@ export const useReconciliationData = ({
         dueDate: item.data_vencimento,
         paymentDate: item.data_pagamento,
         description: item.observacao || '',
-        source: item.origem as any,
+        source: item.origem as ReconciliationSource,
         paymentStatus: mapPaymentStatus(item.status_externo),
-        reconciliationStatus: mapReconciliationStatus(item.status_conciliacao || 'PENDING'),
-        customerName: item.customer_name || item.contracts?.customers?.name || '',
-        customerDocument: item.customer_document || item.contracts?.customers?.cpf_cnpj?.toString() || '',
+        reconciliationStatus: mapReconciliationStatus(item.status_conciliacao || 'PENDENTE'), // AIDEV-NOTE: Valor padrão em MAIÚSCULO
+        customerName: item.customer_name || '',
+        customerDocument: item.customer_document || '',
         hasContract: !!item.contracts,
         contractId: item.contracts?.id || null,
         contractNumber: item.contracts?.contract_number || null,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
+        // AIDEV-NOTE: Campos críticos para exibição das colunas de valor
+        chargeAmount: item.valor_cobranca ? parseFloat(item.valor_cobranca) : undefined,
+        paidAmount: parseFloat(item.valor_pago) || 0,
         // AIDEV-NOTE: Campos adicionais para compatibilidade
         customer_name: item.customer_name,
         customer_document: item.customer_document,
         installment_number: item.installment_number,
         total_installments: item.total_installments
       }));
-
-      setMovements(mappedMovements);
       
-      // AIDEV-NOTE: Calcular indicadores iniciais
-      const initialIndicators = calculateIndicators(mappedMovements);
-      setIndicators(initialIndicators);
+      // AIDEV-NOTE: Calcular indicadores
+      const indicators = calculateIndicators(mappedMovements);
 
       // AIDEV-NOTE: Log de auditoria
-      await logAction('reconciliation_data_loaded', {
-        tenant: currentTenant.name,
-        total_movements: mappedMovements.length,
-        indicators: initialIndicators
+      await logAction('DATA_ACCESS', {
+        action: 'reconciliation_data_loaded',
+        tenant_id: tenantId,
+        records_count: mappedMovements.length,
+        timestamp: new Date().toISOString()
       });
 
-      toast({
-        title: "✅ Dados carregados",
-        description: `${mappedMovements.length} movimentações encontradas.`,
-        variant: "default",
-      });
-
-    } catch (error: any) {
-      console.error('❌ Erro ao carregar dados de conciliação:', error);
-      
-      toast({
-        title: "❌ Erro ao carregar dados",
-        description: error.response?.data?.error || error.message || "Não foi possível carregar as movimentações.",
-        variant: "destructive",
-      });
-      
-      // AIDEV-NOTE: Em caso de erro, manter array vazio
-      setMovements([]);
-      setIndicators(null);
-    } finally {
-      setIsLoading(false);
+      return {
+        movements: mappedMovements,
+        indicators
+      };
+    },
+    {
+      enabled: isOpen && !!guardTenant?.id && shouldFetch,
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchInterval: false, // AIDEV-NOTE: Desabilitar polling automático
+      refetchIntervalInBackground: false,
+      retry: 1, // AIDEV-NOTE: Reduzir tentativas de retry
+      retryOnMount: false, // AIDEV-NOTE: Não tentar novamente no mount
+      notifyOnChangeProps: ['data', 'error', 'isLoading'] // AIDEV-NOTE: Limitar notificações
     }
-  }, [hasAccess, currentTenant, toast, logAction, mapPaymentStatus, mapReconciliationStatus, calculateIndicators]);
+  );
 
-  // AIDEV-NOTE: Função para refresh dos dados
-  const refreshData = useCallback(async (): Promise<void> => {
-    await loadReconciliationData();
-  }, [loadReconciliationData]);
-
-  // AIDEV-NOTE: Effect para carregar dados quando modal abre
-  useEffect(() => {
-    if (isOpen && hasAccess && currentTenant) {
-      loadReconciliationData();
+  // AIDEV-NOTE: Função para invalidar cache e forçar refetch
+  const invalidateReconciliationCache = useCallback(() => {
+    if (guardTenant?.id) {
+      queryClient.invalidateQueries({ 
+        queryKey: ['reconciliation-data', guardTenant?.id] 
+      });
+      console.log(`[CACHE] Cache de conciliação invalidado para tenant: ${guardTenant?.id}`);
+      
+      // AIDEV-NOTE: Log de auditoria para invalidação de cache
+        logAction('USER_ACTION', {
+          action: 'reconciliation_cache_invalidated',
+          tenant_id: guardTenant?.id,
+          timestamp: new Date().toISOString()
+        });
     }
-  }, [isOpen, hasAccess, currentTenant, loadReconciliationData]);
+  }, [guardTenant?.id, queryClient, logAction]);
 
-  return {
-    movements,
-    indicators,
-    isLoading,
+  // AIDEV-NOTE: Função para refresh manual
+  const refreshData = useCallback(() => {
+    return reconciliationQuery.refetch();
+  }, [reconciliationQuery]);
+
+  // AIDEV-NOTE: Função de carregamento para compatibilidade
+  const loadReconciliationData = useCallback(async (): Promise<void> => {
+    setShouldFetch(true);
+    await refreshData();
+  }, [refreshData]);
+
+  // AIDEV-NOTE: Memoizar dados para evitar re-renders desnecessários
+  const memoizedData = useMemo(() => ({
+    movements: reconciliationQuery.data?.movements || [],
+    indicators: reconciliationQuery.data?.indicators || null,
+    isLoading: reconciliationQuery.isLoading,
     loadReconciliationData,
-    refreshData
-  };
+    refreshData,
+    invalidateCache: invalidateReconciliationCache,
+  }), [
+    reconciliationQuery.data,
+    reconciliationQuery.isLoading,
+    loadReconciliationData,
+    refreshData,
+    invalidateReconciliationCache
+  ]);
+
+  return memoizedData;
 };

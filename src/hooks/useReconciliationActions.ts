@@ -1,10 +1,11 @@
 // =====================================================
 // USE RECONCILIATION ACTIONS HOOK
 // Descrição: Hook customizado para gerenciar ações do modal de conciliação
-// Padrão: Action Handlers + Export + Refresh + Modal Management
+// Padrão: Action Handlers + Export + Refresh + Modal Management + Cache Invalidation
 // =====================================================
 
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuditLogger } from '@/hooks/useAuditLogger';
@@ -20,7 +21,8 @@ export interface UseReconciliationActionsProps {
   currentTenant: any;
   movements: ReconciliationMovement[];
   filteredMovements: ReconciliationMovement[];
-  onRefreshData: () => Promise<void>;
+  onRefreshData?: () => Promise<void>;
+  onInvalidateCache?: () => void;
   validateTenantContext: () => Promise<boolean>;
   logSecurityEvent: (event: string, details?: any) => Promise<void>;
 }
@@ -42,15 +44,43 @@ export const useReconciliationActions = ({
   movements,
   filteredMovements,
   onRefreshData,
+  onInvalidateCache,
   validateTenantContext,
   logSecurityEvent
 }: UseReconciliationActionsProps): UseReconciliationActionsReturn => {
   const { toast } = useToast();
   const { logAction } = useAuditLogger();
+  const queryClient = useQueryClient();
 
   // AIDEV-NOTE: Estados locais para ações
   const [actionModal, setActionModal] = useState<ActionModalState>(INITIAL_ACTION_MODAL_STATE);
   const [isExporting, setIsExporting] = useState(false);
+
+  // AIDEV-NOTE: Função para invalidar cache de conciliação
+  const invalidateReconciliationCache = useCallback(async () => {
+    if (!currentTenant?.id) return;
+
+    try {
+      // AIDEV-NOTE: Invalidar queries específicas de conciliação
+      await queryClient.invalidateQueries({
+        queryKey: ['reconciliation', currentTenant.id]
+      });
+
+      // AIDEV-NOTE: Invalidar queries relacionadas
+      await queryClient.invalidateQueries({
+        queryKey: ['conciliation_staging', currentTenant.id]
+      });
+
+      // AIDEV-NOTE: Chamar callback de invalidação se fornecido
+      if (onInvalidateCache) {
+        onInvalidateCache();
+      }
+
+      console.log('✅ Cache de conciliação invalidado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao invalidar cache:', error);
+    }
+  }, [currentTenant?.id, queryClient, onInvalidateCache]);
 
   // AIDEV-NOTE: Função para refresh dos dados
   const handleRefresh = useCallback(async (): Promise<void> => {
@@ -73,7 +103,13 @@ export const useReconciliationActions = ({
         description: "Carregando informações mais recentes.",
       });
 
-      await onRefreshData();
+      // AIDEV-NOTE: Invalidar cache primeiro para forçar nova busca
+      await invalidateReconciliationCache();
+
+      // AIDEV-NOTE: Chamar refresh se fornecido, senão usar invalidação
+      if (onRefreshData) {
+        await onRefreshData();
+      }
 
       await logAction('reconciliation_data_refreshed', {
         tenant_id: currentTenant?.id,
@@ -101,7 +137,7 @@ export const useReconciliationActions = ({
         variant: "destructive",
       });
     }
-  }, [validateTenantContext, logSecurityEvent, onRefreshData, movements.length, currentTenant, logAction, toast]);
+  }, [validateTenantContext, logSecurityEvent, onRefreshData, movements.length, currentTenant, logAction, toast, invalidateReconciliationCache]);
 
   // AIDEV-NOTE: Função para exportar dados
   const handleExport = useCallback(async (): Promise<void> => {
@@ -266,15 +302,15 @@ export const useReconciliationActions = ({
 
       switch (action) {
         case ReconciliationAction.RECONCILE:
-          updateData = { status_conciliacao: 'RECONCILED' };
+          updateData = { status_conciliacao: 'CONCILIADO' }; // AIDEV-NOTE: Status em MAIÚSCULO
           successMessage = 'Movimento conciliado com sucesso';
           break;
         case ReconciliationAction.MARK_DIVERGENT:
-          updateData = { status_conciliacao: 'DIVERGENT' };
+          updateData = { status_conciliacao: 'DIVERGENTE' }; // AIDEV-NOTE: Status em MAIÚSCULO
           successMessage = 'Movimento marcado como divergente';
           break;
         case ReconciliationAction.CANCEL:
-          updateData = { status_conciliacao: 'CANCELLED' };
+          updateData = { status_conciliacao: 'CANCELADO' }; // AIDEV-NOTE: Status em MAIÚSCULO
           successMessage = 'Movimento cancelado';
           break;
         case ReconciliationAction.LINK_TO_CONTRACT:
@@ -284,7 +320,7 @@ export const useReconciliationActions = ({
           }
           updateData = { 
             contrato_id: formData.contractId, // AIDEV-NOTE: Corrigido para contrato_id (nome correto da coluna)
-            status_conciliacao: 'RECONCILED' // AIDEV-NOTE: Corrigido para valor válido do constraint
+            status_conciliacao: 'CONCILIADO' // AIDEV-NOTE: Status em MAIÚSCULO
           };
           successMessage = 'Movimento vinculado ao contrato com sucesso';
           break;
@@ -318,9 +354,16 @@ export const useReconciliationActions = ({
         description: successMessage,
       });
 
-      // AIDEV-NOTE: Fechar modal e atualizar dados
+      // AIDEV-NOTE: Fechar modal e invalidar cache para atualizar dados
       setActionModal(INITIAL_ACTION_MODAL_STATE);
-      await onRefreshData();
+      
+      // AIDEV-NOTE: Invalidar cache primeiro para garantir dados atualizados
+      await invalidateReconciliationCache();
+      
+      // AIDEV-NOTE: Chamar refresh se fornecido
+      if (onRefreshData) {
+        await onRefreshData();
+      }
 
     } catch (error: any) {
       console.error('❌ Erro na ação de conciliação:', error);
@@ -339,7 +382,7 @@ export const useReconciliationActions = ({
         variant: "destructive",
       });
     }
-  }, [currentTenant, validateTenantContext, logSecurityEvent, logAction, toast, onRefreshData]);
+  }, [currentTenant, validateTenantContext, logSecurityEvent, logAction, toast, invalidateReconciliationCache, onRefreshData]);
 
   // AIDEV-NOTE: Função para fechar modal de ação
   const closeActionModal = useCallback((): void => {
