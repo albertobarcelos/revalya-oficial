@@ -47,17 +47,24 @@ export function ActionButtons({
   const getActionButtons = (movement: any): ActionButton[] => {
     const actions: ActionButton[] = [
       {
+        type: ReconciliationAction.IMPORT_TO_CHARGE,
+        label: 'Importar para Cobranças',
+        icon: CheckCircle2,
+        variant: 'default',
+        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+      },
+      {
         type: ReconciliationAction.LINK_TO_CONTRACT,
         label: 'Vincular a Contrato',
         icon: Link,
-        variant: 'default',
+        variant: 'secondary',
         disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
       },
       {
         type: ReconciliationAction.CREATE_STANDALONE,
         label: 'Criar Cobrança Avulsa',
         icon: Plus,
-        variant: 'secondary',
+        variant: 'outline',
         disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
       },
       {

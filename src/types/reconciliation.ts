@@ -49,7 +49,11 @@ export enum ReconciliationAction {
   CREATE_STANDALONE = 'CREATE_STANDALONE',         // Criar cobrança avulsa
   COMPLEMENT_EXISTING = 'COMPLEMENT_EXISTING',     // Complementar cobrança existente
   REGISTER_CUSTOMER = 'REGISTER_CUSTOMER',         // Cadastrar novo cliente
-  DELETE_IMPORTED = 'DELETE_IMPORTED'              // Excluir item importado
+  DELETE_IMPORTED = 'DELETE_IMPORTED',             // Excluir item importado
+  IMPORT_TO_CHARGE = 'IMPORT_TO_CHARGE',           // Importar para tabela de cobranças
+  MARK_AS_RECONCILED = 'MARK_AS_RECONCILED',       // Marcar como reconciliado
+  EXPORT = 'EXPORT',                               // Exportar selecionados
+  IGNORE = 'IGNORE'                                // Ignorar selecionados
 }
 
 // =====================================================

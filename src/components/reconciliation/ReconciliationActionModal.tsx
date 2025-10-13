@@ -53,6 +53,7 @@ import {
   UserPlus,
   AlertTriangle,
   CheckCircle,
+  CheckCircle2,
   X,
   FileText,
   DollarSign,
@@ -301,6 +302,71 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
   // =====================================================
   // FORM RENDERERS
   // =====================================================
+
+  const renderImportToChargeForm = () => (
+    <div className="space-y-4">
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-start gap-3">
+          <CheckCircle2 className="h-5 w-5 text-blue-600 mt-0.5" />
+          <div className="space-y-2">
+            <h4 className="font-medium text-blue-900">
+              Confirmar Importação para Cobranças
+            </h4>
+            <p className="text-sm text-blue-700">
+              Esta movimentação será importada diretamente para a tabela de cobranças. 
+              Uma nova cobrança será criada com base nos dados da movimentação.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* AIDEV-NOTE: Resumo da operação */}
+      <div className="space-y-3">
+        <h5 className="font-medium text-sm">Dados que serão importados:</h5>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="space-y-1">
+            <span className="text-muted-foreground">Valor:</span>
+            <div className="font-medium">
+              R$ {movement?.valor_pago?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground">Data de Pagamento:</span>
+            <div className="font-medium">
+              {movement?.data_pagamento ? new Date(movement.data_pagamento).toLocaleDateString('pt-BR') : 'N/A'}
+            </div>
+          </div>
+          {movement?.customerName && (
+            <div className="space-y-1 col-span-2">
+              <span className="text-muted-foreground">Cliente:</span>
+              <div className="font-medium">{movement.customerName}</div>
+            </div>
+          )}
+          <div className="space-y-1">
+            <span className="text-muted-foreground">Origem:</span>
+            <div className="font-medium">{movement?.origem}</div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-muted-foreground">ID Externo:</span>
+            <div className="font-medium">{movement?.id_externo}</div>
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button 
+          type="button" 
+          onClick={() => handleSubmit({})}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Importando...' : 'Confirmar Importação'}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
 
   const renderLinkToContractForm = () => (
     <Form {...linkForm}>
@@ -707,6 +773,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
 
               {/* AIDEV-NOTE: Renderização condicional dos formulários */}
               <div className="space-y-4">
+                {action === ReconciliationAction.IMPORT_TO_CHARGE && renderImportToChargeForm()}
                 {action === ReconciliationAction.LINK_TO_CONTRACT && renderLinkToContractForm()}
                 {action === ReconciliationAction.CREATE_STANDALONE && renderCreateStandaloneForm()}
                 {action === ReconciliationAction.REGISTER_CUSTOMER && renderRegisterCustomerForm()}

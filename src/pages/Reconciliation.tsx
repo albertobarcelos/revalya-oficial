@@ -361,6 +361,35 @@ const ReconciliationPage: React.FC = () => {
     movement: ImportedMovement,
     data?: { contractId?: string; chargeId?: string; [key: string]: unknown }
   ) => {
+    // AIDEV-NOTE: Se for IMPORT_TO_CHARGE, usar o serviço de importação
+    if (action === ReconciliationAction.IMPORT_TO_CHARGE) {
+      try {
+        // Temporariamente selecionar apenas este movimento para importação
+        const previousSelection = selectedMovements;
+        setSelectedMovements([movement.id]);
+        
+        await handleBulkImportToCharges();
+        
+        // Restaurar seleção anterior
+        setSelectedMovements(previousSelection);
+        
+        toast({
+          title: "Importação concluída",
+          description: `Movimento importado para cobranças com sucesso.`,
+          variant: "default"
+        });
+        
+        return;
+      } catch (error) {
+        toast({
+          title: "Erro na importação",
+          description: "Não foi possível importar o movimento. Tente novamente.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+    
     // AIDEV-NOTE: Se for LINK_TO_CONTRACT e não tiver contractId, abrir modal para seleção
     if (action === ReconciliationAction.LINK_TO_CONTRACT && !data?.contractId) {
       // Verificar se é ação em lote (múltiplos movimentos selecionados)
@@ -393,29 +422,29 @@ const ReconciliationPage: React.FC = () => {
           
           switch (action) {
             case ReconciliationAction.LINK_TO_CONTRACT:
+              updatedMovement.contrato_id = data?.contractId as string;
               updatedMovement.reconciliationStatus = ReconciliationStatus.RECONCILED;
-              updatedMovement.reconciledAt = new Date().toISOString();
-              updatedMovement.reconciledBy = 'admin@revalya.com'; // Em produção seria o usuário atual
-              updatedMovement.contractId = data?.contractId;
-              updatedMovement.hasContract = true;
               break;
-              
-            case ReconciliationAction.CREATE_STANDALONE_CHARGE:
+            case ReconciliationAction.CREATE_STANDALONE:
+              updatedMovement.charge_id = `CHG-${Date.now()}-${movement.id.slice(-4)}`;
               updatedMovement.reconciliationStatus = ReconciliationStatus.RECONCILED;
-              updatedMovement.reconciledAt = new Date().toISOString();
-              updatedMovement.reconciledBy = 'admin@revalya.com';
-              updatedMovement.chargeId = `CHG-${Date.now()}`;
               break;
-              
-            case ReconciliationAction.COMPLEMENT_EXISTING_CHARGE:
+            case ReconciliationAction.COMPLEMENT_EXISTING:
+              updatedMovement.cobranca_id = data?.chargeId as string;
               updatedMovement.reconciliationStatus = ReconciliationStatus.RECONCILED;
-              updatedMovement.reconciledAt = new Date().toISOString();
-              updatedMovement.reconciledBy = 'admin@revalya.com';
               break;
-              
-            case ReconciliationAction.DELETE_IMPORTED_ITEM:
+            case ReconciliationAction.REGISTER_CUSTOMER:
+              updatedMovement.customer_registered = true;
+              updatedMovement.reconciliationStatus = ReconciliationStatus.PENDING;
+              break;
+            case ReconciliationAction.DELETE_IMPORTED:
               // Em produção, o item seria removido da lista
               return null;
+            case ReconciliationAction.MARK_AS_RECONCILED:
+              updatedMovement.reconciliationStatus = ReconciliationStatus.RECONCILED;
+              break;
+            default:
+              break;
           }
           
           return updatedMovement;
@@ -425,9 +454,14 @@ const ReconciliationPage: React.FC = () => {
       
       const actionLabels = {
         [ReconciliationAction.LINK_TO_CONTRACT]: 'vinculado ao contrato',
-        [ReconciliationAction.CREATE_STANDALONE_CHARGE]: 'criado como cobrança avulsa',
-        [ReconciliationAction.COMPLEMENT_EXISTING_CHARGE]: 'complementado na cobrança existente',
-        [ReconciliationAction.DELETE_IMPORTED_ITEM]: 'removido da lista'
+        [ReconciliationAction.CREATE_STANDALONE]: 'criado como cobrança avulsa',
+        [ReconciliationAction.COMPLEMENT_EXISTING]: 'complementado na cobrança existente',
+        [ReconciliationAction.REGISTER_CUSTOMER]: 'cliente cadastrado',
+        [ReconciliationAction.DELETE_IMPORTED]: 'removido da lista',
+        [ReconciliationAction.IMPORT_TO_CHARGE]: 'importado para cobranças',
+        [ReconciliationAction.MARK_AS_RECONCILED]: 'marcado como reconciliado',
+        [ReconciliationAction.EXPORT]: 'exportado',
+        [ReconciliationAction.IGNORE]: 'ignorado'
       };
       
       toast({
