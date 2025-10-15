@@ -265,7 +265,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     
     // AIDEV-NOTE: Carrega dados de cobrança do serviço para edição (preservar valor existente)
     setBillingData({
-      generate_billing: service.generate_billing !== undefined ? service.generate_billing : true
+      generate_billing: service.generate_billing ?? false
     });
     
     // AIDEV-NOTE: Carrega dados de vencimento do serviço para edição (preservar valores existentes)

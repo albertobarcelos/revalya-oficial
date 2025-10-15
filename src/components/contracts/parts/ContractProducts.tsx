@@ -46,7 +46,7 @@ interface SelectedProduct {
   tax_rate: number;
   total_amount: number;
   is_active: boolean;
-  // AIDEV-NOTE: Campos financeiros adicionados para produtos
+  // Campos financeiros
   payment_method?: string | null;
   card_type?: string | null;
   billing_type?: string | null;
@@ -57,6 +57,8 @@ interface SelectedProduct {
   due_days?: number | null;
   due_day?: number | null;
   due_next_month?: boolean | null;
+  // Campo de cobrança
+  generate_billing?: boolean;
 }
 
 export function ContractProducts({ products }: ContractProductsProps) {
@@ -113,6 +115,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
     cofins_rate: 0
   });
 
+  // AIDEV-NOTE: Estado para dados de cobrança do produto
+  const [billingData, setBillingData] = React.useState({
+    generate_billing: false
+  });
+
   // Adicionar produto customizado
   const handleAddCustomProduct = () => {
     if (!customProductName.trim() || customProductPrice <= 0) return;
@@ -138,7 +145,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
       due_date_type: "days_after_billing",
       due_days: 5,
       due_day: 10,
-      due_next_month: false
+      due_next_month: false,
+      generate_billing: false
     };
     
     const currentProducts = form.getValues("products") || [];
@@ -242,6 +250,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
         cofins_deduct: currentProduct.cofins_deduct || false,
         cofins_rate: currentProduct.cofins_rate || 0
       });
+
+      // AIDEV-NOTE: Inicializar dados de cobrança com valores salvos do produto
+      setBillingData({
+        generate_billing: currentProduct.generate_billing ?? false
+      });
       
       console.log('✅ Dados carregados com sucesso');
     }
@@ -315,6 +328,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
         due_days: dueDateData.due_days !== undefined ? dueDateData.due_days : 5,
         due_day: dueDateData.due_day !== undefined ? dueDateData.due_day : 10,
         due_next_month: dueDateData.due_next_month || false,
+        // Campos de cobrança
+        generate_billing: billingData.generate_billing ?? false,
         // Campos de impostos
         ...taxData
       };
@@ -864,6 +879,45 @@ export function ContractProducts({ products }: ContractProductsProps) {
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* AIDEV-NOTE: Seção de configuração de cobrança - similar aos serviços */}
+                <div className="p-4 border rounded-lg space-y-4">
+                  <h4 className="font-medium text-lg">Gerar cobrança no faturamento?</h4>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="generateBilling"
+                        checked={billingData.generate_billing}
+                        onCheckedChange={(checked) => setBillingData(prev => ({ 
+                          ...prev, 
+                          generate_billing: !!checked 
+                        }))}
+                      />
+                      <Label htmlFor="generateBilling" className="text-sm font-medium">
+                        Sim
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="noGenerateBilling"
+                        checked={!billingData.generate_billing}
+                        onCheckedChange={(checked) => setBillingData(prev => ({ 
+                          ...prev, 
+                          generate_billing: !checked 
+                        }))}
+                      />
+                      <Label htmlFor="noGenerateBilling" className="text-sm font-medium">
+                        Não
+                      </Label>
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground">
+                      Define se este produto deve gerar cobrança automática no faturamento
+                    </p>
+                  </div>
                 </div>
               </div>
             </TabsContent>

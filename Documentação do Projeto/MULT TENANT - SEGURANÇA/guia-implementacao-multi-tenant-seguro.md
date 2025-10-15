@@ -308,8 +308,183 @@ export function MinhaPage() {
 
 * **Todas as páginas** devem seguir o template de segurança
 
+## 11. Implementação Específica: Tasks (Tarefas)
+
+### 11.1 Hook Seguro useSecureTasks
+
+O módulo de tasks foi implementado seguindo rigorosamente as 5 camadas de segurança:
+
+```typescript
+// AIDEV-NOTE: Hook seguro para operações com tasks
+export function useSecureTasks() {
+  // CAMADA 1: Validação de acesso obrigatória
+  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  
+  // CAMADA 2: Configuração de contexto seguro
+  const initContext = useCallback(async () => {
+    await supabase.rpc('set_tenant_context_simple', { 
+      p_tenant_id: currentTenant.id 
+    });
+  }, [currentTenant.id]);
+
+  // CAMADA 3: Query segura com isolamento
+  const tasksQuery = useSecureTenantQuery({
+    queryKey: ['tasks', currentTenant?.id],
+    queryFn: async (supabase, tenantId) => {
+      await initContext();
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // CAMADA 4: Mutações seguras
+  const createTask = useSecureTenantMutation({
+    mutationFn: async ({ title, description, ...taskData }) => {
+      await initContext();
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([{
+          ...taskData,
+          title,
+          description,
+          tenant_id: currentTenant.id // OBRIGATÓRIO
+        }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // CAMADA 5: Validação dupla nos resultados
+  const validatedTasks = useMemo(() => {
+    if (!tasksQuery.data) return [];
+    
+    // Validação crítica: verificar se todos os dados pertencem ao tenant
+    const invalidTasks = tasksQuery.data.filter(
+      task => task.tenant_id !== currentTenant?.id
+    );
+    
+    if (invalidTasks.length > 0) {
+      console.error('[SECURITY VIOLATION] Tasks de outros tenants detectadas:', invalidTasks);
+      throw new Error('Violação de segurança: dados de outros tenants detectados');
+    }
+    
+    return tasksQuery.data;
+  }, [tasksQuery.data, currentTenant?.id]);
+
+  return {
+    tasks: validatedTasks,
+    createTask,
+    updateTask,
+    deleteTask,
+    hasAccess,
+    isLoading: tasksQuery.isLoading,
+    error: tasksQuery.error
+  };
+}
+```
+
+### 11.2 Políticas RLS para Tasks
+
+Foram implementadas duas políticas RLS complementares para garantir isolamento total:
+
+**Política 1: Para usuários autenticados (public role)**
+```sql
+CREATE POLICY "Secure tenant access to tasks" ON tasks
+FOR ALL TO public
+USING (
+  tenant_id IN (
+    SELECT tu.tenant_id
+    FROM tenant_users tu
+    WHERE tu.user_id = auth.uid()
+      AND tu.active = true
+      AND tu.role = ANY(ARRAY['TENANT_ADMIN', 'admin', 'owner'])
+  )
+)
+WITH CHECK (
+  tenant_id IN (
+    SELECT tu.tenant_id
+    FROM tenant_users tu
+    WHERE tu.user_id = auth.uid()
+      AND tu.active = true
+      AND tu.role = ANY(ARRAY['TENANT_ADMIN', 'admin', 'owner'])
+  )
+);
+```
+
+**Política 2: Para contexto administrativo (postgres role)**
+```sql
+CREATE POLICY "Tenant context access to tasks" ON tasks
+FOR ALL TO postgres
+USING (tenant_id::text = current_setting('app.current_tenant_id', true))
+WITH CHECK (tenant_id::text = current_setting('app.current_tenant_id', true));
+```
+
+### 11.3 Validação de Isolamento
+
+**Teste de Isolamento Realizado:**
+- ✅ Políticas RLS ativas na tabela `tasks`
+- ✅ Função `set_tenant_context_simple` configurada corretamente
+- ✅ Usuários `authenticated` e `anon` respeitam RLS (rolbypassrls = false)
+- ✅ Usuário `postgres` tem bypass apenas para administração (rolbypassrls = true)
+- ✅ Contexto de tenant configurado via `current_setting('app.current_tenant_id')`
+
+**Resultado:** O isolamento funciona corretamente na aplicação frontend, onde as consultas são feitas através dos usuários `authenticated`/`anon` que respeitam as políticas RLS.
+
+### 11.4 Estrutura da Tabela Tasks
+
+```sql
+-- Campos obrigatórios para segurança multi-tenant
+CREATE TABLE tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  client_name TEXT,
+  client_id UUID,
+  charge_id UUID,
+  due_date TIMESTAMPTZ,
+  priority TEXT DEFAULT 'medium',
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) -- CAMPO CRÍTICO
+);
+
+-- Índices para performance e segurança
+CREATE INDEX idx_tasks_tenant_id ON tasks(tenant_id);
+CREATE INDEX idx_tasks_status_tenant ON tasks(status, tenant_id);
+```
+
+### 11.5 Componentes Atualizados
+
+Os seguintes componentes foram migrados para usar o hook seguro:
+
+- **Tasks.tsx**: Página principal de tarefas
+- **TasksTable.tsx**: Tabela de listagem
+- **CreateTaskModal.tsx**: Modal de criação
+- **EditTaskModal.tsx**: Modal de edição
+
+**Padrão de Migração:**
+```typescript
+// ANTES (INSEGURO)
+const { data: tasks } = useTasks();
+
+// DEPOIS (SEGURO)
+const { tasks, hasAccess } = useSecureTasks();
+if (!hasAccess) return <AccessDenied />;
+```
+
 ### REGRA DE OURO
 
-**Se não tem tenant\_id na query, NÃO PODE ser executada!**
+**Se não tem tenant_id na query, NÃO PODE ser executada!**
 
 Este guia deve ser seguido rigorosamente em todas as implementações multi-tenant do sistema para garantir a segurança e isolamento completo dos dados entre diferentes tenants.

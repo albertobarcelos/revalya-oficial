@@ -40,7 +40,10 @@ ORDER BY c.created_at DESC;
 SELECT 
     t.name as tenant_name,
     t.slug as tenant_slug,
-    COUNT(c.id) as total_charges
+    COUNT(c.id) as total_charges,
+    COUNT(CASE WHEN c.status = 'PENDING' THEN 1 ELSE 0 END) as pending,
+    COUNT(CASE WHEN c.status = 'RECEIVED' THEN 1 ELSE 0 END) as received,
+    COUNT(CASE WHEN c.status = 'OVERDUE' THEN 1 ELSE 0 END) as overdue
 FROM tenants t
 LEFT JOIN charges c ON t.id = c.tenant_id
 GROUP BY t.id, t.name, t.slug

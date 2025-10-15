@@ -154,28 +154,68 @@ const prepareContractData = async (data: z.infer<typeof contractFormSchema>, ten
 };
 
 // AIDEV-NOTE: Funções de mapeamento movidas para fora do escopo da função handleSubmit
-// Função para mapear valores de billing_type do formulário para o banco
+// Converte valores em português do frontend para valores em inglês do banco
 const mapBillingType = (billingType: string | null): string | null => {
   if (!billingType) return null;
   
-  // Mantém os valores como estão no banco de dados
-  return billingType;
+  const mapping: Record<string, string> = {
+    // Valores em português do frontend -> Valores em português do banco (conforme constraint)
+    'Único': 'Único',
+    'Mensal': 'Mensal',
+    'Trimestral': 'Trimestral',
+    'Semestral': 'Semestral',
+    'Anual': 'Anual',
+    // Valores em inglês -> Valores em português do banco
+    'unique': 'Único',
+    'monthly': 'Mensal',
+    'quarterly': 'Trimestral',
+    'semiannual': 'Semestral',
+    'annual': 'Anual'
+  };
+  
+  return mapping[billingType] || billingType;
 };
 
 // Função para mapear valores de payment_method do formulário para o banco
 const mapPaymentMethod = (paymentMethod: string | null): string | null => {
   if (!paymentMethod) return null;
   
-  // Mantém os valores como estão
-  return paymentMethod;
+  const mapping: Record<string, string> = {
+    // Valores em português do frontend -> Valores em português do banco (conforme constraint)
+    'Cartão': 'Cartão',
+    'PIX': 'PIX',
+    'Transferência Bancária': 'Transferência',
+    'Boleto Bancário': 'Boleto',
+    // Valores em inglês -> Valores em português do banco
+    'credit_card': 'Cartão',
+    'pix': 'PIX',
+    'bank_transfer': 'Transferência',
+    'bank_slip': 'Boleto'
+  };
+  
+  return mapping[paymentMethod] || paymentMethod;
 };
 
 // Função para mapear valores de recurrence_frequency
 const mapRecurrenceFrequency = (frequency: string | null): string | null => {
   if (!frequency) return null;
   
-  // Mantém os valores como estão no banco de dados
-  return frequency;
+  const mapping: Record<string, string> = {
+    // Valores em português do frontend -> Valores em português do banco (conforme constraint)
+    'Mensal': 'Mensal',
+    'Trimestral': 'Trimestral',
+    'Semestral': 'Semestral',
+    'Anual': 'Anual',
+    'Único': 'Único',
+    // Valores em inglês -> Valores em português do banco
+    'monthly': 'Mensal',
+    'quarterly': 'Trimestral',
+    'semiannual': 'Semestral',
+    'annual': 'Anual',
+    'unique': 'Único'
+  };
+  
+  return mapping[frequency] || frequency;
 };
 
 export function ContractFormActions({ 
@@ -251,6 +291,17 @@ export function ContractFormActions({
     try {
       setIsPending(true);
       
+      // AIDEV-NOTE: Configurar contexto de tenant para RLS funcionar corretamente
+      try {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: currentTenant.id
+        });
+        console.log('✅ Contexto de tenant configurado:', currentTenant.id);
+      } catch (contextError) {
+        console.error('❌ Erro ao configurar contexto de tenant:', contextError);
+        throw new Error('Falha ao configurar contexto de segurança');
+      }
+      
       // Validar configuração financeira dos serviços
       if (data.services && data.services.length > 0) {
         const servicesWithIncompleteConfig = data.services.filter((service: any) => {
@@ -318,12 +369,20 @@ export function ContractFormActions({
         throw new Error('Tenant não encontrado ou acesso negado');
       }
       
+      // AIDEV-NOTE: Configurar contexto do tenant ANTES de qualquer consulta ao banco
+      // Isso resolve o erro 406 (Not Acceptable) nas consultas RLS
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant.id 
+      });
+      
       const contractData = await prepareContractData(data, currentTenant.id, contractId);
       
       console.log('Dados preparados para o banco:', contractData);
       console.log('Serviços do formulário:', data.services);
       
       let savedContractId = contractId;
+      console.log('🔍 Contract ID inicial:', contractId);
+      console.log('🔍 Saved Contract ID inicial:', savedContractId);
       
       // AIDEV-NOTE: Usando hooks seguros com RLS em vez de inserção direta
       if (contractId) {
@@ -336,6 +395,7 @@ export function ContractFormActions({
         
         savedContractId = contractId;
         console.log('✅ Contrato atualizado com sucesso:', updatedContract);
+        console.log('🔍 Saved Contract ID após atualização:', savedContractId);
       } else {
         // Criar novo contrato usando hook seguro
         console.log('🆕 Criando novo contrato via hook seguro');
@@ -343,27 +403,39 @@ export function ContractFormActions({
         
         savedContractId = newContract.id;
         console.log('✅ Contrato criado com sucesso:', newContract);
+        console.log('🔍 Saved Contract ID após criação:', savedContractId);
       }
 
       // Salvar os serviços do contrato na tabela contract_services
       if (data.services && data.services.length > 0 && savedContractId) {
         console.log('Salvando serviços do contrato:', data.services);
+        console.log('🔍 Contract ID final para busca de serviços:', savedContractId);
         
-        // AIDEV-NOTE: Nova lógica - buscar serviços existentes para fazer UPDATE seletivo
+        // AIDEV-NOTE: Validação crítica - garantir que savedContractId está definido
+        if (!savedContractId) {
+          throw new Error('Erro crítico: savedContractId não está definido');
+        }
+        
+        // AIDEV-NOTE: Buscar serviços existentes APÓS definição final do savedContractId
         let existingServices: any[] = [];
-        if (contractId) {
-          const { data: existingData, error: fetchError } = await supabase
-            .from('contract_services')
-            .select('*')
-            .eq('contract_id', contractId)
-            .eq('tenant_id', currentTenant.id);
-            
-          if (fetchError) {
-            console.warn('Erro ao buscar serviços existentes:', fetchError);
-          } else {
-            existingServices = existingData || [];
-            console.log('🔍 Serviços existentes encontrados:', existingServices.length);
-          }
+        const { data: existingData, error: fetchError } = await supabase
+          .from('contract_services')
+          .select('*')
+          .eq('contract_id', savedContractId)
+          .eq('tenant_id', currentTenant.id);
+          
+        if (fetchError) {
+          console.warn('Erro ao buscar serviços existentes:', fetchError);
+          existingServices = [];
+        } else {
+          existingServices = existingData || [];
+          console.log('🔍 Serviços existentes encontrados:', existingServices.length);
+          console.log('📋 Detalhes dos serviços existentes:', existingServices.map(s => ({
+            id: s.id,
+            service_id: s.service_id,
+            contract_id: s.contract_id,
+            description: s.description
+          })));
         }
         
         // Obter ou criar um serviço genérico para serviços customizados
@@ -371,13 +443,14 @@ export function ContractFormActions({
         const servicesWithoutId = data.services.filter((service: any) => !service.service_id);
         
         if (servicesWithoutId.length > 0) {
-          // Verificar se já existe um serviço genérico
+          // AIDEV-NOTE: Verificar se já existe um serviço genérico
+          // Usando .maybeSingle() para evitar erro 406 quando não existe
           const { data: existingGeneric } = await supabase
             .from('services')
             .select('id')
             .eq('name', 'Serviço Customizado')
             .eq('tenant_id', currentTenant.id)
-            .single();
+            .maybeSingle();
             
           if (existingGeneric) {
             genericServiceId = existingGeneric.id;
@@ -393,7 +466,7 @@ export function ContractFormActions({
                 is_active: true
               })
               .select('id')
-              .single();
+              .maybeSingle();
               
             if (genericError) {
               console.warn('Erro ao criar serviço genérico:', genericError);
@@ -403,7 +476,7 @@ export function ContractFormActions({
                 .select('id')
                 .eq('tenant_id', currentTenant.id)
                 .limit(1)
-                .single();
+                .maybeSingle();
               genericServiceId = fallbackService?.id;
             } else {
               genericServiceId = newGeneric.id;
@@ -458,16 +531,39 @@ export function ContractFormActions({
         const usedExistingServices = new Set<string>(); // Track de IDs já utilizados
         
         // Classificar serviços em UPDATE vs INSERT
+        console.log('🔄 Iniciando classificação de serviços. Total de serviços no formulário:', data.services.length);
+        console.log('🔄 Contract ID usado para comparação:', savedContractId);
+        
         data.services.forEach((service: any, index: number) => {
           const serviceData = prepareServiceData(service);
           
+          console.log(`🔍 Processando serviço ${index + 1}:`, {
+            service_id: serviceData.service_id,
+            description: serviceData.description,
+            contract_id: serviceData.contract_id
+          });
+          
           // AIDEV-NOTE: Buscar serviço existente que ainda não foi usado
           // Para serviços com mesmo service_id, usar o primeiro disponível
-          const existingService = existingServices.find(existing => 
-            existing.service_id === serviceData.service_id &&
-            existing.contract_id === savedContractId &&
-            !usedExistingServices.has(existing.id)
-          );
+          console.log(`🔍 Buscando serviço existente para service_id: ${serviceData.service_id}, contract_id: ${savedContractId}`);
+          
+          const existingService = existingServices.find(existing => {
+            const serviceIdMatch = existing.service_id === serviceData.service_id;
+            const contractIdMatch = existing.contract_id === savedContractId;
+            const notUsed = !usedExistingServices.has(existing.id);
+            
+            console.log(`🔍 Comparando com existing service ${existing.id}:`, {
+              service_id_match: serviceIdMatch,
+              contract_id_match: contractIdMatch,
+              not_used: notUsed,
+              existing_service_id: existing.service_id,
+              existing_contract_id: existing.contract_id
+            });
+            
+            return serviceIdMatch && contractIdMatch && notUsed;
+          });
+          
+          console.log(`🔍 Serviço existente encontrado para ${serviceData.service_id}:`, existingService ? 'SIM' : 'NÃO');
           
           if (existingService) {
             // Marcar como usado para evitar duplicação
@@ -530,16 +626,66 @@ export function ContractFormActions({
           }
         }
         
-        // Executar INSERTs
+        // Executar INSERTs com verificação de duplicação
         if (servicesToInsert.length > 0) {
           console.log('🆕 Executando INSERTs...');
-          try {
-            const insertedServices = await insertContractServicesMutation.mutateAsync(servicesToInsert);
-            console.log('✅ Serviços inseridos com sucesso:', insertedServices);
-          } catch (error) {
-            console.error('❌ Erro ao inserir serviços:', error);
-            throw new Error(`Erro ao inserir serviços: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          
+          // AIDEV-NOTE: Verificar duplicação antes de inserir para evitar constraint violation
+          for (const serviceData of servicesToInsert) {
+            try {
+              // AIDEV-NOTE: Verificar se já existe um serviço com mesmo contract_id e service_id
+              // Usando .maybeSingle() para evitar erro 406 quando não há duplicação
+              const { data: existingDuplicate, error: checkError } = await supabase
+                .from('contract_services')
+                .select('id')
+                .eq('contract_id', serviceData.contract_id)
+                .eq('service_id', serviceData.service_id)
+                .eq('tenant_id', currentTenant.id)
+                .maybeSingle();
+                
+              if (checkError) {
+                console.error('❌ Erro ao verificar duplicação:', checkError);
+                throw checkError;
+              }
+              
+              if (existingDuplicate) {
+                console.log(`⚠️ Serviço já existe, fazendo UPDATE em vez de INSERT:`, {
+                  existing_id: existingDuplicate.id,
+                  service_id: serviceData.service_id,
+                  contract_id: serviceData.contract_id
+                });
+                
+                // Fazer UPDATE em vez de INSERT
+                const { error: updateError } = await supabase
+                  .from('contract_services')
+                  .update(serviceData)
+                  .eq('id', existingDuplicate.id)
+                  .eq('tenant_id', currentTenant.id);
+                  
+                if (updateError) {
+                  console.error('❌ Erro ao atualizar serviço duplicado:', updateError);
+                  throw updateError;
+                }
+                console.log('✅ Serviço duplicado atualizado:', existingDuplicate.id);
+              } else {
+                // Inserir normalmente
+                const { error: insertError } = await supabase
+                  .from('contract_services')
+                  .insert(serviceData);
+                  
+                if (insertError) {
+                  console.error('❌ Erro ao inserir serviço:', insertError);
+                  throw insertError;
+                }
+                console.log('✅ Serviço inserido:', serviceData.service_id);
+              }
+            } catch (error) {
+              console.error('❌ Erro no processamento do serviço:', error);
+              throw new Error(`Erro ao processar serviço: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+            }
           }
+          
+          console.log('✅ Todos os serviços processados com sucesso!');
         }
         
         // Executar DELETEs
@@ -589,13 +735,14 @@ export function ContractFormActions({
         const productsWithoutId = data.products.filter((product: any) => !product.product_id);
         
         if (productsWithoutId.length > 0) {
-          // Verificar se já existe um produto genérico
+          // AIDEV-NOTE: Verificar se já existe um produto genérico
+          // Usando .maybeSingle() para evitar erro 406 quando não existe
           const { data: existingGeneric } = await supabase
             .from('products')
             .select('id')
             .eq('name', 'Produto Customizado')
             .eq('tenant_id', currentTenant.id)
-            .single();
+            .maybeSingle();
             
           if (existingGeneric) {
             genericProductId = existingGeneric.id;
@@ -611,7 +758,7 @@ export function ContractFormActions({
                 is_active: true
               })
               .select('id')
-              .single();
+              .maybeSingle();
               
             if (genericError) {
               console.warn('Erro ao criar produto genérico:', genericError);
@@ -621,7 +768,7 @@ export function ContractFormActions({
                 .select('id')
                 .eq('tenant_id', currentTenant.id)
                 .limit(1)
-                .single();
+                .maybeSingle();
               genericProductId = fallbackProduct?.id;
             } else {
               genericProductId = newGeneric.id;

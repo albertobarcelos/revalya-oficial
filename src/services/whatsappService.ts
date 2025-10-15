@@ -1138,6 +1138,9 @@ class WhatsAppService {
         }
       } 
       else if (action === 'disconnect') {
+        // AIDEV-NOTE: Buscar instâncias existentes para o tenant antes de tentar desconectar
+        const existingInstances = await this.findInstancesBySlugPrefix(tenantSlug);
+        
         // Verificar se há uma instância salva ou existente
         const instancesToDisconnect = existingInstances.length > 0 
           ? existingInstances 

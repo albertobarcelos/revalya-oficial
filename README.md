@@ -319,6 +319,40 @@ Implementamos uma série de correções e melhorias nas páginas de produtos e s
 - **Lógica**: Estado externo tem prioridade sobre estado interno
 - **Teste realizado**: Criação de novo serviço funcionando corretamente
 
+### Janeiro 2025: Correção Crítica - Vinculação Automática de Cobranças aos Períodos no Kanban
+
+Implementamos uma correção crítica no Kanban de Faturamento para garantir que as cobranças criadas sejam automaticamente vinculadas aos períodos de faturamento correspondentes.
+
+#### 🐛 **Problema Identificado**
+
+- **Sintoma**: Botão "Faturar" criava cobranças mas cards não se moviam para "Faturados no Mês"
+- **Causa**: `billingMutation` não chamava `on_charge_created_link_period` após criar cobranças
+- **Impacto**: Inconsistência entre cobranças criadas e status dos períodos de faturamento
+
+#### ✅ **Solução Implementada**
+
+**Arquivo Modificado**: `src/pages/FaturamentoKanban.tsx`
+
+```typescript
+// Para cobranças únicas
+if (chargeResult?.data?.id) {
+  await supabase.rpc('on_charge_created_link_period', {
+    p_charge_id: chargeResult.data.id
+  });
+}
+
+// Para cobranças parceladas
+if (installmentResults.successCount > 0 && installmentResults.results[0]?.data?.id) {
+  await supabase.rpc('on_charge_created_link_period', {
+    p_charge_id: installmentResults.results[0].data.id
+  });
+}
+```
+
+**Resultado**: Vinculação automática de cobranças aos períodos, garantindo atualização correta do status para `BILLED` e movimentação dos cards no Kanban.
+
+**Documentação**: [`CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md`](./CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md)
+
 ### Janeiro 2025: Correção de Contexto de Tenant em Operações de Criação
 
 Corrigimos um problema crítico onde a função `createService` no hook `useServices.ts` não estava configurando corretamente o contexto do tenant antes de realizar operações de inserção no banco de dados.
