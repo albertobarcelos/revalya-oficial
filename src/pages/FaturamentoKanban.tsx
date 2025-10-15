@@ -641,8 +641,9 @@ export default function FaturamentoKanban() {
 
           // AIDEV-NOTE: Usar attempt_billing_period_charge para criar cobrança e atualizar status
           const { data: result, error: billingError } = await supabase.rpc('attempt_billing_period_charge', {
+            p_tenant_id: tenantId,
             p_period_id: periodId,
-            p_tenant_id: tenantId
+            p_charge_data: null // Usar dados padrão do período
           });
 
           if (billingError) {

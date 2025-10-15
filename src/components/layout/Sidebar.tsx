@@ -316,7 +316,7 @@ export default function Sidebar() {
               <div className="flex w-full items-center justify-center">
                 <div className="flex items-center justify-center transition-all duration-300 ease-in-out">
                   <img 
-                    src="/logos/LOGO-REVALYA.png" 
+                    src="/logos/LOGO-REVALYA123.png" 
                     alt="Revalya" 
                     className="h-20 w-auto py-4 transition-all duration-300 ease-in-out"
                   />
