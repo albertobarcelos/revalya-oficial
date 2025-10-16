@@ -141,7 +141,7 @@ class WhatsAppService {
                   logService.info(this.MODULE_NAME, `Instância precisa ser desconectada. Tentando desconectar e tentar novamente (tentativa ${retries})`);
                   
                   // Extrair o nome da instância
-                  const instanceMatch = endpoint.match(/\/([^\/]+)$/);
+                  const instanceMatch = endpoint.match(/\/([^/]+)$/);
                   if (instanceMatch && instanceMatch[1]) {
                     const instanceName = instanceMatch[1].split('?')[0]; // Remover query params se houver
                     try {
@@ -357,6 +357,47 @@ class WhatsAppService {
   }
 
   /**
+   * Formatar QR Code para exibição no navegador
+   * AIDEV-NOTE: Garante que o QR Code esteja no formato correto para tag <img>
+   */
+  private formatQRCodeForDisplay = (qrCode: string): string => {
+    logService.info(this.MODULE_NAME, `[DEBUG] Formatando QR Code. Tamanho: ${qrCode.length}, Início: ${qrCode.substring(0, 50)}...`);
+    
+    // Se já está no formato data URL, retornar como está
+    if (qrCode.startsWith('data:image/')) {
+      logService.info(this.MODULE_NAME, '[DEBUG] QR Code já está no formato data URL');
+      return qrCode;
+    }
+    
+    // Se é um link do WhatsApp, retornar como está
+    if (qrCode.startsWith('https://wa.me/') || qrCode.startsWith('http://wa.me/')) {
+      logService.info(this.MODULE_NAME, '[DEBUG] QR Code é um link do WhatsApp');
+      return qrCode;
+    }
+    
+    // Se parece ser base64 puro, adicionar o prefixo data URL
+    if (qrCode.length > 100 && !qrCode.includes(' ') && !qrCode.includes('\n')) {
+      // Verificar se já tem o prefixo base64
+      if (qrCode.includes('base64,')) {
+        // Extrair apenas a parte base64
+        const base64Part = qrCode.split('base64,')[1];
+        const formatted = `data:image/png;base64,${base64Part}`;
+        logService.info(this.MODULE_NAME, '[DEBUG] QR Code tinha prefixo base64, extraído e reformatado');
+        return formatted;
+      } else {
+        // Assumir que é base64 puro
+        const formatted = `data:image/png;base64,${qrCode}`;
+        logService.info(this.MODULE_NAME, '[DEBUG] QR Code parece ser base64 puro, adicionado prefixo data URL');
+        return formatted;
+      }
+    }
+    
+    // Se não conseguiu identificar o formato, retornar como está
+    logService.warn(this.MODULE_NAME, `[DEBUG] Formato de QR Code não reconhecido, usando como está. Tamanho: ${qrCode.length}`);
+    return qrCode;
+  };
+
+  /**
    * Gera um QR Code para uma instância
    */
   generateQRCode = async (instanceName: string): Promise<string> => {
@@ -364,56 +405,59 @@ class WhatsAppService {
       logService.info(this.MODULE_NAME, `Gerando QR code para instância: ${instanceName}`);
       
       // Na Evolution API, o endpoint de conexão retorna o QR code
-      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET');
+      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET'); 
       
-      // Log detalhado da resposta para diagnóstico
-      logService.info(this.MODULE_NAME, 'Resposta da API para QR Code:', JSON.stringify(response));
+      let qrCode: string | null = null;
       
       // Tentar extrair o QR code de diferentes lugares possíveis na resposta
       
       // Verificar se temos a propriedade base64 (formato antigo)
       if (response && response.base64) {
         logService.info(this.MODULE_NAME, 'QR Code encontrado na propriedade base64');
-        return response.base64;
+        qrCode = response.base64;
       }
-      
       // Verificar se temos a propriedade qrcode (novo formato em algumas versões)
-      if (response && response.qrcode) {
+      else if (response && response.qrcode) {
         logService.info(this.MODULE_NAME, 'QR Code encontrado na propriedade qrcode');
-        return response.qrcode;
+        qrCode = response.qrcode;
       }
-      
       // Verificar se temos o QR code em uma subestrutura
-      if (response && response.data && response.data.qrcode) {
+      else if (response && response.data && response.data.qrcode) {
         logService.info(this.MODULE_NAME, 'QR Code encontrado em data.qrcode');
-        return response.data.qrcode;
+        qrCode = response.data.qrcode;
       }
-      
       // Verificar estrutura aninhada instance.qrcode
-      if (response && response.instance && response.instance.qrcode) {
+      else if (response && response.instance && response.instance.qrcode) {
         logService.info(this.MODULE_NAME, 'QR Code encontrado em instance.qrcode');
-        return response.instance.qrcode;
+        qrCode = response.instance.qrcode;
       }
-      
       // Outras possíveis estruturas - QR code como string direta
-      if (response && typeof response === 'string' && response.startsWith('data:image')) {
+      else if (response && typeof response === 'string' && response.startsWith('data:image')) {
         logService.info(this.MODULE_NAME, 'QR Code encontrado como string direta');
-        return response;
+        qrCode = response;
       }
-      
       // Se não encontrou em nenhum lugar conhecido, tentar encontrar em qualquer propriedade que pareça um QR code
-      if (response) {
+      else if (response) {
         for (const key in response) {
           const value = response[key];
           if (typeof value === 'string' && 
              (value.startsWith('data:image') || 
               value.includes('png;base64') || 
               value.startsWith('1@') || 
-              value.startsWith('https://wa.me/'))) {
+              value.startsWith('https://wa.me/') ||
+              (value.length > 100 && !value.includes(' ')))) { // Possível base64
             logService.info(this.MODULE_NAME, `QR Code encontrado na propriedade: ${key}`);
-            return value;
+            qrCode = value;
+            break;
           }
         }
+      }
+      
+      // Se encontrou um QR Code, formatá-lo corretamente
+      if (qrCode) {
+        const formattedQRCode = this.formatQRCodeForDisplay(qrCode);
+        logService.info(this.MODULE_NAME, `QR Code formatado com sucesso. Tamanho original: ${qrCode.length}, Formato final: ${formattedQRCode.substring(0, 50)}...`);
+        return formattedQRCode;
       }
       
       // Se chegou até aqui, não encontramos o QR code na resposta
@@ -429,17 +473,17 @@ class WhatsAppService {
         // Verificar onde está o QR code nesta resposta
         if (qrResponse && qrResponse.qrcode) {
           logService.info(this.MODULE_NAME, 'QR Code encontrado em qrcode da nova chamada');
-          return qrResponse.qrcode;
+          return this.formatQRCodeForDisplay(qrResponse.qrcode);
         }
         
         if (qrResponse && qrResponse.base64) {
           logService.info(this.MODULE_NAME, 'QR Code encontrado em base64 da nova chamada');
-          return qrResponse.base64;
+          return this.formatQRCodeForDisplay(qrResponse.base64);
         }
         
         if (qrResponse && typeof qrResponse === 'string') {
           logService.info(this.MODULE_NAME, 'QR Code retornado como string da nova chamada');
-          return qrResponse;
+          return this.formatQRCodeForDisplay(qrResponse);
         }
       } catch (qrError) {
         logService.error(this.MODULE_NAME, 'Erro ao tentar alternativa para QR Code:', qrError);
@@ -523,7 +567,7 @@ class WhatsAppService {
       }
       
       // Normalizar estado para formato padronizado
-      // Estados observados na API: 'connected', 'connecting', 'disconnected', 'ready', 'paired', 'timeout'
+      // Estados observados na API: 'connected', 'connecating', 'disconnected', 'ready', 'paired', 'timeout'
       if (['connected', 'ready', 'open'].includes(state.toLowerCase())) {
         return 'connected';
       } else if (['connecting', 'pairing', 'paired', 'syncing'].includes(state.toLowerCase())) {
@@ -892,7 +936,7 @@ class WhatsAppService {
           });
 
           // AIDEV-NOTE: Log de auditoria para acesso ao tenant
-          await logAccess(foundTenant.id, 'tenant_access', 'read', {
+          await logAccess('read', 'tenant_access', foundTenant.id, {
             slug: foundTenant.slug,
             search_method: 'partial_match'
           });
@@ -907,7 +951,7 @@ class WhatsAppService {
         });
 
         // AIDEV-NOTE: Log de auditoria para acesso ao tenant
-        await logAccess(data.id, 'tenant_access', 'read', {
+        await logAccess('read', 'tenant_access', data.id, {
           slug: data.slug,
           search_method: 'exact_match'
         });
@@ -1077,9 +1121,9 @@ class WhatsAppService {
           if (qrCode) {
             logService.debug(this.MODULE_NAME, `QR Code gerado com sucesso para ${instanceName}`);
             
-            // Se o QR Code for muito grande, tentar simplificá-lo
-            if (qrCode.length > 2000) {
-              logService.warn(this.MODULE_NAME, `QR Code muito grande (${qrCode.length} caracteres). Usando versão completa.`);
+            // AIDEV-NOTE: Verificar se o QR Code é muito grande e validar formato
+            if (qrCode.length > 5000) {
+              logService.warn(this.MODULE_NAME, `QR Code muito grande (${qrCode.length} caracteres). Verificando formato...`);
               
               // Se for um link do WhatsApp, extrair a parte relevante
               if (qrCode.includes('wa.me/')) {
@@ -1088,7 +1132,15 @@ class WhatsAppService {
                   qrCode = `https://wa.me/${match[1]}`;
                   logService.info(this.MODULE_NAME, `QR Code simplificado para link: ${qrCode}`);
                 }
-              } 
+              } else if (qrCode.startsWith('data:image/')) {
+                // Para data URLs, verificar se está bem formado
+                logService.info(this.MODULE_NAME, `QR Code é uma data URL válida. Mantendo formato original.`);
+              } else {
+                // Se não é um formato reconhecido e é muito grande, pode haver problema
+                logService.error(this.MODULE_NAME, `QR Code em formato não reconhecido e muito grande. Tamanho: ${qrCode.length}`);
+              }
+            } else if (qrCode.length > 2000) {
+              logService.info(this.MODULE_NAME, `QR Code de tamanho médio (${qrCode.length} caracteres). Formato adequado para renderização.`);
             }
             
             // AIDEV-NOTE: Removido monitorConnectionAndSave - agora é responsabilidade do useWhatsAppToggle
@@ -1388,16 +1440,52 @@ class WhatsAppService {
       const tenant = await this.getTenantBySlug(tenantSlug);
       if (!tenant || !tenant.id) return null;
 
-      // AIDEV-NOTE: Usar executeWithAuth para proteger consulta ao Supabase
+      // AIDEV-NOTE: Implementação segura seguindo padrões multi-tenant obrigatórios
       return await executeWithAuth(async () => {
-        const { data: integration } = await supabase
+        // 1. VALIDAÇÃO DE TENANT OBRIGATÓRIA
+        if (!tenant.id) {
+          throw new Error('Tenant ID não definido - violação de segurança');
+        }
+
+        // 2. CONFIGURAÇÃO DE CONTEXTO OBRIGATÓRIA
+        await supabase.rpc('set_tenant_context_simple', { 
+          p_tenant_id: tenant.id 
+        });
+
+        // 3. QUERY SEGURA COM FILTROS OBRIGATÓRIOS
+        const { data: integration, error } = await supabase
           .from('tenant_integrations')
           .select('config')
           .eq('tenant_id', tenant.id)
           .eq('integration_type', 'whatsapp')
-          .single();
+          .eq('is_active', true)
+          .maybeSingle();
 
-        return integration?.config?.instance_name || null;
+        if (error) {
+          logService.error(this.MODULE_NAME, `Erro na query tenant_integrations: ${error.message}`);
+          throw new Error(`Erro ao consultar integração WhatsApp: ${error.message}`);
+        }
+
+        // 4. VALIDAÇÃO DE DADOS RETORNADOS - Permite null quando não há integração
+        if (integration && integration.config && typeof integration.config === 'object') {
+          const instanceName = integration.config.instance_name;
+          
+          // 5. LOG DE AUDITORIA OBRIGATÓRIO
+          await logAccess(
+            'read',
+            'whatsapp_integration_config',
+            tenant.id,
+            { 
+              tenantSlug,
+              instanceName: instanceName || 'not_found',
+              operation: 'getSavedInstanceName'
+            }
+          );
+
+          return instanceName || null;
+        }
+
+        return null;
       }, 2, `getSavedInstanceName_${tenantSlug}`);
     } catch (error) {
       logService.error(this.MODULE_NAME, `Erro ao obter nome da instância salva para ${tenantSlug}:`, error);
@@ -1416,6 +1504,14 @@ class WhatsAppService {
 
       logService.info(this.MODULE_NAME, `Iniciando saveInstanceConfig para ${tenantSlug}, instância: ${instanceName}, ativo: ${isActive}`);
 
+      // AIDEV-NOTE: CORREÇÃO CRÍTICA - Verificar autenticação e acesso ao tenant ANTES de qualquer operação
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        const error = 'Usuário não autenticado';
+        logService.error(this.MODULE_NAME, error);
+        throw new Error(error);
+      }
+
       const tenant = await this.getTenantBySlug(tenantSlug);
       if (!tenant || !tenant.id) {
         const error = `Tenant não encontrado para o slug: ${tenantSlug}`;
@@ -1423,22 +1519,38 @@ class WhatsAppService {
         throw new Error(error);
       }
 
-      logService.info(this.MODULE_NAME, `Tenant encontrado: ${tenant.id}`);
+      // AIDEV-NOTE: CORREÇÃO CRÍTICA - Verificar se o usuário tem acesso ao tenant
+      const { data: tenantAccess, error: accessError } = await supabase
+        .from('tenant_users')
+        .select('id, role')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenant.id)
+        .single();
+
+      if (accessError || !tenantAccess) {
+        const error = `Usuário ${user.email} não tem acesso ao tenant ${tenantSlug}`;
+        logService.error(this.MODULE_NAME, error);
+        throw new Error(error);
+      }
+
+      logService.info(this.MODULE_NAME, `Acesso verificado - Usuário: ${user.email}, Tenant: ${tenantSlug}, Role: ${tenantAccess.role}`);
 
       // AIDEV-NOTE: Usar executeWithAuth para proteger operação de update no Supabase
       // AIDEV-NOTE: Configurar contexto de tenant obrigatório antes da operação
       await executeWithAuth(async () => {
-        // AIDEV-NOTE: Configuração de contexto de tenant obrigatória ANTES de qualquer operação
-        const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-          p_tenant_id: tenant.id 
+        // AIDEV-NOTE: CORREÇÃO CRÍTICA - Configuração de contexto com user_id obrigatório
+        const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
+          p_tenant_id: tenant.id,
+          p_user_id: user.id
         });
 
-        if (contextError) {
-          logService.error(this.MODULE_NAME, `Erro ao configurar contexto de tenant:`, contextError);
-          throw contextError;
+        if (contextError || !contextResult?.success) {
+          const errorMsg = `Erro ao configurar contexto de tenant: ${contextError?.message || 'Contexto não configurado'}`;
+          logService.error(this.MODULE_NAME, errorMsg);
+          throw new Error(errorMsg);
         }
 
-        logService.info(this.MODULE_NAME, `Contexto de tenant configurado: ${tenant.id}`);
+        logService.info(this.MODULE_NAME, `Contexto de tenant configurado com sucesso: ${tenant.id} para usuário ${user.id}`);
 
         // AIDEV-NOTE: Verificar se já existe um registro para fazer update ou insert
         const { data: existingIntegration, error: selectError } = await supabase
@@ -1479,24 +1591,26 @@ class WhatsAppService {
             .select();
         } else {
           logService.info(this.MODULE_NAME, `Criando nova integração para tenant: ${tenant.id}`);
-          // AIDEV-NOTE: Criar novo registro seguindo padrões de segurança multi-tenant
-          // AIDEV-NOTE: Garantir que tenant_id está explicitamente definido
+          // AIDEV-NOTE: CORREÇÃO CRÍTICA - Criar novo registro com created_by obrigatório
           const insertData = {
             tenant_id: tenant.id,
             integration_type: 'whatsapp' as const,
             config: configData,
             is_active: isActive,
             environment: 'production' as const,
+            created_by: user.id, // AIDEV-NOTE: Campo obrigatório para auditoria
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
 
           logService.info(this.MODULE_NAME, `Dados para inserção:`, insertData);
 
+          // AIDEV-NOTE: CORREÇÃO CRÍTICA - Usar .single() para garantir retorno único
           result = await supabase
             .from('tenant_integrations')
             .insert(insertData)
-            .select();
+            .select()
+            .single();
         }
 
         if (result.error) {
@@ -1507,7 +1621,6 @@ class WhatsAppService {
         logService.info(this.MODULE_NAME, `Resultado da operação:`, result.data);
 
         // AIDEV-NOTE: Log de auditoria obrigatório para operações críticas
-        // AIDEV-NOTE: Corrigir ordem dos parâmetros: (action, resource, tenantId, details)
         await logAccess(
           existingIntegration ? 'update' : 'create',
           'whatsapp_instance_config',
@@ -1515,7 +1628,9 @@ class WhatsAppService {
           {
             instance_name: instanceName,
             is_active: isActive,
-            tenant_slug: tenantSlug
+            tenant_slug: tenantSlug,
+            user_id: user.id,
+            user_email: user.email
           }
         );
 

@@ -149,7 +149,9 @@ export function useCharges(params: UseChargesParams = {}) {
       }
       if (params.search) {
         // AIDEV-NOTE: Busca expandida para incluir dados do cliente (nome, empresa, CPF/CNPJ)
-        query = query.or(`descricao.ilike.%${params.search}%,asaas_id.ilike.%${params.search}%,customers.name.ilike.%${params.search}%,customers.company.ilike.%${params.search}%,customers.cpf_cnpj.ilike.%${params.search}%`)
+        // Corrigindo sintaxe PostgREST - valores devem estar entre aspas
+        const searchTerm = params.search.replace(/'/g, "''"); // Escape de aspas simples
+        query = query.or(`descricao.ilike."%${searchTerm}%",asaas_id.ilike."%${searchTerm}%",customers.name.ilike."%${searchTerm}%",customers.company.ilike."%${searchTerm}%",customers.cpf_cnpj.ilike."%${searchTerm}%"`)
       }
 
       // Paginação
@@ -189,7 +191,9 @@ export function useCharges(params: UseChargesParams = {}) {
       }
       if (params.search) {
         // AIDEV-NOTE: Busca expandida para incluir dados do cliente na contagem também
-        countQuery = countQuery.or(`descricao.ilike.%${params.search}%,asaas_id.ilike.%${params.search}%,customers.name.ilike.%${params.search}%,customers.company.ilike.%${params.search}%,customers.cpf_cnpj.ilike.%${params.search}%`)
+        // Corrigindo sintaxe PostgREST - valores devem estar entre aspas
+        const searchTerm = params.search.replace(/'/g, "''"); // Escape de aspas simples
+        countQuery = countQuery.or(`descricao.ilike."%${searchTerm}%",asaas_id.ilike."%${searchTerm}%",customers.name.ilike."%${searchTerm}%",customers.company.ilike."%${searchTerm}%",customers.cpf_cnpj.ilike."%${searchTerm}%"`)
       }
       
       // Executar ambas as queries

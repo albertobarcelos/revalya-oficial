@@ -314,6 +314,16 @@
   [data-radix-popper-content-wrapper] {
     z-index: 9999 !important;
   }
+
+  /* AIDEV-NOTE: Prevenir que elementos Radix UI interfiram com o QR code */
+  .qr-code-container [data-radix-popper-content-wrapper],
+  .qr-code-container [data-radix-popover-content],
+  .qr-code-container [data-radix-tooltip-content] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
   
   /* Garantir que calendários sejam clicáveis */
   .rdp {
@@ -394,6 +404,49 @@
     height: 256px;
     object-fit: contain;
     margin: 0 auto;
+  }
+
+  /* AIDEV-NOTE: Prevenir interferências de pseudo-elementos no QR code */
+  .qrcode-container::before,
+  .qrcode-container::after,
+  .qrcode-image::before,
+  .qrcode-image::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  /* Garantir que o QR code não seja afetado por efeitos shine ou outros pseudo-elementos */
+  img[alt*="QR Code"]::before,
+  img[alt*="QR Code"]::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  /* Container específico para QR codes sem interferências */
+  .qr-code-container {
+    position: relative;
+    isolation: isolate;
+    z-index: 10000 !important;
+  }
+
+  .qr-code-container::before,
+  .qr-code-container::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  /* AIDEV-NOTE: Garantir que o QR code sempre fique acima de qualquer elemento */
+  .qr-code-container img[alt*="QR Code"] {
+    position: relative !important;
+    z-index: 10001 !important;
+    isolation: isolate !important;
+    background: transparent !important;
+  }
+
+  /* Prevenir que qualquer elemento dentro do dialog sobreponha o QR code */
+  .qr-code-container * {
+    position: relative;
+    z-index: inherit;
   }
 
   /* Animações para cards de tipo de faturamento */

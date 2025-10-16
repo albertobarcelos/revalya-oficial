@@ -11,12 +11,13 @@ import type { Cobranca } from '@/types/database';
 import { BulkMessageDialog } from '../BulkMessageDialog';
 
 // AIDEV-NOTE: Interface para props do componente DayDetailsDialog
+// Atualizada para suportar templateId e customMessage no envio de mensagens
 interface DayDetailsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   selectedDay: Date | null;
   charges: Cobranca[];
-  onSendMessages: (chargeIds: string[]) => Promise<void>;
+  onSendMessages: (chargeIds: string[], templateId: string, customMessage?: string) => Promise<void>;
 }
 
 // AIDEV-NOTE: Componente de diálogo de detalhes do dia extraído para modularização
@@ -41,14 +42,22 @@ export function DayDetailsDialog({
     setSelectedCharges(checked ? charges.map(c => c.id) : []);
   };
 
+  // AIDEV-NOTE: Handler corrigido para passar templateId e customMessage para onSendMessages
   const handleSendMessages = async (templateId: string, customMessage?: string) => {
     setIsLoadingMessages(true);
     try {
-      await onSendMessages(selectedCharges);
+      console.log('🚀 [DAY-DETAILS-DIALOG] Iniciando envio de mensagens');
+      console.log('📝 [DAY-DETAILS-DIALOG] Template ID:', templateId);
+      console.log('📝 [DAY-DETAILS-DIALOG] Mensagem customizada:', customMessage ? 'Sim' : 'Não');
+      console.log('🎯 [DAY-DETAILS-DIALOG] Cobranças selecionadas:', selectedCharges);
+      
+      await onSendMessages(selectedCharges, templateId, customMessage);
       setIsBulkMessageOpen(false);
       setSelectedCharges([]);
+      
+      console.log('✅ [DAY-DETAILS-DIALOG] Mensagens enviadas com sucesso');
     } catch (error) {
-      console.error('Erro ao enviar mensagens:', error);
+      console.error('❌ [DAY-DETAILS-DIALOG] Erro ao enviar mensagens:', error);
     } finally {
       setIsLoadingMessages(false);
     }

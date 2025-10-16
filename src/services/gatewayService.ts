@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
+import { executeWithAuth } from '@/lib/supabase-utils';
+import { logAccess } from '@/lib/audit';
+import { logService } from '@/lib/logService';
 
 type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
 
@@ -531,13 +534,13 @@ class GatewayService {
 
   // ========== UTILITÁRIOS ==========
   private async getGatewayConfig(provider: string): Promise<PaymentGateway> {
-    // AIDEV-NOTE: Buscar credenciais específicas do tenant na nova tabela tenant_integrations
+    // AIDEV-NOTE: Buscar credenciais específicas do tenant seguindo padrões de segurança multi-tenant
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       throw new Error('Usuário não autenticado');
     }
 
-    // Buscar tenant_id do usuário
+    // AIDEV-NOTE: Buscar tenant_id do usuário com validação
     const { data: profile } = await supabase
       .from('profiles')
       .select('tenant_id')
@@ -548,29 +551,67 @@ class GatewayService {
       throw new Error('Tenant não encontrado para o usuário');
     }
 
-    // Buscar credenciais do tenant para o provider específico
-    const { data: integration, error } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', profile.tenant_id)
-      .eq('integration_type', provider.toLowerCase())
-      .eq('is_active', true)
-      .single();
+    // AIDEV-NOTE: Usar executeWithAuth para proteger operação de consulta
+    return await executeWithAuth(async () => {
+      // AIDEV-NOTE: Configuração de contexto de tenant obrigatória ANTES de qualquer operação
+      const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: profile.tenant_id 
+      });
 
-    if (error || !integration) {
-      throw new Error(`Integração ${provider} não configurada ou inativa para este tenant. Configure as credenciais em Configurações > Integrações.`);
-    }
+      if (contextError) {
+        logService.error('GatewayService', `Erro ao configurar contexto de tenant:`, contextError);
+        throw contextError;
+      }
 
-    // Retornar no formato esperado pelo PaymentGateway
-    return {
-      id: integration.id,
-      provider: integration.integration_type,
-      api_key: integration.api_key,
-      api_url: integration.api_url,
-      is_active: integration.is_active,
-      created_at: integration.created_at,
-      updated_at: integration.updated_at
-    } as PaymentGateway;
+      // AIDEV-NOTE: Query segura com filtros obrigatórios de tenant_id
+      const { data: integration, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', profile.tenant_id)
+        .eq('integration_type', provider.toLowerCase())
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        logService.error('GatewayService', `Erro ao buscar integração ${provider}:`, error);
+        throw error;
+      }
+
+      if (!integration) {
+        throw new Error(`Integração ${provider} não configurada ou inativa para este tenant. Configure as credenciais em Configurações > Integrações.`);
+      }
+
+      // AIDEV-NOTE: Validação de dados retornados
+      if (integration.tenant_id !== profile.tenant_id) {
+        logService.error('GatewayService', `Violação de segurança: tenant_id não confere`, {
+          expected: profile.tenant_id,
+          received: integration.tenant_id
+        });
+        throw new Error('Erro de segurança: dados de tenant inválidos');
+      }
+
+      // AIDEV-NOTE: Log de auditoria obrigatório para acesso a credenciais
+      await logAccess(
+        'read',
+        'gateway_credentials',
+        profile.tenant_id,
+        {
+          provider: provider.toLowerCase(),
+          integration_id: integration.id
+        }
+      );
+
+      // Retornar no formato esperado pelo PaymentGateway
+      return {
+        id: integration.id,
+        provider: integration.integration_type,
+        api_key: integration.api_key,
+        api_url: integration.api_url,
+        is_active: integration.is_active,
+        created_at: integration.created_at,
+        updated_at: integration.updated_at
+      } as PaymentGateway;
+    }, 3, `getGatewayConfig_${provider}_${profile.tenant_id}`);
   }
 
   /**

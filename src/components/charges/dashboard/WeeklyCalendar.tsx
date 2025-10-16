@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isToday, getWeek, getYear, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +11,8 @@ import { ChevronLeft, ChevronRight, Calendar, Filter, Download, TrendingUp, Load
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, formatDateSafely } from '@/lib/utils';
+import { messageService } from '@/services/messageService';
+import { useToast } from '@/hooks/use-toast';
 import { WeeklyFilters } from './WeeklyFilters';
 import { WeeklyMetrics } from './WeeklyMetrics';
 import { DayCard } from './DayCard';
@@ -30,6 +32,7 @@ interface GroupedCharges {
 // AIDEV-NOTE: Componente principal do calendário semanal refatorado
 export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const { currentTenant } = useCurrentTenant();
+  const { toast } = useToast();
   
   // Estados principais
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -71,8 +74,35 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
     }, {} as GroupedCharges);
   };
 
+  // AIDEV-NOTE: Função para carregar dados da semana anterior
+  const loadPreviousWeekData = useCallback(async (currentCharges: Cobranca[]) => {
+    if (!tenantId) return;
+    
+    try {
+      const prevWeekStart = subWeeks(weekStart, 1);
+      const prevWeekEnd = endOfWeek(prevWeekStart, { weekStartsOn: 0 });
+      
+      const { data, error } = await supabase
+        .from('charges')
+        .select('valor')
+        .eq('tenant_id', tenantId)
+        .gte('data_vencimento', format(prevWeekStart, 'yyyy-MM-dd'))
+        .lte('data_vencimento', format(prevWeekEnd, 'yyyy-MM-dd'));
+
+      if (error) throw error;
+      
+      const prevTotal = (data || []).reduce((sum, charge) => sum + (charge.valor || 0), 0);
+      const currentTotal = currentCharges.reduce((sum, charge) => sum + (charge.valor || 0), 0);
+      
+      setPreviousWeekTotal(prevTotal);
+      setWeeklyGrowth(prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0);
+    } catch (error) {
+      console.error('Erro ao carregar dados da semana anterior:', error);
+    }
+  }, [tenantId, weekStart]);
+
   // AIDEV-NOTE: Função para carregar dados da semana
-  const loadWeekData = async () => {
+  const loadWeekData = useCallback(async () => {
     if (!tenantId) return;
     
     setIsLoading(true);
@@ -91,41 +121,15 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
 
       if (error) throw error;
       
-      setCharges(data || []);
-      await loadPreviousWeekData();
+      const chargesData = data || [];
+      setCharges(chargesData);
+      await loadPreviousWeekData(chargesData);
     } catch (error) {
       console.error('Erro ao carregar dados da semana:', error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // AIDEV-NOTE: Função para carregar dados da semana anterior
-  const loadPreviousWeekData = async () => {
-    if (!tenantId) return;
-    
-    try {
-      const prevWeekStart = subWeeks(weekStart, 1);
-      const prevWeekEnd = endOfWeek(prevWeekStart, { weekStartsOn: 0 });
-      
-      const { data, error } = await supabase
-        .from('charges')
-        .select('valor')
-        .eq('tenant_id', tenantId)
-        .gte('data_vencimento', format(prevWeekStart, 'yyyy-MM-dd'))
-        .lte('data_vencimento', format(prevWeekEnd, 'yyyy-MM-dd'));
-
-      if (error) throw error;
-      
-      const prevTotal = (data || []).reduce((sum, charge) => sum + (charge.valor || 0), 0);
-      const currentTotal = charges.reduce((sum, charge) => sum + (charge.valor || 0), 0);
-      
-      setPreviousWeekTotal(prevTotal);
-      setWeeklyGrowth(prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0);
-    } catch (error) {
-      console.error('Erro ao carregar dados da semana anterior:', error);
-    }
-  };
+  }, [tenantId, weekStart, weekEnd, loadPreviousWeekData]);
 
   // AIDEV-NOTE: Navegação entre semanas
   const navigateWeek = (direction: 'next' | 'prev') => {
@@ -161,7 +165,7 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   // AIDEV-NOTE: Efeitos para carregamento de dados
   useEffect(() => {
     if (tenantId) loadWeekData();
-  }, [weekStart, weekEnd, tenantId]);
+  }, [weekStart, weekEnd, tenantId, loadWeekData]);
 
   useEffect(() => {
     setFilteredCharges(charges);
@@ -405,9 +409,36 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
         }}
         selectedDay={selectedDay}
         charges={selectedDayCharges}
-        onSendMessages={async (chargeIds) => {
-          // Implementar lógica de envio
-          console.log('Enviando mensagens para:', chargeIds);
+        onSendMessages={async (chargeIds, templateId, customMessage) => {
+          // AIDEV-NOTE: Implementação correta do envio de mensagens usando messageService
+          console.log('🚀 [WEEKLY-CALENDAR] Iniciando envio de mensagens');
+          console.log('📝 [WEEKLY-CALENDAR] Template ID:', templateId);
+          console.log('📝 [WEEKLY-CALENDAR] Mensagem customizada:', customMessage ? 'Sim' : 'Não');
+          console.log('🎯 [WEEKLY-CALENDAR] Cobranças selecionadas:', chargeIds);
+          
+          try {
+            const result = await messageService.sendBulkMessages(chargeIds, templateId, customMessage);
+            
+            console.log('✅ [WEEKLY-CALENDAR] Resultado do messageService:', result);
+            
+            toast({
+              title: "Mensagens enviadas com sucesso",
+              description: `${result.count} mensagens foram enviadas.`,
+              variant: "default",
+            });
+            
+            return result.data;
+          } catch (error) {
+            console.error('❌ [WEEKLY-CALENDAR] Erro ao enviar mensagens:', error);
+            
+            toast({
+              title: "Erro ao enviar mensagens",
+              description: error instanceof Error ? error.message : "Ocorreu um erro ao enviar as mensagens.",
+              variant: "destructive",
+            });
+            
+            throw error;
+          }
         }}
       />
     </div>

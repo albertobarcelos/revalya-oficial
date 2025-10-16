@@ -153,7 +153,11 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
 
       <ChargePaymentDetails chargeDetails={chargeDetails} />
 
-      <ChargeItemsList description={chargeDetails?.descricao || ''} />
+      <ChargeItemsList 
+        description={chargeDetails?.descricao || ''} 
+        contractServices={chargeDetails?.contract?.contract_services || []}
+        contractProducts={chargeDetails?.contract?.contract_products || []}
+      />
 
       <Tabs defaultValue="messages">
         <TabsList className="grid grid-cols-2 mb-4">

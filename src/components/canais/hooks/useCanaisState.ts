@@ -48,9 +48,9 @@ export function useCanaisState(
 
       tenantData.integrations.forEach((integration: any) => {
         if (integration.integration_type in newCanaisAtivos) {
-          // AIDEV-NOTE: Considerar tanto is_enabled quanto is_active para determinar se o canal está ativo
-          const isActive = integration.is_enabled || integration.is_active || false;
-          logService.debug(MODULE_NAME, `Canal ${integration.integration_type}: is_enabled=${integration.is_enabled}, is_active=${integration.is_active}, resultado=${isActive}`);
+          // AIDEV-NOTE: Usar apenas is_active que é o campo correto na tabela tenant_integrations
+          const isActive = integration.is_active || false;
+          logService.debug(MODULE_NAME, `Canal ${integration.integration_type}: is_active=${integration.is_active}, resultado=${isActive}`);
           newCanaisAtivos[integration.integration_type as CanalType] = isActive;
         }
       });
