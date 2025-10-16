@@ -1024,6 +1024,8 @@ export interface ContractData {
   endDate?: Date;
   renewalDate?: Date;
   autoRenewal?: boolean;
+  // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobranças automaticamente
+  generate_billing?: boolean;
   client: PersonalData | CompanyData;
   financial: FinancialData;
   terms?: string;

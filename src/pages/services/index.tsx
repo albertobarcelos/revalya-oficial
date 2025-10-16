@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // Hooks e Utilitários
 import { useServices, Service } from '@/hooks/useServices';
-import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { Layout } from '@/components/layout/Layout';
 import { PageLayout } from '@/components/layout/PageLayout';

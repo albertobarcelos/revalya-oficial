@@ -55,6 +55,7 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
     connectionStatus,
     qrCode,
     qrDialogOpen,
+    isLoading: whatsappLoading,
     setQrDialogOpen,
     setQrCode,
     setConnectionStatus,
@@ -164,7 +165,7 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
         isOpen={qrDialogOpen}
         onClose={() => setQrDialogOpen(false)}
         qrCode={qrCode}
-        isLoading={false}
+        isLoading={whatsappLoading}
         connectionStatus={connectionStatus}
         onConnect={handleConnectWhatsApp}
       />

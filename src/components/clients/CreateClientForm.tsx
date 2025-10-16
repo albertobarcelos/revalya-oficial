@@ -75,12 +75,30 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
         description: 'O cliente foi criado com sucesso. Se for CNPJ, os dados serão preenchidos automaticamente.',
       });
       
+      // AIDEV-NOTE: Chama onSuccess imediatamente para fechar modal
       if (onSuccess && data?.id) {
-        onSuccess(data.id);
+        // Usar setTimeout para garantir que o toast seja exibido antes do fechamento
+        setTimeout(() => {
+          onSuccess(data.id);
+        }, 100);
       }
       
-      // AIDEV-NOTE: Não limpa o formulário imediatamente para mostrar status CNPJ
-      // Será limpo após alguns segundos ou quando o usuário sair
+      // AIDEV-NOTE: Limpa o formulário após sucesso para evitar interferência no fechamento do modal
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        cpfCnpj: '',
+        postal_code: '',
+        address: '',
+        address_number: '',
+        complement: '',
+        neighborhood: '',
+        city: '',
+        state: '',
+        company: '',
+      });
+      setCreatedCustomerId(null);
     } catch (error: any) {
       console.error('Erro na criação do cliente no formulário:', error);
       

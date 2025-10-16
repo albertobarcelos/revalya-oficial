@@ -34,9 +34,9 @@ import { ChargeDetailDrawer } from '@/components/charges/ChargeDetailDrawer';
 import type { Cobranca } from '@/types/database';
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { clientsService } from "@/services/clientsService";
-import { useTasks, type Task, type CreateTaskData, type UpdateTaskData } from '@/hooks/useTasks'; // AIDEV-NOTE: Hook multi-tenant
-import { useTenantAccessGuard, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { supabase } from '@/lib/supabase';
+import { useSecureTasks, type SecureTask } from '@/hooks/useSecureTasks'; // AIDEV-NOTE: Hook seguro multi-tenant
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hook de validação de acesso multi-tenant
+import { supabase } from '@/lib/supabase'; // AIDEV-NOTE: Apenas para RPC functions específicas
 
 // AIDEV-NOTE: Tipo Task movido para hook useTasks para consistência multi-tenant
 // Hook useTasks implementa filtros automáticos por tenant_id em todas as operações
@@ -48,35 +48,22 @@ export default function Tasks() {
   const { slug } = useParams<{ slug: string }>();
   const { toast } = useToast();
   
-  // 1. VALIDAÇÃO DE ACESSO (OBRIGATÓRIO)
+  // 🛡️ VALIDAÇÃO DE ACESSO E HOOK SEGURO (OBRIGATÓRIO)
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const queryClient = useQueryClient();
   
-  // 2. HOOK SEGURO PARA DADOS (OBRIGATÓRIO)
-  const { data: tasksData, isLoading: isTasksLoading } = useSecureTenantQuery(
-    ['tasks'],
-    async (supabase, tenantId) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // VALIDAÇÃO DUPLA: verificar se todos os dados pertencem ao tenant correto
-      const invalidData = data?.filter(item => item.tenant_id !== tenantId);
-      if (invalidData?.length > 0) {
-        console.error('[SECURITY] Violação de segurança detectada - dados de outro tenant:', invalidData);
-        throw new Error('Violação de segurança: dados de outro tenant detectados');
-      }
-      
-      return data || [];
-    }
-  );
-  
-  // Usar dados seguros
-  const tasks = tasksData || [];
+  // 🔐 HOOK SEGURO PARA TAREFAS COM 5 CAMADAS DE SEGURANÇA
+  const {
+    tasks,
+    isLoading: isTasksLoading,
+    createTask,
+    updateTask,
+    deleteTask,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    refetch: refetchTasks
+  } = useSecureTasks();
   
   const [isGeneratingTasks, setIsGeneratingTasks] = useState(false);
   const [taskInput, setTaskInput] = useState('');
@@ -107,7 +94,7 @@ export default function Tasks() {
       // Remover dados em cache que possam estar contaminados
       queryClient.removeQueries({ queryKey: ['tasks'] });
     }
-  }, [currentTenant?.id, queryClient]);
+  }, [currentTenant?.id, currentTenant?.name, queryClient]);
   // Novos estados para controlar a edição de tarefas
   const [isEditMode, setIsEditMode] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<string | null>(null);
@@ -121,6 +108,14 @@ export default function Tasks() {
 
   // AIDEV-NOTE: Removido useEffect para loadTasks - agora gerenciado pelo hook useTasks
   // Hook useTasks gerencia automaticamente o carregamento com filtro por tenant_id
+
+  // 3. AUDIT LOG (OBRIGATÓRIO) - Antes de qualquer early return
+  useEffect(() => {
+    if (currentTenant) {
+      console.log(`[AUDIT] Acessando página de tarefas - Tenant: ${currentTenant.name} (${currentTenant.id})`);
+      console.log(`[SECURITY] Validação de acesso aprovada para tenant: ${currentTenant.slug}`);
+    }
+  }, [currentTenant]);
 
   useEffect(() => {
     // Forçar overflow hidden no body
@@ -164,13 +159,13 @@ export default function Tasks() {
     return null;
   }
 
-  // 3. GUARD CLAUSE (OBRIGATÓRIO)
+  // 4. EARLY RETURNS PARA GUARDS
   if (!hasAccess) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Acesso Negado</h2>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <h2 className="text-2xl font-semibold">Acesso Negado</h2>
             <p className="text-muted-foreground">{accessError}</p>
           </div>
         </div>
@@ -178,123 +173,43 @@ export default function Tasks() {
     );
   }
   
-  // 4. AUDIT LOG (OBRIGATÓRIO)
-  useEffect(() => {
-    if (currentTenant) {
-      console.log(`[AUDIT] Acessando página de tarefas - Tenant: ${currentTenant.name} (${currentTenant.id})`);
-      console.log(`[SECURITY] Validação de acesso aprovada para tenant: ${currentTenant.slug}`);
-    }
-  }, [currentTenant]);
-  
   // 🔍 AUDIT LOG: Página renderizada com sucesso
   console.log(`✅ [AUDIT] Página Tarefas renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
 
   const addTask = async () => {
     if (!taskInput.trim()) return;
     
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      toast({
-        title: 'Erro de segurança',
-        description: 'Tenant não definido. Faça login novamente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     try {
-      // AUDIT LOG
-      console.log(`[AUDIT] Criando tarefa rápida - Tenant: ${currentTenant.name}`);
-      
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskInput,
-          status: 'pending',
-          priority: 'medium',
-          tenant_id: currentTenant.id
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // VALIDAÇÃO DUPLA
-      if (data.tenant_id !== currentTenant.id) {
-        throw new Error('Violação de segurança: tarefa criada para tenant incorreto');
-      }
+      // 🔐 USAR HOOK SEGURO PARA CRIAR TAREFA
+      await createTask({
+        title: taskInput.trim(),
+        status: 'pending',
+        priority: 'medium'
+      });
       
       setTaskInput('');
-      
-      // Recarregar dados
-      window.location.reload();
-      
-      toast({
-        title: 'Tarefa adicionada',
-        description: 'A tarefa foi criada com sucesso.',
-      });
     } catch (error) {
       console.error('Erro ao adicionar tarefa:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível adicionar a tarefa.',
-        variant: 'destructive',
-      });
+      // Toast já é exibido pelo hook seguro
     }
   };
 
   const toggleTaskStatus = async (taskId: string, currentStatus: 'pending' | 'completed') => {
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      toast({
-        title: 'Erro de segurança',
-        description: 'Tenant não definido. Faça login novamente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     try {
       const newStatus = currentStatus === 'pending' ? 'completed' : 'pending';
-      const updateData: any = { status: newStatus };
       
-      if (newStatus === 'completed') {
-        updateData.completed_at = new Date().toISOString();
-      } else {
-        updateData.completed_at = null;
-      }
-      
-      // AUDIT LOG
-      console.log(`[AUDIT] Alterando status da tarefa ${taskId} para ${newStatus} - Tenant: ${currentTenant.name}`);
-      
-      const { data, error } = await supabase
-        .from('tasks')
-        .update(updateData)
-        .eq('id', taskId)
-        .eq('tenant_id', currentTenant.id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // VALIDAÇÃO DUPLA
-      if (data.tenant_id !== currentTenant.id) {
-        throw new Error('Violação de segurança: tentativa de alterar tarefa de outro tenant');
-      }
-      
-      // Recarregar dados
-      window.location.reload();
+      // 🔐 USAR HOOK SEGURO PARA ATUALIZAR TAREFA
+      await updateTask({
+        id: taskId,
+        status: newStatus
+      });
     } catch (error) {
       console.error('Erro ao atualizar status da tarefa:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível atualizar o status da tarefa.',
-        variant: 'destructive',
-      });
+      // Toast já é exibido pelo hook seguro
     }
   };
 
-  const confirmDeleteTask = (taskId: string, e?: React.MouseEvent) => {
+  const openDeleteDialog = (taskId: string, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
     }
@@ -302,62 +217,22 @@ export default function Tasks() {
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirmed = async () => {
+  const confirmDeleteTask = async () => {
     if (!taskToDelete) return;
     
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      toast({
-        title: 'Erro de segurança',
-        description: 'Tenant não definido. Faça login novamente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     try {
-      // AUDIT LOG
-      console.log(`[AUDIT] Excluindo tarefa ${taskToDelete} - Tenant: ${currentTenant.name}`);
-      
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskToDelete)
-        .eq('tenant_id', currentTenant.id);
-      
-      if (error) throw error;
+      // 🔐 USAR HOOK SEGURO PARA EXCLUIR TAREFA
+      await deleteTask(taskToDelete);
       
       setIsDeleteDialogOpen(false);
       setTaskToDelete(null);
-      
-      // Recarregar dados
-      window.location.reload();
-      
-      toast({
-        title: 'Tarefa excluída',
-        description: 'A tarefa foi removida com sucesso.',
-      });
     } catch (error) {
       console.error('Erro ao excluir tarefa:', error);
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível excluir a tarefa.',
-        variant: 'destructive',
-      });
+      // Toast já é exibido pelo hook seguro
     }
   };
 
   const createTaskFromCharge = async (charge: Cobranca) => {
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      toast({
-        title: 'Erro de segurança',
-        description: 'Tenant não definido. Faça login novamente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
     try {
       const dueDate = charge.data_vencimento;
       const today = new Date().toISOString().split('T')[0];
@@ -384,78 +259,32 @@ export default function Tasks() {
         }
       }
       
-      // AUDIT LOG
-      console.log(`[AUDIT] Criando tarefa a partir de cobrança ${charge.id} - Tenant: ${currentTenant.name}`);
-      
-      const newTask = {
+      // 🔐 USAR HOOK SEGURO PARA CRIAR TAREFA
+      const data = await createTask({
         title,
         client_name: charge.customer?.name || 'Cliente',
         client_id: charge.customer?.id,
         charge_id: charge.id,
         due_date: dueDate,
         priority,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-        tenant_id: currentTenant.id
-      };
-      
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert(newTask)
-        .select('id')
-        .single();
-      
-      if (error) {
-        console.error("Erro ao criar tarefa a partir da cobrança:", error);
-        throw error;
-      }
-      
-      // VALIDAÇÃO DUPLA
-      if (data.tenant_id !== currentTenant.id) {
-        throw new Error('Violação de segurança: tarefa criada para tenant incorreto');
-      }
-      
-      // Recarregar dados
-      window.location.reload();
-      
-      toast({
-        title: "Tarefa criada",
-        description: `Tarefa "${title}" para ${charge.customer?.name} criada com sucesso.`,
+        status: 'pending'
       });
       
       return data;
     } catch (error) {
       console.error("Erro ao criar tarefa a partir da cobrança:", error);
-      toast({
-        title: "Erro ao criar tarefa",
-        description: "Não foi possível criar uma tarefa para esta cobrança.",
-        variant: "destructive",
-      });
+      // Toast já é exibido pelo hook seguro
       return null;
     }
   };
 
   const checkTaskExistsForCharge = async (chargeId: string): Promise<boolean> => {
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      console.error('[SECURITY] Tentativa de verificar tarefa sem tenant definido');
-      return false;
-    }
-    
     try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('id')
-        .eq('charge_id', chargeId)
-        .eq('tenant_id', currentTenant.id)
-        .limit(1);
+      // 🔐 USAR DADOS SEGUROS DO HOOK
+      if (!tasks || !hasAccess) return false;
       
-      if (error) {
-        console.error('Erro ao verificar tarefa existente:', error);
-        return false;
-      }
-      
-      return !!data && data.length > 0;
+      // Verificar se existe tarefa para esta cobrança nos dados já carregados
+      return tasks.some(task => task.charge_id === chargeId);
     } catch (error) {
       console.error('Erro ao verificar tarefa existente:', error);
       return false;
@@ -463,25 +292,12 @@ export default function Tasks() {
   };
 
   const generateTasksFromUpcomingCharges = async (daysAhead: number = 5) => {
-    // VALIDAÇÃO DE SEGURANÇA
-    if (!currentTenant?.id) {
-      toast({
-        title: 'Erro de segurança',
-        description: 'Tenant não definido. Faça login novamente.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    if (!chargesData?.data) return;
+    if (!chargesData?.data || !hasAccess) return;
     
     setIsGeneratingTasks(true);
     const today = new Date();
     let tasksCreated = 0;
     let tasksSkipped = 0;
-    
-    // AUDIT LOG
-    console.log(`[AUDIT] Gerando tarefas automáticas para próximos ${daysAhead} dias - Tenant: ${currentTenant.name}`);
     
     try {
       // Filtrar cobranças pendentes com vencimento nos próximos N dias
@@ -516,34 +332,21 @@ export default function Tasks() {
             priority = 'low';
           }
           
-          // Criar a tarefa
-          const task = {
-            title: `Cobrança de ${charge.customer?.name || 'Cliente'} - R$ ${Number(charge.valor).toFixed(2)}`,
-            description: `Vencimento em ${format(dueDate, 'dd/MM/yyyy')}. ${charge.descricao || ''}`,
-            client_name: charge.customer?.name,
-            client_id: charge.customer?.id,
-            charge_id: charge.id,
-            due_date: charge.data_vencimento,
-            priority,
-            status: 'pending',
-            tenant_id: currentTenant.id
-          };
-          
-          const { data, error } = await supabase
-            .from('tasks')
-            .insert(task)
-            .select()
-            .single();
-          
-          if (!error && data) {
-            // VALIDAÇÃO DUPLA
-            if (data.tenant_id !== currentTenant.id) {
-              console.error('[SECURITY] Violação detectada: tarefa criada para tenant incorreto');
-              tasksSkipped++;
-            } else {
-              tasksCreated++;
-            }
-          } else {
+          try {
+            // 🔐 USAR HOOK SEGURO PARA CRIAR TAREFA
+            await createTask({
+              title: `Cobrança de ${charge.customer?.name || 'Cliente'} - R$ ${Number(charge.valor).toFixed(2)}`,
+              description: `Vencimento em ${format(dueDate, 'dd/MM/yyyy')}. ${charge.descricao || ''}`,
+              client_name: charge.customer?.name,
+              client_id: charge.customer?.id,
+              charge_id: charge.id,
+              due_date: charge.data_vencimento,
+              priority,
+              status: 'pending'
+            });
+            
+            tasksCreated++;
+          } catch (error) {
             console.error('Erro ao criar tarefa automática:', error);
             tasksSkipped++;
           }
@@ -551,9 +354,6 @@ export default function Tasks() {
           tasksSkipped++;
         }
       }
-      
-      // Recarregar dados
-      window.location.reload();
       
       // Exibir toast de sucesso
       toast({
@@ -813,7 +613,7 @@ export default function Tasks() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="priority">Prioridade</Label>
-                    <Select value={newTaskPriority} onValueChange={(value: any) => setNewTaskPriority(value)}>
+                    <Select value={newTaskPriority} onValueChange={(value: string) => setNewTaskPriority(value)}>
                       <SelectTrigger id="priority">
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
@@ -979,7 +779,7 @@ export default function Tasks() {
                                     className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive flex-shrink-0"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      confirmDeleteTask(task.id, e);
+                                      openDeleteDialog(task.id, e);
                                     }}
                                   >
                                     <span className="sr-only">Excluir</span>
@@ -1170,7 +970,7 @@ export default function Tasks() {
                                     className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      confirmDeleteTask(task.id, e);
+                                      openDeleteDialog(task.id, e);
                                     }}
                                   >
                                     <span className="sr-only">Excluir</span>
@@ -1221,7 +1021,7 @@ export default function Tasks() {
               <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button variant="destructive" onClick={handleDeleteConfirmed}>
+              <Button variant="destructive" onClick={confirmDeleteTask}>
                 Excluir tarefa
               </Button>
             </DialogFooter>

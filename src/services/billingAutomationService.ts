@@ -91,6 +91,7 @@ class BillingAutomationService {
       const nextMonth = addMonths(currentMonth, 1);
 
       // Buscar contratos ativos que precisam de faturamento
+      // AIDEV-NOTE: Agora consideramos o campo generate_billing para controlar se o contrato deve gerar cobrança
       let contractsQuery = supabase
         .from('contracts')
         .select(`
@@ -120,7 +121,8 @@ class BillingAutomationService {
         `)
         .eq('tenant_id', options.tenant_id)
         .eq('status', 'ACTIVE')
-        .eq('auto_billing', true);
+        .eq('auto_billing', true)
+        .eq('generate_billing', true);
 
       if (options.contract_ids && options.contract_ids.length > 0) {
         contractsQuery = contractsQuery.in('id', options.contract_ids);
@@ -165,9 +167,14 @@ class BillingAutomationService {
             referenceDate
           );
 
+          // AIDEV-NOTE: Corrigido - usar billing_type dos serviços do contrato ao invés de payment_terms inexistente
+          // Pegar o billing_type do primeiro serviço do contrato (assumindo que todos têm o mesmo)
+          const contractBillingType = contract.contract_services?.[0]?.billing_type;
+          const paymentTerms = this.mapBillingTypeToPaymentTerms(contractBillingType);
+
           // Determinar data de vencimento
           const dueDate = this.calculateDueDate(
-            contract.payment_terms || 'MONTHLY',
+            paymentTerms,
             contract.due_day || 10,
             referenceDate
           );
@@ -192,7 +199,7 @@ class BillingAutomationService {
             tax_amount: calculation.tax_amount,
             net_amount: calculation.net_amount,
             status: 'PENDING' as const,
-            payment_terms: contract.payment_terms || 'MONTHLY',
+            // AIDEV-NOTE: Removido payment_terms pois não existe na estrutura do contrato
             synchronization_status: 'PENDING' as const
           };
 
@@ -691,6 +698,29 @@ class BillingAutomationService {
         next_run: new Date()
       };
     }
+  }
+}
+
+  /**
+   * AIDEV-NOTE: Função para mapear billing_type (português) para payment_terms (inglês)
+   * Resolve o erro "case not found" ao converter valores do banco para a função calculateDueDate
+   */
+  private mapBillingTypeToPaymentTerms(billingType?: string): 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL' {
+    if (!billingType) return 'MONTHLY';
+    
+    const mappings: Record<string, 'MONTHLY' | 'QUARTERLY' | 'SEMIANNUAL' | 'ANNUAL'> = {
+      'Mensal': 'MONTHLY',
+      'Trimestral': 'QUARTERLY', 
+      'Semestral': 'SEMIANNUAL',
+      'Anual': 'ANNUAL',
+      // Fallbacks para valores em inglês (caso existam)
+      'MONTHLY': 'MONTHLY',
+      'QUARTERLY': 'QUARTERLY',
+      'SEMIANNUAL': 'SEMIANNUAL', 
+      'ANNUAL': 'ANNUAL'
+    };
+    
+    return mappings[billingType] || 'MONTHLY';
   }
 }
 

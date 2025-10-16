@@ -12,16 +12,19 @@
  * - Previne vazamento de dados entre tenants
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { motion } from 'framer-motion';
 import { 
   CalendarDays, 
   Clock, 
   CreditCard, 
   Package, 
   Wrench,
-  AlertCircle 
+  AlertCircle,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,11 +38,51 @@ interface MonthlyBillingDetailsProps {
 }
 
 export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDetailsProps) {
-  // 🔐 HOOK SEGURO COM VALIDAÇÃO MULTI-TENANT
+  // AIDEV-NOTE: Hook seguro que implementa as 5 camadas de segurança multi-tenant
   const { billingData, isLoading: loading, error, refetch } = useSecureMonthlyBilling({
     contractId,
     enabled: !!contractId
   });
+
+  // AIDEV-NOTE: Debug log para verificar dados recebidos
+  console.log('🔍 [BILLING MODAL DEBUG] Estado do componente:', {
+    contractId,
+    hasContractId: !!contractId,
+    loading,
+    hasBillingData: !!billingData,
+    hasError: !!error,
+    errorMessage: error?.message,
+    billingDataKeys: billingData ? Object.keys(billingData) : null,
+    itemsCount: billingData?.items?.length || 0
+  });
+
+  // AIDEV-NOTE: Log adicional quando dados mudam
+  useEffect(() => {
+    console.log('🔄 [BILLING MODAL DEBUG] Dados de faturamento atualizados:', {
+      contractId,
+      billingData: billingData ? {
+        contractInfo: billingData.contractInfo,
+        itemsCount: billingData.items?.length || 0,
+        totalAmount: billingData.totalAmount,
+        dueDate: billingData.dueDate
+      } : null,
+      loading,
+      error: error?.message
+    });
+  }, [billingData, loading, error, contractId]);
+
+  // 🔍 DEBUG: Log temporário para verificar dados recebidos no componente
+  React.useEffect(() => {
+    if (billingData?.items) {
+      console.log('🔍 [DEBUG] Dados recebidos no componente:', billingData.items.map(item => ({
+        id: item.id,
+        type: item.type,
+        description: item.description,
+        generate_billing: item.generate_billing,
+        generate_billing_type: typeof item.generate_billing
+      })));
+    }
+  }, [billingData]);
 
   /**
    * Formata valor monetário para exibição
@@ -160,12 +203,14 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
               <p className="text-sm text-gray-500">Cliente</p>
               <p className="font-medium">{billingData.contract_info.customer_name}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Vencimento</p>
-              <p className="font-medium flex items-center gap-1">
-                <Clock className="h-4 w-4" />
-                Dia {billingData.contract_info.billing_day}
-              </p>
+            <div className="space-y-2">
+              <div>
+                <p className="text-sm text-gray-500">Vencimento</p>
+                <p className="font-medium flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  Dia {billingData.contract_info.billing_day}
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -193,7 +238,34 @@ export function MonthlyBillingDetails({ contractId, onClose }: MonthlyBillingDet
                       </Badge>
                     </div>
                     
-                    <h4 className="font-medium mb-1">{item.description}</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{item.description}</h4>
+                      
+                      {/* 🎯 AIDEV-NOTE: Indicador de cobrança automática por item */}
+                      <div className="flex items-center gap-2">
+                        {/* 🔍 DEBUG: Log específico na renderização */}
+                        {console.log(`🔍 [RENDER] Item ${item.description}: generate_billing =`, item.generate_billing, typeof item.generate_billing)}
+                        {item.generate_billing ? (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                            Cobrança Automática
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="flex items-center gap-1 px-2 py-1 bg-orange-50 text-orange-700 rounded-md text-xs font-medium"
+                          >
+                            <XCircle className="h-3 w-3" />
+                            Cobrança Manual
+                          </motion.div>
+                        )}
+                      </div>
+                    </div>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
                       <div>

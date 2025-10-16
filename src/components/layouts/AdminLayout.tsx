@@ -88,7 +88,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Logo */}
         <div className="flex h-16 items-center border-b px-6">
           <Link to="/admin/dashboard" className="flex items-center space-x-2">
-            <img src="/logos/LOGO-REVALYA.png" alt="Revalya" className="h-8 w-auto" />
+            <img src="/logos/LOGO-REVALYA123.png" alt="Revalya" className="h-8 w-auto" />
             <span className="text-lg font-semibold">Admin</span>
           </Link>
         </div>

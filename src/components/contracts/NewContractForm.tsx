@@ -919,6 +919,31 @@ function ServiceDetailForm({ service, index, onUpdate, onClose }: ServiceDetailF
             
             <TabsContent value="outras" className="space-y-6 mt-6">
               <div className="space-y-4">
+                {/* AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobrança automaticamente */}
+                <FormField
+                  control={form.control}
+                  name="generate_billing"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">
+                          Gerar Cobrança Automaticamente
+                        </FormLabel>
+                        <FormDescription>
+                          Quando ativado, este contrato gerará cobranças automaticamente conforme o ciclo de faturamento configurado.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={isViewMode}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
                 {/* Opção de não gerar conta a receber */}
                 <div className="flex items-center space-x-2">
                   <Checkbox

@@ -139,26 +139,68 @@ export function useContractEdit(): UseContractEditReturn {
       // 🔧 PREPARAR DADOS PARA O FORMULÁRIO
       console.log('🔧 Formatando serviços carregados do banco:', services);
       
-      // Funções para mapear valores do banco de volta para o formulário
+      // AIDEV-NOTE: Funções para mapear valores do banco de volta para o formulário
+      // Converte valores em inglês do banco para valores em português do frontend
       const reverseMapPaymentMethod = (paymentMethod: string | null): string => {
         if (!paymentMethod) return "";
         
-        // Mantém os valores como estão no banco de dados
-        return paymentMethod;
+        const reverseMapping: Record<string, string> = {
+          // Valores em português do banco -> Valores em português do frontend
+          'Cartão': 'Cartão',
+          'PIX': 'PIX',
+          'Transferência': 'Transferência Bancária',
+          'Boleto': 'Boleto Bancário',
+          // Valores em inglês legados -> Valores em português do frontend
+          'credit_card': 'Cartão',
+          'pix': 'PIX',
+          'bank_transfer': 'Transferência Bancária',
+          'bank_slip': 'Boleto Bancário'
+        };
+        
+        return reverseMapping[paymentMethod] || paymentMethod;
       };
       
       const reverseMapBillingType = (billingType: string | null): string => {
         if (!billingType) return "Único";
         
-        // Agora mantemos os valores em português como estão no banco
-        return billingType;
+        const reverseMapping: Record<string, string> = {
+          // Valores em português do banco -> Valores em português do frontend
+          'Único': 'Único',
+          'Mensal': 'Mensal',
+          'Trimestral': 'Trimestral',
+          'Semestral': 'Semestral',
+          'Anual': 'Anual',
+          // Valores em inglês legados -> Valores em português do frontend
+          'credit_recurring': 'Mensal',
+          'unique': 'Único',
+          'monthly': 'Mensal',
+          'quarterly': 'Trimestral',
+          'semiannual': 'Semestral',
+          'annual': 'Anual'
+        };
+        
+        return reverseMapping[billingType] || billingType;
       };
       
       const reverseMapRecurrenceFrequency = (frequency: string | null): string => {
         if (!frequency) return "Mensal";
         
-        // Agora mantemos os valores em português como estão no banco
-        return frequency;
+        const reverseMapping: Record<string, string> = {
+          // Valores em português do banco -> Valores em português do frontend
+          'Mensal': 'Mensal',
+          'Trimestral': 'Trimestral',
+          'Semestral': 'Semestral',
+          'Anual': 'Anual',
+          'Único': 'Único',
+          // Valores em inglês legados -> Valores em português do frontend
+          'monthly': 'Mensal',
+          'quarterly': 'Trimestral',
+          'semiannual': 'Semestral',
+          'annual': 'Anual',
+          'unique': 'Único'
+        };
+        
+        return reverseMapping[frequency] || frequency;
       };
       
       const formattedServices = services.map(service => {

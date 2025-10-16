@@ -147,14 +147,19 @@ class BillingProcessorService {
       result.charge_id = charge.id;
       result.external_id = chargeData.external_id;
 
-      // 5. Criar lançamento financeiro
+      // 5. Vincular cobrança ao período de faturamento
+      // AIDEV-NOTE: Esta chamada é crucial para atualizar o status do período de PENDING para BILLED
+      // e fazer o card aparecer na coluna "Faturados no Mês" do Kanban
+      await this.linkChargeToContractPeriod(charge.id, billing.contract_id, billing.due_date, billing.net_amount);
+
+      // 6. Criar lançamento financeiro
       const financeEntry = await this.createFinanceEntry(billing, charge);
       result.finance_entry_id = financeEntry.id;
 
-      // 6. Atualizar status da previsão
+      // 7. Atualizar status da previsão
       await billingForecastService.markBillingAsProcessed(billing.id);
 
-      // 7. Criar itens de faturamento
+      // 8. Criar itens de faturamento
       await this.createBillingItems(billing.id, contractData.contract_services);
 
       result.success = true;
@@ -254,6 +259,41 @@ class BillingProcessorService {
     }
 
     return data;
+  }
+
+  /**
+   * Vincula cobrança criada ao período de faturamento correspondente
+   * AIDEV-NOTE: Esta função chama a RPC on_charge_created_link_period que atualiza
+   * o status do período de PENDING para BILLED, permitindo que o card apareça
+   * na coluna "Faturados no Mês" do Kanban
+   */
+  private async linkChargeToContractPeriod(
+    charge_id: string,
+    contract_id: string,
+    bill_date: string,
+    amount: number
+  ): Promise<void> {
+    const { data, error } = await supabase.rpc('on_charge_created_link_period', {
+      p_charge_id: charge_id,
+      p_contract_id: contract_id,
+      p_bill_date: bill_date,
+      p_amount: amount
+    });
+
+    if (error) {
+      console.error('[BillingProcessor] Erro ao vincular cobrança ao período:', error);
+      throw new Error(`Erro ao vincular cobrança ao período: ${error.message}`);
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[BillingProcessor] Cobrança vinculada ao período:', {
+        charge_id,
+        contract_id,
+        bill_date,
+        amount,
+        result: data
+      });
+    }
   }
 
   /**

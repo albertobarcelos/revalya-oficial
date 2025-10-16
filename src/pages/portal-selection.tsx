@@ -427,7 +427,7 @@ export default function PortalSelectionPage() {
           {/* Header com informações do usuário e logo */}
           <div className="mb-12 flex flex-col items-center justify-center text-center">
             <img 
-              src="/logos/LOGO-REVALYA.png" 
+              src="/logos/LOGO-REVALYA123.png" 
               alt="Revalya Logo" 
               className="mb-10 w-80"
             />
@@ -493,7 +493,7 @@ export default function PortalSelectionPage() {
         {/* Header com informações do usuário e logo */}
         <div className="mb-12 flex flex-col items-center justify-center text-center">
           <img 
-            src="/logos/LOGO-REVALYA.png" 
+            src="/logos/LOGO-REVALYA123.png" 
             alt="Revalya Logo" 
             className="mb-10 w-80"
           />
