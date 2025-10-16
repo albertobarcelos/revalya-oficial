@@ -145,38 +145,51 @@ export const generateMockMovements = (config?: Partial<MockDataConfig>): Importe
     const chargeId = hasContract && Math.random() > 0.5 ? `CHG-${generateRandomId().toUpperCase()}` : undefined;
 
     const movement: ImportedMovement = {
+      // AIDEV-NOTE: Campos principais obrigatórios
       id: generateRandomId(),
-      tenantId: 'tenant-1',
-      source,
-      externalId: generateExternalId(source),
-      externalReference: Math.random() > 0.7 ? `REF-${generateRandomId()}` : undefined,
+      tenant_id: 'tenant-1',
+      origem: source,
+      id_externo: generateExternalId(source),
+      valor_pago: paidAmount,
+      status_externo: paymentStatus === PaymentStatus.PAID ? 'PAID' : 
+                     paymentStatus === PaymentStatus.CANCELLED ? 'CANCELLED' : 'PENDING',
+      status_conciliacao: status,
+      juros_multa_diferenca: Math.abs(difference) > 0.01 ? difference : 0,
       
-      chargeAmount: hasContract ? chargeAmount : undefined,
-      paidAmount,
-      difference: Math.abs(difference) > 0.01 ? difference : undefined,
-      currency: 'BRL',
+      // AIDEV-NOTE: Campos opcionais de relacionamento
+      contrato_id: contractId,
+      cobranca_id: chargeId,
+      valor_cobranca: hasContract ? chargeAmount : undefined,
       
-      paymentStatus,
-      reconciliationStatus: status,
-      dueDate: hasContract ? generateRandomDate(45) : undefined,
-      paymentDate: paymentStatus === PaymentStatus.PAID ? generateRandomDate(15) : undefined,
+      // AIDEV-NOTE: Campos de datas
+      data_vencimento: hasContract ? generateRandomDate(45) : undefined,
+      data_pagamento: paymentStatus === PaymentStatus.PAID ? generateRandomDate(15) : undefined,
       
-      contractId,
-      chargeId,
-      hasContract,
-      
-      description: `Pagamento via ${source} - ${customer.name}`,
-      customerName: customer.name,
-      customerDocument: customer.document,
-      observations: status === ReconciliationStatus.DIVERGENT ? 
+      // AIDEV-NOTE: Campos de referência e observação
+      external_reference: Math.random() > 0.7 ? `REF-${generateRandomId()}` : undefined,
+      observacao: status === ReconciliationStatus.DIVERGENT ? 
         `Diferença de ${difference > 0 ? 'juros' : 'desconto'}: ${Math.abs(difference).toFixed(2)}` : 
         undefined,
       
-      importedAt: generateRandomDate(7),
-      reconciledAt: status === ReconciliationStatus.RECONCILED ? generateRandomDate(3) : undefined,
-      reconciledBy: status === ReconciliationStatus.RECONCILED ? 'admin@revalya.com' : undefined,
-      createdAt: generateRandomDate(30),
-      updatedAt: generateRandomDate(5)
+      // AIDEV-NOTE: Campos do cliente
+      customer_name: customer.name,
+      customer_document: customer.document,
+      
+      // AIDEV-NOTE: Campos de conciliação
+      reconciled: status === ReconciliationStatus.RECONCILED,
+      reconciled_at: status === ReconciliationStatus.RECONCILED ? generateRandomDate(3) : undefined,
+      reconciled_by: status === ReconciliationStatus.RECONCILED ? 'admin@revalya.com' : undefined,
+      
+      // AIDEV-NOTE: Campos de auditoria
+      created_at: generateRandomDate(30),
+      updated_at: generateRandomDate(5),
+      
+      // AIDEV-NOTE: Campos computados para compatibilidade
+      tenantId: 'tenant-1',
+      hasContract,
+      customerName: customer.name,
+      customerDocument: customer.document,
+      description: `Pagamento via ${source} - ${customer.name}`
     };
 
     movements.push(movement);
@@ -191,136 +204,186 @@ export const generateMockMovements = (config?: Partial<MockDataConfig>): Importe
 
 export const mockMovementsAsaas: ImportedMovement[] = [
   {
+    // AIDEV-NOTE: Campos principais obrigatórios
     id: 'mov-asaas-001',
+    tenant_id: 'tenant-1',
+    origem: ReconciliationSource.ASAAS,
+    id_externo: 'asaas_pay_123456789',
+    valor_pago: 1500.00,
+    status_externo: 'PAID',
+    status_conciliacao: ReconciliationStatus.RECONCILED,
+    juros_multa_diferenca: 0,
+    
+    // AIDEV-NOTE: Campos opcionais de relacionamento
+    contrato_id: 'CTR-ABC123',
+    cobranca_id: 'CHG-XYZ789',
+    valor_cobranca: 1500.00,
+    
+    // AIDEV-NOTE: Campos de datas
+    data_vencimento: '2024-01-15T00:00:00.000Z',
+    data_pagamento: '2024-01-15T14:30:00.000Z',
+    
+    // AIDEV-NOTE: Campos do cliente
+    customer_name: 'João Silva Santos',
+    customer_document: '123.456.789-01',
+    
+    // AIDEV-NOTE: Campos de conciliação
+    reconciled: true,
+    reconciled_at: '2024-01-15T15:00:00.000Z',
+    reconciled_by: 'user-admin-001',
+    
+    // AIDEV-NOTE: Campos de auditoria
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-15T15:00:00.000Z',
+    
+    // AIDEV-NOTE: Campos computados para compatibilidade
     tenantId: 'tenant-1',
-    source: ReconciliationSource.ASAAS,
-    externalId: 'asaas_pay_123456789',
-    
-    chargeAmount: 1500.00,
-    paidAmount: 1500.00,
-    difference: 0,
-    currency: 'BRL',
-    
-    paymentStatus: PaymentStatus.PAID,
-    reconciliationStatus: ReconciliationStatus.RECONCILED,
-    dueDate: '2024-01-15T00:00:00.000Z',
-    paymentDate: '2024-01-15T14:30:00.000Z',
-    
-    contractId: 'CTR-ABC123',
-    chargeId: 'CHG-XYZ789',
     hasContract: true,
-    
-    description: 'Mensalidade Janeiro 2024 - João Silva',
     customerName: 'João Silva Santos',
     customerDocument: '123.456.789-01',
-    reconciledAt: '2024-01-15T15:00:00.000Z',
-    reconciledBy: 'user-admin-001',
-    
-    importedAt: '2024-01-15T15:00:00.000Z',
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-15T15:00:00.000Z'
+    description: 'Mensalidade Janeiro 2024 - João Silva'
   },
   {
+    // AIDEV-NOTE: Campos principais obrigatórios
     id: 'mov-asaas-002',
+    tenant_id: 'tenant-1',
+    origem: ReconciliationSource.ASAAS,
+    id_externo: 'asaas_pay_987654321',
+    valor_pago: 750.00,
+    status_externo: 'PAID',
+    status_conciliacao: ReconciliationStatus.PENDING,
+    juros_multa_diferenca: 0,
+    
+    // AIDEV-NOTE: Campos opcionais de relacionamento
+    contrato_id: undefined,
+    cobranca_id: undefined,
+    valor_cobranca: undefined,
+    
+    // AIDEV-NOTE: Campos de datas
+    data_vencimento: undefined,
+    data_pagamento: '2024-01-16T10:45:00.000Z',
+    
+    // AIDEV-NOTE: Campos do cliente
+    customer_name: 'Maria Oliveira Costa',
+    customer_document: '987.654.321-02',
+    
+    // AIDEV-NOTE: Campos de conciliação
+    reconciled: false,
+    reconciled_at: undefined,
+    reconciled_by: undefined,
+    
+    // AIDEV-NOTE: Campos de auditoria
+    created_at: '2024-01-16T10:45:00.000Z',
+    updated_at: '2024-01-16T11:00:00.000Z',
+    
+    // AIDEV-NOTE: Campos computados para compatibilidade
     tenantId: 'tenant-1',
-    source: ReconciliationSource.ASAAS,
-    externalId: 'asaas_pay_987654321',
-    
-    chargeAmount: undefined,
-    paidAmount: 750.00,
-    difference: undefined,
-    currency: 'BRL',
-    
-    paymentStatus: PaymentStatus.PAID,
-    reconciliationStatus: ReconciliationStatus.PENDING,
-    dueDate: undefined,
-    paymentDate: '2024-01-16T10:45:00.000Z',
-    
-    contractId: undefined,
-    chargeId: undefined,
     hasContract: false,
-    
-    description: 'Pagamento avulso - Maria Oliveira',
     customerName: 'Maria Oliveira Costa',
     customerDocument: '987.654.321-02',
-    
-    importedAt: '2024-01-16T11:00:00.000Z',
-    createdAt: '2024-01-16T10:45:00.000Z',
-    updatedAt: '2024-01-16T11:00:00.000Z'
+    description: 'Pagamento avulso - Maria Oliveira'
   },
   {
+    // AIDEV-NOTE: Campos principais obrigatórios
     id: 'mov-asaas-003',
+    tenant_id: 'tenant-1',
+    origem: ReconciliationSource.ASAAS,
+    id_externo: 'asaas_pay_456789123',
+    valor_pago: 2850.00,
+    status_externo: 'PAID',
+    status_conciliacao: ReconciliationStatus.DIVERGENT,
+    juros_multa_diferenca: 50.00,
+    
+    // AIDEV-NOTE: Campos opcionais de relacionamento
+    contrato_id: 'CTR-ASA003',
+    cobranca_id: 'CHG-ASA003',
+    valor_cobranca: 2800.00,
+    
+    // AIDEV-NOTE: Campos de datas
+    data_vencimento: '2024-01-08T00:00:00.000Z',
+    data_pagamento: '2024-01-18T16:20:00.000Z',
+    
+    // AIDEV-NOTE: Campos de referência e observação
+    observacao: 'Diferença de juros: R$ 50,00 (pagamento em atraso)',
+    
+    // AIDEV-NOTE: Campos do cliente
+    customer_name: 'Carlos Pereira Lima',
+    customer_document: '456.789.123-03',
+    
+    // AIDEV-NOTE: Campos de conciliação
+    reconciled: false,
+    reconciled_at: undefined,
+    reconciled_by: undefined,
+    
+    // AIDEV-NOTE: Campos de auditoria
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-18T17:00:00.000Z',
+    
+    // AIDEV-NOTE: Campos computados para compatibilidade
     tenantId: 'tenant-1',
-    source: ReconciliationSource.ASAAS,
-    externalId: 'asaas_pay_456789123',
-    
-    chargeAmount: 2800.00,
-    paidAmount: 2850.00,
-    difference: 50.00,
-    currency: 'BRL',
-    
-    paymentStatus: PaymentStatus.PAID,
-    reconciliationStatus: ReconciliationStatus.DIVERGENT,
-    dueDate: '2024-01-08T00:00:00.000Z',
-    paymentDate: '2024-01-18T16:20:00.000Z',
-    
-    contractId: 'CTR-ASA003',
-    chargeId: 'CHG-ASA003',
     hasContract: true,
-    
-    description: 'Mensalidade com juros - Carlos Pereira',
     customerName: 'Carlos Pereira Lima',
     customerDocument: '456.789.123-03',
-    observations: 'Diferença de juros: R$ 50,00 (pagamento em atraso)',
-    
-    importedAt: '2024-01-18T17:00:00.000Z',
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-18T17:00:00.000Z'
+    description: 'Mensalidade com juros - Carlos Pereira'
   },
   {
+    // AIDEV-NOTE: Campos principais obrigatórios
     id: 'mov-asaas-004',
+    tenant_id: 'tenant-1',
+    origem: ReconciliationSource.ASAAS,
+    id_externo: 'asaas_pay_789123456',
+    valor_pago: 1200.00,
+    status_externo: 'PAID',
+    status_conciliacao: ReconciliationStatus.RECONCILED,
+    juros_multa_diferenca: 0,
+    
+    // AIDEV-NOTE: Campos opcionais de relacionamento
+    contrato_id: 'CTR-ASA004',
+    cobranca_id: 'CHG-ASA004',
+    valor_cobranca: 1200.00,
+    
+    // AIDEV-NOTE: Campos de datas
+    data_vencimento: '2024-01-20T00:00:00.000Z',
+    data_pagamento: '2024-01-19T08:15:00.000Z',
+    
+    // AIDEV-NOTE: Campos do cliente
+    customer_name: 'Ana Rodrigues Silva',
+    customer_document: '789.123.456-04',
+    
+    // AIDEV-NOTE: Campos de conciliação
+    reconciled: true,
+    reconciled_at: '2024-01-19T09:00:00.000Z',
+    reconciled_by: 'user-admin-003',
+    
+    // AIDEV-NOTE: Campos de auditoria
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-19T09:00:00.000Z',
+    
+    // AIDEV-NOTE: Campos computados para compatibilidade
     tenantId: 'tenant-1',
-    source: ReconciliationSource.ASAAS,
-    externalId: 'asaas_pay_789123456',
-    
-    chargeAmount: 1200.00,
-    paidAmount: 1200.00,
-    difference: 0,
-    currency: 'BRL',
-    
-    paymentStatus: PaymentStatus.PAID,
-    reconciliationStatus: ReconciliationStatus.RECONCILED,
-    dueDate: '2024-01-20T00:00:00.000Z',
-    paymentDate: '2024-01-19T08:15:00.000Z',
-    
-    contractId: 'CTR-ASA004',
-    chargeId: 'CHG-ASA004',
     hasContract: true,
-    
-    description: 'Mensalidade Janeiro 2024 - Ana Rodrigues',
     customerName: 'Ana Rodrigues Silva',
     customerDocument: '789.123.456-04',
-    reconciledAt: '2024-01-19T09:00:00.000Z',
-    reconciledBy: 'user-admin-003',
-    
-    importedAt: '2024-01-19T09:00:00.000Z',
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-19T09:00:00.000Z'
+    description: 'Mensalidade Janeiro 2024 - Ana Rodrigues'
   },
   {
+    // AIDEV-NOTE: Campos principais obrigatórios
     id: 'mov-asaas-005',
-    tenantId: 'tenant-1',
-    source: ReconciliationSource.ASAAS,
-    externalId: 'asaas_pay_321654987',
+    tenant_id: 'tenant-1',
+    origem: ReconciliationSource.ASAAS,
+    id_externo: 'asaas_pay_321654987',
+    valor_pago: 1850.00,
+    status_externo: 'PAID',
+    status_conciliacao: ReconciliationStatus.PENDING,
+    juros_multa_diferenca: 0,
     
-    chargeAmount: undefined,
-    paidAmount: 1850.00,
-    difference: undefined,
-    currency: 'BRL',
+    // AIDEV-NOTE: Campos opcionais de relacionamento
+    contrato_id: undefined,
+    cobranca_id: undefined,
+    valor_cobranca: undefined,
     
-    paymentStatus: PaymentStatus.PAID,
-    reconciliationStatus: ReconciliationStatus.PENDING,
-    dueDate: undefined,
+    // AIDEV-NOTE: Campos de datas
+    data_vencimento: undefined,
     paymentDate: '2024-01-21T13:30:00.000Z',
     
     contractId: undefined,
