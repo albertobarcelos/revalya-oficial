@@ -24,6 +24,33 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Campo Generate Billing para Controle de Faturamento Automático
+
+Implementamos o campo `generate_billing` na tabela `contracts` para permitir controle granular sobre quais contratos devem gerar cobranças automáticas no sistema.
+
+#### 🎯 **Funcionalidade Implementada**
+
+- **Campo Database**: `generate_billing BOOLEAN DEFAULT true` na tabela `contracts`
+- **Interface de Usuário**: Switch no formulário de contratos para controlar faturamento automático
+- **Filtros de Serviço**: Serviços de automação agora consideram apenas contratos com `generate_billing = true`
+- **Compatibilidade**: Todos os contratos existentes mantêm comportamento anterior (padrão `true`)
+
+#### 🔧 **Serviços Atualizados**
+
+1. **billingAutomationService.ts**: Filtro para processar apenas contratos com faturamento habilitado
+2. **billingForecastService.ts**: Previsões geradas apenas para contratos ativos para faturamento
+3. **useContracts.ts**: Hook atualizado para incluir o campo nas queries
+4. **NewContractForm.tsx**: Interface com switch para controle do faturamento
+
+#### 📋 **Benefícios**
+
+- ✅ **Controle Granular**: Administradores podem desabilitar faturamento por contrato
+- ✅ **Flexibilidade**: Contratos especiais podem ter cobrança manual
+- ✅ **Compatibilidade**: Nenhuma funcionalidade existente foi quebrada
+- ✅ **Segurança**: Implementação segue padrões multi-tenant do projeto
+
+**Documentação**: [`CONTRATOS_GENERATE_BILLING.md`](./Documentação%20do%20Projeto/CONTRATOS_GENERATE_BILLING.md)
+
 ### Janeiro 2025: Melhorias na Integração WhatsApp - Persistência e Reconexão Automática
 
 Implementamos correções críticas na integração WhatsApp para resolver problemas de persistência de configuração e reconexão automática após recarregamento da página.
@@ -292,6 +319,40 @@ Implementamos uma série de correções e melhorias nas páginas de produtos e s
 - **Lógica**: Estado externo tem prioridade sobre estado interno
 - **Teste realizado**: Criação de novo serviço funcionando corretamente
 
+### Janeiro 2025: Correção Crítica - Vinculação Automática de Cobranças aos Períodos no Kanban
+
+Implementamos uma correção crítica no Kanban de Faturamento para garantir que as cobranças criadas sejam automaticamente vinculadas aos períodos de faturamento correspondentes.
+
+#### 🐛 **Problema Identificado**
+
+- **Sintoma**: Botão "Faturar" criava cobranças mas cards não se moviam para "Faturados no Mês"
+- **Causa**: `billingMutation` não chamava `on_charge_created_link_period` após criar cobranças
+- **Impacto**: Inconsistência entre cobranças criadas e status dos períodos de faturamento
+
+#### ✅ **Solução Implementada**
+
+**Arquivo Modificado**: `src/pages/FaturamentoKanban.tsx`
+
+```typescript
+// Para cobranças únicas
+if (chargeResult?.data?.id) {
+  await supabase.rpc('on_charge_created_link_period', {
+    p_charge_id: chargeResult.data.id
+  });
+}
+
+// Para cobranças parceladas
+if (installmentResults.successCount > 0 && installmentResults.results[0]?.data?.id) {
+  await supabase.rpc('on_charge_created_link_period', {
+    p_charge_id: installmentResults.results[0].data.id
+  });
+}
+```
+
+**Resultado**: Vinculação automática de cobranças aos períodos, garantindo atualização correta do status para `BILLED` e movimentação dos cards no Kanban.
+
+**Documentação**: [`CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md`](./CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md)
+
 ### Janeiro 2025: Correção de Contexto de Tenant em Operações de Criação
 
 Corrigimos um problema crítico onde a função `createService` no hook `useServices.ts` não estava configurando corretamente o contexto do tenant antes de realizar operações de inserção no banco de dados.
@@ -322,6 +383,125 @@ Corrigimos um problema crítico onde a função `createService` no hook `useServ
 - **Teste realizado**: Criação de novo serviço funcionando corretamente
 
 #### 📋 **Anchor Comment Adicionado**
+
+```typescript
+// AIDEV-NOTE: Configuração de contexto de tenant obrigatória antes de operações DML
+await supabase.rpc('set_config', {
+  parameter_name: 'app.current_tenant_id',
+  parameter_value: tenantId
+});
+```
+
+### Janeiro 2025: Refatoração Completa da ReconciliationTable
+
+Realizamos uma refatoração completa da `ReconciliationTable.tsx`, extraindo componentes para melhorar a manutenibilidade, legibilidade e seguir os padrões de Clean Code do projeto.
+
+#### 🎯 **Objetivo da Refatoração**
+
+- **Modularização**: Quebrar um componente monolítico de 576 linhas em componentes menores e especializados
+- **Responsabilidade Única**: Cada componente com uma responsabilidade específica
+- **Manutenibilidade**: Facilitar futuras modificações e correções
+- **Padrões do Projeto**: Seguir as diretrizes estabelecidas no Revalya
+
+#### 🔧 **Componentes Extraídos**
+
+1. **TableHeader** (`src/components/reconciliation/parts/TableHeader.tsx`)
+   - **Responsabilidade**: Renderização do cabeçalho da tabela com colunas configuráveis
+   - **Props**: `columns` (array de configurações de coluna)
+   - **Funcionalidades**: Tooltips, ordenação, responsividade
+
+2. **StatusBadge** (`src/components/reconciliation/parts/StatusBadge.tsx`)
+   - **Responsabilidade**: Exibição visual dos status de conciliação
+   - **Props**: `status` (ReconciliationStatus)
+   - **Funcionalidades**: Cores e ícones específicos por status, animações
+
+3. **ValueCell** (`src/components/reconciliation/parts/ValueCell.tsx`)
+   - **Responsabilidade**: Formatação e exibição de valores monetários
+   - **Props**: `value` (number), `className?` (string)
+   - **Funcionalidades**: Formatação BRL, cores condicionais, alinhamento
+
+4. **TableRow** (`src/components/reconciliation/parts/TableRow.tsx`)
+   - **Responsabilidade**: Renderização de uma linha da tabela com todos os dados
+   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`, `isSelected`, `onSelectionChange`
+   - **Funcionalidades**: Seleção, ações, detalhes, responsividade
+
+5. **ActionButtons** (`src/components/reconciliation/parts/ActionButtons.tsx`)
+   - **Responsabilidade**: Menu dropdown com ações disponíveis por movimento
+   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`
+   - **Funcionalidades**: Ações dinâmicas baseadas no status, integração ASAAS
+
+#### ✅ **Benefícios Alcançados**
+
+1. **Código Limpo**:
+   - Componente principal reduzido de 576 para ~400 linhas
+   - Cada componente com responsabilidade única
+   - Funções com máximo de 20 linhas (padrão do projeto)
+
+2. **Manutenibilidade**:
+   - Modificações isoladas em componentes específicos
+   - Testes unitários mais focados
+   - Debugging simplificado
+
+3. **Reutilização**:
+   - Componentes podem ser reutilizados em outras tabelas
+   - StatusBadge e ValueCell aplicáveis em outros contextos
+   - ActionButtons configurável para diferentes entidades
+
+4. **Performance**:
+   - Componentes menores com re-renders otimizados
+   - Memoização mais efetiva
+   - Bundle splitting natural
+
+#### 🛡️ **Segurança Multi-Tenant Mantida**
+
+- **Contexto de Tenant**: Todos os componentes respeitam o tenant ativo
+- **RLS**: Políticas de Row-Level Security preservadas
+- **Validação**: Guards de acesso mantidos em todas as operações
+- **Auditoria**: Logs de ações preservados
+
+#### 🔧 **Detalhes Técnicos**
+
+- **Arquivos Criados**: 5 novos componentes em `src/components/reconciliation/parts/`
+- **Imports Corrigidos**: Ajustes em paths relativos para absolutos
+- **TypeScript**: Interfaces específicas para cada componente
+- **Padrões UI**: Shadcn/UI + Tailwind + Framer Motion mantidos
+
+#### 🐛 **Correções Realizadas**
+
+1. **Import Paths**: Correção de imports relativos para absolutos usando alias `@/`
+2. **TableRow Conflict**: Resolução de conflito entre componente customizado e Shadcn TableRow
+3. **Build Errors**: Correção de erros de compilação e validação TypeScript
+4. **Runtime Errors**: Correção do erro "TableRow is not defined" em linhas vazias
+
+#### 📊 **Validações Realizadas**
+
+- ✅ **TypeScript Check**: `npm run type-check` - sem erros
+- ✅ **Build**: `npm run build` - compilação bem-sucedida  
+- ✅ **Dev Server**: Aplicação rodando sem erros
+- ✅ **Funcionalidade**: Filtros e ações funcionando corretamente
+- ✅ **UI/UX**: Interface responsiva e animações preservadas
+
+#### 📁 **Estrutura Final**
+
+```
+src/components/reconciliation/
+├── ReconciliationTable.tsx          # Componente principal (refatorado)
+├── parts/
+│   ├── TableHeader.tsx              # Cabeçalho da tabela
+│   ├── StatusBadge.tsx              # Badge de status
+│   ├── ValueCell.tsx                # Célula de valores
+│   ├── TableRow.tsx                 # Linha da tabela
+│   └── ActionButtons.tsx            # Botões de ação
+└── types/
+    └── table-parts.ts               # Interfaces dos componentes
+```
+
+#### 🎯 **Próximos Passos**
+
+- Aplicar o mesmo padrão de refatoração em outras tabelas do sistema
+- Criar biblioteca de componentes reutilizáveis
+- Implementar testes unitários para cada componente extraído
+- Documentar padrões de componentização para a equipe
 
 ```typescript
 // AIDEV-NOTE: Configuração obrigatória do contexto do tenant antes de operações de inserção

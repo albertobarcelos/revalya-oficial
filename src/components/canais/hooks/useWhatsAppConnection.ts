@@ -17,8 +17,8 @@ interface UseWhatsAppConnectionProps {
   updateCanalState?: (canal: 'whatsapp', isActive: boolean) => void;
 }
 
-const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolution.nexsyn.com.br';
-const EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY || 'd93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a';
+const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || '';
+const EVOLUTION_API_KEY = import.meta.env.VITE_EVOLUTION_API_KEY || '';
 
 export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
   const { toast } = useToast();
@@ -104,8 +104,8 @@ export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
     if (!isAuthorized) {
       logService.warn(MODULE_NAME, "Tentativa de acesso não autorizado ao WhatsApp");
       toast({
-        title: "Acesso Negado",
-        description: TOAST_MESSAGES.ACCESS_DENIED,
+        title: TOAST_MESSAGES.ACCESS_DENIED.title,
+        description: TOAST_MESSAGES.ACCESS_DENIED.description,
         variant: "destructive",
       });
       return;
@@ -138,8 +138,8 @@ export function useWhatsAppConnection(props?: UseWhatsAppConnectionProps) {
         logService.info(MODULE_NAME, `QR Code gerado com sucesso para tenant: ${tenantSlug}`);
         
         toast({
-          title: "QR Code Gerado",
-          description: TOAST_MESSAGES.QR_GENERATED,
+          title: TOAST_MESSAGES.QR_GENERATED.title,
+          description: TOAST_MESSAGES.QR_GENERATED.description,
         });
       } else if (result.success && !result.qrCode && result.error === 'WhatsApp já está conectado') {
         // Instância já conectada - não mostrar erro, apenas informar

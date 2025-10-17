@@ -268,7 +268,12 @@ export default function Clients() {
                             Cadastre um novo cliente no sistema
                           </DialogDescription>
                         </DialogHeader>
-                        <CreateClientForm onSuccess={() => setIsNewClientDialogOpen(false)} />
+                        <CreateClientForm onSuccess={(customerId) => {
+                          // AIDEV-NOTE: Garantir fechamento imediato do modal após sucesso
+                          setIsNewClientDialogOpen(false);
+                          // Invalidar queries para atualizar lista de clientes
+                          queryClient.invalidateQueries({ queryKey: ['customers'] });
+                        }} />
                       </DialogContent>
                     </Dialog>
                   </div>

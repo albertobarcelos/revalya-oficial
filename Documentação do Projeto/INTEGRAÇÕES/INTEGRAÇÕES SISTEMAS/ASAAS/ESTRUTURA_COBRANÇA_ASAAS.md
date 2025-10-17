@@ -1,4 +1,901 @@
+```
 # 🏗️ ESTRUTURA DE COBRANÇA ASAAS - DOCUMENTAÇÃO TÉCNICA COMPLETA
+
+**Versão:** 2.0  
+**Data:** Janeiro 2025  
+**Autor:** Barcelitos (AI Agent)  
+**Projeto:** Revalya Oficial  
+**Status:** 🔴 ÁREA CRÍTICA - DOCUMENTAÇÃO MASTER
+
+---
+
+## 🎯 **VISÃO GERAL DA ARQUITETURA**
+
+Esta documentação detalha **COMPLETAMENTE** a integração ASAAS no sistema Revalya, incluindo:
+
+- ✅ **Edge Function Atual**: `asaas-webhook` (Supabase Functions)
+- ✅ **Fluxo de Dados**: Webhook → Validação → Staging → Conciliação
+- ✅ **Segurança Multi-Tenant**: RLS + Validação dupla + Isolamento por `tenant_id`
+- ✅ **Anti-Duplicação**: Estratégias de idempotência e UPSERT
+- ✅ **Monitoramento**: Logs, métricas e debugging
+
+---
+
+## 🚀 **EDGE FUNCTION ATUAL: `asaas-webhook`**
+
+### **1. Localização e Configuração**
+- **Arquivo:** `supabase/functions/asaas-webhook/index.ts`
+- **URL:** `https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{tenant_id}`
+- **Método:** POST
+- **Autenticação:** `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS)
+
+### **2. Fluxo de Processamento Atual**
+
+```mermaid
+graph TB
+    A[ASAAS Webhook] --> B[Edge Function: asaas-webhook]
+    B --> C[Validar CORS + HTTP Method]
+    C --> D[Extrair tenant_id da URL]
+    D --> E[Buscar Configuração Integration]
+    E --> F[Validar webhook_token]
+    F --> G[Parse JSON Payload]
+    G --> H[Verificar Idempotência]
+    H --> I[Inserir integration_processed_events]
+    I --> J[UPSERT conciliation_staging]
+    J --> K[Resposta de Sucesso]
+```
+
+### **3. Lógica de Insert/Update Detalhada**
+
+#### **A. Tabela: `integration_processed_events`**
+**Operação:** SOMENTE INSERT (sem update)
+**Chave Única:** `tenant_id` + `integration_id` + `event_id`
+
+```typescript
+// AIDEV-NOTE: Idempotência - verifica se evento já foi processado
+const { data: existingEvent } = await supabase
+  .from('integration_processed_events')
+  .select('id')
+  .eq('tenant_id', tenantId)
+  .eq('integration_id', integration.id)
+  .eq('event_id', eventId)
+  .single();
+
+if (existingEvent) {
+  return new Response(JSON.stringify({ 
+    message: 'Event already processed', 
+    event_id: eventId 
+  }), { status: 200 });
+}
+
+// Inserir novo evento processado
+await supabase
+  .from('integration_processed_events')
+  .insert({
+    tenant_id: tenantId,
+    integration_id: integration.id,
+    event_id: eventId,
+    event_type: 'payment_webhook',
+    processed_at: new Date().toISOString(),
+    payload: webhookData
+  });
+```
+
+#### **B. Tabela: `conciliation_staging`**
+**Operação:** UPSERT (insert ou update)
+**Chave de Conflito:** `tenant_id` + `id_externo` + `origem`
+
+```typescript
+// AIDEV-NOTE: UPSERT na tabela de staging
+const stagingData = {
+  tenant_id: tenantId,
+  id_externo: payment.id,           // ID do pagamento no ASAAS
+  origem: 'asaas',                  // Sempre 'asaas' para esta integração
+  valor_cobranca: payment.value,
+  valor_pago: payment.netValue || payment.value,
+  status_externo: payment.status,
+  status_conciliacao: 'pendente',
+  data_vencimento: payment.dueDate,
+  data_pagamento: payment.paymentDate,
+  observacao: payment.description,
+  dados_brutos: payment,            // JSON completo do webhook
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+};
+
+const { error } = await supabase
+  .from('conciliation_staging')
+  .upsert(stagingData, {
+    onConflict: 'tenant_id,id_externo,origem',
+    ignoreDuplicates: false         // Permite atualizações
+  });
+```
+
+### **4. Configuração Manual do Webhook ASAAS**
+
+#### **A. URL do Webhook**
+```
+https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{tenant_id}
+```
+
+#### **B. Configurações no Painel ASAAS**
+1. Acessar configurações de webhook no ASAAS
+2. Definir URL com o tenant_id específico
+3. Selecionar eventos do tipo "PAYMENT"
+4. Configurar para API V3
+5. Ativar o webhook
+
+#### **C. Token de Autenticação**
+- Token gerado via função `generate_secure_token()`
+- Exemplo de token: `0275fd8894396c2b3317ea623fc7575a`
+- Armazenado de forma segura na tabela `tenant_integrations`
+
+### **2. Funções de Suporte**
+
+#### **A. generate_secure_token**
+```sql
+CREATE OR REPLACE FUNCTION public.generate_secure_token()
+RETURNS text
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_token text;
+BEGIN
+    -- Gera token aleatório de 32 caracteres
+    v_token := encode(gen_random_bytes(16), 'hex');
+    RETURN v_token;
+END;
+$$;
+```
+
+#### **B. save_webhook_info**
+```sql
+CREATE OR REPLACE FUNCTION public.save_webhook_info(
+    p_tenant_id uuid,
+    p_webhook_url text,
+    p_webhook_token text
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Verifica acesso do tenant
+    PERFORM check_tenant_access(p_tenant_id);
+    
+    -- Atualiza informações do webhook
+    UPDATE public.tenant_integrations
+    SET 
+        webhook_url = p_webhook_url,
+        webhook_token = p_webhook_token,
+        updated_at = NOW()
+    WHERE 
+        tenant_id = p_tenant_id 
+        AND integration_type = 'asaas'
+        AND is_active = true;
+    
+    RETURN 'Webhook configurado com sucesso';
+END;
+$$;
+```
+
+### **3. Processo de Configuração Manual**
+
+1. **Gerar Token**
+   ```sql
+   SELECT generate_secure_token();
+   ```
+
+2. **Configurar no ASAAS**
+   - URL: `https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{tenant_id}`
+   - Token: Usar o token gerado
+   - Versão: API V3
+   - Eventos: PAYMENT
+
+3. **Salvar Configuração**
+   ```sql
+   SELECT save_webhook_info(
+       '{tenant_id}',
+       'https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{tenant_id}',
+       '{token_gerado}'
+   );
+   ```
+
+---
+
+## 🔒 **SEGURANÇA MULTI-TENANT**
+
+### **1. Row Level Security (RLS) - Implementado**
+
+#### **A. Tabela: `tenant_integrations`**
+```sql
+-- AIDEV-NOTE: RLS policies para tenant_integrations
+-- Política SELECT: Usuários do tenant + service_role
+CREATE POLICY "tenant_integrations_select_policy" ON tenant_integrations
+FOR SELECT USING (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+
+-- Política INSERT: Usuários do tenant + service_role
+CREATE POLICY "tenant_integrations_insert_policy" ON tenant_integrations
+FOR INSERT WITH CHECK (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+
+-- Política UPDATE: Usuários do tenant + service_role
+CREATE POLICY "tenant_integrations_update_policy" ON tenant_integrations
+FOR UPDATE USING (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+
+-- Política DELETE: Usuários do tenant + service_role
+CREATE POLICY "tenant_integrations_delete_policy" ON tenant_integrations
+FOR DELETE USING (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+```
+
+#### **B. Tabela: `conciliation_staging`**
+```sql
+-- AIDEV-NOTE: RLS policies para conciliation_staging
+-- Política SELECT: Usuários do tenant + service_role
+CREATE POLICY "conciliation_staging_select_policy" ON conciliation_staging
+FOR SELECT USING (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+
+-- Política INSERT: Usuários do tenant + service_role
+CREATE POLICY "conciliation_staging_insert_policy" ON conciliation_staging
+FOR INSERT WITH CHECK (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+
+-- Política UPDATE: Usuários do tenant + service_role
+CREATE POLICY "conciliation_staging_update_policy" ON conciliation_staging
+FOR UPDATE USING (
+  tenant_id IN (
+    SELECT tenant_id FROM tenant_users 
+    WHERE user_id = auth.uid() AND active = true
+  ) OR auth.jwt() ->> 'role' = 'service_role'
+);
+```
+
+### **2. Validação de Token Webhook**
+
+```typescript
+// AIDEV-NOTE: Validação de token no Edge Function
+const { data: integration } = await supabase
+  .from('tenant_integrations')
+  .select('id, webhook_token')
+  .eq('tenant_id', tenantId)
+  .eq('integration_type', 'asaas')
+  .eq('is_active', true)
+  .single();
+
+if (!integration) {
+  return new Response(JSON.stringify({ 
+    error: 'Integration not found or inactive' 
+  }), { status: 404 });
+}
+
+// Validar token do webhook
+const receivedToken = request.headers.get('x-webhook-token');
+if (receivedToken !== integration.webhook_token) {
+  return new Response(JSON.stringify({ 
+    error: 'Invalid webhook token' 
+  }), { status: 401 });
+}
+```
+
+---
+
+## 📊 **ESTRUTURA DE DADOS DETALHADA**
+
+### **1. Tabela: `tenant_integrations`**
+**Função:** Configurações de integração por tenant
+
+```sql
+-- AIDEV-NOTE: Estrutura atual da tabela tenant_integrations
+CREATE TABLE tenant_integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  integration_type TEXT NOT NULL,           -- 'asaas', 'pix', etc.
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  environment TEXT DEFAULT 'production',    -- 'sandbox' ou 'production'
+  webhook_url TEXT,                         -- URL do webhook configurada
+  webhook_token TEXT,                       -- Token de validação
+  last_sync_at TIMESTAMPTZ,                -- Última sincronização
+  sync_status TEXT,                         -- Status da sincronização
+  error_message TEXT,                       -- Última mensagem de erro
+  created_by UUID,                          -- Usuário que criou
+  config JSONB,                            -- Configurações específicas
+  
+  -- CONSTRAINTS DE SEGURANÇA
+  CONSTRAINT unique_integration_per_tenant 
+    UNIQUE (tenant_id, integration_type, environment)
+);
+
+-- ÍNDICES PARA PERFORMANCE
+CREATE INDEX idx_tenant_integrations_tenant_id ON tenant_integrations(tenant_id);
+CREATE INDEX idx_tenant_integrations_type ON tenant_integrations(integration_type);
+CREATE INDEX idx_tenant_integrations_active ON tenant_integrations(is_active);
+```
+
+### **2. Tabela: `conciliation_staging`**
+**Função:** Área de staging para dados brutos antes da conciliação
+
+```sql
+-- AIDEV-NOTE: Estrutura atual da tabela conciliation_staging
+CREATE TABLE conciliation_staging (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  origem TEXT NOT NULL,                     -- 'asaas', 'pix', 'manual'
+  id_externo TEXT NOT NULL,                 -- ID único do sistema externo
+  valor_cobranca NUMERIC(10,2),            -- Valor original da cobrança
+  valor_pago NUMERIC(10,2),                -- Valor efetivamente pago
+  status_externo TEXT NOT NULL,            -- Status no sistema externo
+  status_conciliacao TEXT DEFAULT 'pendente', -- 'pendente', 'conciliado', 'erro'
+  contrato_id UUID,                        -- Referência ao contrato (se identificado)
+  cobranca_id UUID,                        -- Referência à cobrança (se conciliado)
+  juros_multa_diferenca NUMERIC(10,2),     -- Diferença de juros/multa
+  data_vencimento DATE,                    -- Data de vencimento
+  data_pagamento TIMESTAMPTZ,              -- Data do pagamento
+  observacao TEXT,                         -- Observações gerais
+  dados_brutos JSONB,                      -- Dados completos do webhook/API
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- CONSTRAINTS DE SEGURANÇA MULTI-TENANT
+  CONSTRAINT unique_external_id_per_tenant_origin 
+    UNIQUE (tenant_id, origem, id_externo)
+);
+
+-- ÍNDICES PARA PERFORMANCE
+CREATE INDEX idx_conciliation_staging_tenant_id ON conciliation_staging(tenant_id);
+CREATE INDEX idx_conciliation_staging_origem ON conciliation_staging(origem);
+CREATE INDEX idx_conciliation_staging_status ON conciliation_staging(status_conciliacao);
+CREATE INDEX idx_conciliation_staging_created_at ON conciliation_staging(created_at);
+CREATE INDEX idx_conciliation_staging_id_externo ON conciliation_staging(id_externo);
+```
+
+### **3. Tabela: `integration_processed_events`**
+**Função:** Controle de idempotência para webhooks
+
+```sql
+-- AIDEV-NOTE: Estrutura da tabela de eventos processados
+CREATE TABLE integration_processed_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  integration_id UUID NOT NULL REFERENCES tenant_integrations(id),
+  event_id TEXT NOT NULL,                  -- ID único do evento (do webhook)
+  event_type TEXT NOT NULL,               -- Tipo do evento ('payment_webhook', etc.)
+  processed_at TIMESTAMPTZ DEFAULT NOW(),
+  payload JSONB,                          -- Payload completo do webhook
+  
+  -- CONSTRAINTS DE IDEMPOTÊNCIA
+  CONSTRAINT unique_event_per_integration 
+    UNIQUE (tenant_id, integration_id, event_id)
+);
+
+-- ÍNDICES PARA PERFORMANCE
+CREATE INDEX idx_integration_events_tenant_id ON integration_processed_events(tenant_id);
+CREATE INDEX idx_integration_events_integration_id ON integration_processed_events(integration_id);
+CREATE INDEX idx_integration_events_event_id ON integration_processed_events(event_id);
+CREATE INDEX idx_integration_events_processed_at ON integration_processed_events(processed_at);
+```
+
+---
+
+## 🔄 **FLUXO COMPLETO DE PROCESSAMENTO**
+
+### **1. Fluxo Principal: Webhook → Staging → Conciliação**
+
+```mermaid
+graph TB
+    A[ASAAS envia Webhook] --> B[Edge Function recebe]
+    B --> C{Validar tenant_id}
+    C -->|Inválido| D[Retornar 404]
+    C -->|Válido| E[Buscar configuração integration]
+    E --> F{Validar webhook_token}
+    F -->|Inválido| G[Retornar 401]
+    F -->|Válido| H[Parse JSON payload]
+    H --> I[Extrair event_id]
+    I --> J{Evento já processado?}
+    J -->|Sim| K[Retornar 200 - Already processed]
+    J -->|Não| L[Inserir integration_processed_events]
+    L --> M[Preparar dados staging]
+    M --> N[UPSERT conciliation_staging]
+    N --> O[Retornar 200 - Success]
+    
+    P[Processo de Conciliação] --> Q[Buscar registros pendentes]
+    Q --> R[Identificar contrato/cobrança]
+    R --> S[Atualizar status_conciliacao]
+    S --> T[Criar/Atualizar cobrança final]
+```
+
+### **2. Estratégias Anti-Duplicação**
+
+#### **A. Nível 1: Idempotência de Eventos**
+```typescript
+// AIDEV-NOTE: Verificação de evento já processado
+const { data: existingEvent } = await supabase
+  .from('integration_processed_events')
+  .select('id')
+  .eq('tenant_id', tenantId)
+  .eq('integration_id', integration.id)
+  .eq('event_id', eventId)
+  .single();
+
+if (existingEvent) {
+  // Evento já foi processado - retornar sucesso sem reprocessar
+  return new Response(JSON.stringify({ 
+    message: 'Event already processed', 
+    event_id: eventId 
+  }), { status: 200 });
+}
+```
+
+#### **B. Nível 2: UPSERT no Staging**
+```typescript
+// AIDEV-NOTE: UPSERT previne duplicação no staging
+const { error } = await supabase
+  .from('conciliation_staging')
+  .upsert(stagingData, {
+    onConflict: 'tenant_id,origem,id_externo',
+    ignoreDuplicates: false  // Permite atualizações de dados
+  });
+```
+
+#### **C. Nível 3: Constraint de Banco**
+```sql
+-- AIDEV-NOTE: Constraint garante unicidade no banco
+CONSTRAINT unique_external_id_per_tenant_origin 
+  UNIQUE (tenant_id, origem, id_externo)
+```
+
+---
+
+## 🚨 **MONITORAMENTO E DEBUGGING**
+
+### **1. Logs Estruturados**
+
+```typescript
+// AIDEV-NOTE: Estrutura padronizada de logs
+interface WebhookLogEntry {
+  timestamp: string;
+  level: 'INFO' | 'WARN' | 'ERROR';
+  tenant_id: string;
+  event_id: string;
+  operation: string;
+  duration_ms?: number;
+  error?: string;
+  details: Record<string, any>;
+}
+
+function logWebhookOperation(entry: WebhookLogEntry) {
+  console.log(JSON.stringify({
+    ...entry,
+    timestamp: new Date().toISOString(),
+    source: 'asaas-webhook'
+  }));
+}
+```
+
+### **2. Métricas Importantes**
+
+#### **A. Webhooks Recebidos**
+- Total de webhooks por tenant/dia
+- Taxa de sucesso vs. erro
+- Tempo médio de processamento
+- Eventos duplicados detectados
+
+#### **B. Staging e Conciliação**
+- Registros em staging pendentes
+- Taxa de conciliação automática
+- Registros com erro de conciliação
+- Volume de dados por origem
+
+### **3. Queries de Monitoramento**
+
+```sql
+-- AIDEV-NOTE: Queries úteis para monitoramento
+
+-- 1. Webhooks processados nas últimas 24h
+SELECT 
+  tenant_id,
+  COUNT(*) as total_events,
+  COUNT(DISTINCT event_id) as unique_events,
+  MIN(processed_at) as first_event,
+  MAX(processed_at) as last_event
+FROM integration_processed_events 
+WHERE processed_at >= NOW() - INTERVAL '24 hours'
+GROUP BY tenant_id
+ORDER BY total_events DESC;
+
+-- 2. Registros em staging pendentes de conciliação
+SELECT 
+  tenant_id,
+  origem,
+  status_conciliacao,
+  COUNT(*) as total_records,
+  MIN(created_at) as oldest_record,
+  MAX(created_at) as newest_record
+FROM conciliation_staging 
+WHERE status_conciliacao = 'pendente'
+GROUP BY tenant_id, origem, status_conciliacao
+ORDER BY oldest_record ASC;
+
+-- 3. Performance de processamento por tenant
+SELECT 
+  cs.tenant_id,
+  COUNT(*) as total_staging_records,
+  COUNT(CASE WHEN cs.status_conciliacao = 'conciliado' THEN 1 END) as conciliated,
+  COUNT(CASE WHEN cs.status_conciliacao = 'erro' THEN 1 END) as errors,
+  ROUND(
+    COUNT(CASE WHEN cs.status_conciliacao = 'conciliado' THEN 1 END) * 100.0 / COUNT(*), 
+    2
+  ) as success_rate_percent
+FROM conciliation_staging cs
+WHERE cs.created_at >= NOW() - INTERVAL '7 days'
+GROUP BY cs.tenant_id
+ORDER BY success_rate_percent DESC;
+```
+
+---
+
+## 🛠️ **GUIA PRÁTICO PARA DESENVOLVEDORES**
+
+### **1. Como Configurar um Novo Tenant**
+
+```sql
+-- AIDEV-NOTE: Script completo para configurar integração ASAAS
+
+-- 1. Gerar token seguro
+SELECT generate_secure_token() as webhook_token;
+
+-- 2. Inserir configuração de integração
+INSERT INTO tenant_integrations (
+  tenant_id,
+  integration_type,
+  is_active,
+  environment,
+  webhook_url,
+  webhook_token,
+  config
+) VALUES (
+  '{TENANT_ID}',
+  'asaas',
+  true,
+  'production', -- ou 'sandbox'
+  'https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{TENANT_ID}',
+  '{TOKEN_GERADO}',
+  '{
+    "api_version": "v3",
+    "events": ["PAYMENT_CREATED", "PAYMENT_UPDATED", "PAYMENT_RECEIVED"],
+    "retry_attempts": 3,
+    "timeout_seconds": 30
+  }'::jsonb
+);
+
+-- 3. Verificar configuração
+SELECT 
+  id,
+  tenant_id,
+  integration_type,
+  is_active,
+  webhook_url,
+  webhook_token,
+  config
+FROM tenant_integrations 
+WHERE tenant_id = '{TENANT_ID}' AND integration_type = 'asaas';
+```
+
+### **2. Como Testar a Integração**
+
+```bash
+# AIDEV-NOTE: Script de teste para webhook
+
+# 1. Teste básico de conectividade
+curl -X POST \
+  "https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook/{TENANT_ID}" \
+  -H "Content-Type: application/json" \
+  -H "x-webhook-token: {TOKEN}" \
+  -d '{
+    "event": "PAYMENT_RECEIVED",
+    "payment": {
+      "id": "pay_test_123",
+      "value": 100.00,
+      "status": "RECEIVED",
+      "dueDate": "2025-01-15",
+      "paymentDate": "2025-01-15T10:30:00Z",
+      "customer": "cus_test_456",
+      "customerName": "Cliente Teste",
+      "description": "Teste de integração",
+      "billingType": "PIX"
+    }
+  }'
+
+# 2. Verificar se foi processado
+# Executar no Supabase SQL Editor:
+SELECT * FROM integration_processed_events 
+WHERE tenant_id = '{TENANT_ID}' 
+ORDER BY processed_at DESC 
+LIMIT 5;
+
+SELECT * FROM conciliation_staging 
+WHERE tenant_id = '{TENANT_ID}' 
+ORDER BY created_at DESC 
+LIMIT 5;
+```
+
+### **3. Como Debuggar Problemas**
+
+#### **A. Webhook não está sendo recebido**
+```sql
+-- Verificar configuração da integração
+SELECT * FROM tenant_integrations 
+WHERE tenant_id = '{TENANT_ID}' AND integration_type = 'asaas';
+
+-- Verificar logs da Edge Function (via Supabase Dashboard)
+-- Ir para: Functions > asaas-webhook > Logs
+```
+
+#### **B. Webhook recebido mas não processado**
+```sql
+-- Verificar eventos processados
+SELECT * FROM integration_processed_events 
+WHERE tenant_id = '{TENANT_ID}' 
+ORDER BY processed_at DESC 
+LIMIT 10;
+
+-- Verificar registros em staging
+SELECT * FROM conciliation_staging 
+WHERE tenant_id = '{TENANT_ID}' 
+AND status_conciliacao = 'pendente'
+ORDER BY created_at DESC;
+```
+
+#### **C. Dados inconsistentes**
+```sql
+-- Comparar eventos vs staging
+SELECT 
+  'events' as source,
+  COUNT(*) as total,
+  MIN(processed_at) as oldest,
+  MAX(processed_at) as newest
+FROM integration_processed_events 
+WHERE tenant_id = '{TENANT_ID}'
+
+UNION ALL
+
+SELECT 
+  'staging' as source,
+  COUNT(*) as total,
+  MIN(created_at) as oldest,
+  MAX(created_at) as newest
+FROM conciliation_staging 
+WHERE tenant_id = '{TENANT_ID}' AND origem = 'asaas';
+```
+
+### **4. Como Fazer Manutenção**
+
+#### **A. Limpeza de Dados Antigos**
+```sql
+-- AIDEV-NOTE: Limpeza de eventos processados (manter últimos 90 dias)
+DELETE FROM integration_processed_events 
+WHERE processed_at < NOW() - INTERVAL '90 days';
+
+-- Limpeza de staging conciliado (manter últimos 30 dias)
+DELETE FROM conciliation_staging 
+WHERE status_conciliacao = 'conciliado' 
+AND updated_at < NOW() - INTERVAL '30 days';
+```
+
+#### **B. Reprocessar Registros com Erro**
+```sql
+-- Resetar registros com erro para reprocessamento
+UPDATE conciliation_staging 
+SET 
+  status_conciliacao = 'pendente',
+  updated_at = NOW()
+WHERE status_conciliacao = 'erro' 
+AND tenant_id = '{TENANT_ID}';
+```
+
+---
+
+## ⚠️ **REGRAS CRÍTICAS DE MANUTENÇÃO**
+
+### **🔴 NUNCA ALTERAR SEM VALIDAÇÃO:**
+1. **Constraints de `tenant_id`** - Segurança multi-tenant fundamental
+2. **Validação de `webhook_token`** - Segurança de webhooks
+3. **Estrutura de `id_externo`** - Prevenção de duplicação
+4. **Chaves de UPSERT** - `tenant_id + origem + id_externo`
+5. **Políticas RLS** - Isolamento de dados por tenant
+
+### **🟡 ALTERAR COM CUIDADO:**
+1. **Estrutura de tabelas** - Requer migração e testes
+2. **Formato de `dados_brutos`** - Compatibilidade com versões anteriores
+3. **Mapeamento de status** - Pode afetar conciliação existente
+4. **Timeouts e retry** - Performance e confiabilidade
+
+### **🟢 SEGURO PARA ALTERAR:**
+1. **Logs e monitoramento** - Não afeta funcionalidade
+2. **Mensagens de erro** - Melhoria de UX
+3. **Queries de relatório** - Análise e debugging
+4. **Documentação** - Sempre manter atualizada
+
+---
+
+## 📚 **REFERÊNCIAS E DEPENDÊNCIAS**
+
+### **1. Arquivos Relacionados**
+- `supabase/functions/asaas-webhook/index.ts` - Edge Function principal
+- `supabase/migrations/` - Migrações de banco de dados
+- `src/types/asaas.ts` - Tipos TypeScript (se existir)
+- `src/services/conciliation.ts` - Serviços de conciliação (se existir)
+
+### **2. Tabelas do Banco**
+- `tenant_integrations` - Configurações de integração
+- `conciliation_staging` - Staging de dados brutos
+- `integration_processed_events` - Controle de idempotência
+- `tenant_users` - Relação usuário-tenant (para RLS)
+
+### **3. APIs Externas**
+- **ASAAS API v3** - `https://api.asaas.com/v3`
+- **ASAAS Sandbox** - `https://sandbox.asaas.com/v3`
+- **Documentação ASAAS** - `https://docs.asaas.com`
+
+### **4. Ferramentas de Monitoramento**
+- **Supabase Dashboard** - Logs da Edge Function
+- **Supabase SQL Editor** - Queries de debugging
+- **ASAAS Dashboard** - Configuração de webhooks
+
+---
+
+**📝 AIDEV-NOTE:** Esta documentação reflete o estado atual da integração ASAAS (Janeiro 2025). Sempre consulte o código fonte para verificar implementações específicas e mantenha esta documentação atualizada com mudanças na arquitetura.
+
+**🔄 Última Atualização:** Janeiro 2025  
+**👤 Responsável:** Barcelitos (AI Agent)  
+**📋 Status:** 🔴 DOCUMENTAÇÃO CRÍTICA - SEMPRE CONSULTAR ANTES DE ALTERAÇÕES
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- Verifica acesso do tenant
+    PERFORM check_tenant_access(p_tenant_id);
+    
+    -- Atualiza informações do webhook
+    UPDATE public.tenant_integrations
+    SET 
+        config = jsonb_set(
+            COALESCE(config, '{}'::jsonb),
+            '{webhook}',
+            jsonb_build_object(
+                'url', p_webhook_url,
+                'token', p_webhook_token
+            )
+        ),
+        updated_at = NOW()
+    WHERE 
+        tenant_id = p_tenant_id 
+        AND integration_type = 'asaas'
+        AND is_active = true;
+    
+    RETURN 'Webhook configurado com sucesso';
+END;
+$$;
+```
+
+### **3. Processo de Configuração Manual**
+
+1. **Gerar Token**
+   ```sql
+   SELECT generate_secure_token();
+   ```
+
+2. **Configurar no ASAAS**
+   - URL: `https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook-charges/{tenant_id}`
+   - Token: Usar o token gerado
+   - Versão: API V3
+   - Eventos: PAYMENT
+
+3. **Salvar Configuração**
+   ```sql
+   SELECT save_webhook_info(
+       '{tenant_id}',
+       'https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook-charges/{tenant_id}',
+       '{token_gerado}'
+   );
+   ```
+
+### **4. Vantagens da Configuração Manual**
+
+1. **Controle**
+   - Processo transparente e auditável
+   - Sem ambiguidade de tenant_id
+   - Configuração explícita
+
+2. **Segurança**
+   - Token gerado de forma segura
+   - Armazenamento protegido
+   - Validação de tenant
+
+3. **Manutenção**
+   - Fácil diagnóstico
+   - Processo documentado
+   - Auditoria clara
+
+## Estrutura de Dados
+
+### Tabelas do Sistema
+
+1. **charges**
+   - Tabela principal de cobranças
+   - Campos específicos ASAAS:
+     ```sql
+     asaas_id TEXT
+     asaas_external_reference TEXT
+     asaas_payment_date TIMESTAMPTZ
+     asaas_confirmed_date TIMESTAMPTZ
+     asaas_credit_date TIMESTAMPTZ
+     asaas_original_value NUMERIC
+     asaas_net_value NUMERIC
+     asaas_interest_value NUMERIC
+     asaas_fine_value NUMERIC
+     asaas_discount_value NUMERIC
+     asaas_payment_method TEXT
+     asaas_bank_slip_url TEXT
+     asaas_invoice_url TEXT
+     asaas_pix_qr_code TEXT
+     asaas_pix_copy_paste TEXT
+     reconciliation_status TEXT
+     reconciliation_date TIMESTAMPTZ
+     reconciliation_notes TEXT
+     ```
+
+2. **conciliation_staging**
+   - Tabela intermediária para reconciliação
+   - Campos principais:
+     ```sql
+     id UUID
+     tenant_id UUID
+     origem TEXT
+     id_externo TEXT
+     valor_cobranca NUMERIC
+     valor_pago NUMERIC
+     status_externo TEXT
+     status_conciliacao TEXT
+     contrato_id UUID
+     cobranca_id UUID
+     juros_multa_diferenca NUMERIC
+     data_vencimento TIMESTAMPTZ
+     data_pagamento TIMESTAMPTZ
+     observacao TEXT
+     ```
+   - Constraint único: (tenant_id, origem, id_externo)
+   - RLS: Isolamento por tenant_id
+```
 
 **Versão:** 1.0  
 **Data:** Janeiro 2025  

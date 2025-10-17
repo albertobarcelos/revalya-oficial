@@ -112,7 +112,7 @@ export default function AdminDashboard() {
     queryFn: async (): Promise<DashboardStats> => {
       try {
         // Log de auditoria para acesso ao dashboard admin global
-        await logAction({
+        await logAction('USER_ACTION', {
           action: 'ADMIN_DASHBOARD_ACCESS',
           resource: 'admin_dashboard_global',
           details: { 

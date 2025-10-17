@@ -59,10 +59,10 @@ function Login() {
   return (
     <div className="min-h-screen flex">
       {/* Lado esquerdo - Logo e mensagem de boas-vindas */}
-      <div className="hidden lg:flex w-1/2 bg-[#0e1429] flex-col items-center justify-center p-12">
+      <div className="hidden lg:flex w-1/2 bg-[#0A1B2E] flex-col items-center justify-center p-12">
         <div className="w-3/4 flex flex-col items-center">
           <img 
-            src="/logos/LOGO-REVALYA.png" 
+            src="/logos/LOGO-REVALYA123.png" 
             alt="Revalya Logo" 
             className="w-full mb-12"
           />
@@ -83,7 +83,7 @@ function Login() {
           {/* Logo mobile */}
           <div className="lg:hidden flex justify-center mb-10 w-full">
             <img 
-              src="/logos/LOGO-REVALYA.png" 
+              src="/logos/LOGO-REVALYA123.png" 
               alt="Revalya Logo" 
               className="w-3/4"
             />

@@ -25,6 +25,8 @@ import {
 import { cn } from '@/lib/utils';
 import { SortableItem } from '@/components/ui/sortable-item';
 import { useBillingKanban, type KanbanContract } from '@/hooks/useBillingKanban';
+import { useKanbanFilters } from '@/hooks/useKanbanFilters';
+import { KanbanFilters } from '@/components/billing/KanbanFilters';
 import { Layout } from '@/components/layout/Layout';
 import { useNavigate, useParams } from 'react-router-dom';
 import { NewContractForm } from '@/components/contracts/NewContractForm';
@@ -54,9 +56,9 @@ interface KanbanCardProps {
   isDragging?: boolean;
   columnId?: string;
   onViewDetails: (contractId: string) => void;
-  dragHandleProps?: any;
+  dragHandleProps?: Record<string, unknown>;
   isSelected?: boolean;
-  onSelectionChange?: (contractId: string, selected: boolean) => void;
+  onSelectionChange?: (periodId: string, selected: boolean) => void;
   showCheckbox?: boolean;
 }
 
@@ -76,9 +78,19 @@ function KanbanCard({
   const isFaturados = columnId === 'faturados';
   const isRenovar = columnId === 'renovar';
   
-  // AIDEV-NOTE: Função para abrir modal de detalhes do contrato com proteção contra múltiplos cliques
+  // AIDEV-NOTE: Função para abrir modal de detalhes do contrato com proteção contra múltiplos cliques e validação de contract_id
   const handleViewDetails = useCallback(async () => {
     if (isClicking) return;
+    
+    // AIDEV-NOTE: Validação defensiva para prevenir contract_id undefined
+    if (!contract.contract_id) {
+      console.error('Erro: contract_id está undefined para o contrato:', {
+        id: contract.id,
+        customer_name: contract.customer_name,
+        contract_number: contract.contract_number
+      });
+      return;
+    }
     
     setIsClicking(true);
     try {
@@ -87,14 +99,15 @@ function KanbanCard({
       // Reset após um pequeno delay
       setTimeout(() => setIsClicking(false), 500);
     }
-  }, [isClicking, onViewDetails, contract.contract_id]);
+  }, [isClicking, onViewDetails, contract.contract_id, contract.id, contract.customer_name, contract.contract_number]);
   
   // AIDEV-NOTE: Função para lidar com mudança de seleção do checkbox
+  // Agora usa contract.id (period_id) em vez de contract.contract_id
   const handleSelectionChange = useCallback((checked: boolean) => {
     if (onSelectionChange) {
-      onSelectionChange(contract.contract_id, checked);
+      onSelectionChange(contract.id, checked);
     }
-  }, [onSelectionChange, contract.contract_id]);
+  }, [onSelectionChange, contract.id]);
   
   // AIDEV-NOTE: Definir estilos baseados na coluna para design moderno
   const getCardStyles = () => {
@@ -189,7 +202,7 @@ function KanbanCard({
           >
             <div className="flex items-center space-x-2">
               <span className={cn("font-bold text-sm", styles.textPrimary)}>
-                {contract.numero}
+                {contract.contract_id ? `#${contract.contract_id.slice(-8)}` : 'N/A'}
               </span>
             </div>
             <Badge 
@@ -213,7 +226,7 @@ function KanbanCard({
           {/* Cliente */}
           <div className="space-y-1">
             <p className={cn("text-sm font-medium leading-tight", styles.textSecondary)}>
-              {contract.cliente}
+              {contract.customer_name}
             </p>
           </div>
           
@@ -222,7 +235,7 @@ function KanbanCard({
             <div className="flex items-center space-x-1">
               <DollarSign className={cn("w-4 h-4", styles.textPrimary)} />
               <span className={cn("text-lg font-bold", styles.textPrimary)}>
-                R$ {contract.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {(contract.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>
@@ -269,7 +282,7 @@ interface KanbanColumnProps {
   badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline';
   onViewDetails: (contractId: string) => void;
   selectedContracts?: Set<string>;
-  onSelectionChange?: (contractId: string, selected: boolean) => void;
+  onSelectionChange?: (periodId: string, selected: boolean) => void;
   showCheckboxes?: boolean;
 }
 
@@ -403,7 +416,7 @@ function KanbanColumn({
                 contract={contract} 
                 columnId={columnId} 
                 onViewDetails={onViewDetails}
-                isSelected={selectedContracts.has(contract.contract_id)}
+                isSelected={selectedContracts.has(contract.id)}
                 onSelectionChange={onSelectionChange}
                 showCheckbox={showCheckboxes && (columnId === 'faturar-hoje' || columnId === 'pendente')}
               />
@@ -435,6 +448,15 @@ export default function FaturamentoKanban() {
   const { kanbanData, isLoading, error, refreshData, updateContractStatus } = useBillingKanban();
   const { user } = useSupabase();
   
+  // Hook de filtros
+  const {
+    filters,
+    filteredData,
+    updateFilter,
+    clearFilters,
+    hasActiveFilters
+  } = useKanbanFilters(kanbanData);
+  
   // 🔍 [DEBUG] Log do estado do componente
   console.log('🎯 [COMPONENT] FaturamentoKanban render:', {
     hasAccess,
@@ -457,43 +479,71 @@ export default function FaturamentoKanban() {
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [contractMode, setContractMode] = useState<'view' | 'edit'>('view');
 
-  // AIDEV-NOTE: Função para abrir modal de detalhes do contrato com debounce
+  // AIDEV-NOTE: Abrir modal com segurança multi-tenant (define contexto + filtra tenant)
   const handleViewDetails = useCallback(async (contractId: string) => {
     // Previne múltiplos cliques rápidos
     if (isContractModalOpen) return;
-    
+    // Guardas de segurança: requer acesso e tenant válido
+    if (!hasAccess || !currentTenant?.id) {
+      console.warn('Acesso negado ou tenant inválido ao abrir detalhes do contrato');
+      return;
+    }
+
     try {
-      console.log('Abrindo modal para contrato:', contractId);
-      
-      // Buscar o status do contrato para determinar o mode
+      console.log('🔍 [MODAL DEBUG] Abrindo modal para contrato:', {
+        contractId,
+        tenantId: currentTenant.id,
+        tenantName: currentTenant.name,
+        hasAccess
+      });
+
+      // AIDEV-NOTE: Configura contexto de tenant para reforçar RLS em operações subsequentes
+      console.log('🔧 [MODAL DEBUG] Configurando contexto de tenant...');
+      await supabase.rpc('set_tenant_context_simple', { p_tenant_id: currentTenant.id });
+      console.log('✅ [MODAL DEBUG] Contexto de tenant configurado com sucesso');
+
+      // Buscar o status do contrato para determinar o mode, filtrando pelo tenant
+      console.log('🔍 [MODAL DEBUG] Buscando status do contrato...');
       const { data: contract, error: contractError } = await supabase
         .from('contracts')
-        .select('status')
+        .select('status, tenant_id')
         .eq('id', contractId)
+        .eq('tenant_id', currentTenant.id)
         .single();
-      
-      if (contractError) {
-        console.error('Erro ao buscar status do contrato:', contractError);
+
+      if (contractError || !contract) {
+        console.error('❌ [MODAL DEBUG] Erro ao buscar status do contrato:', contractError);
         // Usar mode padrão em caso de erro
         setContractMode('view');
       } else {
+        console.log('✅ [MODAL DEBUG] Status do contrato obtido:', {
+          status: contract.status,
+          tenant_id: contract.tenant_id,
+          contractId
+        });
         // Determinar o mode baseado no status do contrato
-        // mode = 'view' para contratos ACTIVE (mostrar dados reais)
-        // mode = 'edit' para contratos DRAFT ou CANCELED (permitir edição)
         const mode = (contract.status === 'ACTIVE') ? 'view' : 'edit';
         setContractMode(mode);
       }
+
+      console.log('🚀 [MODAL DEBUG] Abrindo modal...');
+      setSelectedContractId(contractId);
+      setIsContractModalOpen(true);
+      
+      // AIDEV-NOTE: Pequeno delay para garantir que o contexto seja aplicado antes do hook ser executado
+      setTimeout(() => {
+        console.log('✅ [MODAL DEBUG] Modal aberto com sucesso para contrato:', contractId);
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ [MODAL DEBUG] Erro ao abrir modal do contrato:', error);
+      // Usar mode padrão em caso de erro
+      setContractMode('view');
       
       setSelectedContractId(contractId);
       setIsContractModalOpen(true);
-    } catch (error) {
-      console.error('Erro ao abrir modal do contrato:', error);
-      // Usar mode padrão em caso de erro
-      setContractMode('view');
-      setSelectedContractId(contractId);
-      setIsContractModalOpen(true);
     }
-  }, [isContractModalOpen]);
+  }, [isContractModalOpen, hasAccess, currentTenant?.id, currentTenant?.name]);
 
   // AIDEV-NOTE: Função para fechar modal de detalhes do contrato
   const handleCloseModal = useCallback(() => {
@@ -503,13 +553,14 @@ export default function FaturamentoKanban() {
   }, []);
 
   // AIDEV-NOTE: Função para lidar com mudança de seleção de contratos
-  const handleSelectionChange = useCallback((contractId: string, selected: boolean) => {
+  // Agora usa period_id (contract.id) em vez de contract_id
+  const handleSelectionChange = useCallback((periodId: string, selected: boolean) => {
     setSelectedContracts(prev => {
       const newSet = new Set(prev);
       if (selected) {
-        newSet.add(contractId);
+        newSet.add(periodId);
       } else {
-        newSet.delete(contractId);
+        newSet.delete(periodId);
       }
       return newSet;
     });
@@ -549,10 +600,10 @@ export default function FaturamentoKanban() {
     }
   };
 
-  // AIDEV-NOTE: Hook seguro para mutação de faturamento com contexto de tenant
+  // AIDEV-NOTE: Hook seguro para mutação de faturamento usando attempt_billing_period_charge
   const billingMutation = useSecureTenantMutation(
-    async (supabase, tenantId, variables: { contractIds: string[] }) => {
-      const { contractIds } = variables;
+    async (supabase, tenantId, variables: { periodIds: string[] }) => {
+      const { periodIds } = variables;
       let successCount = 0;
       let errorCount = 0;
 
@@ -565,147 +616,52 @@ export default function FaturamentoKanban() {
       console.log('✅ [BILLING] Sessão refreshada com sucesso para usuário:', authCheck.user?.id);
       console.log('🔒 [BILLING] Processando faturamento para tenant:', tenantId);
 
-      for (const contractId of contractIds) {
+      // AIDEV-NOTE: CAMADA 4 - Configuração explícita de contexto de tenant (OBRIGATÓRIO)
+      try {
+        await supabase.rpc('set_tenant_context_simple', { 
+          p_tenant_id: tenantId 
+        });
+        console.log('🛡️ [SECURITY] Contexto de tenant configurado:', tenantId);
+      } catch (contextError) {
+        console.error('❌ [SECURITY] Falha ao configurar contexto de tenant:', contextError);
+        throw new Error('Falha na configuração de segurança. Tente novamente.');
+      }
+
+      // AIDEV-NOTE: Processar cada período de faturamento usando attempt_billing_period_charge
+      for (const periodId of periodIds) {
         try {
-          // AIDEV-NOTE: Buscar dados do contrato com validação de tenant explícita
-          const { data: contract, error: contractError } = await supabase
-            .from('contracts')
-            .select(`
-              id,
-              contract_number,
-              total_amount,
-              billing_day,
-              customer:customers!inner(
-                id,
-                name,
-                email,
-                phone
-              ),
-              contract_services(
-                id,
-                description,
-                quantity,
-                unit_price,
-                total_amount,
-                due_date_type,
-                due_days,
-                due_day,
-                due_next_month,
-                payment_method,
-                card_type,
-                billing_type,
-                recurrence_frequency,
-                installments
-              ),
-              contract_products(
-                id,
-                description,
-                quantity,
-                unit_price,
-                total_amount,
-                due_date_type,
-                due_days,
-                due_day,
-                due_next_month,
-                payment_method,
-                card_type,
-                billing_type,
-                recurrence_frequency,
-                installments,
-                product:products(name)
-              )
-            `)
-            .eq('id', contractId)
-            .eq('tenant_id', tenantId) // AIDEV-NOTE: Usar tenantId do contexto seguro
-            .single();
-
-          if (contractError || !contract) {
-            console.error('❌ [BILLING] Erro ao buscar contrato:', contractError);
+          // AIDEV-NOTE: CAMADA 5 - Validação crítica antes da operação
+          if (!tenantId || !periodId) {
+            console.error('❌ [SECURITY] Parâmetros inválidos:', { tenantId, periodId });
             errorCount++;
             continue;
           }
 
-          // AIDEV-NOTE: Agrupar serviços e produtos por configurações de pagamento iguais
-          const services = (contract as any).contract_services || [];
-          const products = (contract as any).contract_products || [];
-          const paymentGroups = groupItemsByPaymentConfig(services, products);
+          console.log(`📋 [BILLING] Processando período de faturamento: ${periodId}`);
 
-          if (paymentGroups.length === 0) {
-            console.warn(`⚠️ [BILLING] Contrato ${contract.contract_number} não possui serviços ou produtos configurados`);
+          // AIDEV-NOTE: Usar attempt_billing_period_charge para criar cobrança e atualizar status
+          const { data: result, error: billingError } = await supabase.rpc('attempt_billing_period_charge', {
+            p_period_id: periodId,
+            p_tenant_id: tenantId
+          });
+
+          if (billingError) {
+            console.error('❌ [BILLING] Erro ao processar período:', billingError);
             errorCount++;
             continue;
           }
 
-          // AIDEV-NOTE: Usar startOfDay para garantir consistência de timezone e evitar problemas de horário
-          const billingDate = startOfDay(new Date());
-          const referenceMonth = `${String(billingDate.getMonth() + 1).padStart(2, '0')}/${billingDate.getFullYear()}`;
-          
-          // AIDEV-NOTE: Processar cada grupo de pagamento separadamente
-          for (const group of paymentGroups) {
-            const chargeType = mapGroupPaymentMethodToChargeType(group);
-            const dueDate = calculateGroupDueDate(group, billingDate);
-            const chargeDescription = generateGroupDescription(group, contract.contract_number, referenceMonth);
-            
-            // AIDEV-NOTE: Verificar se é pagamento parcelado para criar múltiplas cobranças
-            const isInstallment = group.payment_method?.toLowerCase() === 'cartão' && group.installments > 1;
-            
-            if (isInstallment) {
-              // Criar múltiplas cobranças para pagamento parcelado
-              const installmentCharges = [];
-              const installmentValue = group.total_amount / group.installments;
-              
-              for (let i = 1; i <= group.installments; i++) {
-                // AIDEV-NOTE: Usar addMonths do date-fns para evitar problemas com meses de diferentes tamanhos
-                const installmentDueDate = addMonths(dueDate, i - 1);
-                
-                const installmentDescription = `${chargeDescription} - Parcela ${i}/${group.installments}`;
-                
-                installmentCharges.push({
-                  contract_id: contractId,
-                  valor: installmentValue,
-                  data_vencimento: installmentDueDate.toISOString().split('T')[0],
-                  descricao: installmentDescription,
-                  status: 'PENDING',
-                  tenant_id: tenantId, // AIDEV-NOTE: Usar tenantId do contexto seguro
-                  customer_id: (contract.customer as any).id,
-                  tipo: chargeType
-                });
-              }
-
-              const { error: installmentError } = await insertMultipleCharges(installmentCharges);
-
-              if (installmentError) {
-                console.error('❌ [BILLING] Erro ao criar parcelas do grupo:', installmentError);
-                errorCount++;
-              } else {
-                console.log(`✅ [BILLING] Parcelas criadas para contrato ${contract.contract_number}`);
-              }
-            } else {
-              // Criar cobrança única para o grupo
-              const { error: chargeError } = await insertChargeWithAuthContext({
-                contract_id: contractId,
-                valor: group.total_amount,
-                data_vencimento: dueDate.toISOString().split('T')[0],
-                descricao: chargeDescription,
-                status: 'PENDING',
-                tenant_id: tenantId, // AIDEV-NOTE: Usar tenantId do contexto seguro
-                customer_id: (contract.customer as any).id,
-                tipo: chargeType
-              });
-
-              if (chargeError) {
-                console.error('❌ [BILLING] Erro ao criar cobrança do grupo:', chargeError);
-                errorCount++;
-                continue;
-              } else {
-                console.log(`✅ [BILLING] Cobrança criada para contrato ${contract.contract_number}`);
-              }
-            }
+          // AIDEV-NOTE: Verificar resultado da operação
+          if (result?.success) {
+            console.log(`✅ [BILLING] Período ${periodId} faturado com sucesso. Charge ID: ${result.charge_id}`);
+            successCount++;
+          } else {
+            console.error(`❌ [BILLING] Falha ao faturar período ${periodId}:`, result?.error || 'Erro desconhecido');
+            errorCount++;
           }
 
-          successCount++;
         } catch (error) {
-          console.error('❌ [BILLING] Erro no processamento do contrato:', error);
+          console.error('❌ [BILLING] Erro no processamento do período:', error);
           errorCount++;
         }
       }
@@ -748,11 +704,12 @@ export default function FaturamentoKanban() {
   );
 
   // AIDEV-NOTE: Função wrapper para iniciar o faturamento
+  // Agora usa period_ids em vez de contract_ids e attempt_billing_period_charge
   const handleBilling = useCallback(async () => {
     if (!currentTenant || selectedContracts.size === 0) {
       toast({
         title: "Erro de validação",
-        description: "Selecione pelo menos um contrato para faturar.",
+        description: "Selecione pelo menos um período para faturar.",
         variant: "destructive",
       });
       return;
@@ -760,8 +717,8 @@ export default function FaturamentoKanban() {
 
     setIsBilling(true);
     try {
-      const contractIds = Array.from(selectedContracts);
-      console.log('🚀 [BILLING] Iniciando faturamento para contratos:', contractIds);
+      const periodIds = Array.from(selectedContracts);
+      console.log('🚀 [BILLING] Iniciando faturamento para períodos:', periodIds);
       
       // Log de auditoria - início do faturamento
        await logger.audit({
@@ -769,15 +726,15 @@ export default function FaturamentoKanban() {
          tenantId: currentTenant.id,
          action: 'CREATE',
          resourceType: 'BILLING',
-         resourceId: contractIds.join(','),
+         resourceId: periodIds.join(','),
          metadata: {
            operation: 'bulk_billing_started',
-           contract_count: contractIds.length,
-           contract_ids: contractIds
+           period_count: periodIds.length,
+           period_ids: periodIds
          }
        });
        
-       const result = await billingMutation.mutateAsync({ contractIds });
+       const result = await billingMutation.mutateAsync({ periodIds });
        
        // Log de auditoria - resultado do faturamento
        await logger.audit({
@@ -785,12 +742,12 @@ export default function FaturamentoKanban() {
          tenantId: currentTenant.id,
          action: 'CREATE',
          resourceType: 'BILLING',
-         resourceId: contractIds.join(','),
+         resourceId: periodIds.join(','),
          metadata: {
            operation: 'bulk_billing_completed',
            success_count: result?.successCount || 0,
            error_count: result?.errorCount || 0,
-           total_processed: contractIds.length
+           total_processed: periodIds.length
          }
        });
     } catch (error) {
@@ -804,8 +761,8 @@ export default function FaturamentoKanban() {
          metadata: {
            operation: 'bulk_billing_failed',
            error_message: error instanceof Error ? error.message : 'Erro desconhecido',
-           contract_count: selectedContracts.size,
-           contract_ids: Array.from(selectedContracts)
+           period_count: selectedContracts.size,
+           period_ids: Array.from(selectedContracts)
          }
        });
       
@@ -814,7 +771,7 @@ export default function FaturamentoKanban() {
     } finally {
       setIsBilling(false);
     }
-  }, [currentTenant, selectedContracts, billingMutation]);
+  }, [currentTenant, selectedContracts, billingMutation, user?.id]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -901,9 +858,11 @@ export default function FaturamentoKanban() {
         if (!contractToMove.billing_id) {
           console.log('🔄 Criando cobrança para contrato sem billing_id:', contractToMove.contract_id);
           
-          // AIDEV-NOTE: Buscar método de pagamento do contrato para determinar tipo correto
+          // AIDEV-NOTE: Buscar método de pagamento do contrato com contexto seguro para determinar tipo correto
           let paymentMethod = 'boleto'; // Default fallback
           try {
+            // AIDEV-NOTE: Configura contexto de tenant antes de consulta para garantir RLS
+            await supabase.rpc('set_tenant_context_simple', { p_tenant_id: currentTenant.id });
             const { data: contractData } = await supabase
               .from('contracts')
               .select('contract_services(payment_method), contract_products(payment_method)')
@@ -1122,6 +1081,14 @@ export default function FaturamentoKanban() {
                 </div>
               </div>
             </div>
+            
+            {/* Filtros */}
+            <KanbanFilters
+              filters={filters}
+              onFilterChange={updateFilter}
+              onClearFilters={clearFilters}
+              hasActiveFilters={hasActiveFilters}
+            />
           
             {/* Botão de faturamento - aparece quando há contratos selecionados */}
             {selectedContracts.size > 0 && (
@@ -1160,20 +1127,27 @@ export default function FaturamentoKanban() {
             onDragCancel={handleDragCancel}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-6">
-              {columns.map(column => (
-                <KanbanColumn
-                  key={column.id}
-                  title={column.title}
-                  contracts={column.contracts}
-                  columnId={column.id}
-                  icon={column.icon}
-                  badgeVariant={column.badgeVariant}
-                  onViewDetails={handleViewDetails}
-                  selectedContracts={selectedContracts}
-                  onSelectionChange={handleSelectionChange}
-                  showCheckboxes={showCheckboxes}
-                />
-              ))}
+              {columns.map(column => {
+                // Usar dados filtrados se houver filtros ativos
+                const columnContracts = hasActiveFilters 
+                  ? filteredData[column.id as keyof typeof filteredData] || []
+                  : column.contracts;
+                  
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    title={column.title}
+                    contracts={columnContracts}
+                    columnId={column.id}
+                    icon={column.icon}
+                    badgeVariant={column.badgeVariant}
+                    onViewDetails={handleViewDetails}
+                    selectedContracts={selectedContracts}
+                    onSelectionChange={handleSelectionChange}
+                    showCheckboxes={showCheckboxes}
+                  />
+                );
+              })}
             </div>
           
             <DragOverlay>

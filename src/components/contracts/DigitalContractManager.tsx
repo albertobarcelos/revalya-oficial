@@ -522,11 +522,11 @@ const DigitalContractManager: React.FC<DigitalContractManagerProps> = ({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MONTHLY">Mensal</SelectItem>
-                        <SelectItem value="QUARTERLY">Trimestral</SelectItem>
-                        <SelectItem value="SEMI_ANNUAL">Semestral</SelectItem>
-                        <SelectItem value="ANNUAL">Anual</SelectItem>
-                        <SelectItem value="ONE_TIME">Único</SelectItem>
+                        <SelectItem value="Mensal">Mensal</SelectItem>
+                        <SelectItem value="Trimestral">Trimestral</SelectItem>
+                        <SelectItem value="Semestral">Semestral</SelectItem>
+                        <SelectItem value="Anual">Anual</SelectItem>
+                        <SelectItem value="Único">Único</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

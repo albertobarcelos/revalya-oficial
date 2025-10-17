@@ -155,13 +155,13 @@ export function ServiceSelection({
             </DialogDescription>
           </VisuallyHidden>
         </DialogHeader>
-        <div className="bg-background/95 backdrop-blur-sm border-y border-border/50 shadow-lg w-full" style={{ maxHeight: 'calc(100vh - 278px)', overflow: 'auto' }}>
+        <div className="bg-background/95 backdrop-blur-sm border border-border/50 shadow-xl w-full rounded-3xl overflow-hidden" style={{ maxHeight: 'calc(100vh - 278px)' }}>
           {/* Cabeçalho com seta de voltar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-primary text-primary-foreground sticky top-0 z-10">
+          <div className="flex items-center justify-between px-6 py-4 bg-primary text-primary-foreground sticky top-0 z-10">
             <Button
               variant="ghost"
               size="icon"
-              className="mr-2 hover:bg-primary-foreground/10 text-primary-foreground"
+              className="mr-2 hover:bg-primary-foreground/10 text-primary-foreground rounded-xl"
               onClick={() => onOpenChange(false)}
             >
               <ArrowLeft className="h-5 w-5" />
@@ -174,7 +174,7 @@ export function ServiceSelection({
             
             <Button 
               variant="ghost" 
-              className="gap-1 hover:bg-primary-foreground/10 text-primary-foreground"
+              className="gap-2 hover:bg-primary-foreground/10 text-primary-foreground rounded-xl px-4 py-2"
               onClick={onCreateService}
             >
               <Plus className="h-4 w-4" />
@@ -183,39 +183,39 @@ export function ServiceSelection({
           </div>
 
           {/* Conteúdo principal */}
-          <div className="p-4">
+          <div className="p-6 overflow-auto" style={{ maxHeight: 'calc(100vh - 350px)' }}>
             {/* Barra de pesquisa */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
                   placeholder="Buscar serviços..."
-                  className="w-full appearance-none bg-background pl-8 shadow-none"
+                  className="w-full appearance-none bg-background pl-10 pr-4 py-3 rounded-2xl border-2 border-border/50 focus:border-primary/50 shadow-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   disabled={isLoading}
                 />
                 {isLoading && (
-                  <div className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <div className="absolute right-3 top-3 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 )}
               </div>
-              <Button className="bg-primary hover:bg-primary/90 py-6 px-4">
+              <Button className="bg-primary hover:bg-primary/90 py-3 px-6 rounded-2xl shadow-sm">
                 <Search className="h-4 w-4 mr-2" />
                 Pesquisar
               </Button>
             </div>
 
             {/* Tabela de serviços */}
-            <div className="border rounded-md bg-card/50">
+            <div className="border-2 border-border/50 rounded-3xl bg-card/50 overflow-hidden shadow-sm">
               <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    {!singleSelect && <TableHead className="w-12"></TableHead>}
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="text-right">Preço Unitário</TableHead>
-                    <TableHead>Status</TableHead>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="border-b-2 border-border/30">
+                    {!singleSelect && <TableHead className="w-12 py-4"></TableHead>}
+                    <TableHead className="py-4 font-semibold">Nome</TableHead>
+                    <TableHead className="py-4 font-semibold">Descrição</TableHead>
+                    <TableHead className="text-right py-4 font-semibold">Preço Unitário</TableHead>
+                    <TableHead className="py-4 font-semibold">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -231,42 +231,42 @@ export function ServiceSelection({
                       return (
                         <TableRow 
                           key={service.id}
-                          className={`hover:bg-muted/30 cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}
+                          className={`hover:bg-muted/20 cursor-pointer transition-colors duration-200 ${isSelected ? 'bg-primary/8 border-l-4 border-l-primary' : ''}`}
                           onClick={(e) => handleRowClick(service.id, e)}
                         >
                           {!singleSelect && (
-                            <TableCell>
+                            <TableCell className="py-4">
                               <div className="flex items-center justify-center">
                                 <Checkbox 
                                   checked={isSelected}
                                   onCheckedChange={(checked) => handleCheckboxChange(service.id, checked === true)}
-                                  className="h-5 w-5"
+                                  className="h-5 w-5 rounded-lg"
                                 />
                               </div>
                             </TableCell>
                           )}
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {service.name}
+                          <TableCell className="font-medium py-4">
+                            <div className="flex items-center gap-3">
+                              <span className="text-foreground">{service.name}</span>
                               {isSelected && (
-                                <Badge variant="outline" className="h-5">
+                                <Badge variant="outline" className="h-6 rounded-xl border-primary/30 bg-primary/10 text-primary">
                                   <CheckCircle className="h-3 w-3 mr-1" />
                                   Selecionado
                                 </Badge>
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className="text-muted-foreground py-4">
                             {service.description || "Sem descrição"}
                           </TableCell>
-                          <TableCell className="text-right font-mono">
+                          <TableCell className="text-right font-mono py-4 font-semibold">
                             {formatCurrency(service.default_price)}
                           </TableCell>
-                          <TableCell>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                          <TableCell className="py-4">
+                            <span className={`inline-flex items-center px-3 py-1.5 rounded-2xl text-xs font-medium ${
                               service.is_active 
-                                ? 'bg-success/10 text-success' 
-                                : 'bg-gray-100 text-gray-800'
+                                ? 'bg-success/15 text-success border border-success/20' 
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
                             }`}>
                               {service.is_active ? 'Ativo' : 'Inativo'}
                             </span>
@@ -280,9 +280,9 @@ export function ServiceSelection({
 
               {!singleSelect && (
                 <>
-                  <div className="flex items-center justify-between px-4 py-2 border-t">
+                  <div className="flex items-center justify-between px-6 py-4 border-t-2 border-border/30 bg-muted/20">
                     <div className="flex items-center space-x-4">
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm font-medium text-foreground">
                         {selectedServices.length} selecionado(s)
                       </span>
                       <span className="text-xs text-muted-foreground">
@@ -296,31 +296,34 @@ export function ServiceSelection({
                         size="sm" 
                         onClick={() => setSelectedServices([])}
                         disabled={selectedServices.length === 0}
+                        className="rounded-xl"
                       >
                         Limpar seleção
                       </Button>
-                      <Button variant="outline" size="sm" disabled>
+                      <Button variant="outline" size="sm" disabled className="rounded-xl">
                         Anterior
                       </Button>
-                      <Button variant="outline" size="sm" className="bg-primary/10 border-primary text-primary">
+                      <Button variant="outline" size="sm" className="bg-primary/15 border-primary/50 text-primary rounded-xl">
                         1
                       </Button>
-                      <Button variant="outline" size="sm" disabled>
+                      <Button variant="outline" size="sm" disabled className="rounded-xl">
                         Próximo
                       </Button>
                     </div>
                   </div>
                   
-                  <DialogFooter className="border-t px-4 py-3">
+                  <DialogFooter className="border-t-2 border-border/30 px-6 py-4 bg-background/50">
                     <Button 
                       variant="outline" 
                       onClick={() => onOpenChange(false)}
+                      className="rounded-2xl px-6 py-2"
                     >
                       Cancelar
                     </Button>
                     <Button 
                       onClick={handleSelectServices}
                       disabled={selectedServices.length === 0}
+                      className="rounded-2xl px-6 py-2 shadow-sm"
                     >
                       <Check className="h-4 w-4 mr-2" />
                       Adicionar {selectedServices.length} serviço(s)

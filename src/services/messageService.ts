@@ -146,40 +146,28 @@ export const messageService = {
   },
 
   /**
-   * Envia mensagens para o webhook do n8n
+   * Envia mensagens para o serviço de WhatsApp
    */
   async sendToWebhook(messages: MessageRecord[], templateId: string) {
     // Verificação final antes de enviar
     const checkedMessages = messages.map(m => {
       if (!m.message_content && this.lastCustomMessage) {
-        console.log('🛑 Corrigindo mensagem vazia antes do envio ao webhook');
+        console.log('🛑 Corrigindo mensagem vazia antes do envio');
         m.message_content = this.lastCustomMessage;
       }
       return m;
     });
     
-    console.log('📤 Enviando para webhook:', {
+    console.log('📤 Enviando mensagens:', {
       messageCount: checkedMessages.length,
       firstMessageContent: checkedMessages[0]?.message_content?.substring(0, 50),
       templateId: templateId
     });
     
-    const response = await fetch('https://n8n-wh.nexsyn.com.br/webhook/asaas/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: checkedMessages,
-        templateId,
-      }),
+    return await whatsappService.sendMessages({
+      messages: checkedMessages,
+      templateId,
     });
-
-    if (!response.ok) {
-      throw new Error(`Erro ao enviar mensagens: ${response.status}`);
-    }
-
-    return await response.json();
   },
 
   /**

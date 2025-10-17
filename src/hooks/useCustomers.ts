@@ -54,12 +54,8 @@ export function useCustomers(params?: UseCustomersParams) {
         throw new Error('Tenant ID inconsistente');
       }
 
-      // 🔑 DEFINIR CONTEXTO DE TENANT PARA RLS (otimizado)
-      await supabase.rpc('set_config', {
-        setting_name: 'app.current_tenant_id',
-        setting_value: tenantId,
-        is_local: true
-      });
+      // 🔑 SEGURANÇA MULTI-TENANT: Usando filtros diretos conforme guia de segurança
+      // AIDEV-NOTE: Removida dependência de RPC set_tenant_context - usando filtros diretos de tenant_id
       
       let query = supabase
         .from('customers')

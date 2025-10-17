@@ -51,7 +51,20 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
       accountFilter: '',
       asaasNossoNumero: '',
       asaasBillingType: 'ALL',
-      asaasPaymentStatus: 'ALL'
+      asaasPaymentStatus: 'ALL',
+      // AIDEV-NOTE: Novos filtros com valores padrão
+      paymentMethod: 'ALL',
+      customerDocument: '',
+      valorOriginalMin: undefined,
+      valorOriginalMax: undefined,
+      statusAnterior: 'ALL',
+      deletedFlag: 'ALL',
+      anticipatedFlag: 'ALL',
+      processed: 'ALL',
+      reconciled: 'ALL',
+      hasProcessingError: 'ALL',
+      installmentNumber: undefined,
+      externalReference: ''
     };
     
     onFiltersChange(defaultFilters);
@@ -69,6 +82,20 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
     if (filters.asaasNossoNumero && filters.asaasNossoNumero.trim()) count++;
     if (filters.asaasBillingType && filters.asaasBillingType !== 'ALL') count++;
     if (filters.asaasPaymentStatus && filters.asaasPaymentStatus !== 'ALL') count++;
+    
+    // AIDEV-NOTE: Contabilizar novos filtros
+    if (filters.paymentMethod && filters.paymentMethod !== 'ALL') count++;
+    if (filters.customerDocument && filters.customerDocument.trim()) count++;
+    if (filters.valorOriginalMin !== undefined) count++;
+    if (filters.valorOriginalMax !== undefined) count++;
+    if (filters.statusAnterior && filters.statusAnterior !== 'ALL') count++;
+    if (filters.deletedFlag !== 'ALL') count++;
+    if (filters.anticipatedFlag !== 'ALL') count++;
+    if (filters.processed !== 'ALL') count++;
+    if (filters.reconciled !== 'ALL') count++;
+    if (filters.hasProcessingError !== 'ALL') count++;
+    if (filters.installmentNumber !== undefined) count++;
+    if (filters.externalReference && filters.externalReference.trim()) count++;
     
     return count;
   };
@@ -275,6 +302,142 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
               </div>
             </>
           )}
+
+          {/* AIDEV-NOTE: Novos filtros avançados - seção expansível */}
+          <div className="w-full border-t border-gray-200 pt-3 mt-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              
+              {/* Método de Pagamento */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Método:</span>
+                <Select
+                  value={filters.paymentMethod || 'ALL'}
+                  onValueChange={(value) => handleFilterChange('paymentMethod', value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="h-8 w-32 text-xs border-gray-300">
+                    <SelectValue placeholder="Método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    <SelectItem value="PIX">PIX</SelectItem>
+                    <SelectItem value="BOLETO">Boleto</SelectItem>
+                    <SelectItem value="CREDIT_CARD">Cartão</SelectItem>
+                    <SelectItem value="DEBIT_CARD">Débito</SelectItem>
+                    <SelectItem value="TRANSFER">Transferência</SelectItem>
+                    <SelectItem value="UNDEFINED">Indefinido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Documento do Cliente */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">CPF/CNPJ:</span>
+                <Input
+                  type="text"
+                  value={filters.customerDocument || ''}
+                  onChange={(e) => handleFilterChange('customerDocument', e.target.value)}
+                  disabled={loading}
+                  className="h-8 w-32 text-xs border-gray-300"
+                  placeholder="000.000.000-00"
+                />
+              </div>
+
+              {/* Valor Original - Mínimo */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Valor Min:</span>
+                <Input
+                  type="number"
+                  value={filters.valorOriginalMin || ''}
+                  onChange={(e) => handleFilterChange('valorOriginalMin', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  disabled={loading}
+                  className="h-8 w-24 text-xs border-gray-300"
+                  placeholder="0,00"
+                  step="0.01"
+                />
+              </div>
+
+              {/* Valor Original - Máximo */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Valor Max:</span>
+                <Input
+                  type="number"
+                  value={filters.valorOriginalMax || ''}
+                  onChange={(e) => handleFilterChange('valorOriginalMax', e.target.value ? parseFloat(e.target.value) : undefined)}
+                  disabled={loading}
+                  className="h-8 w-24 text-xs border-gray-300"
+                  placeholder="0,00"
+                  step="0.01"
+                />
+              </div>
+
+              {/* Status Processamento */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Processado:</span>
+                <Select
+                  value={filters.processed || 'ALL'}
+                  onValueChange={(value) => handleFilterChange('processed', value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="h-8 w-28 text-xs border-gray-300">
+                    <SelectValue placeholder="Processado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    <SelectItem value="true">Processados</SelectItem>
+                    <SelectItem value="false">Não Processados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status Conciliação */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Conciliado:</span>
+                <Select
+                  value={filters.reconciled || 'ALL'}
+                  onValueChange={(value) => handleFilterChange('reconciled', value)}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="h-8 w-28 text-xs border-gray-300">
+                    <SelectValue placeholder="Conciliado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    <SelectItem value="true">Conciliados</SelectItem>
+                    <SelectItem value="false">Não Conciliados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Número da Parcela */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Parcela:</span>
+                <Input
+                  type="number"
+                  value={filters.installmentNumber || ''}
+                  onChange={(e) => handleFilterChange('installmentNumber', e.target.value ? parseInt(e.target.value) : undefined)}
+                  disabled={loading}
+                  className="h-8 w-20 text-xs border-gray-300"
+                  placeholder="1"
+                  min="1"
+                />
+              </div>
+
+              {/* Referência Externa */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">Ref. Externa:</span>
+                <Input
+                  type="text"
+                  value={filters.externalReference || ''}
+                  onChange={(e) => handleFilterChange('externalReference', e.target.value)}
+                  disabled={loading}
+                  className="h-8 w-32 text-xs border-gray-300"
+                  placeholder="Referência"
+                />
+              </div>
+
+            </div>
+          </div>
         </div>
       </div>
     </div>

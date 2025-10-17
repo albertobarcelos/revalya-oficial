@@ -61,6 +61,34 @@ export function useChargeDetails(chargeId: string | null) {
             state,
             country,
             additional_info
+          ),
+          contract:contracts(
+            id,
+            contract_number,
+            contract_services(
+              id,
+              description,
+              quantity,
+              unit_price,
+              is_active,
+              service:services(
+                id,
+                name,
+                description
+              )
+            ),
+            contract_products(
+              id,
+              description,
+              quantity,
+              unit_price,
+              is_active,
+              product:products(
+                id,
+                name,
+                description
+              )
+            )
           )
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO CRÍTICO

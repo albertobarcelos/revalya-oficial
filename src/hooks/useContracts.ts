@@ -26,6 +26,8 @@ export interface Contract {
   description?: string
   internal_notes?: string
   billed?: boolean
+  // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobranças automaticamente
+  generate_billing?: boolean
   created_at: string
   updated_at: string
   customers?: {
@@ -301,6 +303,80 @@ export function useContracts(filters: ContractFilters = {}) {
     }
   )
 
+  // 🔄 MUTAÇÃO PARA ATUALIZAR SERVIÇO DO CONTRATO
+  const updateContractServiceMutation = useSecureTenantMutation(
+    async (supabase, tenantId, serviceData: Partial<ContractService> & { id: string }) => {
+      throttledAudit(`🔄 Atualizando serviço ${serviceData.id} para tenant: ${tenantId}`);
+      
+      // AIDEV-NOTE: Configurar contexto RPC antes da operação
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId,
+        p_user_id: null
+      });
+      
+      const { data, error } = await supabase
+        .from('contract_services')
+        .update({
+          quantity: serviceData.quantity,
+          unit_price: serviceData.unit_price,
+          total: serviceData.total,
+          // AIDEV-NOTE: Campos financeiros adicionados para resolver PGRST116
+          payment_method: serviceData.payment_method,
+          card_type: serviceData.card_type,
+          billing_type: serviceData.billing_type,
+          recurrence_frequency: serviceData.recurrence_frequency,
+          installments: serviceData.installments,
+          due_date_type: serviceData.due_date_type,
+          due_days: serviceData.due_days,
+          due_day: serviceData.due_day,
+          due_next_month: serviceData.due_next_month,
+          generate_billing: serviceData.generate_billing,
+          // AIDEV-NOTE: Não permitir alteração de tenant_id, contract_id ou service_id por segurança
+        })
+        .eq('id', serviceData.id)
+        .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
+        .select()
+        .single()
+
+      if (error) {
+        console.error('🚨 [ERROR] Erro ao atualizar serviço:', error);
+        throw error;
+      }
+
+      // AIDEV-NOTE: Validar dados retornados
+      if (data.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY] Serviço atualizado com tenant_id incorreto:', data);
+        throw new Error('Violação de segurança: tenant_id incorreto no serviço atualizado');
+      }
+
+      throttledAudit(`✅ Serviço atualizado com sucesso: ${data.id}`);
+      return data;
+    },
+    {
+      onSuccess: () => {
+        // AIDEV-NOTE: Invalidação específica por tenant
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'contract-services' && 
+                   query.queryKey[1] === currentTenant?.id;
+          }
+        });
+        toast({
+          title: "Sucesso!",
+          description: "Configurações financeiras atualizadas com sucesso!",
+        });
+      },
+      onError: (error) => {
+        console.error('🚨 [MUTATION] Erro na mutação updateContractService:', error);
+        toast({
+          title: "Erro ao salvar configurações financeiras",
+          description: "Não foi possível atualizar as configurações. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    }
+  )
+
   // 🔄 FUNÇÃO PARA FORÇAR ATUALIZAÇÃO
   const refetch = () => {
     return queryClient.invalidateQueries({ queryKey: ['contracts', currentTenant?.id] })
@@ -321,6 +397,7 @@ export function useContracts(filters: ContractFilters = {}) {
     deleteContract: deleteContract, // ✅ Objeto completo da mutação
     isDeleting: deleteContract.isPending,
     updateContractStatusMutation,
+    updateContractServiceMutation, // ✅ Nova mutação para atualizar serviços
     // AIDEV-NOTE: Adicionando funções de serviços para compatibilidade com componentes existentes
     addContractService: contractServicesHook.addService,
     addContractServiceMutation: contractServicesHook.addServiceMutation,

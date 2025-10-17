@@ -321,11 +321,11 @@ export function CreateContractForm({ onSuccess, onCancel }: CreateContractFormPr
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="MONTHLY">Mensal</SelectItem>
-                    <SelectItem value="BIMONTHLY">Bimestral</SelectItem>
-                    <SelectItem value="QUARTERLY">Trimestral</SelectItem>
-                    <SelectItem value="SEMIANNUAL">Semestral</SelectItem>
-                    <SelectItem value="ANNUAL">Anual</SelectItem>
+                    <SelectItem value="Mensal">Mensal</SelectItem>
+                    <SelectItem value="Bimestral">Bimestral</SelectItem>
+                    <SelectItem value="Trimestral">Trimestral</SelectItem>
+                    <SelectItem value="Semestral">Semestral</SelectItem>
+                    <SelectItem value="Anual">Anual</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
