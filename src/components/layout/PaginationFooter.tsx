@@ -66,11 +66,11 @@ export function PaginationFooter({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={`flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 ${className}`}
+      className={`flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 p-2 sm:p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 ${className}`}
     >
       {/* AIDEV-NOTE: Informações de itens e seletor de itens por página */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 text-sm text-muted-foreground">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+        <div className="flex items-center gap-1 sm:gap-2">
           <span>Mostrando</span>
           <span className="font-medium text-foreground">
             {totalItems > 0 ? `${startItem}-${endItem}` : '0'}
@@ -80,14 +80,14 @@ export function PaginationFooter({
           <span>itens</span>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <span>Itens por página:</span>
           <Select
             value={itemsPerPage.toString()}
             onValueChange={(value) => onItemsPerPageChange(Number(value))}
             disabled={isLoading}
           >
-            <SelectTrigger className="w-20 h-8">
+            <SelectTrigger className="w-16 sm:w-20 h-7 sm:h-8 text-xs sm:text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -103,16 +103,16 @@ export function PaginationFooter({
 
       {/* AIDEV-NOTE: Controles de navegação de páginas */}
       {totalPages > 1 && (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
           {/* AIDEV-NOTE: Botão primeira página */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => onPageChange(1)}
             disabled={currentPage === 1 || isLoading}
-            className="h-8 w-8 p-0"
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
           >
-            <ChevronsLeft className="h-4 w-4" />
+            <ChevronsLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* AIDEV-NOTE: Botão página anterior */}
@@ -121,24 +121,24 @@ export function PaginationFooter({
             size="sm"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1 || isLoading}
-            className="h-8 w-8 p-0"
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* AIDEV-NOTE: Números de páginas com responsividade */}
-          <div className="hidden sm:flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-0.5 sm:gap-1">
             {getVisiblePages().map((page, index) => (
               <React.Fragment key={index}>
                 {page === '...' ? (
-                  <span className="px-2 py-1 text-muted-foreground">...</span>
+                  <span className="px-1 sm:px-2 py-1 text-muted-foreground text-xs sm:text-sm">...</span>
                 ) : (
                   <Button
                     variant={currentPage === page ? "default" : "outline"}
                     size="sm"
                     onClick={() => onPageChange(page as number)}
                     disabled={isLoading}
-                    className="h-8 w-8 p-0"
+                    className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-xs sm:text-sm"
                   >
                     {page}
                   </Button>
@@ -148,7 +148,7 @@ export function PaginationFooter({
           </div>
 
           {/* AIDEV-NOTE: Indicador de página atual em telas pequenas */}
-          <div className="sm:hidden flex items-center gap-2 px-3 py-1 text-sm">
+          <div className="sm:hidden flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 text-xs sm:text-sm">
             <span className="font-medium">{currentPage}</span>
             <span className="text-muted-foreground">de</span>
             <span className="font-medium">{totalPages}</span>
@@ -160,9 +160,9 @@ export function PaginationFooter({
             size="sm"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages || isLoading}
-            className="h-8 w-8 p-0"
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
 
           {/* AIDEV-NOTE: Botão última página */}
@@ -171,9 +171,9 @@ export function PaginationFooter({
             size="sm"
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage === totalPages || isLoading}
-            className="h-8 w-8 p-0"
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
           >
-            <ChevronsRight className="h-4 w-4" />
+            <ChevronsRight className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </div>
       )}

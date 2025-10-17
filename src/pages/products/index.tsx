@@ -15,7 +15,8 @@ import {
   Edit, 
   Trash2, 
   AlertCircle,
-  Package
+  Package,
+  Info
 } from 'lucide-react';
 
 // Shadcn/UI Components
@@ -31,6 +32,12 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Hooks e Utilitários
 import { useSecureProducts, Product } from '@/hooks/useSecureProducts';
@@ -213,6 +220,22 @@ export default function ProductsPage() {
     setEditingProduct(null);
   };
 
+  // 🎨 COMPONENTE REUTILIZÁVEL PARA HEADER DA TABELA
+  const TableHeaderComponent = ({ isSticky = false }: { isSticky?: boolean }) => (
+    <TableHeader className={isSticky ? "sticky top-0 bg-background z-10" : ""}>
+      <TableRow className="h-10">
+        <TableHead className="py-2">Nome</TableHead>
+        <TableHead className="py-2">Código</TableHead>
+        <TableHead className="py-2">Valor</TableHead>
+        <TableHead className="py-2">Unidade</TableHead>
+        <TableHead className="py-2">Taxa (%)</TableHead>
+        <TableHead className="py-2">Status</TableHead>
+        <TableHead className="py-2">Retenção</TableHead>
+        <TableHead className="text-right py-2">Ações</TableHead>
+      </TableRow>
+    </TableHeader>
+  );
+
   // AIDEV-NOTE: Verificação de acesso
   if (accessLoading) {
     return (
@@ -247,10 +270,24 @@ export default function ProductsPage() {
   const renderTableContent = () => {
     if (isLoading) {
       return (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeaderComponent />
+            <TableBody>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <TableRow key={index} className="h-10">
+                  <TableCell className="py-1"><Skeleton className="h-4 w-[200px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[100px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[60px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[60px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[40px]" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       );
     }
@@ -284,18 +321,7 @@ export default function ProductsPage() {
     return (
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">Nome</TableHead>
-              <TableHead className="w-[100px]">Código</TableHead>
-              <TableHead className="w-[120px]">Valor</TableHead>
-              <TableHead className="w-[100px]">Unidade</TableHead>
-              <TableHead className="w-[80px]">Taxa (%)</TableHead>
-              <TableHead className="w-[80px]">Status</TableHead>
-              <TableHead className="w-[80px]">Retenção</TableHead>
-              <TableHead className="w-[100px]">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
+          <TableHeaderComponent isSticky={true} />
           <TableBody>
             <AnimatePresence>
               {paginatedProducts.map((product) => (
@@ -307,13 +333,22 @@ export default function ProductsPage() {
                   transition={{ duration: 0.2 }}
                   className="group hover:bg-muted/50"
                 >
-                  <TableCell className="font-medium">
-                    <div>
-                      <div className="font-semibold">{product.name}</div>
+                  <TableCell className="font-medium py-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-sm">{product.name}</span>
                       {product.description && (
-                        <div className="text-sm text-muted-foreground">
-                          {product.description}
-                        </div>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info 
+                                className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-help" 
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-[300px]">
+                              <p className="text-xs">{product.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   </TableCell>
@@ -394,8 +429,15 @@ export default function ProductsPage() {
             Novo Produto
           </Button>
         }
-        cardTitle="Lista de Produtos"
-        pagination={pagination}
+        pagination={{
+          currentPage: pagination.currentPage,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.itemsPerPage,
+          onPageChange: pagination.setCurrentPage,
+          onItemsPerPageChange: pagination.setItemsPerPage,
+          isLoading: isLoading
+        }}
       >
         {renderTableContent()}
       </PageLayout>

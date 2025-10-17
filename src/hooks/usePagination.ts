@@ -13,6 +13,7 @@ interface UsePaginationReturn {
   currentPage: number;
   itemsPerPage: number;
   totalPages: number;
+  totalItems: number;
   startIndex: number;
   endIndex: number;
   hasNextPage: boolean;
@@ -158,6 +159,7 @@ export function usePagination({
     currentPage,
     itemsPerPage,
     totalPages,
+    totalItems,
     startIndex,
     endIndex,
     hasNextPage,
