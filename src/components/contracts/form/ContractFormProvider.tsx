@@ -48,7 +48,7 @@ interface ContractFormProviderProps {
 }
 
 // Função para calcular totais baseado nos serviços e produtos
-const calculateTotals = (services: any[] = [], products: any[] = []) => {
+const calculateTotals = (services: any[] = [], products: any[] = [], contractDiscount: number = 0) => {
   // Calcular subtotal de serviços
   const servicesSubtotal = services.reduce((sum, service) => {
     const quantity = service.quantity || 1;
@@ -87,7 +87,8 @@ const calculateTotals = (services: any[] = [], products: any[] = []) => {
     return sum + productDiscount;
   }, 0);
 
-  const discount = servicesDiscount + productsDiscount;
+  const itemsDiscount = servicesDiscount + productsDiscount;
+  const totalDiscount = itemsDiscount + contractDiscount;
 
   // Calcular impostos de serviços
   const servicesTax = services.reduce((sum, service) => {
@@ -114,11 +115,11 @@ const calculateTotals = (services: any[] = [], products: any[] = []) => {
   }, 0);
 
   const tax = servicesTax + productsTax;
-  const total = subtotal - discount + tax;
+  const total = subtotal - totalDiscount + tax;
 
   return {
     subtotal: Math.round(subtotal * 100) / 100,
-    discount: Math.round(discount * 100) / 100,
+    discount: Math.round(totalDiscount * 100) / 100,
     tax: Math.round(tax * 100) / 100,
     total: Math.round(total * 100) / 100
   };
@@ -204,25 +205,27 @@ export function ContractFormProvider({
     }
   }, [contractError]);
 
-  // Monitorar mudanças nos serviços e produtos e recalcular totais
+  // Monitorar mudanças nos serviços, produtos e desconto do contrato e recalcular totais
   const services = form.watch('services');
   const products = form.watch('products');
+  const contractDiscount = form.watch('total_discount') || 0;
   
   useEffect(() => {
-    // Recalcular sempre que houver mudanças nos serviços ou produtos
+    // Recalcular sempre que houver mudanças nos serviços, produtos ou desconto
     const hasItems = (services && services.length > 0) || (products && products.length > 0);
     
-    const newTotals = calculateTotals(services || [], products || []);
+    // AIDEV-NOTE: Incluir desconto do contrato no cálculo dos totais
+    const newTotals = calculateTotals(services || [], products || [], contractDiscount);
     setTotalValues(newTotals);
     
-    // Atualizar os campos do formulário
+    // AIDEV-NOTE: Atualizar apenas total_amount e total_tax
+    // Não sobrescrever total_discount pois ele é gerenciado pelo ContractDiscounts
     form.setValue('total_amount', newTotals.total);
-    form.setValue('total_discount', newTotals.discount);
     form.setValue('total_tax', newTotals.tax);
     
     const itemsCount = (services?.length || 0) + (products?.length || 0);
-    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos');
-  }, [services, products, form]);
+    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos', 'com desconto do contrato:', contractDiscount);
+  }, [services, products, contractDiscount, form]);
 
   // Detectar mudanças no formulário
   const handleFormChange = () => {

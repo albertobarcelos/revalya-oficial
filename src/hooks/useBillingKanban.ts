@@ -48,7 +48,15 @@ const invalidateBillingCache = (tenantId: string) => {
   });
   
   queryClient.invalidateQueries({ 
+    queryKey: ['contract_billing_periods', tenantId] 
+  });
+  
+  queryClient.invalidateQueries({ 
     queryKey: ['charges', tenantId] 
+  });
+  
+  queryClient.invalidateQueries({ 
+    queryKey: ['recebimentos', tenantId] 
   });
   
   console.log('🔄 Cache invalidado para tenant:', tenantId);

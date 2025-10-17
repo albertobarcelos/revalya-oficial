@@ -822,11 +822,25 @@ export function ContractProducts({ products }: ContractProductsProps) {
                         type="number"
                         min={1}
                         max={365}
-                        value={dueDateData.due_days}
-                        onChange={(e) => setDueDateData(prev => ({ 
-                          ...prev, 
-                          due_days: parseInt(e.target.value) || 1 
-                        }))}
+                        value={dueDateData.due_days || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // AIDEV-NOTE: Permite campo vazio durante edição, mas aplica valor mínimo 1 quando há conteúdo
+                          if (value === '') {
+                            setDueDateData(prev => ({ ...prev, due_days: undefined }));
+                          } else {
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue) && numValue >= 1) {
+                              setDueDateData(prev => ({ ...prev, due_days: numValue }));
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
+                          if (!dueDateData.due_days) {
+                            setDueDateData(prev => ({ ...prev, due_days: 1 }));
+                          }
+                        }}
                         placeholder="Ex: 5 dias após o faturamento"
                       />
                       <p className="text-xs text-muted-foreground">

@@ -242,9 +242,11 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
   // AIDEV-NOTE: Função para confirmar e executar a exclusão de contratos
   const handleConfirmDelete = async () => {
     try {
-      // Excluir contratos um por um
+      setIsDeleting(true);
+      
+      // Excluir contratos um por um usando mutateAsync
       for (const contractId of selectedContracts) {
-        await deleteContract(contractId);
+        await deleteContract.mutateAsync(contractId);
       }
       
       // Refetch para atualizar a lista
@@ -266,6 +268,8 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
         description: error.message || "Erro ao excluir contratos.",
         variant: "destructive"
       });
+    } finally {
+      setIsDeleting(false);
       setShowDeleteDialog(false);
     }
   };
@@ -408,7 +412,8 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                       </TableCell>
                       <TableCell>{renderStageBadge(contract.stage)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(contract.total_amount)}
+                        {/* AIDEV-NOTE: Exibindo valor final considerando desconto aplicado */}
+                        {formatCurrency(contract.total_amount - (contract.total_discount || 0))}
                       </TableCell>
                       <TableCell>{getBillingTypeLabel(contract.billing_type)}</TableCell>
                       <TableCell>
@@ -526,10 +531,11 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
             </AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleConfirmDelete}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Excluir Contratos
+              {isDeleting ? "Excluindo..." : "Excluir Contratos"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

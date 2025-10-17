@@ -36,7 +36,32 @@ Os registros na tabela `contract_billing_periods` permaneciam com status `PENDIN
 -- PENDING/DUE_TODAY → LATE (quando bill_date < hoje)
 ```
 
-### 2. Estrutura da Resposta
+### 2. Configuração do Cron Job
+
+**Problema de Timezone Identificado**:
+- Servidor/banco em UTC, usuários no Brasil (UTC-3)
+- 00:00 UTC = 21:00 do dia anterior no Brasil
+- Contratos do dia atual apareciam como "pending" porque o sistema já considerava o dia seguinte
+
+**Solução Implementada**:
+```sql
+-- Habilitar extensão pg_cron
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Configurar cron job para horário brasileiro
+SELECT cron.schedule(
+  'recalc-billing-statuses-daily',
+  '0 3 * * *',  -- 03:00 UTC = 00:00 Brasil
+  'SELECT recalc_billing_statuses();'
+);
+```
+
+**Cronograma**:
+- **Execução**: Diariamente às 03:00 UTC (00:00 no Brasil)
+- **Função**: Chama diretamente a RPC `recalc_billing_statuses()`
+- **Status**: Ativo (jobid: 2)
+
+### 3. Estrutura da Resposta
 
 ```json
 {
@@ -72,11 +97,39 @@ bill_date: 2025-10-13 → status: DUE_TODAY ✅
 
 ## 🔄 Configuração de Cron Job
 
-Para automatizar a execução diária, configure um cron job no Supabase:
+### Status Atual: ✅ CONFIGURADO
 
-1. **Acesse**: Dashboard Supabase → Edge Functions → recalc-billing-statuses
-2. **Configure**: Cron schedule para execução diária
-3. **Horário sugerido**: `0 6 * * *` (06:00 UTC diariamente)
+**Cron Job Ativo**:
+- **Nome**: `recalc-billing-statuses-daily`
+- **Schedule**: `0 3 * * *` (03:00 UTC = 00:00 Brasil)
+- **Comando**: `SELECT recalc_billing_statuses();`
+- **Status**: Ativo (jobid: 2)
+
+### Verificação do Cron Job
+```sql
+-- Verificar cron jobs ativos
+SELECT 
+  jobid,
+  schedule,
+  command,
+  active,
+  jobname
+FROM cron.job 
+ORDER BY jobid;
+```
+
+### Gerenciamento do Cron Job
+```sql
+-- Desabilitar temporariamente
+SELECT cron.unschedule('recalc-billing-statuses-daily');
+
+-- Reabilitar
+SELECT cron.schedule(
+  'recalc-billing-statuses-daily',
+  '0 3 * * *',
+  'SELECT recalc_billing_statuses();'
+);
+```
 
 ## 📊 Monitoramento
 

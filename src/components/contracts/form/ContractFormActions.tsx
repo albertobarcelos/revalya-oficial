@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { format } from "date-fns";
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useContractForm } from "./ContractFormProvider";
 import { contractFormSchema } from "../schema/ContractFormSchema";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -233,11 +234,76 @@ export function ContractFormActions({
   
   // AIDEV-NOTE: Hook seguro para validação de acesso ao tenant
   const { currentTenant } = useTenantAccessGuard();
-  
+
+  // AIDEV-NOTE: Hook seguro para inserção de serviços seguindo práticas multi-tenant
+  const insertServiceMutation = useSecureTenantMutation(
+    async (supabase: SupabaseClient, tenantId: string, serviceData: any) => {
+      const { data, error } = await supabase
+        .from('contract_services')
+        .insert(serviceData)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('❌ Erro ao inserir serviço:', error);
+        throw error;
+      }
+      
+      // 🛡️ VALIDAÇÃO DUPLA: Verificar se o serviço criado pertence ao tenant correto
+      if (data.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY VIOLATION] Serviço criado com tenant_id incorreto');
+        throw new Error('Violação de segurança na criação do serviço');
+      }
+      
+      console.log('✅ Serviço inserido:', data.id);
+      return data;
+    }
+  );
+
+  // AIDEV-NOTE: Hook seguro para atualização de serviços
+  const updateServiceMutation = useSecureTenantMutation(
+    async (supabase: SupabaseClient, tenantId: string, { id, ...updateData }: any) => {
+      const { data, error } = await supabase
+        .from('contract_services')
+        .update(updateData)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('❌ Erro ao atualizar serviço:', error);
+        throw error;
+      }
+      
+      console.log('✅ Serviço atualizado:', id);
+      return data;
+    }
+  );
+
+  // AIDEV-NOTE: Hook seguro para deleção de serviços
+  const deleteServiceMutation = useSecureTenantMutation(
+    async (supabase: SupabaseClient, tenantId: string, serviceId: string) => {
+      const { error } = await supabase
+        .from('contract_services')
+        .delete()
+        .eq('id', serviceId)
+        .eq('tenant_id', tenantId);
+        
+      if (error) {
+        console.error('❌ Erro ao deletar serviço:', error);
+        throw error;
+      }
+      
+      console.log('✅ Serviço deletado:', serviceId);
+      return serviceId;
+    }
+  );
+
   // AIDEV-NOTE: Hook seguro para operações de contratos com RLS
   const { createContract, updateContract } = useContracts();
   
-  // AIDEV-NOTE: Hook seguro para inserção de serviços do contrato
+  // AIDEV-NOTE: Hook seguro para inserção de produtos do contrato
   const insertContractServicesMutation = useSecureTenantMutation(
     async (supabase, tenantId, servicesToInsert: any[]) => {
       const { data, error } = await supabase
@@ -368,12 +434,6 @@ export function ContractFormActions({
       if (!currentTenant?.id) {
         throw new Error('Tenant não encontrado ou acesso negado');
       }
-      
-      // AIDEV-NOTE: Configurar contexto do tenant ANTES de qualquer consulta ao banco
-      // Isso resolve o erro 406 (Not Acceptable) nas consultas RLS
-      await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: currentTenant.id 
-      });
       
       const contractData = await prepareContractData(data, currentTenant.id, contractId);
       
@@ -655,28 +715,16 @@ export function ContractFormActions({
                   contract_id: serviceData.contract_id
                 });
                 
-                // Fazer UPDATE em vez de INSERT
-                const { error: updateError } = await supabase
-                  .from('contract_services')
-                  .update(serviceData)
-                  .eq('id', existingDuplicate.id)
-                  .eq('tenant_id', currentTenant.id);
-                  
-                if (updateError) {
-                  console.error('❌ Erro ao atualizar serviço duplicado:', updateError);
-                  throw updateError;
-                }
+                // Fazer UPDATE em vez de INSERT usando hook seguro
+                await updateServiceMutation.mutateAsync({
+                  id: existingDuplicate.id,
+                  ...serviceData
+                });
+                
                 console.log('✅ Serviço duplicado atualizado:', existingDuplicate.id);
               } else {
-                // Inserir normalmente
-                const { error: insertError } = await supabase
-                  .from('contract_services')
-                  .insert(serviceData);
-                  
-                if (insertError) {
-                  console.error('❌ Erro ao inserir serviço:', insertError);
-                  throw insertError;
-                }
+                // Inserir normalmente usando hook seguro
+                await insertServiceMutation.mutateAsync(serviceData);
                 console.log('✅ Serviço inserido:', serviceData.service_id);
               }
             } catch (error) {
@@ -693,16 +741,7 @@ export function ContractFormActions({
           console.log('🗑️ Executando DELETEs...');
           for (const serviceToDelete of servicesToDelete) {
             try {
-              const { error: deleteError } = await supabase
-                .from('contract_services')
-                .delete()
-                .eq('id', serviceToDelete.id)
-                .eq('tenant_id', currentTenant.id);
-                
-              if (deleteError) {
-                console.error('❌ Erro ao deletar serviço:', deleteError);
-                throw deleteError;
-              }
+              await deleteServiceMutation.mutateAsync(serviceToDelete.id);
               console.log('✅ Serviço deletado:', serviceToDelete.id);
             } catch (error) {
               console.error('❌ Erro no DELETE do serviço:', error);

@@ -117,7 +117,7 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
   };
 
   // AIDEV-NOTE: Função para processar baixa com tipo específico de recebimento
-  const handleConfirmPayment = async (paymentType: 'PIX' | 'BOLETO' | 'DINHEIRO') => {
+  const handleConfirmPayment = async (paymentType: 'PIX' | 'BOLETO' | 'DINHEIRO' | 'CARTAO_CREDITO') => {
     try {
       await markAsPaid(charge.id, paymentType);
       refreshChargeDetails();
@@ -291,6 +291,22 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
               <div className="text-left">
                 <div className="font-medium">Dinheiro</div>
                 <div className="text-sm text-muted-foreground">Recebido em dinheiro</div>
+              </div>
+            </Button>
+
+            {/* Opção Cartão de Crédito */}
+            <Button
+              variant="outline"
+              className="h-16 justify-start gap-4 hover:bg-purple-50 hover:border-purple-300 transition-all duration-200"
+              onClick={() => handleConfirmPayment('CARTAO_CREDITO')}
+              disabled={isUpdating}
+            >
+              <div className="flex items-center justify-center w-10 h-10 bg-purple-100 rounded-lg">
+                <CreditCard className="h-5 w-5 text-purple-600" />
+              </div>
+              <div className="text-left">
+                <div className="font-medium">Cartão de Crédito</div>
+                <div className="text-sm text-muted-foreground">Recebido via cartão de crédito</div>
               </div>
             </Button>
           </div>

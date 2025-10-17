@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ContractFormValues } from "../schema/ContractFormSchema";
 import { ContractServices } from "./ContractServices";
 import { ContractProducts } from "./ContractProducts";
+import { ContractDiscounts } from "./ContractDiscounts";
 
 interface ContractTabsProps {
   activeTab: string;
@@ -128,9 +129,7 @@ export function ContractTabs({ activeTab, setActiveTab, services, products = [],
       </TabsContent>
       
       <TabsContent value="descontos" className="mt-4">
-        <div className="p-4 text-center text-muted-foreground">
-          Funcionalidade de Descontos Personalizados em desenvolvimento.
-        </div>
+        <ContractDiscounts />
       </TabsContent>
       
       <TabsContent value="departamentos" className="mt-4">

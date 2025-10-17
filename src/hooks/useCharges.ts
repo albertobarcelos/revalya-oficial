@@ -283,7 +283,11 @@ export function useCharges(params: UseChargesParams = {}) {
           description: "Cobrança cancelada com sucesso!",
         })
       },
-      invalidateQueries: ['charges']
+      invalidateQueries: [
+        'charges',                    // Lista de cobranças
+        'contract_billing_periods',  // Histórico de recebimentos (RecebimentosHistorico)
+        'recebimentos'               // Página de recebimentos
+      ]
     }
   )
 
@@ -386,10 +390,12 @@ export function useCharges(params: UseChargesParams = {}) {
       },
       // AIDEV-NOTE: Invalidar TODAS as queries relacionadas à cobrança para garantir atualização completa
       invalidateQueries: [
-        'charges',           // Lista de cobranças
-        'charge-details',    // Detalhes específicos da cobrança
-        'payment-history',   // Histórico de pagamentos
-        'message-history'    // Histórico de mensagens
+        'charges',                    // Lista de cobranças
+        'charge-details',            // Detalhes específicos da cobrança
+        'payment-history',           // Histórico de pagamentos
+        'message-history',           // Histórico de mensagens
+        'contract_billing_periods',  // Histórico de recebimentos (RecebimentosHistorico)
+        'recebimentos'               // Página de recebimentos
       ]
     }
   )

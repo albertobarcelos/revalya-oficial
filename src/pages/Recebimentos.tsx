@@ -255,7 +255,11 @@ const Recebimentos: React.FC = () => {
           variant: 'destructive'
         });
       },
-      invalidateQueries: ['recebimentos']
+      invalidateQueries: [
+        'recebimentos',               // Página de recebimentos
+        'contract_billing_periods',  // Histórico de recebimentos (RecebimentosHistorico)
+        'charges'                    // Lista de cobranças relacionadas
+      ]
     }
   );
   
