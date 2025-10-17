@@ -316,7 +316,7 @@ export default function Clients() {
               </div>
             ) : (
               <div className="rounded-md border">
-                <div className="max-h-[calc(100vh-20rem)] overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
+                <div className="max-h-[calc(100vh-16rem)] overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
@@ -331,21 +331,21 @@ export default function Clients() {
                     </TableHeader>
                     <TableBody>
                       {paginatedCustomers.map((customer) => (
-                        <TableRow key={customer.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">
+                        <TableRow key={customer.id} className="hover:bg-muted/50 h-12">
+                          <TableCell className="font-medium py-1">
                             <div className="flex flex-col">
-                              <span className="font-medium">{customer.name}</span>
-                              <div className="md:hidden text-xs text-muted-foreground mt-1 space-y-1">
+                              <span className="font-medium text-sm">{customer.name}</span>
+                              <div className="md:hidden text-xs text-muted-foreground mt-0.5 space-y-0.5">
                                 {customer.company && (
                                   <div className="flex items-center">
                                     <Building2 className="mr-1 h-3 w-3" />
-                                    <span className="truncate">{customer.company}</span>
+                                    <span className="truncate text-xs">{customer.company}</span>
                                   </div>
                                 )}
                                 {customer.cpf_cnpj && (
-                                  <div className="lg:hidden">{formatCpfCnpj(customer.cpf_cnpj)}</div>
+                                  <div className="lg:hidden text-xs">{formatCpfCnpj(customer.cpf_cnpj)}</div>
                                 )}
-                                <div className="sm:hidden flex flex-col space-y-1">
+                                <div className="sm:hidden flex flex-col space-y-0.5">
                                   {customer.email && (
                                     <div className="flex items-center">
                                       <Mail className="mr-1 h-3 w-3" />
@@ -362,39 +362,39 @@ export default function Clients() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="hidden md:table-cell">
+                          <TableCell className="hidden md:table-cell py-1">
                             <div className="flex items-center">
-                              <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
-                              <span className="truncate">{customer.company || '-'}</span>
+                              <Building2 className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="truncate text-sm">{customer.company || '-'}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            <span className="font-mono text-sm">
+                          <TableCell className="hidden lg:table-cell py-1">
+                            <span className="font-mono text-xs">
                               {customer.cpf_cnpj !== undefined ? formatCpfCnpj(customer.cpf_cnpj) : "-"}
                             </span>
                           </TableCell>
-                          <TableCell className="hidden sm:table-cell">
+                          <TableCell className="hidden sm:table-cell py-1">
                             {customer.email ? (
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Mail className="mr-2 h-4 w-4" />
-                                <span className="truncate max-w-32">{customer.email}</span>
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Mail className="mr-1.5 h-3.5 w-3.5" />
+                                <span className="truncate max-w-28">{customer.email}</span>
                               </div>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="hidden md:table-cell">
+                          <TableCell className="hidden md:table-cell py-1">
                             {customer.phone ? (
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Phone className="mr-2 h-4 w-4" />
-                                <span>{customer.phone}</span>
+                              <div className="flex items-center text-xs text-muted-foreground">
+                                <Phone className="mr-1.5 h-3.5 w-3.5" />
+                                <span className="text-xs">{customer.phone}</span>
                               </div>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          <TableCell className="hidden md:table-cell py-1">
+                            <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                               customer.active !== false 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-red-100 text-red-800'
@@ -402,20 +402,21 @@ export default function Clients() {
                               {customer.active !== false ? 'Ativo' : 'Inativo'}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-1">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    className="h-7 w-7 p-0"
                                     onClick={() => setEditingCustomer(customer)}
                                   >
-                                    <Pencil className="h-4 w-4" />
+                                    <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Editar cliente</p>
+                                  <p className="text-xs">Editar cliente</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
