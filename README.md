@@ -86,6 +86,68 @@ Implementamos um sistema completo de monitoramento e prevenção de violações 
 - ✅ **Documentação completa** para troubleshooting
 - ✅ **Alertas proativos** para problemas futuros
 
+### Janeiro 2025: Correções na Integração ASAAS - Mapeamento Completo de Dados
+
+Implementamos correções críticas na integração ASAAS para garantir o mapeamento completo de todos os campos de cliente e dados de cobrança.
+
+#### 🐛 **Problemas Identificados e Corrigidos**
+
+1. **Campo `invoice_number` Ausente**:
+   - **Problema**: Campo `invoice_number` não existia na tabela `conciliation_staging`
+   - **Solução**: Adicionada migração para incluir o campo `invoice_number` com índice otimizado
+   - **Impacto**: Agora capturamos o número da nota fiscal do ASAAS corretamente
+
+2. **Mapeamento Incompleto de Dados do Cliente**:
+   - **Problema**: Função de importação ASAAS não mapeava todos os campos de cliente disponíveis
+   - **Campos Corrigidos**:
+     - `customer_phone` ← `customerData?.phone`
+     - `customer_mobile_phone` ← `customerData?.mobilePhone`
+     - `customer_address` ← `customerData?.address`
+     - `customer_address_number` ← `customerData?.addressNumber`
+     - `customer_complement` ← `customerData?.complement`
+     - `customer_province` ← `customerData?.neighborhood`
+     - `customer_city` ← `customerData?.cityName`
+     - `customer_state` ← `customerData?.state`
+     - `customer_postal_code` ← `customerData?.postalCode`
+     - `customer_country` ← `customerData?.country`
+     - `invoice_number` ← `payment.invoiceNumber`
+
+3. **Atualização de Registros Existentes**:
+   - **Problema**: Ao atualizar registros existentes, dados do cliente não eram atualizados
+   - **Solução**: Implementada busca e atualização completa dos dados do cliente em ambos os fluxos (inserção e atualização)
+
+#### 🛠️ **Alterações Técnicas Implementadas**
+
+1. **Migração de Banco de Dados**:
+   ```sql
+   -- Adição do campo invoice_number
+   ALTER TABLE conciliation_staging 
+   ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+   
+   -- Índice para performance
+   CREATE INDEX IF NOT EXISTS idx_conciliation_staging_invoice_number
+   ON conciliation_staging(tenant_id, invoice_number) 
+   WHERE invoice_number IS NOT NULL;
+   ```
+
+2. **Atualização da Edge Function `asaas-import-charges`**:
+   - ✅ Mapeamento completo de todos os campos de cliente
+   - ✅ Inclusão do campo `invoice_number`
+   - ✅ Atualização de dados do cliente em registros existentes
+   - ✅ Busca de dados do cliente via API ASAAS em ambos os fluxos
+
+3. **Consistência com Webhook ASAAS**:
+   - ✅ Verificado que o webhook `asaas-webhook-charges` já possui mapeamento completo
+   - ✅ Ambos os sistemas (import e webhook) agora têm paridade de dados
+
+#### 🎯 **Resultados**
+
+- ✅ **Dados Completos**: Todos os campos de cliente do ASAAS são capturados
+- ✅ **Nota Fiscal**: Campo `invoice_number` disponível para reconciliação
+- ✅ **Consistência**: Paridade entre webhook e importação manual
+- ✅ **Performance**: Índices otimizados para consultas por `invoice_number`
+- ✅ **Integridade**: Dados do cliente sempre atualizados, mesmo em registros existentes
+
 ### Janeiro 2025: Melhorias na Integração WhatsApp - Persistência e Reconexão Automática
 
 Implementamos correções críticas na integração WhatsApp para resolver problemas de persistência de configuração e reconexão automática após recarregamento da página.

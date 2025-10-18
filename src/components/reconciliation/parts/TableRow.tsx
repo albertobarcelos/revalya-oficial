@@ -15,6 +15,7 @@ import { SelectionCheckbox } from './SelectionCheckbox';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
 import { ValueCell } from './ValueCell';
+import ImportedIndicator from './ImportedIndicator';
 import { TableRowProps } from '../types/table-parts';
 import { ReconciliationSource, ReconciliationAction } from '@/types/reconciliation';
 import { formatDate } from '@/lib/utils';
@@ -158,18 +159,17 @@ export function TableRow({
         />
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Status */}
+      {/* AIDEV-NOTE: Coluna Status de Vinculação */}
       <TableCell className="py-1 sm:py-2 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <StatusBadge status={movement.reconciliationStatus} />
-          {/* AIDEV-NOTE: Indicador visual de importação para charges */}
-          {movement.charge_id && movement.imported_at && (
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-green-600" />
-              <span className="text-xs text-green-600 font-medium">Importado</span>
-            </div>
-          )}
-        </div>
+        <StatusBadge status={movement.reconciliationStatus} />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Processado */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        <ImportedIndicator 
+          chargeId={movement.charge_id}
+          importedAt={movement.imported_at}
+        />
       </TableCell>
       
       {/* AIDEV-NOTE: Coluna Pagamento */}
@@ -182,7 +182,9 @@ export function TableRow({
         {movement.hasContract ? (
           <div className="flex items-center justify-center gap-1">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-mono">{movement.contractId}</span>
+            <span className="text-sm font-mono">
+              {movement.contractNumber}
+            </span>
           </div>
         ) : (
           <span className="text-slate-400 text-sm">Sem contrato</span>

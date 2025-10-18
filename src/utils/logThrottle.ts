@@ -1,5 +1,6 @@
 // AIDEV-NOTE: Utilitário para throttling de logs e evitar spam no console
 // Propósito: Controlar a frequência de logs de debug/audit para melhorar performance
+// OTIMIZAÇÃO: Aumentado throttle para 10s e implementado throttling mais agressivo
 
 interface LogEntry {
   message: string;
@@ -10,8 +11,9 @@ interface LogEntry {
 class LogThrottle {
   private logs: Map<string, LogEntry> = new Map();
   private readonly throttleTime: number;
+  private readonly maxLogsPerMinute: number = 5; // AIDEV-NOTE: Máximo 5 logs por minuto por chave
 
-  constructor(throttleTimeMs: number = 1000) {
+  constructor(throttleTimeMs: number = 10000) { // AIDEV-NOTE: Aumentado para 10 segundos
     this.throttleTime = throttleTimeMs;
   }
 
@@ -22,10 +24,14 @@ class LogThrottle {
     const now = Date.now();
     const entry = this.logs.get(key);
 
+    // AIDEV-NOTE: Throttling mais agressivo para logs repetitivos
     if (!entry || (now - entry.lastLogged) >= this.throttleTime) {
       // Se é a primeira vez ou passou o tempo de throttle
       if (entry && entry.count > 1) {
-        console.log(`${message} (repetido ${entry.count}x)`, ...args);
+        // AIDEV-NOTE: Só mostra contagem se for significativa (>10)
+        if (entry.count > 10) {
+          console.log(`${message} (repetido ${entry.count}x)`, ...args);
+        }
       } else {
         console.log(message, ...args);
       }
@@ -53,30 +59,42 @@ class LogThrottle {
    * Log de debug com throttling específico
    */
   debug(key: string, message: string, data?: any): void {
-    this.log(`debug_${key}`, `🔍 [DEBUG] ${message}`, data);
+    // AIDEV-NOTE: Debug logs têm throttling de 30 segundos para reduzir spam
+    const now = Date.now();
+    const entry = this.logs.get(`debug_${key}`);
+    
+    if (!entry || (now - entry.lastLogged) >= 30000) { // 30 segundos para debug
+      this.log(`debug_${key}`, `[DEBUG] ${message}`, data);
+    }
   }
 
   /**
    * Log de tenant guard com throttling específico
    */
   tenantGuard(key: string, message: string, data?: any): void {
-    this.log(`tenant_guard_${key}`, `[TENANT ACCESS GUARD] ${message}`, data);
+    // AIDEV-NOTE: Tenant guard logs têm throttling de 60 segundos devido à alta frequência
+    const now = Date.now();
+    const entry = this.logs.get(`tenant_${key}`);
+    
+    if (!entry || (now - entry.lastLogged) >= 60000) { // 60 segundos para tenant guard
+      this.log(`tenant_${key}`, `[TENANT ACCESS GUARD] 🔍 ${message}`, data);
+    }
   }
 
   /**
-   * Log de auto-select com throttling específico
+   * Log de auto select com throttling específico
    */
   autoSelect(key: string, message: string, data?: any): void {
-    this.log(`auto_select_${key}`, `[TENANT AUTO-SELECT] ${message}`, data);
+    this.log(`autoselect_${key}`, `[AUTO SELECT] ${message}`, data);
   }
 
   /**
-   * Limpa logs antigos (chamado periodicamente)
+   * Limpa logs antigos para evitar vazamento de memória
    */
   cleanup(): void {
     const now = Date.now();
-    const maxAge = this.throttleTime * 10; // 10x o tempo de throttle
-
+    const maxAge = 5 * 60 * 1000; // 5 minutos
+    
     for (const [key, entry] of this.logs.entries()) {
       if (now - entry.lastLogged > maxAge) {
         this.logs.delete(key);
@@ -85,24 +103,24 @@ class LogThrottle {
   }
 
   /**
-   * Força um log mesmo com throttling ativo (para casos críticos)
+   * Log forçado que ignora throttling (usar apenas para erros críticos)
    */
   forceLog(message: string, ...args: any[]): void {
     console.log(message, ...args);
   }
 }
 
-// Instância global do throttle
-export const logThrottle = new LogThrottle(2000); // 2 segundos de throttle
+// AIDEV-NOTE: Instância global com throttle de 10 segundos (aumentado de 2s)
+export const logThrottle = new LogThrottle(10000);
 
-// Cleanup automático a cada 30 segundos
+// AIDEV-NOTE: Cleanup automático a cada 5 minutos
 if (typeof window !== 'undefined') {
   setInterval(() => {
     logThrottle.cleanup();
-  }, 30000);
+  }, 5 * 60 * 1000);
 }
 
-// Exports para facilitar uso
+// Funções de conveniência com throttling otimizado
 export const throttledAudit = (key: string, message: string, data?: any) => 
   logThrottle.audit(key, message, data);
 

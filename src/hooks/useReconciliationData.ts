@@ -75,14 +75,23 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
   }, []);
 
   // AIDEV-NOTE: Função para mapear status de conciliação
+  // Aceita valores em português (salvos no banco) e inglês (enum)
   const mapReconciliationStatus = useCallback((status: string): ReconciliationStatus => {
+    const normalizedStatus = status?.toUpperCase() || '';
     const statusMap: Record<string, ReconciliationStatus> = {
+      // Valores em inglês (enum)
       'RECONCILED': 'RECONCILED',
       'DIVERGENT': 'DIVERGENT', 
       'CANCELLED': 'CANCELLED',
-      'PENDING': 'PENDING'
+      'PENDING': 'PENDING',
+      // Valores em português (banco de dados)
+      'CONCILIADO': 'RECONCILED',
+      'DIVERGENTE': 'DIVERGENT',
+      'CANCELADO': 'CANCELLED',
+      'PENDENTE': 'PENDING',
+      'NAO_CONCILIADO': 'PENDING'
     };
-    return statusMap[status] || 'PENDING';
+    return statusMap[normalizedStatus] || 'PENDING';
   }, []);
 
   // AIDEV-NOTE: Função para calcular indicadores baseados nos dados filtrados

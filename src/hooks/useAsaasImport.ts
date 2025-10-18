@@ -21,9 +21,12 @@ export interface AsaasImportResult {
   success: boolean;
   summary: {
     total_imported: number;
+    total_updated: number;
     total_skipped: number;
+    total_processed: number;
     total_errors: number;
     imported_ids: string[];
+    updated_ids: string[];
     skipped_ids: string[];
     errors: string[];
   };
@@ -96,7 +99,9 @@ export function useAsaasImport() {
         
         // AIDEV-NOTE: Validar propriedades essenciais do summary
         const totalImported = summary.total_imported ?? 0;
+        const totalUpdated = summary.total_updated ?? 0;
         const totalSkipped = summary.total_skipped ?? 0;
+        const totalProcessed = summary.total_processed ?? 0;
         const totalErrors = summary.total_errors ?? 0;
         
         // Invalidar queries relacionadas para atualizar dados
@@ -104,24 +109,30 @@ export function useAsaasImport() {
           queryKey: ['reconciliation-data', currentTenant?.id] 
         });
         
-        // Feedback de sucesso detalhado
-        toast.success(
-          `Importação concluída! ${totalImported} novos registros, ${totalSkipped} já existentes`,
-          {
-            id: 'asaas-import',
-            duration: 5000,
-            description: totalErrors > 0 
-              ? `${totalErrors} erros encontrados` 
-              : undefined
-          }
-        );
+        // AIDEV-NOTE: Toast de sucesso com estatísticas detalhadas
+        const successMessage = totalUpdated > 0 
+          ? `Importação concluída! ${totalImported} novos, ${totalUpdated} atualizados`
+          : `Importação concluída! ${totalImported} novos registros`;
+          
+        const description = [];
+        if (totalSkipped > 0) description.push(`${totalSkipped} já existentes`);
+        if (totalErrors > 0) description.push(`${totalErrors} erros`);
+        
+        toast.success(successMessage, {
+          id: 'asaas-import',
+          duration: 6000,
+          description: description.length > 0 ? description.join(', ') : undefined
+        });
 
         // Log detalhado para debug
         console.log('✅ Importação ASAAS concluída:', {
           imported: totalImported,
+          updated: totalUpdated,
           skipped: totalSkipped,
+          processed: totalProcessed,
           errors: totalErrors,
           importedIds: summary.imported_ids || [],
+          updatedIds: summary.updated_ids || [],
           skippedIds: summary.skipped_ids || [],
           errorDetails: summary.errors || []
         });

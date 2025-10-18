@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react';
 import { useZustandTenant } from '@/hooks/useZustandTenant';
-import { throttledTenantGuard, throttledDebug } from '@/utils/logThrottle';
+import { throttledTenantGuard } from '@/utils/logThrottle';
 
 /**
  * Hook para validação de acesso a dados específicos
@@ -20,8 +20,9 @@ import { throttledTenantGuard, throttledDebug } from '@/utils/logThrottle';
 export function useTenantAccessGuard(requiredRole?: string, requireTenant: boolean = true) {
   const { currentTenant, userRole } = useZustandTenant();
   
-  // 🔍 DEBUG: Log detalhado do tenant access guard (com throttling) - REDUZIDO
-  throttledTenantGuard('tenant_access_verification', `🔍 [TENANT ACCESS GUARD] Verificando acesso`, {
+  // AIDEV-NOTE: Log throttled para evitar spam - apenas quando há mudanças significativas
+  const logKey = `${currentTenant?.id || 'no-tenant'}_${userRole}_${requiredRole || 'no-role'}`;
+  throttledTenantGuard(logKey, `🔍 [TENANT ACCESS GUARD] Verificando acesso`, {
     hasTenant: !!currentTenant?.id,
     userRole,
     requiredRole

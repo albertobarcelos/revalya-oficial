@@ -49,7 +49,8 @@ export function TableHeader({
         <TableHead className="min-w-[120px] text-right">Valor Cobrança</TableHead>
         <TableHead className="min-w-[120px] text-right">Valor Pago</TableHead>
         <TableHead className="min-w-[100px] text-right">Diferença</TableHead>
-        <TableHead className="min-w-[100px] text-center">Status</TableHead>
+        <TableHead className="min-w-[140px] text-center">Status de Vinculação</TableHead>
+        <TableHead className="min-w-[100px] text-center">Processado</TableHead>
         <TableHead className="min-w-[100px] text-center">Pagamento</TableHead>
         <TableHead className="min-w-[120px] text-center">Contrato</TableHead>
         <TableHead className="min-w-[100px] text-center">Vencimento</TableHead>

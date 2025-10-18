@@ -190,29 +190,56 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {lastImportResult.success && (
-                    <div className="grid grid-cols-3 gap-4">
+                  {lastImportResult.success && lastImportResult.summary && (
+                    <div className="grid grid-cols-4 gap-4">
                       <div className="text-center p-3 bg-green-50 rounded-lg">
                         <div className="text-2xl font-bold text-green-600">
-                          {lastImportResult.summary?.total_imported ?? lastImportResult.successful_imports ?? 0}
+                          {lastImportResult.summary.total_imported ?? 0}
                         </div>
-                        <div className="text-sm text-green-700">Importados</div>
+                        <div className="text-sm text-green-700">Novos</div>
+                      </div>
+                      <div className="text-center p-3 bg-orange-50 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {lastImportResult.summary.total_updated ?? 0}
+                        </div>
+                        <div className="text-sm text-orange-700">Atualizados</div>
                       </div>
                       <div className="text-center p-3 bg-blue-50 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600">
-                          {lastImportResult.summary?.total_skipped ?? (lastImportResult.total_payments - lastImportResult.successful_imports - lastImportResult.failed_imports) ?? 0}
+                          {lastImportResult.summary.total_skipped ?? 0}
                         </div>
                         <div className="text-sm text-blue-700">Já existiam</div>
                       </div>
                       <div className="text-center p-3 bg-red-50 rounded-lg">
                         <div className="text-2xl font-bold text-red-600">
-                          {lastImportResult.summary?.total_errors ?? lastImportResult.failed_imports ?? 0}
+                          {lastImportResult.summary.total_errors ?? 0}
                         </div>
                         <div className="text-sm text-red-700">Erros</div>
                       </div>
                     </div>
                   )}
 
+                  {/* AIDEV-NOTE: Resumo detalhado das operações */}
+                  {lastImportResult.success && lastImportResult.summary && (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="text-sm text-gray-700">
+                        <div className="font-medium mb-2">Resumo da Operação:</div>
+                        <div className="space-y-1">
+                          <div>• Total processado: {lastImportResult.summary.total_processed ?? 0} registros</div>
+                          {(lastImportResult.summary.total_updated ?? 0) > 0 && (
+                            <div className="text-orange-700">
+                              • {lastImportResult.summary.total_updated} registros foram atualizados com novos dados
+                            </div>
+                          )}
+                          {(lastImportResult.summary.total_imported ?? 0) > 0 && (
+                            <div className="text-green-700">
+                              • {lastImportResult.summary.total_imported} novos registros foram inseridos
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {lastImportResult.error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                       <p className="text-sm text-red-700">{lastImportResult.error}</p>

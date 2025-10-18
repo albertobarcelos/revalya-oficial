@@ -63,14 +63,9 @@ function mapAsaasStatus(status: string): string {
 }
 
 // AIDEV-NOTE: Função para buscar dados do cliente ASAAS
-// AIDEV-NOTE: Buscar dados do cliente no ASAAS
 async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: string) {
   try {
-    // AIDEV-NOTE: Garantir formato correto da URL para customers
-    const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
-    const apiBaseUrl = baseUrl.includes('/v3') ? baseUrl : `${baseUrl}/v3`;
-    
-    const response = await fetch(`${apiBaseUrl}/customers/${customerId}`, {
+    const response = await fetch(`${apiUrl}/v3/customers/${customerId}`, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -115,11 +110,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
     throw new Error('Configuração ASAAS incompleta (api_key ou api_url ausente)');
   }
 
-  // AIDEV-NOTE: Garantir que a URL base termine sem barra e adicionar /v3 se necessário
-  const baseUrl = api_url.endsWith('/') ? api_url.slice(0, -1) : api_url;
-  const apiBaseUrl = baseUrl.includes('/v3') ? baseUrl : `${baseUrl}/v3`;
-  
-  console.log(`🔑 Usando API URL: ${apiBaseUrl}`);
+  console.log(`🔑 Usando API URL: ${api_url}`);
 
   let offset = 0;
   let totalProcessed = 0;
@@ -129,9 +120,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
     console.log(`📄 Buscando página ${Math.floor(offset / limit) + 1} (offset: ${offset})`);
 
     // 2. Buscar pagamentos do ASAAS
-    const asaasUrl = `${apiBaseUrl}/payments?dateCreated[ge]=${start_date}&dateCreated[le]=${end_date}&limit=${limit}&offset=${offset}`;
-    
-    console.log(`🔍 URL da requisição: ${asaasUrl}`);
+    const asaasUrl = `${api_url}/v3/payments?dateCreated[ge]=${start_date}&dateCreated[le]=${end_date}&limit=${limit}&offset=${offset}`;
     
     const response = await fetch(asaasUrl, {
       method: 'GET',
@@ -142,16 +131,13 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Erro na API ASAAS: ${response.status} - ${errorText}`);
-      throw new Error(`Erro na API ASAAS: ${response.status} - ${errorText}`);
+      throw new Error(`Erro na API ASAAS: ${response.status} - ${await response.text()}`);
     }
 
     const asaasData = await response.json();
     const payments = asaasData.data || [];
     
     console.log(`📊 Encontrados ${payments.length} pagamentos nesta página`);
-    console.log(`📋 Resposta completa da API:`, JSON.stringify(asaasData, null, 2));
 
     if (payments.length === 0) {
       hasMore = false;
@@ -181,10 +167,6 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
           customerData = await fetchAsaasCustomer(payment.customer, api_key, api_url);
         }
 
-        // 5. Mapear status antes da inserção
-        const mappedStatus = mapAsaasStatus(payment.status);
-        console.log(`🔄 Mapeando status: ${payment.status} -> ${mappedStatus}`);
-
         // 6. Inserir no staging
         const { error: insertError } = await supabase
           .from('conciliation_staging')
@@ -194,12 +176,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
             id_externo: payment.id,
             valor_cobranca: payment.value,
             valor_pago: payment.paymentDate ? payment.value : 0,
-            // AIDEV-NOTE: Campos financeiros baseados na documentação ASAAS
-            valor_liquido: payment.netValue || null, // AIDEV-NOTE: Valor líquido após taxas
-            valor_juros: payment.interestValue || null, // AIDEV-NOTE: Valor de juros aplicados
-            valor_multa: payment.fine?.value || null, // AIDEV-NOTE: Valor da multa configurada
-            valor_desconto: payment.discount?.value || null, // AIDEV-NOTE: Valor do desconto aplicado
-            status_externo: mappedStatus, // AIDEV-NOTE: Usar status mapeado para o constraint
+            status_externo: mapAsaasStatus(payment.status), // AIDEV-NOTE: Usar status mapeado para o constraint
             status_conciliacao: 'PENDENTE', // AIDEV-NOTE: Sempre PENDENTE para novos registros do ASAAS
             data_vencimento: payment.dueDate,
             data_pagamento: payment.paymentDate,
@@ -247,19 +224,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
   }
 
   console.log(`🎉 Importação concluída! Total processado: ${totalProcessed}`);
-  
-  // AIDEV-NOTE: Retornar resposta com summary para compatibilidade com frontend
-  return { 
-    success: true, 
-    totalProcessed: totalProcessed,
-    message: `Importação concluída com sucesso. ${totalProcessed} registros processados.`,
-    summary: {
-      totalProcessed,
-      totalImported: totalProcessed,
-      totalSkipped: 0,
-      totalErrors: 0
-    }
-  };
+  return { success: true, processed: totalProcessed };
 }
 
 // AIDEV-NOTE: Handler principal da Edge Function

@@ -276,12 +276,16 @@ async function handlePostRequest(req: Request, tenantId: string) {
     event_id: eventId,
     status: "processed",
     payload,
-    processed_at: new Date().toISOString()
+    processed_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
   });
 
   // 💾 Persistir dados na conciliation_staging
   // AIDEV-NOTE: Garantir que id_externo sempre tenha um valor válido
   const idExterno = payment.id || eventId || crypto.randomUUID();
+  
+  // AIDEV-NOTE: Correção crítica - netValue deve ser tratado consistentemente
+  // Garantir que valor_liquido e valor_pago tenham o mesmo tratamento para null
+  const netValueSafe = payment.netValue ?? 0;
   
   const { error: persistError } = await supabase.from("conciliation_staging").upsert({
     tenant_id: tenantId,
@@ -290,9 +294,9 @@ async function handlePostRequest(req: Request, tenantId: string) {
     asaas_customer_id: payment.customer,
     asaas_subscription_id: payment.subscription,
     valor_cobranca: payment.value,
-    valor_pago: payment.netValue ?? 0,
+    valor_pago: netValueSafe,
     valor_original: payment.originalValue,
-    valor_liquido: payment.netValue,
+    valor_liquido: netValueSafe,
     valor_juros: payment.interest?.value ?? 0,
     valor_multa: payment.fine?.value ?? 0,
     valor_desconto: payment.discount?.value ?? 0,
@@ -312,6 +316,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
     transaction_receipt_url: payment.transactionReceiptUrl?.replace(/,$/, '') || null,
     payment_method: payment.billingType,
     external_reference: payment.externalReference,
+    invoice_number: payment.invoiceNumber || null, // AIDEV-NOTE: Número da fatura/nota fiscal do ASAAS
     deleted_flag: payment.deleted ?? false,
     anticipated_flag: payment.anticipated ?? false,
     // AIDEV-NOTE: Campos do customer obtidos da API do Asaas
@@ -330,7 +335,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
     customer_country: customerData?.country || null,
     webhook_event: eventType,
     raw_data: payload,
-    updated_at: new Date().toISOString()
+    updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
   }, {
     onConflict: "tenant_id,id_externo,origem",
     ignoreDuplicates: false
@@ -347,6 +352,54 @@ async function handlePostRequest(req: Request, tenantId: string) {
         "Content-Type": "application/json"
       }
     });
+  }
+
+  // AIDEV-NOTE: Lógica inteligente - Sincronizar com charges se houver vinculação
+  try {
+    // Buscar charge vinculada pelo asaas_id
+    const { data: linkedCharge, error: chargeError } = await supabase
+      .from("charges")
+      .select("id, status, data_pagamento, asaas_payment_date, asaas_net_value, asaas_invoice_url")
+      .eq("tenant_id", tenantId)
+      .eq("asaas_id", payment.id)
+      .single();
+
+    if (chargeError && chargeError.code !== 'PGRST116') {
+      console.error("❌ Erro ao buscar charge vinculada:", chargeError);
+    } else if (linkedCharge) {
+      console.log("🔗 Charge vinculada encontrada:", linkedCharge.id);
+      
+      // Preparar dados para atualização
+      const updateData: any = {
+        asaas_payment_date: payment.paymentDate || null,
+        asaas_net_value: payment.netValue || null,
+        asaas_invoice_url: payment.invoiceUrl || null,
+        updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
+      };
+
+      // Atualizar data_pagamento apenas se veio do webhook e ainda não existe
+      if (payment.paymentDate && !linkedCharge.data_pagamento) {
+        updateData.data_pagamento = payment.paymentDate;
+      }
+
+      // Atualizar charge com dados do webhook
+      const { error: updateError } = await supabase
+        .from("charges")
+        .update(updateData)
+        .eq("id", linkedCharge.id)
+        .eq("tenant_id", tenantId);
+
+      if (updateError) {
+        console.error("❌ Erro ao atualizar charge vinculada:", updateError);
+      } else {
+        console.log("✅ Charge vinculada atualizada com dados do webhook");
+      }
+    } else {
+      console.log("ℹ️ Nenhuma charge vinculada encontrada para asaas_id:", payment.id);
+    }
+  } catch (syncError) {
+    console.error("❌ Erro na sincronização com charges:", syncError);
+    // Não interrompe o fluxo principal - sincronização é opcional
   }
 
   return new Response(JSON.stringify({
