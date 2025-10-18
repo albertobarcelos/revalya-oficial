@@ -11,11 +11,30 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
 
-// AIDEV-NOTE: Cliente Supabase com service role key
-const supabase = createClient(
+// AIDEV-NOTE: Cliente Supabase com service role key (apenas para leituras sensíveis)
+const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
+
+// AIDEV-NOTE: Função para criar cliente Supabase com contexto de usuário
+function createUserSupabaseClient(authHeader: string | null) {
+  if (!authHeader) {
+    throw new Error('Authorization header é obrigatório para operações de escrita');
+  }
+
+  return createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    }
+  );
+}
 
 // AIDEV-NOTE: Interfaces para tipagem
 interface ImportChargesRequest {
@@ -90,15 +109,16 @@ async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: st
   }
 }
 
-// AIDEV-NOTE: Função principal de importação
-async function importChargesFromAsaas(request: ImportChargesRequest) {
+// AIDEV-NOTE: Função principal de importação com contexto de usuário
+async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUser: any, userId: string) {
   const { tenant_id, start_date, end_date, limit = 100 } = request;
   
   console.log(`🚀 Iniciando importação ASAAS para tenant ${tenant_id}`);
   console.log(`📅 Período: ${start_date} até ${end_date}`);
+  console.log(`👤 User ID para auditoria: ${userId}`);
 
-  // 1. Buscar configuração ASAAS do tenant
-  const { data: integration, error: integrationError } = await supabase
+  // 1. Buscar configuração ASAAS do tenant (usando supabaseAdmin para dados sensíveis)
+  const { data: integration, error: integrationError } = await supabaseAdmin
     .from('tenant_integrations')
     .select('*')
     .eq('tenant_id', tenant_id)
@@ -172,7 +192,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
 
       try {
         // AIDEV-NOTE: Buscar registro existente com campos relevantes para comparação
-        const { data: existing } = await supabase
+        const { data: existing } = await supabaseUser
           .from('conciliation_staging')
           .select(`
             id, valor_pago, status_externo, data_pagamento, 
@@ -220,7 +240,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
 
         console.log(`🔄 Mapeando status: ${payment.status} -> ${mappedStatus}`);
 
-        // AIDEV-NOTE: Preparar dados para UPSERT
+        // AIDEV-NOTE: Preparar dados para UPSERT (incluindo campos de auditoria)
         const recordData = {
           tenant_id: tenant_id,
           origem: 'ASAAS',
@@ -254,16 +274,14 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
           customer_country: customerData?.country || 'Brasil',
           observacao: payment.description || '',
           raw_data: payment,
-          updated_at: new Date().toISOString()
+          // AIDEV-NOTE: Adicionando campos de auditoria diretamente
+          created_by: userId,
+          updated_by: userId
+          // created_at e updated_at serão gerenciados pelo banco
         };
 
-        // AIDEV-NOTE: Se é novo registro, adicionar created_at
-        if (!existing) {
-          recordData.created_at = new Date().toISOString();
-        }
-
-        // AIDEV-NOTE: Executar UPSERT usando ON CONFLICT
-        const { error: upsertError } = await supabase
+        // AIDEV-NOTE: Executar UPSERT usando supabaseUser (com RLS e triggers)
+        const { error: upsertError } = await supabaseUser
           .from('conciliation_staging')
           .upsert(recordData, {
             onConflict: 'tenant_id,origem,id_externo',
@@ -346,6 +364,40 @@ serve(async (req) => {
       );
     }
 
+    // AIDEV-NOTE: Extrair e validar Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Authorization header é obrigatório para esta operação' 
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // AIDEV-NOTE: Criar cliente Supabase com contexto de usuário
+    const supabaseUser = createUserSupabaseClient(authHeader);
+
+    // AIDEV-NOTE: Validar usuário autenticado
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    if (userError || !user) {
+      console.error('❌ Erro ao validar usuário:', userError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Token de autorização inválido ou expirado' 
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log(`👤 Usuário autenticado: ${user.email} (ID: ${user.id})`);
+
     // Validar e parsear dados da requisição
     const requestData = await req.json();
     
@@ -361,8 +413,8 @@ serve(async (req) => {
       );
     }
 
-    // Executar importação
-    const result = await importChargesFromAsaas(requestData);
+    // AIDEV-NOTE: Executar importação com cliente autenticado
+    const result = await importChargesFromAsaas(requestData, supabaseUser, user.id);
     
     return new Response(
       JSON.stringify(result),
