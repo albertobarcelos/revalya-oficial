@@ -123,9 +123,13 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
 
   let offset = 0;
   let totalProcessed = 0;
+  let totalImported = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
+  let totalErrors = 0;
   let hasMore = true;
 
-  while (hasMore) {
+  while (hasMore && totalProcessed < limit) {
     console.log(`📄 Buscando página ${Math.floor(offset / limit) + 1} (offset: ${offset})`);
 
     // 2. Buscar pagamentos do ASAAS
@@ -160,19 +164,52 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
 
     // 3. Processar cada pagamento
     for (const payment of payments) {
+      // AIDEV-NOTE: Verificar limite total de processamento
+      if (totalProcessed >= limit) {
+        hasMore = false;
+        break;
+      }
+
       try {
-        // Verificar se já existe no staging
+        // AIDEV-NOTE: Buscar registro existente com campos relevantes para comparação
         const { data: existing } = await supabase
           .from('conciliation_staging')
-          .select('id')
+          .select(`
+            id, valor_pago, status_externo, data_pagamento, 
+            valor_liquido, valor_juros, valor_multa, valor_desconto,
+            updated_at
+          `)
           .eq('tenant_id', tenant_id)
           .eq('id_externo', payment.id)
           .eq('origem', 'ASAAS')
           .single();
 
+        // AIDEV-NOTE: Mapear status antes da comparação
+        const mappedStatus = mapAsaasStatus(payment.status);
+        const currentValorPago = payment.paymentDate ? payment.value : 0;
+
+        // AIDEV-NOTE: Se existe, verificar se há mudanças significativas
         if (existing) {
-          console.log(`⏭️ Pagamento ${payment.id} já existe no staging`);
-          continue;
+          const hasChanges = (
+            existing.valor_pago !== currentValorPago ||
+            existing.status_externo !== mappedStatus ||
+            existing.data_pagamento !== payment.paymentDate ||
+            existing.valor_liquido !== (payment.netValue || null) ||
+            existing.valor_juros !== (payment.interestValue || null) ||
+            existing.valor_multa !== (payment.fine?.value || null) ||
+            existing.valor_desconto !== (payment.discount?.value || null)
+          );
+
+          if (!hasChanges) {
+            console.log(`⏭️ Pagamento ${payment.id} sem alterações - pulando`);
+            totalSkipped++;
+            totalProcessed++;
+            continue;
+          }
+
+          console.log(`🔄 Pagamento ${payment.id} com alterações - atualizando`);
+          console.log(`   Status: ${existing.status_externo} -> ${mappedStatus}`);
+          console.log(`   Valor Pago: ${existing.valor_pago} -> ${currentValorPago}`);
         }
 
         // 4. Buscar dados do cliente se necessário
@@ -181,83 +218,111 @@ async function importChargesFromAsaas(request: ImportChargesRequest) {
           customerData = await fetchAsaasCustomer(payment.customer, api_key, api_url);
         }
 
-        // 5. Mapear status antes da inserção
-        const mappedStatus = mapAsaasStatus(payment.status);
         console.log(`🔄 Mapeando status: ${payment.status} -> ${mappedStatus}`);
 
-        // 6. Inserir no staging
-        const { error: insertError } = await supabase
+        // AIDEV-NOTE: Preparar dados para UPSERT
+        const recordData = {
+          tenant_id: tenant_id,
+          origem: 'ASAAS',
+          id_externo: payment.id,
+          valor_cobranca: payment.value,
+          valor_pago: currentValorPago,
+          valor_liquido: payment.netValue || null,
+          valor_juros: payment.interestValue || null,
+          valor_multa: payment.fine?.value || null,
+          valor_desconto: payment.discount?.value || null,
+          status_externo: mappedStatus,
+          status_conciliacao: 'PENDENTE',
+          data_vencimento: payment.dueDate,
+          data_pagamento: payment.paymentDate,
+          asaas_customer_id: payment.customer,
+          external_reference: payment.externalReference || '',
+          customer_name: customerData?.name || '',
+          customer_email: customerData?.email || '',
+          customer_document: customerData?.cpfCnpj || '',
+          customer_phone: customerData?.phone || '',
+          customer_mobile_phone: customerData?.mobilePhone || '',
+          customer_company: customerData?.company || customerData?.name || '',
+          customer_address: customerData?.address || '',
+          customer_address_number: customerData?.addressNumber || '',
+          customer_complement: customerData?.complement || '',
+          customer_postal_code: customerData?.postalCode || '',
+          customer_province: customerData?.province || '',
+          customer_city: customerData?.city || '',
+          customer_cityName: customerData?.cityName || '',
+          customer_state: customerData?.state || '',
+          customer_country: customerData?.country || 'Brasil',
+          observacao: payment.description || '',
+          raw_data: payment,
+          updated_at: new Date().toISOString()
+        };
+
+        // AIDEV-NOTE: Se é novo registro, adicionar created_at
+        if (!existing) {
+          recordData.created_at = new Date().toISOString();
+        }
+
+        // AIDEV-NOTE: Executar UPSERT usando ON CONFLICT
+        const { error: upsertError } = await supabase
           .from('conciliation_staging')
-          .insert({
-            tenant_id: tenant_id,
-            origem: 'ASAAS', // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
-            id_externo: payment.id,
-            valor_cobranca: payment.value,
-            valor_pago: payment.paymentDate ? payment.value : 0,
-            // AIDEV-NOTE: Campos financeiros baseados na documentação ASAAS
-            valor_liquido: payment.netValue || null, // AIDEV-NOTE: Valor líquido após taxas
-            valor_juros: payment.interestValue || null, // AIDEV-NOTE: Valor de juros aplicados
-            valor_multa: payment.fine?.value || null, // AIDEV-NOTE: Valor da multa configurada
-            valor_desconto: payment.discount?.value || null, // AIDEV-NOTE: Valor do desconto aplicado
-            status_externo: mappedStatus, // AIDEV-NOTE: Usar status mapeado para o constraint
-            status_conciliacao: 'PENDENTE', // AIDEV-NOTE: Sempre PENDENTE para novos registros do ASAAS
-            data_vencimento: payment.dueDate,
-            data_pagamento: payment.paymentDate,
-            asaas_customer_id: payment.customer,
-            external_reference: payment.externalReference || '',
-            // AIDEV-NOTE: Campos customer_* completos baseados na API ASAAS
-            customer_name: customerData?.name || '',
-            customer_email: customerData?.email || '',
-            customer_document: customerData?.cpfCnpj || '',
-            customer_phone: customerData?.phone || '',
-            customer_mobile_phone: customerData?.mobilePhone || '',
-            customer_company: customerData?.company || customerData?.name || '', // AIDEV-NOTE: Para PJ, company pode ser igual ao name
-            customer_address: customerData?.address || '',
-            customer_address_number: customerData?.addressNumber || '',
-            customer_complement: customerData?.complement || '',
-            customer_postal_code: customerData?.postalCode || '',
-            customer_province: customerData?.province || '',
-            customer_city: customerData?.city || '',
-            customer_cityName: customerData?.cityName || '',
-            customer_state: customerData?.state || '',
-            customer_country: customerData?.country || 'Brasil',
-            observacao: payment.description || '',
-            raw_data: payment,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+          .upsert(recordData, {
+            onConflict: 'tenant_id,origem,id_externo',
+            ignoreDuplicates: false
           });
 
-        if (insertError) {
-          console.error(`❌ Erro ao inserir pagamento ${payment.id}:`, insertError);
+        if (upsertError) {
+          console.error(`❌ Erro ao fazer UPSERT do pagamento ${payment.id}:`, upsertError);
+          totalErrors++;
+          totalProcessed++;
           continue;
         }
 
-        console.log(`✅ Pagamento ${payment.id} inserido com sucesso`);
+        // AIDEV-NOTE: Atualizar contadores baseado na operação
+        if (existing) {
+          console.log(`✅ Pagamento ${payment.id} atualizado com sucesso`);
+          totalUpdated++;
+        } else {
+          console.log(`✅ Pagamento ${payment.id} inserido com sucesso`);
+          totalImported++;
+        }
+        
         totalProcessed++;
 
       } catch (error) {
         console.error(`❌ Erro ao processar pagamento ${payment.id}:`, error);
+        totalErrors++;
+        totalProcessed++;
         continue;
       }
     }
 
     // 7. Verificar se há mais páginas
     offset += limit;
-    hasMore = payments.length === limit;
+    hasMore = payments.length === limit && totalProcessed < limit;
   }
 
-  console.log(`🎉 Importação concluída! Total processado: ${totalProcessed}`);
+  console.log(`🎉 Importação concluída!`);
+  console.log(`📊 Estatísticas finais:`);
+  console.log(`   Total processado: ${totalProcessed}`);
+  console.log(`   Novos importados: ${totalImported}`);
+  console.log(`   Atualizados: ${totalUpdated}`);
+  console.log(`   Pulados (sem alteração): ${totalSkipped}`);
+  console.log(`   Erros: ${totalErrors}`);
   
-  // AIDEV-NOTE: Retornar resposta com summary para compatibilidade com frontend
-  return { 
-    success: true, 
-    totalProcessed: totalProcessed,
-    message: `Importação concluída com sucesso. ${totalProcessed} registros processados.`,
+  // AIDEV-NOTE: Retornar resposta com estrutura correta que o frontend espera
+  return {
+    success: true,
+    message: `Importação concluída. ${totalImported} novos, ${totalUpdated} atualizados, ${totalSkipped} pulados, ${totalErrors} erros.`,
     summary: {
-      totalProcessed,
-      totalImported: totalProcessed,
-      totalSkipped: 0,
-      totalErrors: 0
+      total_processed: totalProcessed,
+      total_imported: totalImported,
+      total_updated: totalUpdated,
+      total_skipped: totalSkipped,
+      total_errors: totalErrors,
+      imported_ids: [], // AIDEV-NOTE: Placeholder para compatibilidade
+      updated_ids: [],  // AIDEV-NOTE: Placeholder para compatibilidade
+      skipped_ids: [],  // AIDEV-NOTE: Placeholder para compatibilidade
+      errors: []        // AIDEV-NOTE: Placeholder para compatibilidade
     }
   };
 }
