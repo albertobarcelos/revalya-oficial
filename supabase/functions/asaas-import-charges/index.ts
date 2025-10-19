@@ -208,25 +208,30 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
         const mappedStatus = mapAsaasStatus(payment.status);
         const currentValorPago = payment.paymentDate ? payment.value : 0;
 
-        // AIDEV-NOTE: Se existe, verificar se há mudanças significativas
-        if (existing) {
-          const hasChanges = (
-            existing.valor_pago !== currentValorPago ||
-            existing.status_externo !== mappedStatus ||
-            existing.data_pagamento !== payment.paymentDate ||
-            existing.valor_liquido !== (payment.netValue || null) ||
-            existing.taxa_juros !== (payment.interest || null) ||
-            existing.taxa_multa !== (payment.fine || null) ||
-            existing.valor_desconto !== (payment.discount?.value || null)
-          );
+        // AIDEV-NOTE: Verificar se houve mudanças nos campos relevantes
+        const hasChanges = existing && (
+          existing.valor_pago !== currentValorPago ||
+          existing.status_externo !== mappedStatus ||
+          existing.data_pagamento !== payment.paymentDate ||
+          existing.valor_liquido !== (payment.netValue || null) ||
+          existing.taxa_juros !== (payment.interest?.value || null) ||
+          existing.taxa_multa !== (payment.fine?.value || null) ||
+          existing.valor_desconto !== (payment.discount?.value || null) ||
+          existing.barcode !== (payment.barCode || null) ||
+          existing.pix_key !== (payment.pixQrCode || null) ||
+          existing.invoice_url !== (payment.invoiceUrl || null) ||
+          existing.pdf_url !== (payment.bankSlipUrl || null)
+        );
 
-          if (!hasChanges) {
-            console.log(`⏭️ Pagamento ${payment.id} sem alterações - pulando`);
-            totalSkipped++;
-            totalProcessed++;
-            continue;
-          }
+        // AIDEV-NOTE: Se o registro existe mas não há mudanças, pular
+        if (existing && !hasChanges) {
+          console.log(`⏭️ Pagamento ${payment.id} sem alterações - pulando`);
+          totalSkipped++;
+          totalProcessed++;
+          continue;
+        }
 
+        if (existing && hasChanges) {
           console.log(`🔄 Pagamento ${payment.id} com alterações - atualizando`);
           console.log(`   Status: ${existing.status_externo} -> ${mappedStatus}`);
           console.log(`   Valor Pago: ${existing.valor_pago} -> ${currentValorPago}`);
@@ -236,6 +241,72 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
         let customerData = null;
         if (payment.customer) {
           customerData = await fetchAsaasCustomer(payment.customer, api_key, api_url);
+        }
+
+        // AIDEV-NOTE: Buscar dados adicionais de PIX e código de barras
+        // Garantir formato correto da URL base
+        const baseUrl = api_url.endsWith('/') ? api_url.slice(0, -1) : api_url;
+        const apiBaseUrl = baseUrl.includes('/v3') ? baseUrl : `${baseUrl}/v3`;
+
+        // Obter linha digitável do boleto para pagamentos do tipo BOLETO
+        if (payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+          try {
+            const barcodeResponse = await fetch(`${apiBaseUrl}/payments/${payment.id}/identificationField`, {
+              method: 'GET',
+              headers: {
+                'access_token': api_key,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (barcodeResponse.ok) {
+              const barcodeData = await barcodeResponse.json();
+              payment.barCode = barcodeData.identificationField;
+              console.log(`✅ Obtido código de barras para pagamento ${payment.id}`);
+            } else {
+              console.log(`⚠️ Não foi possível obter código de barras para pagamento ${payment.id}`);
+            }
+          } catch (error) {
+            console.error(`❌ Erro ao buscar código de barras para pagamento ${payment.id}:`, error);
+          }
+        }
+        // AIDEV-NOTE: Obter QR Code PIX e payload copia e cola para pagamentos do tipo BOLETO, PIX ou UNDEFINED
+        console.log(`🔍 Verificando tipo de pagamento para ${payment.id}: billingType="${payment.billingType}", status="${payment.status}"`);
+        
+        if (payment.billingType === 'PIX' || payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+          try {
+            const pixResponse = await fetch(`${apiBaseUrl}/payments/${payment.id}/pixQrCode`, {
+              method: 'GET',
+              headers: {
+                'access_token': api_key,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (pixResponse.ok) {
+              const pixData = await pixResponse.json();
+              
+              // Log completo para debug da estrutura exata da resposta
+              console.log(`📋 Resposta PIX completa para pagamento ${payment.id}:`, JSON.stringify(pixData));
+              
+              // Verificar estrutura exata do objeto
+              if (pixData && typeof pixData === 'object') {
+                // Verificar todos os campos disponíveis
+                console.log(`🔑 Campos disponíveis na resposta PIX:`, Object.keys(pixData));
+                
+                // Tentar diferentes campos possíveis para garantir que capturamos o valor correto
+                payment.pixQrCode = pixData.payload || pixData.encodedImage || pixData.qrCode || pixData.content || null;
+                
+                console.log(`✅ Obtido PIX copia e cola para pagamento ${payment.id}: ${payment.pixQrCode ? payment.pixQrCode.substring(0, 30) + '...' : 'null'}`);
+              }
+            } else {
+              console.log(`⚠️ Não foi possível obter PIX copia e cola para pagamento ${payment.id}`);
+            }
+          } catch (error) {
+            console.error(`❌ Erro ao buscar PIX copia e cola para pagamento ${payment.id}:`, error);
+          }
+        } else {
+          console.log(`ℹ️ Pagamento ${payment.id} não é do tipo PIX/BOLETO/UNDEFINED (tipo: ${payment.billingType}), pulando busca de dados PIX`);
         }
 
         console.log(`🔄 Mapeando status: ${payment.status} -> ${mappedStatus}`);
@@ -279,13 +350,18 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           pdf_url: payment.bankSlipUrl || null,
           invoice_url: payment.invoiceUrl || null,
           barcode: payment.barCode || null,
-          pix_key: payment.pixQrCode || null,
+          pix_key: payment.pixQrCode || null, // Usando o payload do PIX QR Code
           raw_data: payment,
           // AIDEV-NOTE: Adicionando campos de auditoria diretamente
           created_by: userId,
           updated_by: userId
           // created_at e updated_at serão gerenciados pelo banco
         };
+
+        // AIDEV-NOTE: Log de debug para verificar o valor final do pix_key
+        if (payment.billingType === 'PIX') {
+          console.log(`🔑 Valor final pix_key para pagamento ${payment.id}: ${payment.pixQrCode ? payment.pixQrCode.substring(0, 50) + '...' : 'null'}`);
+        }
 
         // AIDEV-NOTE: Executar UPSERT usando supabaseUser (com RLS e triggers)
         const { error: upsertError } = await supabaseUser
@@ -302,9 +378,9 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           continue;
         }
 
-        // AIDEV-NOTE: Atualizar contadores baseado na operação
+        // AIDEV-NOTE: Atualizar contadores baseado na operação e mudanças
         if (existing) {
-          console.log(`✅ Pagamento ${payment.id} atualizado com sucesso`);
+          console.log(`✅ Pagamento ${payment.id} atualizado com sucesso (houve mudanças)`);
           totalUpdated++;
         } else {
           console.log(`✅ Pagamento ${payment.id} inserido com sucesso`);
