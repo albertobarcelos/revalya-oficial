@@ -54,13 +54,13 @@ export function useWhatsAppToggle({
         }
 
         if (wasExisting) {
-          // Se era existente, reverter para is_enabled: false
+          // Se era existente, reverter para is_active: false
           const { error } = await supabase
             .from('tenant_integrations')
             .update({
               tenant_id: tenantId,
-              is_enabled: false,
-              connection_status: 'disconnected',
+              is_active: false,
+              sync_status: 'error',
               updated_at: new Date().toISOString()
             })
             .eq('id', integrationId)
@@ -152,8 +152,8 @@ export function useWhatsAppToggle({
             
             const updateData = {
               tenant_id: tenantId, // AIDEV-NOTE: Explícito para RLS
-              is_enabled: true,
-              connection_status: 'pending', // Status inicial: pending
+              is_active: true,
+              sync_status: 'pending', // Status inicial: pending
               updated_at: new Date().toISOString()
             };
 
@@ -293,7 +293,7 @@ export function useWhatsAppToggle({
 
             const updateData = {
               tenant_id: tenantId, // AIDEV-NOTE: Explícito para RLS
-              is_enabled: false,
+              is_active: false,
               updated_at: new Date().toISOString()
             };
 
@@ -315,7 +315,7 @@ export function useWhatsAppToggle({
               { 
                 action: 'disable_whatsapp',
                 tenant_slug: tenantSlug,
-                is_enabled: false
+                is_active: false
               }
             );
           });

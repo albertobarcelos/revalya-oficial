@@ -97,6 +97,7 @@ import { ContractProducts } from "./parts/ContractProducts";
 import { RecebimentosHistorico, Recebimento } from "./parts/RecebimentosHistorico";
 import { ContractTaxes } from "./parts/ContractTaxes";
 import { ContractServices } from "./parts/ContractServices";
+import { ContractDiscounts } from "./parts/ContractDiscounts";
 
 // Schema de validação Zod integrado
 const contractSchema = z.object({
@@ -919,6 +920,31 @@ function ServiceDetailForm({ service, index, onUpdate, onClose }: ServiceDetailF
             
             <TabsContent value="outras" className="space-y-6 mt-6">
               <div className="space-y-4">
+                {/* AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobrança automaticamente */}
+                <FormField
+                  control={form.control}
+                  name="generate_billing"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">
+                          Gerar Cobrança Automaticamente
+                        </FormLabel>
+                        <FormDescription>
+                          Quando ativado, este contrato gerará cobranças automaticamente conforme o ciclo de faturamento configurado.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={isViewMode}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
                 {/* Opção de não gerar conta a receber */}
                 <div className="flex items-center space-x-2">
                   <Checkbox
@@ -1490,7 +1516,7 @@ function ContractFormContent({
     <FormProvider {...form}> 
       <div className={`bg-background flex flex-col ${
         isModal 
-          ? 'min-h-[600px] max-h-[90vh]' 
+          ? 'h-full max-h-full' 
           : 'min-h-screen'
       }`}>
         <ContractFormHeader
@@ -1500,7 +1526,7 @@ function ContractFormContent({
           className="backdrop-blur-sm bg-primary/95 min-h-[60px] flex-shrink-0 z-10"
         />
         
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           <div className="w-[90px] bg-card shadow-md flex flex-col items-center border-r border-border/30 flex-shrink-0">
             {/* Botão de Salvar/Editar no topo */}
             <div className="py-3 flex-shrink-0">
@@ -1512,9 +1538,9 @@ function ContractFormContent({
               />
             </div>
             
-            {/* Área de rolagem para a navegação */}
-            <div className={`flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent px-1.5 py-2 ${
-              isModal ? 'max-h-[calc(90vh-300px)]' : ''
+            {/* AIDEV-NOTE: Área de rolagem otimizada para a navegação */}
+            <div className={`flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 px-1.5 py-2 ${
+              isModal ? 'max-h-[calc(100vh-400px)]' : ''
             }`}>
               <nav className="space-y-3">
                 <button 
@@ -1584,7 +1610,7 @@ function ContractFormContent({
                   aria-pressed={activeTab === "recebimentos"}
                 >
                   <CreditCard className="h-4 w-4" />
-                  <span className="text-[9px] mt-1 font-medium">Recebimentos</span>
+                  <span className="text-[9px] mt-1 font-medium">Historico</span>
                 </button>
               </nav>
             </div>
@@ -1645,12 +1671,13 @@ function ContractFormContent({
             </div>
           </div>
           
-          <div className={`flex-1 overflow-y-auto overflow-x-hidden ${
-            isModal ? 'max-h-[calc(90vh-180px)]' : ''
+          {/* AIDEV-NOTE: Área principal com scroll otimizado e indicadores visuais */}
+          <div className={`flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40 ${
+            isModal ? 'max-h-[calc(100vh-120px)]' : ''
           }`}>
             <div className="min-h-full">
               <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${
-                isModal ? 'p-4 pb-16' : 'p-6'
+                isModal ? 'p-4 pb-20' : 'p-6'
               }`}>
                 <div className="col-span-1 lg:col-span-2 space-y-6">
                   <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
@@ -1684,13 +1711,7 @@ function ContractFormContent({
                           <Percent className="h-4 w-4 text-primary" />
                           Descontos
                         </h2>
-                        <div className="border-2 border-dashed border-border rounded-lg p-6 text-center bg-muted/50">
-                          <div className="flex flex-col items-center space-y-3">
-                            <Percent className="h-8 w-8 text-muted-foreground" />
-                            <p className="text-muted-foreground text-sm">Funcionalidade de Descontos em desenvolvimento</p>
-                            <p className="text-xs text-muted-foreground/60">Em breve você poderá configurar descontos personalizados</p>
-                          </div>
-                        </div>
+                        <ContractDiscounts />
                       </div>
                     )}
                     {activeTab === "departamentos" && (
@@ -1750,13 +1771,13 @@ function ContractFormContent({
                       <div>
                         <h2 className="font-medium flex items-center gap-2 mb-4">
                           <CreditCard className="h-4 w-4 text-primary" />
-                          Histórico de Recebimentos
+                          Faturamentos & Recebimentos
                         </h2>
                         <RecebimentosHistorico 
                           recebimentos={recebimentosMock} 
                           onNovoRecebimento={() => {}} 
                           contractId={contractId}
-                          showRealData={mode === 'view' && !!contractId}
+                          showRealData={!!contractId}
                         />
                       </div>
                     )}

@@ -22,7 +22,7 @@ function getFirstEnv(names, { required = true } = {}) {
  *  Config & Constantes
  *  ========================= */ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-timestamp, x-tenant-id, x-wa-instance, x-wa-api-base-url, x-wa-api-key, x-country-code, x-dry-run, x-throttle-ms, x-batch-size, x-concurrency, x-env",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id, x-timestamp, x-tenant-id, x-wa-instance, x-wa-api-base-url, x-wa-api-key, x-country-code, x-throttle-ms, x-batch-size, x-concurrency, x-env",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 const SUPABASE_URL = requireEnv("SUPABASE_URL", Deno.env.get("SUPABASE_URL"));
@@ -312,24 +312,46 @@ class BulkService {
   }
   async logMessage(payload) {
     try {
-      const { error } = await this.supabase.from("message_history").insert({
+      // AIDEV-NOTE: Corrigido para usar a estrutura real da tabela message_history
+      // Campos obrigatórios (NOT NULL): tenant_id, customer_id, charge_id, template_id, message, status
+      // Campos opcionais: error_details, metadata
+      
+      // Validação de campos obrigatórios
+      if (!payload.tenantId || !payload.customerId || !payload.chargeId) {
+        Audit.error(new Error("Campos obrigatórios ausentes para logMessage"), {
+          where: "logMessage",
+          requestId: payload.requestId,
+          payload
+        });
+        return;
+      }
+
+      const insertData = {
         tenant_id: payload.tenantId,
-        customer_id: payload.customerId ?? null,
-        charge_id: payload.chargeId ?? null,
-        template_id: payload.templateId ?? null,
+        charge_id: payload.chargeId,
+        template_id: payload.templateId || null, // NULL quando não há template específico
+        customer_id: payload.customerId,
         message: payload.message,
-        phone: payload.phone,
-        success: payload.success,
-        message_id: payload.messageId ?? null,
-        error: payload.error ?? null,
-        sent_at: new Date().toISOString(),
-        request_id: payload.requestId,
-        dry_run: payload.dryRun ?? false
-      });
-      if (error) Audit.error(error, {
-        where: "logMessage",
-        requestId: payload.requestId
-      });
+        status: payload.success ? 'sent' : 'failed',
+        error_details: payload.error || null,
+        metadata: {
+          phone: payload.phone,
+          message_id: payload.messageId,
+          request_id: payload.requestId,
+          dry_run: payload.dryRun || false,
+          sent_at: new Date().toISOString()
+        }
+      };
+
+      const { error } = await this.supabase.from("message_history").insert(insertData);
+      
+      if (error) {
+        Audit.error(error, {
+          where: "logMessage",
+          requestId: payload.requestId,
+          insertData
+        });
+      }
     } catch (err) {
       Audit.error(err, {
         where: "logMessage",
@@ -396,7 +418,8 @@ class BulkService {
     const { charges, customersById } = await this.fetchChargesAndCustomers(chargeIds, tenantId);
     if (charges.length === 0) throw new Error("Nenhuma cobrança encontrada com os IDs fornecidos");
     let templateContent = "";
-    if (templateId && !customMessage) templateContent = await this.getTemplate(templateId, tenantId);
+    // AIDEV-NOTE: Sempre carregar template se há templateId (independente de customMessage)
+    if (templateId) templateContent = await this.getTemplate(templateId, tenantId);
     const results = {
       total: charges.length,
       success: 0,
@@ -582,7 +605,8 @@ class BulkService {
     // Supabase Service Role (Edge) + contexto de tenant (RLS)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { error: ctxErr } = await supabase.rpc("set_tenant_context_simple", {
-      p_tenant_id: validation.tenantId
+      p_tenant_id: validation.tenantId,
+      p_user_id: null // Edge Function usa service role, não há usuário específico
     });
     if (ctxErr) {
       Audit.error(ctxErr, {

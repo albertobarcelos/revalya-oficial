@@ -77,6 +77,22 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
     }
   };
 
+  // AIDEV-NOTE: Função para extrair informação de parcelas da descrição
+  const extractInstallmentInfo = (description: string): string => {
+    if (!description) return 'N/A';
+    
+    // Regex para capturar "Parcela X/Y" da descrição
+    const installmentMatch = description.match(/Parcela (\d+)\/(\d+)/i);
+    
+    if (installmentMatch) {
+      const currentInstallment = installmentMatch[1];
+      const totalInstallments = installmentMatch[2];
+      return `${currentInstallment}/${totalInstallments}`;
+    }
+    
+    return 'N/A';
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PAID':
@@ -94,7 +110,7 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Valor</h3>
           <p className="text-xl font-bold">{formatCurrency(parseFloat(chargeDetails.valor) || 0)}</p>
@@ -102,6 +118,10 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Vencimento</h3>
           <p className="text-lg">{formatDate(chargeDetails.data_vencimento)}</p>
+        </div>
+        <div>
+          <h3 className="text-sm font-medium text-muted-foreground">Parcelas</h3>
+          <p className="text-lg font-medium">{extractInstallmentInfo(chargeDetails.descricao)}</p>
         </div>
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Status</h3>

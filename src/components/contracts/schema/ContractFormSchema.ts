@@ -44,6 +44,8 @@ const serviceItemSchema = z.object({
   updated_at: z.string().optional(),
   tenant_id: z.string().optional(),
   withholding_tax: z.boolean().default(false),
+  // AIDEV-NOTE: Campo para controlar se o serviço deve gerar cobrança automaticamente
+  generate_billing: z.boolean().default(true),
   // Campos financeiros
   payment_method: z.string().optional().nullable(),
   card_type: z.string().optional().nullable(),
@@ -172,6 +174,8 @@ const baseContractSchema = z.object({
   internal_notes: z.string()
     .max(1000, "As observações internas não podem ter mais de 1000 caracteres")
     .optional(),
+  // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobrança automaticamente
+  generate_billing: z.boolean().default(true),
   tax_data: taxDataSchema.optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
@@ -251,6 +255,8 @@ const productItemSchema = z.object({
   updated_at: z.string().optional(),
   tenant_id: z.string().optional(),
   withholding_tax: z.boolean().default(false),
+  // AIDEV-NOTE: Campo para controlar se o produto deve gerar cobrança automaticamente
+  generate_billing: z.boolean().default(true),
   // AIDEV-NOTE: Campos financeiros adicionados para produtos (igual aos serviços)
   payment_method: z.string().optional().nullable(),
   card_type: z.string().optional().nullable(),

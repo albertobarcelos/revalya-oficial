@@ -19,7 +19,8 @@ import {
   Trash2, 
   Eye,
   AlertCircle,
-  Package
+  Package,
+  Info
 } from 'lucide-react';
 
 // Shadcn/UI Components
@@ -42,12 +43,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
 // Hooks e Utilitários
 import { useServices, Service } from '@/hooks/useServices';
-import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { usePagination } from '@/hooks/usePagination';
 import { Layout } from '@/components/layout/Layout';
 import { PageLayout } from '@/components/layout/PageLayout';
@@ -92,12 +99,11 @@ const translateUnit = (unit: string): string => {
  */
 export default function ServicesPage() {
   // 🔐 GUARD DE ACESSO OBRIGATÓRIO
-  const { hasAccess, isLoading: accessLoading, accessError, currentTenant } = useTenantAccessGuard();
+  const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   
   // 🔍 DEBUG: Log do estado de acesso
   console.log('🔍 [ServicesPage] Estado de acesso:', {
     hasAccess,
-    accessLoading,
     accessError,
     currentTenant: currentTenant ? {
       id: currentTenant.id,
@@ -149,19 +155,6 @@ export default function ServicesPage() {
   }, [services, pagination.startIndex, pagination.endIndex]);
   
   // 🛡️ VERIFICAÇÃO DE ACESSO
-  if (accessLoading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-muted-foreground">Verificando permissões...</p>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
   if (hasAccess === false) {
     return (
       <Layout>
@@ -339,35 +332,40 @@ export default function ServicesPage() {
     setEditingService(null);
   };
 
+  // 🎨 COMPONENTE REUTILIZÁVEL PARA HEADER DA TABELA
+  const TableHeaderComponent = ({ isSticky = false }: { isSticky?: boolean }) => (
+    <TableHeader className={isSticky ? "sticky top-0 bg-background z-10" : ""}>
+      <TableRow className="h-10">
+        <TableHead className="py-2">Nome</TableHead>
+        <TableHead className="py-2">Código</TableHead>
+        <TableHead className="py-2">Valor</TableHead>
+        <TableHead className="py-2">Unidade</TableHead>
+        <TableHead className="py-2">Taxa (%)</TableHead>
+        <TableHead className="py-2">Status</TableHead>
+        <TableHead className="py-2">Retenção</TableHead>
+        <TableHead className="text-right py-2">Ações</TableHead>
+      </TableRow>
+    </TableHeader>
+  );
+
   // AIDEV-NOTE: Renderizar conteúdo da tabela
   const renderTableContent = () => {
     if (isLoading) {
       return (
         <div className="rounded-md border">
           <Table>
-            <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Unidade</TableHead>
-                  <TableHead>Taxa (%)</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Retenção</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
+            <TableHeaderComponent />
             <TableBody>
               {Array.from({ length: 8 }).map((_, index) => (
-                <TableRow key={index}>
-                  <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-[40px]" /></TableCell>
+                <TableRow key={index} className="h-10">
+                  <TableCell className="py-1"><Skeleton className="h-4 w-[200px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[100px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[60px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[80px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[60px]" /></TableCell>
+                   <TableCell className="py-1"><Skeleton className="h-4 w-[40px]" /></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -378,11 +376,11 @@ export default function ServicesPage() {
 
     if (error) {
       return (
-        <div className="flex items-center justify-center py-8 rounded-md border">
+        <div className="flex items-center justify-center py-6 rounded-md border">
           <div className="text-center text-muted-foreground">
-            <AlertCircle className="h-8 w-8 mx-auto mb-2 text-destructive" />
-            <p>Erro ao carregar serviços</p>
-            <p className="text-sm">{error.message}</p>
+            <AlertCircle className="h-6 w-6 mx-auto mb-2 text-destructive" />
+            <p className="text-sm">Erro ao carregar serviços</p>
+            <p className="text-xs">{error.message}</p>
           </div>
         </div>
       );
@@ -390,16 +388,16 @@ export default function ServicesPage() {
 
     if (!services || services.length === 0) {
       return (
-        <div className="flex items-center justify-center py-8 rounded-md border">
+        <div className="flex items-center justify-center py-6 rounded-md border">
           <div className="text-center text-muted-foreground">
-            <Package className="h-8 w-8 mx-auto mb-2" />
-            <p>Nenhum serviço encontrado</p>
+            <Package className="h-6 w-6 mx-auto mb-2" />
+            <p className="text-sm">Nenhum serviço encontrado</p>
             {searchTerm ? (
-              <p className="text-sm">Tente um termo de busca diferente.</p>
+              <p className="text-xs">Tente um termo de busca diferente.</p>
             ) : (
-              <div className="mt-4">
-                <Button onClick={() => console.log('Criar primeiro serviço')}>
-                  <Plus className="mr-2 h-4 w-4" />
+              <div className="mt-3">
+                <Button size="sm" onClick={() => console.log('Criar primeiro serviço')}>
+                  <Plus className="mr-2 h-3 w-3" />
                   Criar Primeiro Serviço
                 </Button>
               </div>
@@ -411,20 +409,8 @@ export default function ServicesPage() {
 
     return (
       <div className="rounded-md border">
-        <div className="max-h-[calc(100vh-15rem)] overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Unidade</TableHead>
-                  <TableHead>Taxa (%)</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Retenção</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
+        <Table>
+          <TableHeaderComponent isSticky={true} />
             <TableBody>
               <AnimatePresence>
                 {paginatedServices.map((service, index) => (
@@ -434,72 +420,81 @@ export default function ServicesPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="hover:bg-muted/50 transition-colors cursor-pointer h-10"
                     onClick={() => handleEditService(service)}
                   >
-                    <TableCell className="font-medium">
-                      <div>
-                        <div className="font-semibold">{service.name}</div>
+                    <TableCell className="font-medium py-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-sm">{service.name}</span>
                         {service.description && (
-                          <div className="text-sm text-muted-foreground truncate max-w-[200px]">
-                            {service.description}
-                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info 
+                                  className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-help" 
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-[300px]">
+                                <p className="text-xs">{service.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-1">
                       {service.code ? (
-                        <Badge variant="outline">{service.code}</Badge>
+                        <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">{service.code}</Badge>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span className="text-muted-foreground text-xs">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono">
+                    <TableCell className="font-mono py-1 text-xs sm:text-sm">
                         {formatCurrency(service.default_price)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-1">
                         {service.unit_type ? (
-                          <Badge variant="outline">{translateUnit(service.unit_type)}</Badge>
+                          <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">{translateUnit(service.unit_type)}</Badge>
                         ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </TableCell>
-                    <TableCell>
+                    <TableCell className="py-1">
                       {service.tax_rate > 0 ? (
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">
                           {service.tax_rate}%
                         </Badge>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span className="text-muted-foreground text-xs">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-1">
                       <Badge 
                         variant={service.is_active ? "default" : "secondary"}
-                        className={service.is_active ? "bg-green-100 text-green-800" : ""}
+                        className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5 ${service.is_active ? "bg-green-100 text-green-800" : ""}`}
                       >
                         {service.is_active ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="py-1">
                       {service.withholding_tax ? (
-                        <Badge variant="destructive">Sim</Badge>
+                        <Badge variant="destructive" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">Sim</Badge>
                       ) : (
-                        <Badge variant="outline">Não</Badge>
+                        <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">Não</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right py-1">
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={(e) => {
                           e.stopPropagation(); // Evita que o clique na lixeira abra a edição
                           handleDeleteService(service);
                         }}
                       >
                         <span className="sr-only">Excluir serviço</span>
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </TableCell>
                   </motion.tr>
@@ -508,7 +503,6 @@ export default function ServicesPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
     );
   };
 
@@ -527,8 +521,15 @@ export default function ServicesPage() {
             Novo Serviço
           </Button>
         }
-        cardTitle="Lista de Serviços"
-        pagination={pagination}
+        pagination={{
+          currentPage: pagination.currentPage,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.itemsPerPage,
+          onPageChange: pagination.setCurrentPage,
+          onItemsPerPageChange: pagination.setItemsPerPage,
+          isLoading: isLoading
+        }}
       >
         {renderTableContent()}
       </PageLayout>

@@ -46,7 +46,7 @@ interface SelectedProduct {
   tax_rate: number;
   total_amount: number;
   is_active: boolean;
-  // AIDEV-NOTE: Campos financeiros adicionados para produtos
+  // Campos financeiros
   payment_method?: string | null;
   card_type?: string | null;
   billing_type?: string | null;
@@ -57,6 +57,8 @@ interface SelectedProduct {
   due_days?: number | null;
   due_day?: number | null;
   due_next_month?: boolean | null;
+  // Campo de cobrança
+  generate_billing?: boolean;
 }
 
 export function ContractProducts({ products }: ContractProductsProps) {
@@ -113,6 +115,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
     cofins_rate: 0
   });
 
+  // AIDEV-NOTE: Estado para dados de cobrança do produto
+  const [billingData, setBillingData] = React.useState({
+    generate_billing: false
+  });
+
   // Adicionar produto customizado
   const handleAddCustomProduct = () => {
     if (!customProductName.trim() || customProductPrice <= 0) return;
@@ -138,7 +145,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
       due_date_type: "days_after_billing",
       due_days: 5,
       due_day: 10,
-      due_next_month: false
+      due_next_month: false,
+      generate_billing: false
     };
     
     const currentProducts = form.getValues("products") || [];
@@ -242,6 +250,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
         cofins_deduct: currentProduct.cofins_deduct || false,
         cofins_rate: currentProduct.cofins_rate || 0
       });
+
+      // AIDEV-NOTE: Inicializar dados de cobrança com valores salvos do produto
+      setBillingData({
+        generate_billing: currentProduct.generate_billing ?? false
+      });
       
       console.log('✅ Dados carregados com sucesso');
     }
@@ -315,6 +328,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
         due_days: dueDateData.due_days !== undefined ? dueDateData.due_days : 5,
         due_day: dueDateData.due_day !== undefined ? dueDateData.due_day : 10,
         due_next_month: dueDateData.due_next_month || false,
+        // Campos de cobrança
+        generate_billing: billingData.generate_billing ?? false,
         // Campos de impostos
         ...taxData
       };
@@ -807,11 +822,25 @@ export function ContractProducts({ products }: ContractProductsProps) {
                         type="number"
                         min={1}
                         max={365}
-                        value={dueDateData.due_days}
-                        onChange={(e) => setDueDateData(prev => ({ 
-                          ...prev, 
-                          due_days: parseInt(e.target.value) || 1 
-                        }))}
+                        value={dueDateData.due_days || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // AIDEV-NOTE: Permite campo vazio durante edição, mas aplica valor mínimo 1 quando há conteúdo
+                          if (value === '') {
+                            setDueDateData(prev => ({ ...prev, due_days: undefined }));
+                          } else {
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue) && numValue >= 1) {
+                              setDueDateData(prev => ({ ...prev, due_days: numValue }));
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
+                          if (!dueDateData.due_days) {
+                            setDueDateData(prev => ({ ...prev, due_days: 1 }));
+                          }
+                        }}
                         placeholder="Ex: 5 dias após o faturamento"
                       />
                       <p className="text-xs text-muted-foreground">
@@ -865,6 +894,45 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     </div>
                   )}
                 </div>
+
+                {/* AIDEV-NOTE: Seção de configuração de cobrança - similar aos serviços */}
+                <div className="p-4 border rounded-lg space-y-4">
+                  <h4 className="font-medium text-lg">Gerar cobrança no faturamento?</h4>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="generateBilling"
+                        checked={billingData.generate_billing}
+                        onCheckedChange={(checked) => setBillingData(prev => ({ 
+                          ...prev, 
+                          generate_billing: !!checked 
+                        }))}
+                      />
+                      <Label htmlFor="generateBilling" className="text-sm font-medium">
+                        Sim
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="noGenerateBilling"
+                        checked={!billingData.generate_billing}
+                        onCheckedChange={(checked) => setBillingData(prev => ({ 
+                          ...prev, 
+                          generate_billing: !checked 
+                        }))}
+                      />
+                      <Label htmlFor="noGenerateBilling" className="text-sm font-medium">
+                        Não
+                      </Label>
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground">
+                      Define se este produto deve gerar cobrança automática no faturamento
+                    </p>
+                  </div>
+                </div>
               </div>
             </TabsContent>
             
@@ -896,7 +964,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Tipo de Cartão</Label>
                     <Select value={financialData.card_type || ""} onValueChange={(value) => {
-                      // AIDEV-NOTE: Implementação das regras específicas para credit_recurring nos produtos
+                      // AIDEV-NOTE: Implementação das regras específicas para ambos os tipos de cartão nos produtos
                       const newFinancialData = { ...financialData, card_type: value };
                       
                       if (value === 'credit_recurring') {
@@ -905,9 +973,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
                         newFinancialData.recurrence_frequency = 'Mensal';
                         newFinancialData.installments = 1;
                       } else if (value === 'credit') {
-                        // Para credit simples: permitir seleção livre, manter parcelas
-                        newFinancialData.billing_type = '';
+                        // Para credit simples: definir automaticamente como Único (pagamento único)
+                        newFinancialData.billing_type = 'Único';
                         newFinancialData.recurrence_frequency = '';
+                        // Manter parcelas existentes ou definir padrão de 2 se não houver
+                        newFinancialData.installments = newFinancialData.installments || 2;
                       }
                       
                       setFinancialData(newFinancialData);
@@ -930,12 +1000,14 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     <Select 
                       value={financialData.billing_type || ""} 
                       onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}
-                      disabled={financialData.card_type === 'credit_recurring'}
+                      disabled={financialData.card_type === 'credit_recurring' || financialData.card_type === 'credit'}
                     >
-                      <SelectTrigger className={financialData.card_type === 'credit_recurring' ? 'opacity-50' : ''}>
+                      <SelectTrigger className={(financialData.card_type === 'credit_recurring' || financialData.card_type === 'credit') ? 'opacity-50' : ''}>
                         <SelectValue placeholder={
-                          financialData.card_type === 'credit_recurring' 
-                            ? "Recorrente (Mensal) - Automático" 
+                          financialData.card_type === 'credit_recurring'
+                            ? "Recorrente (Mensal) - Automático"
+                            : financialData.card_type === 'credit'
+                            ? "Único - Automático"
                             : "Selecione o tipo"
                         } />
                       </SelectTrigger>
@@ -949,16 +1021,23 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     </Select>
                     {financialData.card_type === 'credit_recurring' && (
                       <span className="text-xs text-muted-foreground">
-                        Para Crédito Recorrente, o tipo é automaticamente definido como Mensal
+                        Para cartão de crédito recorrente, o tipo é automaticamente definido como Recorrente (Mensal)
+                      </span>
+                    )}
+                    {financialData.card_type === 'credit' && (
+                      <span className="text-xs text-muted-foreground">
+                        Para cartão de crédito, o tipo é automaticamente definido como Único
                       </span>
                     )}
                   </div>
                 )}
                 
-                {/* Frequência de Recorrência - só aparece após escolher método de pagamento e tipo de faturamento, mas não para credit_recurring */}
+                {/* Frequência de Recorrência - só aparece após escolher método de pagamento e tipo de faturamento, mas não para credit_recurring nem para credit nem para Boleto Bancário */}
                 {financialData.payment_method && 
                  (financialData.billing_type === "Mensal" || financialData.billing_type === "Trimestral" || financialData.billing_type === "Semestral" || financialData.billing_type === "Anual") && 
-                 financialData.card_type !== 'credit_recurring' && (
+                 financialData.card_type !== 'credit_recurring' && 
+                 !(financialData.payment_method === 'Cartão' && financialData.card_type === 'credit') &&
+                 financialData.payment_method !== 'Boleto Bancário' && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Frequência de Cobrança</Label>
                     <Select value={financialData.recurrence_frequency || ""} onValueChange={(value) => setFinancialData(prev => ({ ...prev, recurrence_frequency: value }))}>
@@ -975,24 +1054,36 @@ export function ContractProducts({ products }: ContractProductsProps) {
                   </div>
                 )}
                 
-                {/* Número de Parcelas - para cartão só aparece para crédito (não recorrente), para outros métodos após escolher faturamento */}
+                {/* Número de Parcelas - para cartão só aparece para crédito (não recorrente), para outros métodos após escolher faturamento, mas não para Boleto Bancário */}
                 {((financialData.payment_method === 'Cartão' && financialData.card_type === 'credit') || 
-                  (financialData.payment_method && financialData.payment_method !== 'Cartão' && financialData.billing_type && financialData.billing_type !== "Único")) && (
+                  (financialData.payment_method && financialData.payment_method !== 'Cartão' && financialData.billing_type && financialData.billing_type !== "Único")) && 
+                  financialData.payment_method !== 'Boleto Bancário' && (
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Número de Parcelas</Label>
                     <Input 
                       type="number" 
-                      min={2} 
-                      max={financialData.payment_method === 'Cartão' ? 6 : 60} 
-                      value={financialData.installments} 
+                      value={financialData.installments || ""} 
                       onChange={(e) => {
-                        const maxValue = financialData.payment_method === 'Cartão' ? 6 : 60;
-                        const value = Math.min(parseInt(e.target.value) || 1, maxValue);
-                        setFinancialData(prev => ({ ...prev, installments: value }));
+                        // AIDEV-NOTE: Permite que o usuário apague completamente o campo e digite qualquer valor
+                        const inputValue = e.target.value;
+                        if (inputValue === "") {
+                          setFinancialData(prev => ({ ...prev, installments: null }));
+                        } else {
+                          const value = parseInt(inputValue);
+                          if (!isNaN(value) && value > 0) {
+                            setFinancialData(prev => ({ ...prev, installments: value }));
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // AIDEV-NOTE: Se o campo estiver vazio ao perder o foco, define valor padrão como 1
+                        if (!financialData.installments || financialData.installments < 1) {
+                          setFinancialData(prev => ({ ...prev, installments: 1 }));
+                        }
                       }}
                     />
                     <span className="text-sm text-muted-foreground">
-                      parcelas (mín: 2, máx: {financialData.payment_method === 'Cartão' ? 6 : 60})
+                      Número de parcelas para pagamento
                     </span>
                   </div>
                 )}

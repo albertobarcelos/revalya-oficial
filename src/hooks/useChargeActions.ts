@@ -105,7 +105,8 @@ export function useChargeActions() {
         'PIX': 'RECEIVED_PIX',
         'BOLETO': 'RECEIVED_BOLETO',
         'CASH': 'RECEIVED_IN_CASH',
-        'DINHEIRO': 'RECEIVED_IN_CASH'
+        'DINHEIRO': 'RECEIVED_IN_CASH',
+        'CARTAO_CREDITO': 'RECEIVED_CREDIT_CARD'
       };
 
       const status = statusMap[paymentType.toUpperCase()] || 'RECEIVED';

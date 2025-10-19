@@ -15,7 +15,7 @@ import type { MessageTemplate } from '@/types/template';
 import { AVAILABLE_TAGS } from '@/types/settings';
 // 🔐 IMPORTS DE SEGURANÇA MULTI-TENANT OBRIGATÓRIOS
 import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates';
-import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { motion } from 'framer-motion';
 // 🏗️ IMPORT DO LAYOUT PRINCIPAL
 import { Layout } from '@/components/layout/Layout';

@@ -60,6 +60,10 @@ export const TOAST_MESSAGES = {
     title: "WhatsApp conectado",
     description: "Seu WhatsApp já está conectado e pronto para uso."
   },
+  QR_GENERATED: {
+    title: "QR Code gerado",
+    description: "Escaneie o QR Code com seu WhatsApp para conectar."
+  },
   FEATURE_COMING_SOON: {
     title: "Funcionalidade em breve",
     description: "estará disponível em breve."

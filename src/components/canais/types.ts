@@ -38,13 +38,15 @@ export interface TenantIntegration {
   id: string;
   tenant_id: string;
   integration_type: string;
-  is_enabled: boolean;
-  connection_status: string;
+  is_active: boolean;
+  sync_status?: string;
+  error_message?: string;
   instance_name?: string;
   api_url?: string;
   api_key?: string;
   created_at: string;
   updated_at: string;
+  config?: any;
 }
 
 export interface WhatsAppConnectionResult {

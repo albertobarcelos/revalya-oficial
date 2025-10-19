@@ -234,7 +234,7 @@ export async function executeWithAuth<T>(
 }
 
 /**
- * Registra um log de acesso de forma segura
+ * Registra um log de acesso de forma segura usando a tabela audit_logs
  * @param action - Ação realizada
  * @param resource - Recurso acessado
  * @param tenantId - ID do tenant
@@ -254,12 +254,21 @@ export async function logAccess(
         throw new Error('Usuário não autenticado para registrar log');
       }
 
-      const { error } = await supabase.from('access_logs').insert({
+      // AIDEV-NOTE: Usando audit_logs ao invés de access_logs (que não existe)
+      // Mapeando os campos para a estrutura da audit_logs
+      const { error } = await supabase.from('audit_logs').insert({
         user_id: authCheck.user.id,
-        action,
-        resource,
         tenant_id: tenantId,
-        details: details || null
+        action: action,
+        entity_type: 'ACCESS_LOG', // Identificador para logs de acesso
+        entity_id: resource, // Usando resource como entity_id
+        metadata: {
+          resource: resource,
+          details: details || null,
+          access_type: 'USER_ACCESS'
+        },
+        performed_at: new Date().toISOString(),
+        performed_by: authCheck.user.id
       });
 
       if (error) {

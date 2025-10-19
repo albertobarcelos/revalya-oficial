@@ -89,8 +89,7 @@ export function useServices(filters: ServiceFilters = {}) {
       console.log(`🔧 [INIT] Inicializando contexto do tenant: ${currentTenant.id}`);
       
       const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: currentTenant.id,
-        p_user_id: null
+        p_tenant_id: currentTenant.id
       });
       
       if (contextError) {
@@ -159,39 +158,39 @@ export function useServices(filters: ServiceFilters = {}) {
       }
 
       // 🛡️ APLICAR FILTROS LOCALMENTE APÓS BUSCA RPC
-      let filteredData = data || [];
+      let filteredData: Service[] = data || [];
 
       // Aplicar filtros opcionais
       if (searchTerm) {
         const searchTermLower = searchTerm.toLowerCase().trim();
-        filteredData = filteredData.filter((service: any) => 
+        filteredData = filteredData.filter((service: Service) => 
           service.name?.toLowerCase().includes(searchTermLower) ||
           service.description?.toLowerCase().includes(searchTermLower)
         );
       }
       
       if (is_active !== undefined) {
-        filteredData = filteredData.filter((service: any) => service.is_active === is_active);
+        filteredData = filteredData.filter((service: Service) => service.is_active === is_active);
       }
       
       if (withholding_tax !== undefined) {
         if (withholding_tax) {
-          filteredData = filteredData.filter((service: any) => 
+          filteredData = filteredData.filter((service: Service) => 
             service.withholding_tax && service.withholding_tax > 0
           );
         } else {
-          filteredData = filteredData.filter((service: any) => 
+          filteredData = filteredData.filter((service: Service) => 
             !service.withholding_tax || service.withholding_tax === 0
           );
         }
       }
       
       if (category) {
-        filteredData = filteredData.filter((service: any) => service.category === category);
+        filteredData = filteredData.filter((service: Service) => service.category === category);
       }
 
       // 🛡️ APLICAR ORDENAÇÃO
-      filteredData.sort((a: any, b: any) => {
+      filteredData.sort((a: Service, b: Service) => {
         const aValue = a[orderBy] || '';
         const bValue = b[orderBy] || '';
         
@@ -236,8 +235,7 @@ export function useServices(filters: ServiceFilters = {}) {
       // AIDEV-NOTE: Usar a mesma função RPC que funciona na edição (set_tenant_context_simple)
       // Garante que o RLS (Row Level Security) funcione corretamente
       const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId,
-        p_user_id: null // Permitir sem validação de usuário específico
+        p_tenant_id: tenantId
       });
       
       if (contextError) {
@@ -253,16 +251,21 @@ export function useServices(filters: ServiceFilters = {}) {
           ...serviceData,
           tenant_id: tenantId // 🛡️ SEMPRE INCLUIR TENANT_ID
         })
-        .select()
-        .single();
+        .select();
 
       if (error) {
         console.error('🚨 [SECURITY] Erro ao criar serviço:', error);
         throw new Error(`Erro ao criar serviço: ${error.message}`);
       }
 
-      console.log(`✅ [AUDIT] Serviço criado com sucesso:`, data);
-      return data as Service;
+      // AIDEV-NOTE: Verificação manual para garantir que exatamente um registro foi criado
+      if (!data || !Array.isArray(data) || data.length !== 1) {
+        console.error('🚨 [SECURITY] Erro: Nenhum serviço foi criado ou múltiplos registros retornados');
+        throw new Error('Erro interno: Falha na criação do serviço');
+      }
+
+      console.log(`✅ [AUDIT] Serviço criado com sucesso:`, data[0]);
+      return data[0] as Service;
     },
     {
       // AIDEV-NOTE: Invalidar todas as queries de services para este tenant (usando predicate)
@@ -278,13 +281,13 @@ export function useServices(filters: ServiceFilters = {}) {
 
   // 🔐 MUTATION SEGURA PARA ATUALIZAR SERVIÇO
   const updateServiceMutation = useSecureTenantMutation(
-    async (supabase, tenantId, payload: { id: string; serviceData?: any } | (Partial<Service> & { id: string })) => {
+    async (supabase, tenantId, payload: { id: string; serviceData?: ServiceData } | (Partial<Service> & { id: string })) => {
       // AIDEV-NOTE: Inicialização proativa do contexto antes de qualquer operação
       await initializeTenantContext();
       
       // AIDEV-NOTE: Suporte para ambas as estruturas de dados - nova (com serviceData) e legada (direta)
       let id: string;
-      let updates: any;
+      let updates: Partial<ServiceData>;
       
       if ('serviceData' in payload && payload.serviceData) {
         // Nova estrutura: { id, serviceData }
@@ -293,7 +296,7 @@ export function useServices(filters: ServiceFilters = {}) {
           name: payload.serviceData.name,
           description: payload.serviceData.description,
           code: payload.serviceData.code,
-          default_price: payload.serviceData.unit_price || payload.serviceData.default_price,
+          default_price: payload.serviceData.default_price,
           tax_rate: payload.serviceData.tax_rate,
           tax_code: payload.serviceData.tax_code,
           municipality_code: payload.serviceData.municipality_code,
@@ -315,8 +318,7 @@ export function useServices(filters: ServiceFilters = {}) {
       
       // AIDEV-NOTE: Usar a função set_tenant_context_simple que existe e funciona corretamente
       const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId,
-        p_user_id: null // Permitir sem validação de usuário específico
+        p_tenant_id: tenantId
       });
       
       if (contextError) {

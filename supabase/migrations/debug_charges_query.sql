@@ -36,9 +36,9 @@ ORDER BY total DESC;
 -- Verificar cobranças dos últimos 30 dias
 SELECT 
     COUNT(*) as total_last_30_days,
-    COUNT(CASE WHEN c.status = 'PENDING' THEN 1 END) as pending,
-    COUNT(CASE WHEN c.status = 'RECEIVED' THEN 1 END) as received,
-    COUNT(CASE WHEN c.status = 'OVERDUE' THEN 1 END) as overdue
+    COUNT(CASE WHEN c.status = 'PENDING' THEN 1 ELSE 0 END) as pending,
+    COUNT(CASE WHEN c.status = 'RECEIVED' THEN 1 ELSE 0 END) as received,
+    COUNT(CASE WHEN c.status = 'OVERDUE' THEN 1 ELSE 0 END) as overdue
 FROM charges c
 JOIN tenants t ON c.tenant_id = t.id
 WHERE t.slug = 'nexsyn'
