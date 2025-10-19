@@ -20,6 +20,26 @@ import { TableRowProps } from '../types/table-parts';
 import { ReconciliationSource, ReconciliationAction } from '@/types/reconciliation';
 import { formatDate } from '@/lib/utils';
 
+// AIDEV-NOTE: Função para mapear payment_method para nomes amigáveis em português
+const getPaymentMethodDisplayName = (paymentMethod: string | null | undefined): string => {
+  if (!paymentMethod) return 'N/A';
+  
+  const paymentMethodMap: Record<string, string> = {
+    'CREDIT_CARD': 'CRÉDITO',
+    'DEBIT_CARD': 'DÉBITO', 
+    'PIX': 'PIX',
+    'BOLETO': 'BOLETO',
+    'BANK_SLIP': 'BOLETO BANCÁRIO',
+    'TRANSFER': 'TRANSFERÊNCIA',
+    'DEPOSIT': 'DEPÓSITO',
+    'CASH': 'DINHEIRO',
+    'CHECK': 'CHEQUE',
+    'OUTROS': 'OUTROS'
+  };
+  
+  return paymentMethodMap[paymentMethod.toUpperCase()] || paymentMethod;
+};
+
 interface TableRowComponentProps extends TableRowProps {
   isExpanded?: boolean;
   onToggleExpansion?: (id: string) => void;
@@ -120,15 +140,9 @@ export function TableRow({
       
       {/* AIDEV-NOTE: Coluna Tipo de Cobrança - específica para ASAAS */}
       <TableCell className="py-1 sm:py-2 text-center">
-        {movement.source === ReconciliationSource.ASAAS ? (
-          <Badge variant="outline" className="text-xs">
-            {movement.description?.includes('PIX') ? 'PIX' : 
-             movement.description?.includes('BOLETO') ? 'BOLETO' : 
-             movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
-          </Badge>
-        ) : (
-          <span className="text-slate-400">-</span>
-        )}
+        <Badge variant="outline" className="text-xs">
+          {getPaymentMethodDisplayName(movement.payment_method)}
+        </Badge>
       </TableCell>
       
       {/* AIDEV-NOTE: Coluna Valor Cobrança */}

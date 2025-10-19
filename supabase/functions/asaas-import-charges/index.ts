@@ -152,8 +152,8 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
   while (hasMore && totalProcessed < limit) {
     console.log(`📄 Buscando página ${Math.floor(offset / limit) + 1} (offset: ${offset})`);
 
-    // 2. Buscar pagamentos do ASAAS
-    const asaasUrl = `${apiBaseUrl}/payments?dateCreated[ge]=${start_date}&dateCreated[le]=${end_date}&limit=${limit}&offset=${offset}`;
+    // 2. Buscar pagamentos do ASAAS (filtro por data de vencimento)
+    const asaasUrl = `${apiBaseUrl}/payments?dueDate[ge]=${start_date}&dueDate[le]=${end_date}&limit=${limit}&offset=${offset}`;
     
     console.log(`🔍 URL da requisição: ${asaasUrl}`);
     
@@ -364,12 +364,14 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
         }
 
         // AIDEV-NOTE: Executar UPSERT usando supabaseUser (com RLS e triggers)
-        const { error: upsertError } = await supabaseUser
+        // Usar select() para obter informações sobre a operação realizada
+        const { data: upsertData, error: upsertError } = await supabaseUser
           .from('conciliation_staging')
           .upsert(recordData, {
             onConflict: 'tenant_id,origem,id_externo',
             ignoreDuplicates: false
-          });
+          })
+          .select('id, created_at, updated_at');
 
         if (upsertError) {
           console.error(`❌ Erro ao fazer UPSERT do pagamento ${payment.id}:`, upsertError);
@@ -378,12 +380,15 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           continue;
         }
 
-        // AIDEV-NOTE: Atualizar contadores baseado na operação e mudanças
+        // AIDEV-NOTE: Determinar se foi INSERT ou UPDATE baseado na existência prévia e mudanças
+        // Se existing foi encontrado na consulta inicial E chegamos até aqui, então foi uma atualização
+        // (pois registros sem mudanças são pulados antes do UPSERT)
+        // Caso contrário, foi uma inserção de novo registro
         if (existing) {
           console.log(`✅ Pagamento ${payment.id} atualizado com sucesso (houve mudanças)`);
           totalUpdated++;
         } else {
-          console.log(`✅ Pagamento ${payment.id} inserido com sucesso`);
+          console.log(`✅ Pagamento ${payment.id} inserido com sucesso (novo registro)`);
           totalImported++;
         }
         

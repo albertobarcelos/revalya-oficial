@@ -207,7 +207,9 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
         customer_name: item.customer_name,
         customer_document: item.customer_document,
         installment_number: item.installment_number,
-        total_installments: item.total_installments
+        total_installments: item.total_installments,
+        // AIDEV-NOTE: Campo payment_method para exibição do tipo de cobrança
+        payment_method: item.payment_method
       }));
       
       // AIDEV-NOTE: Calcular indicadores
