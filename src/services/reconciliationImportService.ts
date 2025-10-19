@@ -26,8 +26,11 @@ const STATUS_MAPPING: StatusMapping = {
   'CONFIRMED': 'CONFIRMED', 
   'OVERDUE': 'OVERDUE',
   'REFUNDED': 'REFUNDED',
-  'RECEIVED_IN_CASH': 'RECEIVED_IN_CASH',
-  'AWAITING_RISK_ANALYSIS': 'PENDING'
+  'RECEIVED_IN_CASH': 'RECEIVED',
+  'AWAITING_RISK_ANALYSIS': 'BANK_PROCESSING',
+  'DELETED': 'CANCELLED',
+  'FAILED': 'FAILED',
+  'PROCESSING': 'BANK_PROCESSING'
 };
 
 // AIDEV-NOTE: Mapeamento de tipos de pagamento
@@ -101,12 +104,12 @@ export class ReconciliationImportService {
             result.skipped_count++;
           }
           
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.log('❌ [IMPORT DEBUG] Erro ao processar movimento:', movement.id, error);
           result.error_count++;
           result.errors.push({
             movement_id: movement.id,
-            error: error.message || 'Erro desconhecido'
+            error: error instanceof Error ? error.message : 'Erro desconhecido'
           });
         }
       }
@@ -116,9 +119,9 @@ export class ReconciliationImportService {
       
       return result;
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [IMPORT DEBUG] Erro geral na importação:', error);
-      throw new Error(`Falha na importação: ${error.message}`);
+      throw new Error(`Falha na importação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
@@ -166,7 +169,9 @@ export class ReconciliationImportService {
         payment_method,
         raw_data,
         processed,
-        charge_id
+        charge_id,
+        pix_key,
+        barcode
       `)
       .in('id', movementIds)
       .eq('tenant_id', tenantId)
@@ -232,13 +237,18 @@ export class ReconciliationImportService {
 
     // AIDEV-NOTE: 3. Preparar dados da cobrança
     console.log('🔍 [DEBUG] Preparando dados da cobrança...');
-    const chargeData = this.prepareChargeData(movement, customerId, tenantId);
+    const chargeData = await this.prepareChargeData(movement, customerId, tenantId);
     console.log('🔍 [DEBUG] Dados da cobrança preparados:', {
       customer_id: chargeData.customer_id,
       valor: chargeData.valor,
       status: chargeData.status,
       tipo: chargeData.tipo,
       asaas_id: chargeData.asaas_id,
+      origem: chargeData.origem,
+      created_by: chargeData.created_by,
+      updated_by: chargeData.updated_by,
+      barcode: chargeData.barcode ? 'presente' : 'ausente',
+      pix_key: chargeData.pix_key ? 'presente' : 'ausente',
       descricao: chargeData.descricao
     });
 
@@ -385,7 +395,7 @@ export class ReconciliationImportService {
    * Prepara dados da cobrança para inserção
    * AIDEV-NOTE: Transformação completa de dados com mapeamentos
    */
-  private prepareChargeData(
+  private async prepareChargeData(
     movement: ImportedMovement, 
     customerId: string, 
     tenantId: string
@@ -394,17 +404,38 @@ export class ReconciliationImportService {
     const paymentMethod = movement.payment_method || '';
     const tipo = PAYMENT_TYPE_MAPPING[paymentMethod] || 'BOLETO'; // Valor padrão seguro
     
+    // AIDEV-NOTE: Obter user_id atual para campos de auditoria
+    let currentUserId: string | null = null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUserId = user?.id || null;
+    } catch (error) {
+      console.warn('Não foi possível obter user_id para auditoria:', error);
+    }
+
+    // AIDEV-NOTE: Determinar origem baseado na presença de id_externo
+    const origem = movement.id_externo ? 'ASAAS' : 'MANUAL';
+
+    // AIDEV-NOTE: Usar campos diretos da tabela conciliation_staging para barcode e pix_key
+    const barcode = movement.barcode || null;
+    const pix_key = movement.pix_key || null;
+    
     return {
       tenant_id: tenantId,
       customer_id: customerId,
       contract_id: movement.contrato_id || null,
       asaas_id: movement.id_externo,
       valor: movement.valor_cobranca || 0,
-      status: STATUS_MAPPING[movement.status_externo] || 'PENDING',
+      status: STATUS_MAPPING[movement.status_externo?.toUpperCase()] || 'PENDING',
       tipo: tipo,
       data_vencimento: movement.data_vencimento || new Date().toISOString(),
       data_pagamento: movement.data_pagamento || null,
       descricao: movement.observacao || 'Importado da Conciliação',
+      origem: origem, // ASAAS quando id_externo presente, MANUAL caso contrário
+      created_by: currentUserId, // ID do usuário atual para auditoria
+      updated_by: currentUserId, // ID do usuário atual para auditoria
+      barcode: barcode, // Código de barras extraído dos dados JSON
+      pix_key: pix_key, // Chave PIX extraída dos dados JSON
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -415,10 +446,22 @@ export class ReconciliationImportService {
    * AIDEV-NOTE: Atualiza flags de controle na staging
    */
   private async markAsImported(movementId: string, chargeId: string): Promise<void> {
+    // AIDEV-NOTE: Verifica se já existe charge_id para evitar duplicação
+    const { data: existingData } = await supabase
+      .from('conciliation_staging')
+      .select('charge_id')
+      .eq('id', movementId)
+      .single();
+      
+    // Se já existe um charge_id e é diferente do atual, não permitir reimportação
+    if (existingData?.charge_id && existingData.charge_id !== chargeId) {
+      throw new Error(`Movimentação ${movementId} já foi importada para outra cobrança (${existingData.charge_id})`);
+    }
+    
     const { error } = await supabase
       .from('conciliation_staging')
       .update({
-        processed: true,
+        processed: chargeId ? true : false, // AIDEV-NOTE: Processed só é true se tiver charge_id
         charge_id: chargeId,
         imported_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -427,7 +470,7 @@ export class ReconciliationImportService {
 
     if (error) {
       console.error('Erro ao marcar como importado:', error);
-      // AIDEV-NOTE: Não falhar por isso, apenas logar
+      throw new Error(`Erro ao atualizar status de importação: ${error.message}`);
     }
   }
 }

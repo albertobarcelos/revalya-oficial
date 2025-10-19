@@ -668,12 +668,12 @@ export function ChargesCompanyList() {
                          (charge.status === "PENDING" && new Date(charge.data_vencimento) < new Date()) 
                            ? "Atrasada" :
                          charge.status === "PENDING" ? "Pendente" :
-                         charge.status === "RECEIVED" || 
-                         charge.status === "CONFIRMED" ? "Recebida" :
-                         charge.status === "RECEIVED_IN_CASH" ? "Pago Dinheiro" :
-                         charge.status === "RECEIVED_PIX" ? "Pago PIX" :
-                         charge.status === "RECEIVED_BOLETO" ? "Pago Boleto" :
+                         charge.status === "RECEIVED" ? "Recebida" :
+                         charge.status === "CONFIRMED" ? "Confirmada" :
                          charge.status === "CANCELLED" ? "Cancelada" :
+                         charge.status === "REFUNDED" ? "Reembolsada" :
+                         charge.status === "BANK_PROCESSING" ? "Em processamento" :
+                         charge.status === "FAILED" ? "Falhou" :
                          charge.status}
                       </Badge>
                     </TableCell>

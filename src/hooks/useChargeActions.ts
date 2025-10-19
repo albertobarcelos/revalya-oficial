@@ -101,15 +101,8 @@ export function useChargeActions() {
    */
   const markAsPaid = async (chargeId: string, paymentType: string) => {
     try {
-      const statusMap: { [key: string]: string } = {
-        'PIX': 'RECEIVED_PIX',
-        'BOLETO': 'RECEIVED_BOLETO',
-        'CASH': 'RECEIVED_IN_CASH',
-        'DINHEIRO': 'RECEIVED_IN_CASH',
-        'CARTAO_CREDITO': 'RECEIVED_CREDIT_CARD'
-      };
-
-      const status = statusMap[paymentType.toUpperCase()] || 'RECEIVED';
+      // AIDEV-NOTE: Usando status padronizado RECEIVED conforme chargeStatus.ts
+      const status = 'RECEIVED';
 
       updateCharge({
         id: chargeId,

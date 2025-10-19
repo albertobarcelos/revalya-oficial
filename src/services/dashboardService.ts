@@ -284,7 +284,7 @@ export const dashboardService = {
         }
         
         // Incrementar contagens e valores por status
-        if (effectiveStatus === "RECEIVED" || effectiveStatus === "RECEIVED_IN_CASH" || effectiveStatus === "CONFIRMED") {
+        if (effectiveStatus === "RECEIVED" || effectiveStatus === "CONFIRMED") {
           metrics.totalPaid += valor;
           metrics.paidCount++;
           
@@ -385,7 +385,7 @@ export const dashboardService = {
       
       // Filtrar apenas cobranças PAGAS (status RECEIVED, RECEIVED_IN_CASH ou CONFIRMED)
       const paidCharges = historicalCharges.filter(charge => 
-        (charge.status === "RECEIVED" || charge.status === "RECEIVED_IN_CASH" || charge.status === "CONFIRMED") 
+        (charge.status === "RECEIVED" || charge.status === "CONFIRMED") 
         && charge.data_pagamento // Garantir que tem data de pagamento
       );
       

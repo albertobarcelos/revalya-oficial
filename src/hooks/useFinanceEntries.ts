@@ -162,7 +162,7 @@ export function useFinanceEntries(contractId?: string, entryType: 'RECEIVABLE' |
    */
   const getStatistics = useCallback(() => {
     const total = entries.reduce((sum, entry) => sum + entry.net_amount, 0);
-    const paid = entries.filter(entry => entry.status === 'PAID').reduce((sum, entry) => sum + entry.net_amount, 0);
+    const paid = entries.filter(entry => entry.status === 'RECEIVED').reduce((sum, entry) => sum + entry.net_amount, 0);
     const pending = entries.filter(entry => entry.status === 'PENDING').reduce((sum, entry) => sum + entry.net_amount, 0);
     const overdue = entries.filter(entry => entry.status === 'OVERDUE').reduce((sum, entry) => sum + entry.net_amount, 0);
 
@@ -172,9 +172,9 @@ export function useFinanceEntries(contractId?: string, entryType: 'RECEIVABLE' |
       pending,
       overdue,
       count: entries.length,
-      paidCount: entries.filter(entry => entry.status === 'PAID').length,
-      pendingCount: entries.filter(entry => entry.status === 'PENDING').length,
-      overdueCount: entries.filter(entry => entry.status === 'OVERDUE').length
+      paidCount: entries.filter(entry => entry.status === 'RECEIVED').length,
+    pendingCount: entries.filter(entry => entry.status === 'PENDING').length,
+    overdueCount: entries.filter(entry => entry.status === 'OVERDUE').length
     };
   }, [entries]);
 

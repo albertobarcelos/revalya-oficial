@@ -226,7 +226,7 @@ class FinanceEntriesService {
       throw new Error('Lançamento não encontrado');
     }
 
-    if (entry.status === 'PAID') {
+    if (entry.status === 'RECEIVED') {
       throw new Error('Lançamento já está pago');
     }
 
@@ -268,7 +268,7 @@ class FinanceEntriesService {
       throw new Error('Lançamento não encontrado');
     }
 
-    if (entry.status === 'PAID') {
+    if (entry.status === 'RECEIVED') {
       throw new Error('Não é possível cancelar um lançamento já pago');
     }
 
@@ -550,12 +550,13 @@ class FinanceEntriesService {
     const entry = entries[0]; // Assumindo um lançamento por cobrança
 
     // Mapear status do webhook
-    let newStatus: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' = 'PENDING';
+    // AIDEV-NOTE: Usando status padronizados conforme chargeStatus.ts
+    let newStatus: 'PENDING' | 'RECEIVED' | 'OVERDUE' | 'CANCELLED' = 'PENDING';
     switch (webhook_data.status.toLowerCase()) {
       case 'paid':
       case 'received':
       case 'confirmed':
-        newStatus = 'PAID';
+        newStatus = 'RECEIVED';
         break;
       case 'overdue':
         newStatus = 'OVERDUE';
@@ -579,7 +580,7 @@ class FinanceEntriesService {
       }
     };
 
-    if (newStatus === 'PAID' && webhook_data.payment_date) {
+    if (newStatus === 'RECEIVED' && webhook_data.payment_date) {
       updateData.payment_date = webhook_data.payment_date;
       updateData.paid_amount = webhook_data.amount || entry.net_amount;
       updateData.payment_method = webhook_data.payment_method || entry.payment_method;
@@ -623,7 +624,7 @@ class FinanceEntriesService {
       throw new Error('Lançamento não encontrado');
     }
 
-    if (entry.status === 'PAID') {
+    if (entry.status === 'RECEIVED') {
       throw new Error('Não é possível excluir um lançamento já pago');
     }
 
