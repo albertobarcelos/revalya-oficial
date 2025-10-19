@@ -215,8 +215,8 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
             existing.status_externo !== mappedStatus ||
             existing.data_pagamento !== payment.paymentDate ||
             existing.valor_liquido !== (payment.netValue || null) ||
-            existing.valor_juros !== (payment.interestValue || null) ||
-            existing.valor_multa !== (payment.fine?.value || null) ||
+            existing.taxa_juros !== (payment.interest || null) ||
+            existing.taxa_multa !== (payment.fine || null) ||
             existing.valor_desconto !== (payment.discount?.value || null)
           );
 
@@ -248,8 +248,8 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           valor_cobranca: payment.value,
           valor_pago: currentValorPago,
           valor_liquido: payment.netValue || null,
-          valor_juros: payment.interestValue || null,
-          valor_multa: payment.fine?.value || null,
+          taxa_juros: payment.interest?.value || null,
+          taxa_multa: payment.fine?.value || null,
           valor_desconto: payment.discount?.value || null,
           status_externo: mappedStatus,
           status_conciliacao: 'PENDENTE',
@@ -273,6 +273,8 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           customer_state: customerData?.state || '',
           customer_country: customerData?.country || 'Brasil',
           observacao: payment.description || '',
+          payment_method: payment.billingType || null,
+          invoice_number: payment.invoiceNumber || payment.invoice || null,
           raw_data: payment,
           // AIDEV-NOTE: Adicionando campos de auditoria diretamente
           created_by: userId,
@@ -337,9 +339,9 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
       total_updated: totalUpdated,
       total_skipped: totalSkipped,
       total_errors: totalErrors,
-      imported_ids: [], // AIDEV-NOTE: Placeholder para compatibilidade
-      updated_ids: [],  // AIDEV-NOTE: Placeholder para compatibilidade
-      skipped_ids: [],  // AIDEV-NOTE: Placeholder para compatibilidade
+      imported_ids: new Array(totalImported).fill(null), // Preenchendo arrays para compatibilidade com frontend
+      updated_ids: new Array(totalUpdated).fill(null),   // Preenchendo arrays para compatibilidade com frontend
+      skipped_ids: new Array(totalSkipped).fill(null),   // Preenchendo arrays para compatibilidade com frontend
       errors: []        // AIDEV-NOTE: Placeholder para compatibilidade
     }
   };

@@ -297,8 +297,8 @@ async function handlePostRequest(req: Request, tenantId: string) {
     valor_pago: netValueSafe,
     valor_original: payment.originalValue,
     valor_liquido: netValueSafe,
-    valor_juros: payment.interest?.value ?? 0,
-    valor_multa: payment.fine?.value ?? 0,
+    taxa_juros: payment.interest?.value ?? 0,
+taxa_multa: payment.fine?.value ?? 0,
     valor_desconto: payment.discount?.value ?? 0,
     status_externo: mapPaymentStatusToExternal(payment.status || "pending"),
     status_conciliacao: "PENDENTE", // AIDEV-NOTE: Status padrão em MAIÚSCULO
