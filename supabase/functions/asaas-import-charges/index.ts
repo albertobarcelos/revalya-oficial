@@ -275,6 +275,11 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           observacao: payment.description || '',
           payment_method: payment.billingType || null,
           invoice_number: payment.invoiceNumber || payment.invoice || null,
+          // AIDEV-NOTE: Campos de pagamento do ASAAS
+          pdf_url: payment.bankSlipUrl || null,
+          invoice_url: payment.invoiceUrl || null,
+          barcode: payment.barCode || null,
+          pix_key: payment.pixQrCode || null,
           raw_data: payment,
           // AIDEV-NOTE: Adicionando campos de auditoria diretamente
           created_by: userId,
