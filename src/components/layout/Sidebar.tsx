@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { logDebug, logError } from "@/lib/logger";
+import { throttledDebug } from "@/utils/logThrottle"; // AIDEV-NOTE: Import para throttling de logs
 import { useToast } from "@/components/ui/use-toast";
 
 // Hook useClickOutside personalizado
@@ -226,9 +227,12 @@ export default function Sidebar() {
     };
   }, [session?.user?.id]);
 
-  // Log no render para debug
-  logDebug('Render - Estado atual do profile', 'Sidebar', profile);
-  logDebug('Render - Estado atual da session', 'Sidebar', session);
+  // AIDEV-NOTE: Log throttled para evitar spam no console durante re-renders
+  const profileKey = `sidebar_profile_${profile?.id || 'no-profile'}`;
+  const sessionKey = `sidebar_session_${session?.user?.id || 'no-session'}`;
+  
+  throttledDebug(profileKey, 'Render - Estado atual do profile', 'Sidebar', profile);
+  throttledDebug(sessionKey, 'Render - Estado atual da session', 'Sidebar', session);
 
   // Obter o slug do tenant atual da URL
   const tenantSlug = location.pathname.split('/')[1]; // Extrai o slug diretamente da URL /{slug}/...

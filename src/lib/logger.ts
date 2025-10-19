@@ -81,6 +81,7 @@ class Logger {
   private flushInterval: NodeJS.Timeout | null = null
   private readonly bufferSize = 100
   private readonly flushIntervalMs = 5000 // 5 segundos
+  private debugThrottle: Map<string, number> = new Map() // AIDEV-NOTE: Throttling para debug logs
 
   private constructor() {
     this.startBufferFlush()
@@ -110,8 +111,18 @@ class Logger {
   }
 
   public debug(message: string, metadata?: Record<string, any>): void {
-    if (config.dev.debugEnabled) {
-      this.log('debug', message, { metadata })
+    // AIDEV-NOTE: Throttling agressivo para logs de debug para evitar spam no console
+    if (config.logLevel === 'debug') {
+      // Usar throttling para debug logs
+      const key = `debug_${message.substring(0, 50)}`;
+      const now = Date.now();
+      const lastLog = this.debugThrottle.get(key);
+      
+      // Só loga se passou 30 segundos desde o último log similar
+      if (!lastLog || (now - lastLog) >= 30000) {
+        this.log('debug', message, { metadata });
+        this.debugThrottle.set(key, now);
+      }
     }
   }
 
@@ -162,8 +173,21 @@ class Logger {
   }
 
   private logToConsole(entry: LogEntry): void {
-    const timestamp = entry.timestamp.toISOString()
-    const prefix = `[${timestamp}] [${entry.level.toUpperCase()}]`
+    // AIDEV-NOTE: Throttling agressivo para logs de debug para evitar spam no console
+    if (entry.level === 'debug') {
+      const key = `debug_${entry.message}`;
+      const now = Date.now();
+      const lastLog = this.debugThrottle.get(key);
+      
+      if (lastLog && (now - lastLog) < 30000) { // 30 segundos de throttle
+        return; // Log foi throttled, não exibir
+      }
+      
+      this.debugThrottle.set(key, now);
+    }
+
+    const timestamp = entry.timestamp.toISOString();
+    const prefix = `[${timestamp}] [${entry.level.toUpperCase()}]`;
     
     const logData = {
       message: entry.message,
@@ -171,22 +195,22 @@ class Logger {
       ...(entry.userId && { userId: entry.userId }),
       ...(entry.tenantId && { tenantId: entry.tenantId }),
       ...(entry.error && { error: entry.error.message }),
-    }
+    };
 
     switch (entry.level) {
       case 'error':
-        console.error(prefix, logData)
-        if (entry.stack) console.error(entry.stack)
-        break
+        console.error(prefix, logData);
+        if (entry.stack) console.error(entry.stack);
+        break;
       case 'warn':
-        console.warn(prefix, logData)
-        break
+        console.warn(prefix, logData);
+        break;
       case 'info':
-        console.info(prefix, logData)
-        break
+        console.info(prefix, logData);
+        break;
       case 'debug':
-        console.debug(prefix, logData)
-        break
+        console.debug(prefix, logData);
+        break;
     }
   }
 

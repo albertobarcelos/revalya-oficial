@@ -29,32 +29,33 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
   className = '' 
 }) => {
   
-  // AIDEV-NOTE: Configuração de status de reconciliação com ícones e cores
+  // AIDEV-NOTE: Configuração de status de vinculação com ícones e cores
+  // Atualizado para refletir o processo de vinculação de contratos
   const getReconciliationStatusBadge = (status: ReconciliationStatus) => {
     const statusConfig = {
       [ReconciliationStatus.PENDING]: {
-        label: 'Pendente',
+        label: 'Aguardando vinculação',
         variant: 'secondary' as const,
         icon: Clock,
         className: 'bg-yellow-100 text-yellow-800 border-yellow-300'
       },
       [ReconciliationStatus.RECONCILED]: {
-        label: 'Conciliado',
+        label: 'Vinculado a um contrato',
         variant: 'default' as const,
         icon: CheckCircle,
         className: 'bg-green-100 text-green-800 border-green-300'
       },
       [ReconciliationStatus.DIVERGENT]: {
-        label: 'Divergente',
+        label: 'Dados não batem',
         variant: 'destructive' as const,
         icon: AlertTriangle,
         className: 'bg-orange-100 text-orange-800 border-orange-300'
       },
       [ReconciliationStatus.CANCELLED]: {
-        label: 'Cancelado',
+        label: 'Não pode ser vinculado',
         variant: 'outline' as const,
-        icon: Clock,
-        className: 'bg-gray-100 text-gray-800 border-gray-300'
+        icon: AlertTriangle,
+        className: 'bg-red-100 text-red-800 border-red-300'
       }
     };
 

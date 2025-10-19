@@ -7,6 +7,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   DollarSign, 
   CheckCircle, 
@@ -28,7 +29,7 @@ interface ReconciliationIndicatorsProps {
 
 const ReconciliationIndicators: React.FC<ReconciliationIndicatorsProps> = ({
   indicators,
-  loading = false
+  isLoading = false
 }) => {
   // =====================================================
   // HELPER FUNCTIONS
@@ -112,7 +113,7 @@ const ReconciliationIndicators: React.FC<ReconciliationIndicatorsProps> = ({
   // LOADING STATE - Design Moderno
   // =====================================================
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-3">
         {/* Loading Cards Grid */}

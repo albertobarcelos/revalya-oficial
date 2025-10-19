@@ -24,6 +24,129 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Sistema de Monitoramento de Constraint Violations
+
+Implementamos um sistema completo de monitoramento e prevenção de violações de constraint na tabela `conciliation_staging`, especificamente para o erro `conciliation_staging_origem_check`.
+
+#### 🔍 **Problema Investigado**
+
+**Erro Principal**: `new row for relation "conciliation_staging" violates check constraint "conciliation_staging_origem_check"`
+
+**Investigação Realizada**:
+- ✅ Análise completa de logs do PostgreSQL
+- ✅ Verificação de todas as Edge Functions ASAAS
+- ✅ Auditoria de APIs de reconciliação
+- ✅ Busca por scripts de importação manual
+- ✅ Verificação de processos externos
+
+**Conclusão**: Nenhum código estava inserindo dados incorretos. Todos os sistemas estão corretamente configurados para usar `origem: 'ASAAS'` (maiúsculo).
+
+#### 🛠️ **Sistema de Monitoramento Implementado**
+
+1. **Tabela de Log de Violações**:
+   ```sql
+   CREATE TABLE constraint_violation_log (
+     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+     table_name TEXT NOT NULL,
+     constraint_name TEXT NOT NULL,
+     attempted_value TEXT,
+     tenant_id UUID,
+     error_message TEXT,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+2. **Edge Function de Monitoramento**:
+   - 🔍 Detecção automática de violações
+   - 📊 Análise de tendências e estatísticas
+   - 🚨 Sistema de alertas por severidade
+   - 📝 Logging completo de verificações
+
+3. **Trigger de Captura**:
+   ```sql
+   -- Captura tentativas de inserção inválidas antes que causem erro
+   CREATE TRIGGER conciliation_staging_violation_log
+   BEFORE INSERT OR UPDATE ON conciliation_staging
+   FOR EACH ROW EXECUTE FUNCTION trigger_log_conciliation_staging_violation();
+   ```
+
+#### 📊 **Níveis de Alerta**
+- 🔴 **CRÍTICO**: > 10 violações/hora
+- 🟡 **ATENÇÃO**: 5-10 violações/hora
+- 🟢 **NORMAL**: < 5 violações/hora
+
+#### 📚 **Documentação Criada**
+- [`TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md`](./TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md) - Guia completo de troubleshooting
+- [`MONITORAMENTO_CONSTRAINT_VIOLATIONS.md`](./MONITORAMENTO_CONSTRAINT_VIOLATIONS.md) - Sistema de monitoramento
+- [`SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md`](./SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md) - Documentação da solução final
+
+#### 🎯 **Resultados**
+- ✅ **Sistema preventivo** implementado
+- ✅ **Monitoramento automático** a cada 15 minutos
+- ✅ **Documentação completa** para troubleshooting
+- ✅ **Alertas proativos** para problemas futuros
+
+### Janeiro 2025: Correções na Integração ASAAS - Mapeamento Completo de Dados
+
+Implementamos correções críticas na integração ASAAS para garantir o mapeamento completo de todos os campos de cliente e dados de cobrança.
+
+#### 🐛 **Problemas Identificados e Corrigidos**
+
+1. **Campo `invoice_number` Ausente**:
+   - **Problema**: Campo `invoice_number` não existia na tabela `conciliation_staging`
+   - **Solução**: Adicionada migração para incluir o campo `invoice_number` com índice otimizado
+   - **Impacto**: Agora capturamos o número da nota fiscal do ASAAS corretamente
+
+2. **Mapeamento Incompleto de Dados do Cliente**:
+   - **Problema**: Função de importação ASAAS não mapeava todos os campos de cliente disponíveis
+   - **Campos Corrigidos**:
+     - `customer_phone` ← `customerData?.phone`
+     - `customer_mobile_phone` ← `customerData?.mobilePhone`
+     - `customer_address` ← `customerData?.address`
+     - `customer_address_number` ← `customerData?.addressNumber`
+     - `customer_complement` ← `customerData?.complement`
+     - `customer_province` ← `customerData?.neighborhood`
+     - `customer_city` ← `customerData?.cityName`
+     - `customer_state` ← `customerData?.state`
+     - `customer_postal_code` ← `customerData?.postalCode`
+     - `customer_country` ← `customerData?.country`
+     - `invoice_number` ← `payment.invoiceNumber`
+
+3. **Atualização de Registros Existentes**:
+   - **Problema**: Ao atualizar registros existentes, dados do cliente não eram atualizados
+   - **Solução**: Implementada busca e atualização completa dos dados do cliente em ambos os fluxos (inserção e atualização)
+
+#### 🛠️ **Alterações Técnicas Implementadas**
+
+1. **Migração de Banco de Dados**:
+   ```sql
+   -- Adição do campo invoice_number
+   ALTER TABLE conciliation_staging 
+   ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+   
+   -- Índice para performance
+   CREATE INDEX IF NOT EXISTS idx_conciliation_staging_invoice_number
+   ON conciliation_staging(tenant_id, invoice_number) 
+   WHERE invoice_number IS NOT NULL;
+   ```
+
+2. **Atualização da Edge Function `asaas-import-charges`**:
+   - ✅ Mapeamento completo de todos os campos de cliente
+   - ✅ Inclusão do campo `invoice_number`
+   - ✅ Atualização de dados do cliente em registros existentes
+   - ✅ Busca de dados do cliente via API ASAAS em ambos os fluxos
+
+3. **Consistência com Webhook ASAAS**:
+   - ✅ Verificado que o webhook `asaas-webhook-charges` já possui mapeamento completo
+   - ✅ Ambos os sistemas (import e webhook) agora têm paridade de dados
+
+#### 🎯 **Resultados**
+
+- ✅ **Dados Completos**: Todos os campos de cliente do ASAAS são capturados
+- ✅ **Nota Fiscal**: Campo `invoice_number` disponível para reconciliação
+- ✅ **Consistência**: Paridade entre webhook e importação manual
+- ✅ **Performance**: Índices otimizados para consultas por `invoice_number`
+- ✅ **Integridade**: Dados do cliente sempre atualizados, mesmo em registros existentes
 ### Janeiro 2025: Campo Generate Billing para Controle de Faturamento Automático
 
 Implementamos o campo `generate_billing` na tabela `contracts` para permitir controle granular sobre quais contratos devem gerar cobranças automáticas no sistema.

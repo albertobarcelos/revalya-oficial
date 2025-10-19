@@ -93,39 +93,33 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     validateDataAccess
   } = useReconciliationSecurity();
 
-  // AIDEV-NOTE: Hook para gerenciamento de dados
+  // AIDEV-NOTE: Hook para gerenciamento de dados com cache otimizado
   const {
     movements,
     indicators,
     isLoading,
     loadReconciliationData,
-    refreshData
-  } = useReconciliationData({
-    isOpen,
-    hasAccess,
-    currentTenant,
-    validateTenantContext,
-    logSecurityEvent,
-    validateDataAccess
-  });
+    refreshData,
+    invalidateCache
+  } = useReconciliationData(isOpen);
 
   // =====================================================
   // CALLBACKS PARA HOOKS
   // =====================================================
   
-  // AIDEV-NOTE: Callback para mudanças nos dados filtrados
+  // AIDEV-NOTE: Callback para mudanças nos dados filtrados (memoizado e otimizado)
   const handleFilteredChange = useCallback((filtered: ImportedMovement[]) => {
-    // Atualizar indicadores baseados nos dados filtrados
-    // Pode ser usado para sincronizar com outros componentes
+    // AIDEV-NOTE: Callback vazio para evitar re-renders desnecessários
+    // Os dados filtrados já são gerenciados pelo hook useReconciliationFilters
   }, []);
 
-  // AIDEV-NOTE: Callback para mudanças nos indicadores
+  // AIDEV-NOTE: Callback para mudanças nos indicadores (memoizado e otimizado)
   const handleIndicatorsChange = useCallback((newIndicators: ReconciliationIndicators) => {
-    // Atualizar indicadores no estado local se necessário
-    // Pode ser usado para notificações ou logs
+    // AIDEV-NOTE: Callback vazio para evitar re-renders desnecessários
+    // Os indicadores já são gerenciados pelo hook useReconciliationFilters
   }, []);
 
-  // AIDEV-NOTE: Callback para mudanças na paginação
+  // AIDEV-NOTE: Callback para mudanças na paginação (memoizado)
   const handlePaginationChange = useCallback((paginationUpdate: Partial<ReconciliationPagination>) => {
     setPagination(prev => ({
       ...prev,
@@ -146,7 +140,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     onPaginationChange: handlePaginationChange
   });
 
-  // AIDEV-NOTE: Hook para gerenciamento de ações
+  // AIDEV-NOTE: Hook para gerenciamento de ações com invalidação de cache
   const {
     actionModal,
     isExporting,
@@ -160,6 +154,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     movements,
     filteredMovements,
     onRefreshData: refreshData,
+    onInvalidateCache: invalidateCache, // AIDEV-NOTE: Adicionar invalidação de cache
     validateTenantContext,
     logSecurityEvent
   });
@@ -286,6 +281,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                 isLoading={isLoading}
                 isExporting={isExporting}
                 indicators={indicators}
+                onImportComplete={refreshData}
               />
 
               {/* CONTENT - Two Column Layout */}

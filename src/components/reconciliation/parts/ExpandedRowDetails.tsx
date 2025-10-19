@@ -75,8 +75,8 @@ export const ExpandedRowDetails: React.FC<ExpandedRowDetailsProps> = ({ movement
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                 <div>
-                  <span className="font-medium text-slate-600">Nosso Número:</span>
-                  <p className="font-mono">{movement.externalReference || 'N/A'}</p>
+                  <span className="font-medium text-slate-600">Observações:</span>
+                  <p className="font-mono">{movement.observacao || 'N/A'}</p>
                 </div>
                 <div>
                   <span className="font-medium text-slate-600">Linha Digitável:</span>
