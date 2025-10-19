@@ -32,14 +32,17 @@ export function useSecureTenantQuery<T>(
   // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido
   const isValidTenant = currentTenant?.id && currentTenant?.active;
   
-  // 🔍 DEBUG: Log do estado do tenant (com throttling otimizado)
-  throttledDebug('useSecureTenantQuery_state', `useSecureTenantQuery - Tenant: ${currentTenant?.name}`, {
-    tenantId: currentTenant?.id,
-    tenantName: currentTenant?.name,
-    isValidTenant,
-    queryKeyLength: queryKey.length,
-    enabled: isValidTenant && (options?.enabled !== false)
-  });
+  // AIDEV-NOTE: Debug log otimizado com throttling mais agressivo (60s) para reduzir spam
+  // Só loga em desenvolvimento e com throttling de 60 segundos
+  if (process.env.NODE_ENV === 'development') {
+    throttledDebug('useSecureTenantQuery_state', `useSecureTenantQuery - Tenant: ${currentTenant?.name}`, {
+      tenantId: currentTenant?.id,
+      tenantName: currentTenant?.name,
+      isValidTenant,
+      queryKeyLength: queryKey.length,
+      enabled: isValidTenant && (options?.enabled !== false)
+    });
+  }
   
   return useQuery({
     // 🔑 CHAVE SEMPRE INCLUI TENANT_ID

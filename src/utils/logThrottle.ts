@@ -1,6 +1,6 @@
 // AIDEV-NOTE: Utilitário para throttling de logs e evitar spam no console
 // Propósito: Controlar a frequência de logs de debug/audit para melhorar performance
-// OTIMIZAÇÃO: Aumentado throttle para 10s e implementado throttling mais agressivo
+// OTIMIZAÇÃO: Aumentado throttle significativamente para reduzir logs excessivos
 
 interface LogEntry {
   message: string;
@@ -11,9 +11,9 @@ interface LogEntry {
 class LogThrottle {
   private logs: Map<string, LogEntry> = new Map();
   private readonly throttleTime: number;
-  private readonly maxLogsPerMinute: number = 5; // AIDEV-NOTE: Máximo 5 logs por minuto por chave
+  private readonly maxLogsPerMinute: number = 3; // AIDEV-NOTE: Reduzido para máximo 3 logs por minuto
 
-  constructor(throttleTimeMs: number = 10000) { // AIDEV-NOTE: Aumentado para 10 segundos
+  constructor(throttleTimeMs: number = 30000) { // AIDEV-NOTE: Aumentado para 30 segundos
     this.throttleTime = throttleTimeMs;
   }
 
@@ -28,8 +28,8 @@ class LogThrottle {
     if (!entry || (now - entry.lastLogged) >= this.throttleTime) {
       // Se é a primeira vez ou passou o tempo de throttle
       if (entry && entry.count > 1) {
-        // AIDEV-NOTE: Só mostra contagem se for significativa (>10)
-        if (entry.count > 10) {
+        // AIDEV-NOTE: Só mostra contagem se for significativa (>20)
+        if (entry.count > 20) {
           console.log(`${message} (repetido ${entry.count}x)`, ...args);
         }
       } else {
@@ -59,11 +59,11 @@ class LogThrottle {
    * Log de debug com throttling específico
    */
   debug(key: string, message: string, data?: any): void {
-    // AIDEV-NOTE: Debug logs têm throttling de 30 segundos para reduzir spam
+    // AIDEV-NOTE: Debug logs têm throttling de 60 segundos para reduzir spam drasticamente
     const now = Date.now();
     const entry = this.logs.get(`debug_${key}`);
     
-    if (!entry || (now - entry.lastLogged) >= 30000) { // 30 segundos para debug
+    if (!entry || (now - entry.lastLogged) >= 60000) { // 60 segundos para debug
       this.log(`debug_${key}`, `[DEBUG] ${message}`, data);
     }
   }
@@ -72,11 +72,11 @@ class LogThrottle {
    * Log de tenant guard com throttling específico
    */
   tenantGuard(key: string, message: string, data?: any): void {
-    // AIDEV-NOTE: Tenant guard logs têm throttling de 60 segundos devido à alta frequência
+    // AIDEV-NOTE: Tenant guard logs têm throttling de 120 segundos devido à alta frequência
     const now = Date.now();
     const entry = this.logs.get(`tenant_${key}`);
     
-    if (!entry || (now - entry.lastLogged) >= 60000) { // 60 segundos para tenant guard
+    if (!entry || (now - entry.lastLogged) >= 120000) { // 120 segundos para tenant guard
       this.log(`tenant_${key}`, `[TENANT ACCESS GUARD] 🔍 ${message}`, data);
     }
   }
@@ -93,7 +93,7 @@ class LogThrottle {
    */
   cleanup(): void {
     const now = Date.now();
-    const maxAge = 5 * 60 * 1000; // 5 minutos
+    const maxAge = 10 * 60 * 1000; // 10 minutos (aumentado de 5)
     
     for (const [key, entry] of this.logs.entries()) {
       if (now - entry.lastLogged > maxAge) {
@@ -110,14 +110,14 @@ class LogThrottle {
   }
 }
 
-// AIDEV-NOTE: Instância global com throttle de 10 segundos (aumentado de 2s)
-export const logThrottle = new LogThrottle(10000);
+// AIDEV-NOTE: Instância global com throttle de 30 segundos (aumentado de 10s)
+export const logThrottle = new LogThrottle(30000);
 
-// AIDEV-NOTE: Cleanup automático a cada 5 minutos
+// AIDEV-NOTE: Cleanup automático a cada 10 minutos (aumentado de 5)
 if (typeof window !== 'undefined') {
   setInterval(() => {
     logThrottle.cleanup();
-  }, 5 * 60 * 1000);
+  }, 10 * 60 * 1000);
 }
 
 // Funções de conveniência com throttling otimizado

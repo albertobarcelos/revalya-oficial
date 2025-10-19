@@ -129,11 +129,15 @@ export function useContractEdit(): UseContractEditReturn {
       const services = servicesResult.data || [];
       const products = productsResult.data || [];
       
+      // AIDEV-NOTE: Corrigir mapeamento do cliente - Supabase retorna em 'customers', não 'customer'
+      const customer = contract.customers || null;
+      
       console.log('✅ Dados carregados:', {
         contract: contract.contract_number,
         servicesCount: services.length,
         productsCount: products.length,
-        customer: contract.customer?.name
+        customer: customer?.name || 'Cliente não encontrado',
+        customerData: customer
       });
 
       // 🔧 PREPARAR DADOS PARA O FORMULÁRIO
@@ -367,7 +371,7 @@ export function useContractEdit(): UseContractEditReturn {
         contract,
         services: formattedServices,
         products: formattedProducts,
-        customer: contract.customer
+        customer: customer // AIDEV-NOTE: Usar a variável customer corrigida
       };
       
       setData(contractEditData);

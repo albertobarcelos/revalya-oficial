@@ -106,9 +106,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Estados para configuração financeira
   const [financialData, setFinancialData] = React.useState<FinancialData>({
-    payment_method: "", // AIDEV-NOTE: Iniciar vazio para forçar seleção do usuário
+    payment_method: "PIX", // AIDEV-NOTE: Valor padrão válido para evitar erro de validação
     card_type: "",
-    billing_type: "",
+    billing_type: "Único", // AIDEV-NOTE: Valor padrão válido para evitar erro de validação
     recurrence_frequency: "",
     installments: 1
   });
@@ -242,11 +242,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       default_price: serviceItem.default_price || 0,
       quantity: serviceItem.quantity || 1, // Usar quantidade do ServiceSelection
       total: (serviceItem.default_price || 0) * (serviceItem.quantity || 1),
-      // Campos financeiros padrão - todos vazios para forçar seleção
-      payment_method: "",
+      // AIDEV-NOTE: Campos financeiros com valores padrão válidos para evitar erro de validação
+      payment_method: "PIX", // Valor padrão válido
       card_type: "",
-      billing_type: "Único",
-      recurrence_frequency: "",
+      billing_type: "Único", // Valor padrão válido
+      recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
       // Campo de cobrança padrão - AIDEV-NOTE: Por padrão, gerar cobrança no faturamento
       generate_billing: billingData.generate_billing,
@@ -620,13 +620,13 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           due_days: selectedService.due_days !== undefined ? selectedService.due_days : existingFormService.due_days,
           due_day: selectedService.due_day !== undefined ? selectedService.due_day : existingFormService.due_day,
           due_next_month: selectedService.due_next_month !== undefined ? selectedService.due_next_month : existingFormService.due_next_month,
-          // AIDEV-NOTE: Priorizar dados do selectedService (edição em massa) sobre dados do formulário
-          // Usar dados do formulário apenas como fallback quando selectedService não tem o valor
-          payment_method: selectedService.payment_method || existingFormService.payment_method,
-          card_type: selectedService.card_type || existingFormService.card_type,
-          billing_type: selectedService.billing_type || existingFormService.billing_type,
-          recurrence_frequency: selectedService.recurrence_frequency || existingFormService.recurrence_frequency,
-          installments: selectedService.installments || existingFormService.installments,
+          // AIDEV-NOTE: Priorizar valores válidos (não vazios) entre selectedService e formulário
+          // Usar valores padrão válidos quando ambos estão vazios
+          payment_method: selectedService.payment_method || existingFormService.payment_method || "PIX",
+          card_type: selectedService.card_type || existingFormService.card_type || "",
+          billing_type: selectedService.billing_type || existingFormService.billing_type || "Único",
+          recurrence_frequency: selectedService.recurrence_frequency || existingFormService.recurrence_frequency || "",
+          installments: selectedService.installments || existingFormService.installments || 1,
           // AIDEV-NOTE: Preservar configuração de geração de cobrança do formulário
           generate_billing: selectedService.generate_billing !== undefined ? selectedService.generate_billing : existingFormService.generate_billing
         };
@@ -1231,7 +1231,17 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     <Label className="text-sm font-medium">Tipo de Faturamento</Label>
                     <Select 
                       value={financialData.billing_type || ""} 
-                      onValueChange={(value) => setFinancialData(prev => ({ ...prev, billing_type: value }))}
+                      onValueChange={(value) => {
+                        const newData = { ...financialData, billing_type: value };
+                        
+                        // AIDEV-NOTE: Para Boleto Bancário recorrente, definir recurrence_frequency automaticamente
+                        if (financialData.payment_method === 'Boleto Bancário' && 
+                            ['Mensal', 'Trimestral', 'Semestral', 'Anual'].includes(value)) {
+                          newData.recurrence_frequency = value;
+                        }
+                        
+                        setFinancialData(newData);
+                      }}
                       disabled={financialData.payment_method === 'Cartão' && (financialData.card_type === 'credit_recurring' || financialData.card_type === 'credit')}
                     >
                       <SelectTrigger className={(financialData.payment_method === 'Cartão' && (financialData.card_type === 'credit_recurring' || financialData.card_type === 'credit')) ? 'opacity-50' : ''}>
@@ -1755,7 +1765,17 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     <Label htmlFor="bulk-billing-type">Tipo de Faturamento</Label>
                     <Select 
                       value={bulkEditData.billing_type} 
-                      onValueChange={(value) => setBulkEditData(prev => ({ ...prev, billing_type: value }))}
+                      onValueChange={(value) => {
+                        const newData = { ...bulkEditData, billing_type: value };
+                        
+                        // AIDEV-NOTE: Para Boleto Bancário recorrente, definir recurrence_frequency automaticamente
+                        if (bulkEditData.payment_method === 'Boleto Bancário' && 
+                            ['Mensal', 'Trimestral', 'Semestral', 'Anual'].includes(value)) {
+                          newData.recurrence_frequency = value;
+                        }
+                        
+                        setBulkEditData(newData);
+                      }}
                       disabled={bulkEditData.card_type === 'credit_recurring' || bulkEditData.card_type === 'credit'}
                     >
                       <SelectTrigger className={`${(bulkEditData.card_type === 'credit_recurring' || bulkEditData.card_type === 'credit') ? 'opacity-50' : ''}`}>

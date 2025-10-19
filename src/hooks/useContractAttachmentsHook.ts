@@ -18,59 +18,44 @@ export const useContractAttachments = (contractId: string) => {
   const queryClient = useQueryClient();
 
   // Função simplificada para buscar anexos usando o contexto seguro do useTenantAccessGuard
-  const fetchAttachments = async () => {
+  // AIDEV-NOTE: Memoizar fetchAttachments para evitar re-renders excessivos
+  const fetchAttachments = useCallback(async () => {
+    if (!currentTenant?.id || !contractId) {
+      setAttachments([]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      
-      // Verificar se temos o tenant atual do hook
-      if (!currentTenant?.id) {
-        throw new Error('Contexto de tenant não disponível');
-      }
+      setError(null);
 
-      // Verificar se o contrato pertence ao tenant atual
-      const { data: contractVerification, error: contractError } = await supabase
-        .from('contracts')
-        .select('id')
-        .eq('id', contractId)
-        .eq('tenant_id', currentTenant.id)
-        .single();
-        
-      if (contractError || !contractVerification) {
-        throw new Error('Contrato não encontrado ou não pertence ao tenant atual');
-      }
-      
-      // Buscar anexos do contrato
+      // Configurar contexto do tenant
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant.id 
+      });
+
       const { data, error } = await supabase
         .from('contract_attachments')
         .select('*')
         .eq('contract_id', contractId)
-        .eq('is_active', true)
-        .order('uploaded_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Erro ao buscar anexos:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Configurando estado com os dados de anexos:', data?.length);
       setAttachments(data || []);
-      
     } catch (error: any) {
       console.error('Erro ao buscar anexos:', error);
       setError(error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentTenant?.id, contractId]); // AIDEV-NOTE: Dependências memoizadas
 
-
-  
   // Efeito simplificado para buscar anexos quando o tenant estiver disponível
   useEffect(() => {
-    if (currentTenant?.id && contractId) {
-      fetchAttachments();
-    }
-  }, [currentTenant?.id, contractId]);
+    fetchAttachments();
+  }, [fetchAttachments]); // AIDEV-NOTE: Agora depende da função memoizada
 
   // Adicionar um anexo ao contrato
   const addAttachment = async (attachmentData: FormData) => {

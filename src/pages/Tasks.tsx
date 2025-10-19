@@ -86,6 +86,7 @@ export default function Tasks() {
   }>({ isOpen: false, taskId: null, taskTitle: '' });
   
   // 🚨 FORÇA LIMPEZA COMPLETA DO CACHE AO TROCAR TENANT
+  // AIDEV-NOTE: Otimizado para evitar re-renders excessivos - removido currentTenant?.name e queryClient das dependências
   React.useEffect(() => {
     if (currentTenant?.id) {
       console.log(`🧹 [CACHE] Limpando cache para tenant: ${currentTenant.name} (${currentTenant.id})`);
@@ -94,7 +95,8 @@ export default function Tasks() {
       // Remover dados em cache que possam estar contaminados
       queryClient.removeQueries({ queryKey: ['tasks'] });
     }
-  }, [currentTenant?.id, currentTenant?.name, queryClient]);
+  }, [currentTenant?.id]); // AIDEV-NOTE: Removido currentTenant?.name e queryClient para evitar re-renders desnecessários
+  
   // Novos estados para controlar a edição de tarefas
   const [isEditMode, setIsEditMode] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<string | null>(null);

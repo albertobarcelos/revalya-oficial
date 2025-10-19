@@ -135,11 +135,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
       tax_rate: 0,
       total_amount: customProductPrice * quantity,
       is_active: true,
-      // AIDEV-NOTE: Campos financeiros padrão - definir billing_type como "Único" igual aos serviços
-      payment_method: "",
+      // AIDEV-NOTE: Campos financeiros com valores padrão válidos para evitar erro de validação
+      payment_method: "PIX", // Valor padrão válido
       card_type: "",
-      billing_type: "Único",
-      recurrence_frequency: "",
+      billing_type: "Único", // Valor padrão válido
+      recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
       payment_gateway: "",
       due_date_type: "days_after_billing",
@@ -177,11 +177,11 @@ export function ContractProducts({ products }: ContractProductsProps) {
       tax_rate: product.tax_rate || 0,
       total_amount: (product.unit_price || product.price || 0) * quantity,
       is_active: true,
-      // AIDEV-NOTE: Campos financeiros padrão - definir billing_type como "Único" igual aos serviços
-      payment_method: "",
+      // AIDEV-NOTE: Campos financeiros com valores padrão válidos para evitar erro de validação
+      payment_method: "PIX", // Valor padrão válido
       card_type: "",
-      billing_type: "Único",
-      recurrence_frequency: "",
+      billing_type: "Único", // Valor padrão válido
+      recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
       payment_gateway: "",
       due_date_type: "days_after_billing",

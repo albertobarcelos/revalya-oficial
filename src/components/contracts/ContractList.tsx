@@ -66,7 +66,6 @@ interface ContractListProps {
 export function ContractList({ onCreateContract, onViewContract, onEditContract }: ContractListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [customerFilter, setCustomerFilter] = useState<string>("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -87,7 +86,6 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     refreshContracts
   } = useContracts({
     status: statusFilter !== "ALL" ? statusFilter : undefined,
-    customerId: customerFilter !== "ALL" ? customerFilter : undefined,
     limit: itemsPerPage,
     page: currentPage,
   });
@@ -310,19 +308,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
             </SelectContent>
           </Select>
           
-          <Select value={customerFilter} onValueChange={setCustomerFilter}>
-            <SelectTrigger className="w-40 h-9">
-              <SelectValue placeholder="Cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos</SelectItem>
-              {customers?.map((customer) => (
-                <SelectItem key={customer.id} value={customer.id}>
-                  {customer.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
         </div>
         <div className="flex gap-2">
           {selectedContracts.length > 0 && (

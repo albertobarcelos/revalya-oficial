@@ -123,7 +123,7 @@ export function useFinanceEntries(contractId?: string, entryType: 'RECEIVABLE' |
         setInitialFetchAttempted(true);
       }
     }
-  }, [contractId, entryType, currentTenant, tenantLoading]);
+  }, [contractId, entryType, currentTenant?.id]); // AIDEV-NOTE: Otimizado - removido tenantLoading e usado currentTenant?.id
   
   // Efeito para buscar os lançamentos quando o componente for montado
   useEffect(() => {
