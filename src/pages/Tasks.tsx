@@ -147,19 +147,22 @@ export default function Tasks() {
   });
   
   // 🚨 VALIDAÇÃO CRÍTICA: Verificar se o tenant corresponde ao slug da URL
-  if (currentTenant && currentTenant.slug !== slug) {
-    console.error(`🚨 [SECURITY BREACH] Tenant slug não corresponde à URL!`, {
-      currentTenantSlug: currentTenant.slug,
-      urlSlug: slug,
-      currentTenantName: currentTenant.name,
-      currentTenantId: currentTenant.id
-    });
-    
-    // Forçar redirecionamento para o portal
-    console.log(`🔄 [REDIRECT] Redirecionando para portal devido a incompatibilidade de tenant`);
-    window.location.href = `/meus-aplicativos`;
-    return null;
-  }
+  // AIDEV-NOTE: Removido early return para evitar violação das Rules of Hooks
+  // A validação agora é feita no useEffect para redirecionamento
+  useEffect(() => {
+    if (currentTenant && currentTenant.slug !== slug) {
+      console.error(`🚨 [SECURITY BREACH] Tenant slug não corresponde à URL!`, {
+        currentTenantSlug: currentTenant.slug,
+        urlSlug: slug,
+        currentTenantName: currentTenant.name,
+        currentTenantId: currentTenant.id
+      });
+      
+      // Forçar redirecionamento para o portal
+      console.log(`🔄 [REDIRECT] Redirecionando para portal devido a incompatibilidade de tenant`);
+      window.location.href = `/meus-aplicativos`;
+    }
+  }, [currentTenant, slug]);
 
   // 4. EARLY RETURNS PARA GUARDS
   if (!hasAccess) {
@@ -376,13 +379,22 @@ export default function Tasks() {
     }
   };
 
+  // AIDEV-NOTE: ✅ FUNÇÃO CORRIGIDA - Inclui contexto de tenant para RPC segura
   const sendManualReminder = async (chargeId: string) => {
     try {
+      // 🛡️ CONFIGURAR CONTEXTO DE TENANT (OBRIGATÓRIO PARA RPC)
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentTenant?.id 
+      });
+      
       const { data, error } = await supabase.rpc('send_charge_reminder', {
         charge_id: chargeId
       });
       
       if (error) throw error;
+      
+      // 🔍 AUDIT LOG
+      console.log(`✅ [AUDIT] Lembrete enviado - Tenant: ${currentTenant?.name}, Charge: ${chargeId}`);
       
       toast({
         title: 'Lembrete enviado',
@@ -391,7 +403,7 @@ export default function Tasks() {
       
       return data;
     } catch (error) {
-      console.error('Erro ao enviar lembrete:', error);
+      console.error(`❌ [AUDIT] Erro ao enviar lembrete - Tenant: ${currentTenant?.name}:`, error);
       toast({
         title: 'Erro ao enviar lembrete',
         description: 'Não foi possível enviar o lembrete. Tente novamente.',
@@ -435,10 +447,10 @@ export default function Tasks() {
     setIsNewTaskDialogOpen(true);
   };
 
-  // AIDEV-NOTE: Função migrada para usar hook multi-tenant
+  // AIDEV-NOTE: ✅ FUNÇÃO CORRIGIDA - Usa apenas hooks seguros multi-tenant
   // createTask e updateTask do hook garantem isolamento automático por tenant_id
   const createNewTaskFromForm = async () => {
-    // VALIDAÇÃO DE SEGURANÇA
+    // 🛡️ VALIDAÇÃO DE SEGURANÇA
     if (!currentTenant?.id) {
       toast({
         title: 'Erro de segurança',
@@ -467,59 +479,32 @@ export default function Tasks() {
         description: newTaskDescription || undefined,
         priority: newTaskPriority,
         due_date: newTaskDueDate || undefined,
-        status: 'pending' as const,
-        tenant_id: currentTenant.id
+        status: 'pending' as const
       };
       
       if (isEditMode && taskToEdit) {
-        // AUDIT LOG
-        console.log(`[AUDIT] Atualizando tarefa ${taskToEdit} - Tenant: ${currentTenant.name}`);
+        // ✅ USAR HOOK SEGURO - Todas as 5 camadas de segurança aplicadas automaticamente
+        await updateTask(taskToEdit, taskData);
         
-        // Atualizar tarefa existente
-        const { data, error } = await supabase
-          .from('tasks')
-          .update(taskData)
-          .eq('id', taskToEdit)
-          .eq('tenant_id', currentTenant.id)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        
-        // VALIDAÇÃO DUPLA
-        if (data.tenant_id !== currentTenant.id) {
-          throw new Error('Violação de segurança: tentativa de alterar tarefa de outro tenant');
-        }
+        console.log(`✅ [AUDIT] Tarefa ${taskToEdit} atualizada via hook seguro - Tenant: ${currentTenant.name}`);
       } else {
-        // AUDIT LOG
-        console.log(`[AUDIT] Criando nova tarefa - Tenant: ${currentTenant.name}`);
+        // ✅ USAR HOOK SEGURO - Todas as 5 camadas de segurança aplicadas automaticamente
+        await createTask(taskData);
         
-        // Criar nova tarefa
-        const { data, error } = await supabase
-          .from('tasks')
-          .insert(taskData)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        
-        // VALIDAÇÃO DUPLA
-        if (data.tenant_id !== currentTenant.id) {
-          throw new Error('Violação de segurança: tarefa criada para tenant incorreto');
-        }
+        console.log(`✅ [AUDIT] Nova tarefa criada via hook seguro - Tenant: ${currentTenant.name}`);
       }
       
       resetNewTaskForm();
       
-      // Recarregar dados
-      window.location.reload();
+      // ✅ INVALIDAÇÃO AUTOMÁTICA - O hook já invalida o cache automaticamente
+      // Não é necessário window.location.reload()
       
       toast({
         title: isEditMode ? 'Tarefa atualizada' : 'Tarefa criada',
         description: `A tarefa foi ${isEditMode ? 'atualizada' : 'criada'} com sucesso.`,
       });
     } catch (error) {
-      console.error("Erro ao " + (isEditMode ? "atualizar" : "criar") + " tarefa:", error);
+      console.error(`❌ [AUDIT] Erro ao ${isEditMode ? 'atualizar' : 'criar'} tarefa:`, error);
       toast({
         title: 'Erro',
         description: `Não foi possível ${isEditMode ? 'atualizar' : 'criar'} a tarefa.`,

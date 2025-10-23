@@ -24,6 +24,59 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Correção da Estrutura da Tabela message_history
+
+Realizamos uma correção completa da estrutura da tabela `message_history` para alinhar o código com o schema real do banco de dados.
+
+#### 🔍 **Problema Identificado**
+
+**Inconsistências entre código e banco**:
+- Interface `MessageHistory` no código não refletia a estrutura real da tabela
+- Campos inexistentes sendo utilizados (`template_name`, `sent_at`, `message_content`, etc.)
+- Queries falhando por tentar selecionar campos que não existem
+
+#### 🛠️ **Correções Implementadas**
+
+1. **Atualização da Interface MessageHistory**:
+   ```typescript
+   interface MessageHistory {
+     id: string;
+     tenant_id: string;
+     charge_id: string | null;
+     template_id: string | null;
+     customer_id: string | null;
+     message: string | null;
+     status: string | null;
+     error_details: string | null;
+     metadata: any | null;
+     created_at: string;
+     updated_at: string | null;
+     batch_id: string | null;
+   }
+   ```
+
+2. **Arquivos Corrigidos**:
+   - ✅ `src/hooks/useMessageHistory.ts` - Interface e query corrigidas
+   - ✅ `src/components/charges/ChargeMessageHistory.tsx` - Campos de exibição atualizados
+   - ✅ `src/components/charges/ChargeDetails.test.tsx` - Mock data corrigido
+   - ✅ `src/types/database.ts` - Interface principal atualizada
+   - ✅ `src/services/messageService.ts` - Função `recordMessageHistory` corrigida
+
+3. **Mapeamento de Campos Corrigido**:
+   - `sent_at` → `created_at`
+   - `template_name` → `template_id`
+   - `message_content` → `message`
+   - `customer_name` → `metadata.customer_name`
+   - `customer_phone` → `metadata.customer_phone`
+   - `error_message` → `error_details`
+
+#### 🎯 **Resultados**
+
+- ✅ **Consistência**: Código alinhado com schema real do banco
+- ✅ **Funcionalidade**: Histórico de mensagens funcionando corretamente
+- ✅ **Manutenibilidade**: Interface TypeScript reflete estrutura real
+- ✅ **Testes**: Mocks atualizados para refletir dados reais
+
 ### Janeiro 2025: Sistema de Monitoramento de Constraint Violations
 
 Implementamos um sistema completo de monitoramento e prevenção de violações de constraint na tabela `conciliation_staging`, especificamente para o erro `conciliation_staging_origem_check`.

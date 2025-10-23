@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -24,6 +24,7 @@ import {
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { toast } from "sonner";
 import { useServices } from "@/hooks/useServices";
+import { useServiceCodeGenerator } from "@/hooks/useServiceCodeGenerator";
 
 // Esquema de validação para o formulário
 const serviceFormSchema = z.object({
@@ -63,6 +64,19 @@ interface ServiceCreationProps {
 export function ServiceCreation({ open, onOpenChange, onServiceCreated }: ServiceCreationProps) {
   const { createServiceMutation } = useServices();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [codeError, setCodeError] = useState<string>("");
+
+  // 🔢 HOOK PARA GERAÇÃO AUTOMÁTICA DE CÓDIGOS
+  const { 
+    generateNextCode, 
+    validateCodeExists, 
+    refreshMaxCode,
+    nextAvailableCode,
+    isLoadingMaxCode,
+    hasAccess 
+  } = useServiceCodeGenerator();
+
+
 
   const form = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceFormSchema),
@@ -78,11 +92,42 @@ export function ServiceCreation({ open, onOpenChange, onServiceCreated }: Servic
       withholding_tax: false,
     },
   });
+
+  // 🔄 EFEITO PARA RESETAR FORMULÁRIO QUANDO O MODAL FECHAR
+  useEffect(() => {
+    if (!open) {
+      form.reset();
+      setCodeError("");
+    }
+  }, [open, form]);
+
+  // 🔄 EFEITO PARA PREENCHER CÓDIGO AUTOMATICAMENTE QUANDO O MODAL ABRIR
+  useEffect(() => {
+    if (open && hasAccess && nextAvailableCode && !form.getValues('code')?.trim()) {
+      console.log(`🔢 [AUTO-CODE] Preenchendo código automaticamente: ${nextAvailableCode}`);
+      form.setValue('code', nextAvailableCode);
+      setCodeError("");
+    }
+  }, [open, hasAccess, nextAvailableCode, form]);
   
   const onSubmit = async (data: ServiceFormValues) => {
     setIsSubmitting(true);
+    setCodeError("");
     
     try {
+      // 🔍 VALIDAR CÓDIGO DUPLICADO SE FORNECIDO
+      if (data.code && data.code.trim()) {
+        console.log(`🔍 [VALIDATION] Validando código: ${data.code}`);
+        const codeExists = await validateCodeExists(data.code.trim());
+        
+        if (codeExists) {
+          setCodeError(`O código "${data.code}" já está em uso. Escolha outro código.`);
+          toast.error(`Código "${data.code}" já está em uso`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // Criar o serviço usando a mutation do hook useServices
       const newService = await createServiceMutation.mutateAsync({
         name: data.name,
@@ -95,6 +140,10 @@ export function ServiceCreation({ open, onOpenChange, onServiceCreated }: Servic
       });
       
       toast.success("Serviço criado com sucesso!");
+      
+      // 🔄 ATUALIZAR CACHE DO MAIOR CÓDIGO APÓS CRIAÇÃO
+      refreshMaxCode();
+      
       onServiceCreated({
         id: newService.id,
         name: newService.name,
@@ -111,9 +160,11 @@ export function ServiceCreation({ open, onOpenChange, onServiceCreated }: Servic
       });
       
       form.reset();
+      setCodeError("");
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(`Erro ao criar serviço: ${error.message || 'Erro desconhecido'}`); 
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error(`Erro ao criar serviço: ${errorMessage}`); 
       console.error("Erro ao criar serviço:", error);
     } finally {
       setIsSubmitting(false);
@@ -223,6 +274,39 @@ export function ServiceCreation({ open, onOpenChange, onServiceCreated }: Servic
                           <FormDescription>
                             Detalhes adicionais sobre o serviço (opcional)
                           </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {/* 🔢 CAMPO DE CÓDIGO COM GERAÇÃO AUTOMÁTICA */}
+                    <FormField
+                      control={form.control}
+                      name="code"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-medium">Código do Serviço</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder={isLoadingMaxCode ? "Carregando..." : `Ex: ${nextAvailableCode || "001"}`}
+                              className="bg-background/50"
+                              {...field}
+                              value={field.value || ''}
+                              onChange={(e) => {
+                                field.onChange(e.target.value);
+                                setCodeError(""); // Limpar erro ao digitar
+                              }}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {nextAvailableCode ? 
+                              `Próximo código disponível: ${nextAvailableCode}` : 
+                              "Código único para identificar o serviço (opcional)"
+                            }
+                          </FormDescription>
+                          {codeError && (
+                            <p className="text-sm text-destructive font-medium">{codeError}</p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}

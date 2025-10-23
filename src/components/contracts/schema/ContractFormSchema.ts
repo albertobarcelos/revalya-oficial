@@ -44,6 +44,10 @@ const serviceItemSchema = z.object({
   updated_at: z.string().optional(),
   tenant_id: z.string().optional(),
   withholding_tax: z.boolean().default(false),
+  due_type: z.enum(['days_after_billing', 'fixed_day']).default('days_after_billing'),
+  due_value: z.number().min(1).default(5),
+  due_next_month: z.boolean().default(false),
+
   // AIDEV-NOTE: Campo para controlar se o serviço deve gerar cobrança automaticamente
   generate_billing: z.boolean().default(true),
   // Campos financeiros
@@ -174,6 +178,10 @@ const baseContractSchema = z.object({
   internal_notes: z.string()
     .max(1000, "As observações internas não podem ter mais de 1000 caracteres")
     .optional(),
+  due_type: z.enum(['days_after_billing', 'fixed_day']).default('days_after_billing'),
+  due_value: z.number().min(1).default(5),
+  due_next_month: z.boolean().default(false),
+
   // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobrança automaticamente
   generate_billing: z.boolean().default(true),
   tax_data: taxDataSchema.optional(),
@@ -264,9 +272,8 @@ const productItemSchema = z.object({
   recurrence_frequency: z.string().optional().nullable(),
   installments: z.coerce.number().min(1).optional().nullable(),
   payment_gateway: z.string().optional().nullable(),
-  due_date_type: z.string().optional().nullable(),
-  due_days: z.coerce.number().optional().nullable(),
-  due_day: z.coerce.number().optional().nullable(),
+  due_type: z.string().optional().nullable(),
+  due_value: z.coerce.number().optional().nullable(),
   due_next_month: z.boolean().optional().nullable(),
 });
 

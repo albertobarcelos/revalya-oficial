@@ -2,6 +2,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/core/tenant';
 import { formatCurrency } from '@/lib/utils';
+import { 
+  isRetroactiveContract, 
+  calculateRetroactiveBillingPeriods,
+  logRetroactiveLogicApplication,
+  canApplyRetroactiveLogic,
+  calculateRetroactiveStats,
+  type Contract,
+  type BillingPeriod
+} from '@/utils/retroactiveBillingUtils';
+import { useRetroactiveBillingAudit } from './useRetroactiveBillingAudit';
 
 /**
  * Interface para representar um período de faturamento da tabela contract_billing_periods
@@ -53,9 +63,73 @@ export function useContractBillingPeriods(contractId?: string) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [initialFetchAttempted, setInitialFetchAttempted] = useState(false);
+  const [isRetroactive, setIsRetroactive] = useState(false);
+  const [retroactiveStats, setRetroactiveStats] = useState<any>(null);
+  
+  // AIDEV-NOTE: Hook de auditoria para registrar aplicação da lógica retroativa
+  const {
+    logRetroactiveStart,
+    logRetroactiveCalculation,
+    logRetroactiveValidationFailure,
+    logRetroactiveSkipped
+  } = useRetroactiveBillingAudit()
   
   const { currentTenant, isLoading: tenantLoading } = useTenant();
   const isMountedRef = useRef(true);
+
+  /**
+   * AIDEV-NOTE: Função para gerar períodos retroativos quando aplicável
+   * Implementa a nova lógica de faturamento retroativo conforme documentação
+   */
+  const generateRetroactivePeriods = useCallback(async (contract: Contract) => {
+    const startTime = Date.now()
+    
+    try {
+      // Verificar se é contrato retroativo
+      if (!isRetroactiveContract(contract)) {
+        await logRetroactiveSkipped(contractId, 'Contrato não é retroativo')
+        setIsRetroactive(false)
+        return
+      }
+
+      // Verificar se pode aplicar lógica retroativa
+      if (!canApplyRetroactiveLogic(contract)) {
+        await logRetroactiveSkipped(contractId, 'Lógica retroativa não pode ser aplicada')
+        setIsRetroactive(false)
+        return
+      }
+
+      // Registrar início do processamento retroativo
+      await logRetroactiveStart(contractId, contract)
+
+      // Calcular períodos retroativos
+      const retroactivePeriods = calculateRetroactiveBillingPeriods(contract)
+      const stats = calculateRetroactiveStats(retroactivePeriods, contract)
+      
+      const calculationTime = Date.now() - startTime
+
+      // Registrar cálculo dos períodos
+      await logRetroactiveCalculation(contractId, retroactivePeriods, calculationTime)
+
+      // Registrar aplicação da lógica (mantendo log original)
+      logRetroactiveLogicApplication(contract, retroactivePeriods, stats)
+
+      // Atualizar estados
+      setIsRetroactive(true)
+      setRetroactiveStats(stats)
+
+    } catch (error) {
+      console.error('Erro ao gerar períodos retroativos:', error)
+      
+      // Registrar falha na validação
+      await logRetroactiveValidationFailure(contractId, [
+        error instanceof Error ? error.message : 'Erro desconhecido'
+      ])
+      
+      setIsRetroactive(false)
+      setRetroactiveStats(null)
+    }
+  }, [contractId, logRetroactiveStart, logRetroactiveCalculation, logRetroactiveValidationFailure, logRetroactiveSkipped]);
 
   /**
    * Função para buscar períodos de faturamento do contrato
@@ -74,17 +148,36 @@ export function useContractBillingPeriods(contractId?: string) {
         p_tenant_id: currentTenant.id 
       });
 
-      // Verificar se o contrato pertence ao tenant
-      const { data: contractVerification, error: contractError } = await supabase
+      // AIDEV-NOTE: Buscar dados completos do contrato para verificar se é retroativo
+      const { data: contractData, error: contractError } = await supabase
         .from('contracts')
-        .select('id')
+        .select(`
+          id,
+          tenant_id,
+          customer_id,
+          start_date,
+          end_date,
+          billing_day,
+          billing_interval,
+          billing_interval_type,
+          status,
+          created_at,
+          customers(
+            id,
+            name,
+            email
+          )
+        `)
         .eq('id', contractId)
         .eq('tenant_id', currentTenant.id)
         .single();
         
-      if (contractError || !contractVerification) {
+      if (contractError || !contractData) {
         throw new Error('Contrato não encontrado ou você não tem permissão para acessá-lo.');
       }
+
+      // AIDEV-NOTE: Verificar se é um contrato retroativo e gerar períodos se necessário
+      const retroactivePeriods = await generateRetroactivePeriods(contractData as Contract);
       
       // AIDEV-NOTE: Buscar períodos de faturamento com cobranças relacionadas
       const { data, error } = await supabase
@@ -243,6 +336,9 @@ export function useContractBillingPeriods(contractId?: string) {
     getStatusLabel,
     getStatusColor,
     statistics: getStatistics(),
+    // Informações sobre contratos retroativos
+    isRetroactive,
+    retroactiveStats,
     // Funções utilitárias
     isEmpty: periods.length === 0,
     hasError: !!error

@@ -5,6 +5,58 @@ import { ContractFormValues, contractFormSchema } from "../schema/ContractFormSc
 import { useContractEdit } from "@/hooks/useContractEdit";
 import { toast } from "sonner";
 
+// AIDEV-NOTE: Interfaces para tipagem específica
+interface ServiceData {
+  id?: string;
+  service_id?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  unit_price?: number;
+  default_price?: number;
+  discount_percentage?: number;
+  tax_rate?: number;
+  [key: string]: unknown;
+}
+
+interface ProductData {
+  id?: string;
+  product_id?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  price?: number;
+  unit_price?: number;
+  discount_percentage?: number;
+  tax_rate?: number;
+  [key: string]: unknown;
+}
+
+interface ContractData {
+  id?: string;
+  contract_number?: string;
+  services?: ServiceData[];
+  products?: ProductData[];
+  [key: string]: unknown;
+}
+
+interface TotalValues {
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+}
+
+// AIDEV-NOTE: Interface para alterações pendentes de serviços
+interface PendingServiceChanges {
+  [serviceId: string]: {
+    originalData: ServiceData;
+    pendingChanges: Partial<ServiceData>;
+    hasChanges: boolean;
+    timestamp: number;
+  };
+}
+
 interface ContractFormContextType {
   form: ReturnType<typeof useForm<ContractFormValues>>;
   mode: "create" | "edit" | "view";
@@ -14,17 +66,16 @@ interface ContractFormContextType {
   setIsPending: (pending: boolean) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  totalValues: {
-    subtotal: number;
-    discount: number;
-    tax: number;
-    total: number;
-  };
-  setTotalValues: (values: any) => void;
+  totalValues: TotalValues;
+  setTotalValues: (values: TotalValues) => void;
   isViewMode: boolean;
   isEditMode: boolean;
   isLoadingContract: boolean;
-  contractData: any;
+  contractData: ContractData | null;
+  // AIDEV-NOTE: Estado compartilhado para alterações pendentes
+  pendingServiceChanges: PendingServiceChanges;
+  setPendingServiceChanges: (changes: PendingServiceChanges) => void;
+  applyPendingChanges: () => void;
 }
 
 const ContractFormContext = createContext<ContractFormContextType | null>(null);
@@ -48,7 +99,7 @@ interface ContractFormProviderProps {
 }
 
 // Função para calcular totais baseado nos serviços e produtos
-const calculateTotals = (services: any[] = [], products: any[] = [], contractDiscount: number = 0) => {
+const calculateTotals = (services: ServiceData[] = [], products: ProductData[] = [], contractDiscount: number = 0) => {
   // Calcular subtotal de serviços
   const servicesSubtotal = services.reduce((sum, service) => {
     const quantity = service.quantity || 1;
@@ -145,6 +196,9 @@ export function ContractFormProvider({
     total: 0,
   });
 
+  // AIDEV-NOTE: Estado para alterações pendentes de serviços
+  const [pendingServiceChanges, setPendingServiceChanges] = useState<PendingServiceChanges>({});
+
   // Hook otimizado para carregamento de dados de edição
   const { data: contractData, isLoading: isLoadingContract, error: contractError, loadContract } = useContractEdit();
 
@@ -172,6 +226,27 @@ export function ContractFormProvider({
       // ... outros valores padrão
     }
   });
+
+  // AIDEV-NOTE: Função para aplicar alterações pendentes ao formulário
+  const applyPendingChanges = React.useCallback(() => {
+    const currentServices = form.getValues('services') || [];
+    const updatedServices = currentServices.map(service => {
+      const serviceId = service.service_id || service.id;
+      const pendingChange = pendingServiceChanges[serviceId];
+      
+      if (pendingChange && pendingChange.hasChanges) {
+        return {
+          ...service,
+          ...pendingChange.pendingChanges
+        };
+      }
+      
+      return service;
+    });
+
+    form.setValue('services', updatedServices);
+    console.log('🔄 Alterações pendentes aplicadas:', Object.keys(pendingServiceChanges).length);
+  }, [form, pendingServiceChanges]);
 
   // 🚀 CARREGAMENTO OTIMIZADO: Carregar dados do contrato quando contractId mudar
   useEffect(() => {
@@ -259,7 +334,11 @@ export function ContractFormProvider({
     isViewMode,
     isEditMode,
     isLoadingContract,
-    contractData
+    contractData,
+    // AIDEV-NOTE: Novos estados para alterações pendentes
+    pendingServiceChanges,
+    setPendingServiceChanges,
+    applyPendingChanges
   };
 
   return (

@@ -2,6 +2,7 @@ import { format, addDays, addMonths, addYears, isBefore, isAfter } from 'date-fn
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
 import { financialAuditService } from './financialAuditService';
+import { getCurrentUser } from '../utils/supabaseAuthManager';
 
 export interface DigitalContract {
   id?: string;
@@ -259,6 +260,16 @@ class DigitalContractService {
     template_id?: string
   ): Promise<string> {
     try {
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || null;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular created_by e updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: contract.tenant_id,
+        p_user_id: userId
+      });
+      
       // Gerar número do contrato
       const contractNumber = await this.generateContractNumber(contract.tenant_id);
       
@@ -332,6 +343,16 @@ class DigitalContractService {
         throw new Error('Contrato não pode ser modificado no status atual');
       }
 
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || user_id;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: currentContract.tenant_id,
+        p_user_id: userId
+      });
+
       const updatedContract = {
         ...updates,
         updated_by: user_id,
@@ -384,6 +405,16 @@ class DigitalContractService {
       if (error || !originalContract) {
         throw new Error('Contrato original não encontrado');
       }
+
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || user_id;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular created_by e updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: originalContract.tenant_id,
+        p_user_id: userId
+      });
 
       // Criar nova versão
       const newVersion: DigitalContract = {

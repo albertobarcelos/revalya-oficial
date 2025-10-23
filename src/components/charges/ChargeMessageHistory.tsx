@@ -49,10 +49,10 @@ function ChargeMessageHistoryComponent({ messages, isLoading }: ChargeMessageHis
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium">
-                {format(new Date(msg.sent_at), 'dd/MM/yyyy HH:mm')}
+                {format(new Date(msg.created_at), 'dd/MM/yyyy HH:mm')}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                {msg.template_name || 'Mensagem Enviada'}
+                {msg.template_id ? `Template: ${msg.template_id}` : 'Mensagem Enviada'}
               </p>
             </div>
             <Badge variant={msg.status === 'delivered' ? 'default' : 'outline'}>

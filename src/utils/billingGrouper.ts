@@ -43,9 +43,8 @@ export interface PaymentGroup {
   billing_type: string;
   recurrence_frequency?: string;
   installments: number;
-  due_date_type: string;
-  due_days?: number;
-  due_day?: number;
+  due_type: string;
+  due_value: number;
   due_next_month?: boolean;
   items: Array<{
     id: string;
@@ -64,9 +63,8 @@ export interface PaymentConfig {
   billing_type: string;
   recurrence_frequency?: string;
   installments: number;
-  due_date_type: string;
-  due_days?: number;
-  due_day?: number;
+  due_type: string;
+  due_value: number;
   due_next_month?: boolean;
 }
 
@@ -82,9 +80,8 @@ function generatePaymentKey(config: PaymentConfig): string {
     billing_type,
     recurrence_frequency,
     installments,
-    due_date_type,
-    due_days,
-    due_day,
+    due_type,
+    due_value,
     due_next_month
   } = config;
 
@@ -104,12 +101,11 @@ function generatePaymentKey(config: PaymentConfig): string {
     normalizedPaymentMethod,
     normalizedCardType,
     normalizedBillingType,
-    recurrence_frequency || 'undefined',
+    recurrence_frequency ?? 'undefined',
     normalizedInstallments,
-    due_date_type || 'undefined',
-    due_days || 'undefined',
-    due_day || 'undefined',
-    due_next_month || false
+    due_type ?? 'undefined',
+    due_value ?? 'undefined',
+    due_next_month ?? false
   ].join('|');
 }
 
@@ -139,10 +135,10 @@ export function groupItemsByPaymentConfig(
       billing_type: service.billing_type || 'Único',
       recurrence_frequency: service.recurrence_frequency,
       installments: service.installments || 1,
-      due_date_type: service.due_date_type || 'days_after_billing',
-      due_days: service.due_days !== undefined ? service.due_days : 5, // AIDEV-NOTE: Padronizar com produtos
-      due_day: service.due_day,
-      due_next_month: service.due_next_month || false // AIDEV-NOTE: Padronizar com produtos
+      // AIDEV-NOTE: PRESERVAR valores reais do banco - só aplicar padrão se realmente for null/undefined
+      due_type: service.due_type ?? 'days_after_billing',
+      due_value: service.due_value ?? 5, // AIDEV-NOTE: Usar nullish coalescing para preservar 0
+      due_next_month: service.due_next_month ?? false // AIDEV-NOTE: Usar nullish coalescing para preservar false explícito
     };
 
     // AIDEV-NOTE: Gerar chave única baseada em TODAS as configurações
@@ -182,10 +178,10 @@ export function groupItemsByPaymentConfig(
       billing_type: product.billing_type || 'Único',
       recurrence_frequency: product.recurrence_frequency,
       installments: product.installments || 1,
-      due_date_type: product.due_date_type || 'days_after_billing',
-      due_days: product.due_days !== undefined ? product.due_days : 5, // AIDEV-NOTE: Idêntico aos serviços
-      due_day: product.due_day,
-      due_next_month: product.due_next_month || false // AIDEV-NOTE: Idêntico aos serviços
+      // AIDEV-NOTE: PRESERVAR valores reais do banco - só aplicar padrão se realmente for null/undefined
+      due_type: product.due_type ?? 'days_after_billing',
+      due_value: product.due_value ?? 5, // AIDEV-NOTE: Usar nullish coalescing para preservar 0
+      due_next_month: product.due_next_month ?? false // AIDEV-NOTE: Usar nullish coalescing para preservar false explícito
     };
     
     console.log(`💰 Produto ${product.product?.name || product.description}: payment_method=${config.payment_method}, valor=${product.total_amount || (product.quantity * product.unit_price)}`);
@@ -252,18 +248,19 @@ export function generateGroupDescription(
 /**
  * AIDEV-NOTE: Calcula data de vencimento baseada na configuração do grupo
  * Usa a mesma lógica da implementação atual, mas aplicada ao grupo
+ * Agora com campos simplificados: due_type e due_value
  */
 export function calculateGroupDueDate(
   group: PaymentGroup,
   billingDate: Date = new Date()
 ): Date {
-  if (group.due_date_type === 'days_after_billing') {
+  if (group.due_type === 'days_after_billing') {
     const dueDate = new Date(billingDate);
-    dueDate.setDate(dueDate.getDate() + (group.due_days || 5));
+    dueDate.setDate(dueDate.getDate() + (group.due_value ?? 5));
     return dueDate;
-  } else if (group.due_date_type === 'fixed_day') {
+  } else if (group.due_type === 'fixed_day') {
     const dueDate = new Date(billingDate);
-    const targetDay = group.due_day || 10;
+    const targetDay = group.due_value ?? 10;
     
     if (group.due_next_month) {
       dueDate.setMonth(dueDate.getMonth() + 1);

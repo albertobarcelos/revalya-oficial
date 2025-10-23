@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { supabase } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { logError, logDebug } from "@/lib/logger";
+import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
 
 interface ProfileAvatarProps {
   url?: string;
@@ -13,6 +14,9 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  
+  // AIDEV-NOTE: Hook de segurança para obter tenant_id correto
+  const { currentTenant } = useTenantAccessGuard();
 
   useEffect(() => {
     if (url) {
@@ -28,7 +32,7 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
   async function downloadImage(path: string) {
     try {
       const { data: { publicUrl } } = supabase.storage
-        .from('imagens')
+        .from(STORAGE_BUCKETS.AVATARS)
         .getPublicUrl(path);
 
       setAvatarUrl(publicUrl);
@@ -65,19 +69,22 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
         throw new Error('A imagem deve ter no máximo 2MB.');
       }
 
-      // Gera um nome único para o arquivo incluindo o ID do usuário
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      // AIDEV-NOTE: Gera nome no formato esperado pelas políticas RLS
+      // Formato: avatar_{tenant_id}_{user_id}_{timestamp}.{ext}
+      const tenantId = currentTenant?.id || 'default';
+      const timestamp = Date.now();
+      const fileName = `avatar_${tenantId}_${user.id}_${timestamp}.${fileExt}`;
 
       logDebug('Iniciando upload do arquivo', 'ProfileAvatar', { 
         fileName,
         fileSize: file.size,
         fileType: file.type,
-        bucket: 'imagens'
+        bucket: STORAGE_BUCKETS.AVATARS
       });
 
       // Faz o upload do arquivo
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('imagens')
+        .from(STORAGE_BUCKETS.AVATARS)
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
@@ -88,7 +95,7 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
           error: uploadError,
           fileName,
           fileSize: file.size,
-          bucket: 'imagens'
+          bucket: STORAGE_BUCKETS.AVATARS
         });
         throw uploadError;
       }
@@ -100,7 +107,7 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
 
       // Obtém a URL pública do arquivo
       const { data: { publicUrl } } = supabase.storage
-        .from('imagens')
+        .from(STORAGE_BUCKETS.AVATARS)
         .getPublicUrl(fileName);
 
       logDebug('URL pública obtida', 'ProfileAvatar', { publicUrl });
@@ -119,7 +126,7 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
         errorCode: error.code,
         errorDetails: error.details,
         errorHint: error.hint,
-        bucket: 'imagens'
+        bucket: STORAGE_BUCKETS.AVATARS
       });
       toast({
         title: "Erro ao fazer upload",

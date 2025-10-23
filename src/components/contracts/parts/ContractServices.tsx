@@ -16,10 +16,17 @@ import { useContracts } from '@/hooks/useContracts';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { ServiceSelection } from './ServiceSelection';
+import { useContractForm } from '../form/ContractFormProvider';
+import { UseFormReturn } from 'react-hook-form';
 
 // Interfaces
+interface ContractFormData {
+  services?: SelectedService[];
+  [key: string]: unknown;
+}
+
 interface ContractServicesProps {
-  form: any;
+  form: UseFormReturn<ContractFormData>;
   contractId?: string;
 }
 
@@ -38,10 +45,9 @@ interface SelectedService {
   billing_type?: string;
   recurrence_frequency?: string;
   installments?: number;
-  // Campos de vencimento - AIDEV-NOTE: Novos campos para controlar data de vencimento das cobranças
-  due_date_type?: 'days_after_billing' | 'fixed_day'; // Tipo de vencimento
-  due_days?: number; // Número de dias após faturamento
-  due_day?: number; // Dia fixo do mês (1-31)
+  // Campos de vencimento - AIDEV-NOTE: Campos simplificados para controlar data de vencimento das cobranças
+  due_type?: 'days_after_billing' | 'fixed_day'; // Tipo de vencimento
+  due_value?: number; // Valor: dias após faturamento OU dia fixo do mês
   due_next_month?: boolean; // Se vencimento é no próximo mês
   // Campo de cobrança - AIDEV-NOTE: Controla se o serviço gera cobrança no faturamento
   generate_billing?: boolean; // Se deve gerar cobrança no faturamento
@@ -89,7 +95,39 @@ interface TaxData {
   cofins_deduct: boolean;
 }
 
+// AIDEV-NOTE: Interface para dados de edição em massa - compatível com SelectedService
+interface BulkEditData {
+  // Configurações financeiras
+  payment_method: string;
+  card_type: string;
+  billing_type: string;
+  recurrence_frequency: string;
+  installments: number;
+  // Valor unitário
+  unit_price: string;
+  // Configurações de vencimento - usando propriedades opcionais para compatibilidade
+  due_type: 'days_after_billing' | 'fixed_day';
+  due_value?: number; // Valor: dias após faturamento OU dia fixo do mês
+  due_next_month: boolean;
+  // Geração de faturamento
+  generate_billing: boolean;
+}
+
+// AIDEV-NOTE: Interface para gerenciar alterações pendentes dos serviços
+// Permite armazenar mudanças localmente antes de enviar ao backend
+interface PendingServiceChanges {
+  [serviceId: string]: {
+    originalData: SelectedService;
+    pendingChanges: Partial<SelectedService>;
+    hasChanges: boolean;
+    timestamp: number; // Para controle de ordem das alterações
+  };
+}
+
 export function ContractServices({ form, contractId }: ContractServicesProps) {
+  // AIDEV-NOTE: Usando contexto compartilhado para gerenciar alterações pendentes
+  const { pendingServiceChanges, setPendingServiceChanges } = useContractForm();
+  
   // Ref para controlar atualizações internas e evitar loop infinito
   const isInternalUpdate = React.useRef(false);
   
@@ -133,9 +171,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Estados para configuração de vencimento - AIDEV-NOTE: Controla os campos de vencimento do serviço
   const [dueDateData, setDueDateData] = React.useState({
-    due_date_type: 'days_after_billing' as 'days_after_billing' | 'fixed_day',
-    due_days: 5,
-    due_day: 10,
+    due_type: 'days_after_billing' as 'days_after_billing' | 'fixed_day',
+    due_value: 5,
     due_next_month: false
   });
 
@@ -148,8 +185,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   const [selectedServiceIds, setSelectedServiceIds] = React.useState<string[]>([]);
   const [showBulkEditModal, setShowBulkEditModal] = React.useState(false);
   
-  // AIDEV-NOTE: Estados para edição em massa
-  const [bulkEditData, setBulkEditData] = React.useState({
+  // AIDEV-NOTE: Flag para controlar sincronização automática durante edição
+  const [isEditingDueDateData, setIsEditingDueDateData] = React.useState(false);
+  
+  // AIDEV-NOTE: Estados para edição em massa - usando interface tipada
+  const [bulkEditData, setBulkEditData] = React.useState<BulkEditData>({
     // Configurações financeiras
     payment_method: '',
     card_type: '',
@@ -158,10 +198,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     installments: 1,
     // Valor unitário
     unit_price: '',
-    // Configurações de vencimento
-    due_date_type: 'days_after_billing' as 'days_after_billing' | 'fixed_day',
-    due_days: 5,
-    due_day: 10,
+    // Configurações de vencimento - propriedades opcionais não precisam ser inicializadas
+    due_type: 'days_after_billing',
     due_next_month: false,
     // Geração de faturamento
     generate_billing: true
@@ -230,7 +268,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   }, [formServices]);
   
   // AIDEV-NOTE: Função modificada para processar múltiplos serviços selecionados
-  const handleAddServices = (selectedServiceItems: any[]) => {
+  const handleAddServices = (selectedServiceItems: { id: string; name: string; description?: string; unit_price: number; default_price?: number }[]) => {
     console.log('🔄 Adicionando múltiplos serviços:', selectedServiceItems);
     
     const newServices: SelectedService[] = selectedServiceItems.map(serviceItem => ({
@@ -248,6 +286,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       billing_type: "Único", // Valor padrão válido
       recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
+      // AIDEV-NOTE: Campos de vencimento obrigatórios - valores padrão seguros
+      due_type: 'days_after_billing', // Valor padrão válido
+      due_value: 5, // 5 dias após faturamento
+      due_next_month: false, // Vencimento no mesmo mês
       // Campo de cobrança padrão - AIDEV-NOTE: Por padrão, gerar cobrança no faturamento
       generate_billing: billingData.generate_billing,
       // Campos de impostos padrão
@@ -316,30 +358,50 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     
     // AIDEV-NOTE: Carrega dados de cobrança do serviço para edição (preservar valor existente)
     setBillingData({
-      generate_billing: service.generate_billing ?? false
+      generate_billing: service.generate_billing ?? true // Usa ?? para preservar false e defaultar para true quando undefined/null
     });
     
     // AIDEV-NOTE: Carrega dados de vencimento do serviço para edição (preservar valores existentes)
     // Buscar dados de vencimento do serviço no estado atual (selectedServices)
     const currentService = selectedServices.find(s => s.id === serviceId);
     
+    // AIDEV-NOTE: CORREÇÃO CRÍTICA - Preservar valores existentes sem fallback agressivo
+    // Prioridade: currentService > service > apenas então usar padrão
+    // Usar ?? (nullish coalescing) para preservar valores falsy válidos como false, 0, etc.
+    const resolvedDueType = currentService?.due_type ?? service.due_type ?? 'days_after_billing';
+    const resolvedDueValue = currentService?.due_value ?? service.due_value ?? 5;
+    const resolvedDueNextMonth = currentService?.due_next_month ?? service.due_next_month ?? false;
+    
+    console.log('🔍 DADOS DE VENCIMENTO RESOLVIDOS:', {
+      serviceId,
+      currentService: {
+        due_type: currentService?.due_type,
+        due_value: currentService?.due_value,
+        due_next_month: currentService?.due_next_month
+      },
+      service: {
+        due_type: service.due_type,
+        due_value: service.due_value,
+        due_next_month: service.due_next_month
+      },
+      resolved: {
+        due_type: resolvedDueType,
+        due_value: resolvedDueValue,
+        due_next_month: resolvedDueNextMonth
+      }
+    });
+    
     setDueDateData({
-      due_date_type: currentService?.due_date_type || service.due_date_type || 'days_after_billing',
-      due_days: currentService?.due_days !== undefined && currentService?.due_days !== null 
-        ? currentService.due_days 
-        : (service.due_days !== undefined && service.due_days !== null ? service.due_days : 5),
-      due_day: currentService?.due_day !== undefined && currentService?.due_day !== null 
-        ? currentService.due_day 
-        : (service.due_day !== undefined && service.due_day !== null ? service.due_day : 10),
-      due_next_month: currentService?.due_next_month !== undefined && currentService?.due_next_month !== null 
-        ? currentService.due_next_month 
-        : (service.due_next_month !== undefined && service.due_next_month !== null ? service.due_next_month : false)
+      due_type: resolvedDueType,
+      due_value: resolvedDueValue,
+      due_next_month: resolvedDueNextMonth
     });
     
     setShowTaxModal(true);
   };
   
   // Função para salvar os dados dos impostos e financeiros
+  // AIDEV-NOTE: Função para salvar configurações financeiras e de impostos apenas no estado local
   const handleSaveTaxes = async () => {
     try {
       // Encontrar o serviço que está sendo editado
@@ -351,122 +413,58 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       
       const currentService = selectedServices[serviceIndex];
       
-      // Preparar dados para atualização no banco - AIDEV-NOTE: Inclui dados financeiros e de vencimento
-      const updatedServiceData = {
-        ...currentService,
-        // Dados financeiros
-        payment_method: financialData.payment_method || null,
-        card_type: financialData.card_type || null,
-        billing_type: financialData.billing_type || null,
-        recurrence_frequency: financialData.recurrence_frequency || null,
-        installments: financialData.installments || 1,
-        // Dados de vencimento - AIDEV-NOTE: Configurações de vencimento do serviço
-        due_date_type: dueDateData.due_date_type,
-        due_days: dueDateData.due_days,
-        due_day: dueDateData.due_day,
-        due_next_month: dueDateData.due_next_month,
-        // Dados de cobrança - AIDEV-NOTE: Configuração se gera cobrança no faturamento
-        generate_billing: billingData.generate_billing,
-        // Manter outros dados do serviço
-        ...taxData
-      };
-      
-      console.log('=== DADOS PREPARADOS PARA ATUALIZAÇÃO ===');
-      console.log('Dados do serviço atualizado:', updatedServiceData);
-      
-      // Atualizar no banco de dados se o serviço já existe no contrato (tem um ID real no banco)
-      // Verificar se o serviço já foi salvo no banco (não é apenas um serviço temporário)
-      console.log('Verificando serviço para atualização:', {
-        id: currentService.id,
-        service_id: currentService.service_id,
-        contractId,
-        isTemp: currentService.id.startsWith('temp-')
-      });
-      
-      if (contractId && currentService.service_id && !currentService.id.startsWith('temp-')) {
-        // Se o serviço já existe no banco, atualizar usando o hook useContracts
-        console.log('Atualizando serviço no banco de dados...');
-        
-        // Mapear payment_method e validar card_type
-        const mappedPaymentMethod = mapPaymentMethod(financialData.payment_method);
-        // AIDEV-NOTE: Garantir que card_type seja NULL quando payment_method não for 'Cartão'
-        // e que seja obrigatório quando for 'Cartão' (conforme constraint do banco)
-        const validatedCardType = mappedPaymentMethod === 'Cartão' 
-          ? (financialData.card_type || null) 
-          : null;
-        
-        // AIDEV-NOTE: Validar se card_type é obrigatório quando payment_method é 'Cartão'
-        if (mappedPaymentMethod === 'Cartão' && !financialData.card_type) {
-          toast.error('Erro de validação', {
-            description: 'Quando o método de pagamento é Cartão, o tipo de cartão é obrigatório.'
-          });
-          return;
-        }
-        
-        console.log('🔄 Mapeamento de dados financeiros:', {
-          original: { payment_method: financialData.payment_method, card_type: financialData.card_type },
-          mapped: { payment_method: mappedPaymentMethod, card_type: validatedCardType }
-        });
-
-        // AIDEV-NOTE: Usa o hook updateContractServiceMutation para salvar no banco
-        // Corrigindo estrutura de dados para evitar erro PGRST116
-        await updateContractServiceMutation.mutateAsync({
-          id: currentService.id, // ID deve estar no nível raiz, não dentro de serviceData
-          // Manter dados básicos do serviço
-          description: currentService.description,
-          quantity: currentService.quantity,
-          unit_price: currentService.unit_price,
-          discount_percentage: currentService.discount_percentage || 0,
-          tax_rate: currentService.tax_rate || 0,
-          // Dados financeiros mapeados
-          payment_method: mappedPaymentMethod,
-          card_type: validatedCardType,
-          billing_type: financialData.billing_type || null,
-          recurrence_frequency: financialData.recurrence_frequency || null,
-          installments: financialData.installments || 1,
-          // Dados de vencimento
-          due_date_type: dueDateData.due_date_type,
-          due_days: dueDateData.due_days,
-          due_day: dueDateData.due_day,
-          due_next_month: dueDateData.due_next_month,
-          // AIDEV-NOTE: Campo de cobrança - corrige erro PGRST204 ao incluir generate_billing
-          generate_billing: billingData.generate_billing
-        });
-        
-        console.log('Serviço atualizado com sucesso no banco!');
-      } else if (contractId && currentService.service_id) {
-        // Se é um serviço temporário, mas precisa ser salvo no banco
-        console.log('Serviço temporário - configurações financeiras serão salvas quando o contrato for salvo');
-      } else {
-        console.log('Serviço não atende aos critérios para atualização no banco');
+      // AIDEV-NOTE: Validação de método de pagamento e tipo de cartão
+      if (financialData.payment_method === 'credit_card' && !financialData.card_type) {
+        toast.error('Tipo de cartão é obrigatório para pagamento com cartão de crédito');
+        return;
       }
-      
-      // Atualizar no estado local - AIDEV-NOTE: Usar valores originais do formulário no estado local
-      const updatedServices = [...selectedServices];
-      updatedServices[serviceIndex] = {
-        ...updatedServices[serviceIndex],
-        // Incluir campos financeiros diretamente no objeto do serviço (valores originais do formulário)
+
+      // AIDEV-NOTE: Preparar dados das alterações para salvar no estado local
+      const serviceChanges: Partial<SelectedService> = {
+        // Incluir campos financeiros
         payment_method: financialData.payment_method,
         card_type: financialData.card_type,
         billing_type: financialData.billing_type,
         recurrence_frequency: financialData.recurrence_frequency,
         installments: financialData.installments,
-        // Incluir dados de vencimento - AIDEV-NOTE: Salva configurações de vencimento no serviço
-        due_date_type: dueDateData.due_date_type,
-        due_days: dueDateData.due_days,
-        due_day: dueDateData.due_day,
+        // Incluir dados de vencimento
+        due_type: dueDateData.due_type,
+        due_value: dueDateData.due_value,
         due_next_month: dueDateData.due_next_month,
-        // AIDEV-NOTE: Campo de cobrança - incluir no estado local
+        // Campo de cobrança
         generate_billing: billingData.generate_billing,
+        // Dados de impostos
         ...taxData
+      };
+
+      // AIDEV-NOTE: Salvar alterações no estado de pendências
+      setPendingServiceChanges(prev => ({
+        ...prev,
+        [editingServiceId]: {
+          originalData: currentService,
+          pendingChanges: serviceChanges,
+          hasChanges: true,
+          timestamp: Date.now()
+        }
+      }));
+      
+      // AIDEV-NOTE: Atualizar no estado local para refletir as mudanças na UI
+      const updatedServices = [...selectedServices];
+      updatedServices[serviceIndex] = {
+        ...updatedServices[serviceIndex],
+        ...serviceChanges
       };
       
       setSelectedServices(updatedServices);
       setShowTaxModal(false);
       setEditingServiceId("");
+      
+      // AIDEV-NOTE: Feedback visual de que as alterações foram salvas localmente
+      toast.success('Configurações salvas localmente. Clique em "Salvar" no contrato para confirmar as alterações.');
+      
     } catch (error) {
       console.error('Erro ao salvar configurações financeiras:', error);
-      // Toast de erro já é exibido pelo mutation
+      toast.error('Erro ao salvar configurações');
     }
   };
 
@@ -546,9 +544,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
               total_amount: service.quantity * parsedUnitPrice
             }),
             // Configurações de vencimento
-            due_date_type: bulkEditData.due_date_type,
-            due_days: bulkEditData.due_days,
-            due_day: bulkEditData.due_day,
+            due_type: bulkEditData.due_type,
+            due_value: bulkEditData.due_value,
             due_next_month: bulkEditData.due_next_month,
             // Geração de faturamento
             generate_billing: bulkEditData.generate_billing
@@ -569,9 +566,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         recurrence_frequency: '',
         installments: 1,
         unit_price: '',
-        due_date_type: 'days_after_billing',
-        due_days: 5,
-        due_day: 10,
+        due_type: 'days_after_billing',
+        due_value: 5,
         due_next_month: false,
         generate_billing: true
       });
@@ -606,20 +602,19 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       // AIDEV-NOTE: Priorizar alterações da edição em massa sobre dados existentes do formulário
       if (existingFormService) {
         console.log('🔄 Sincronizando dados para serviço:', selectedService.id, {
-          // Dados de vencimento: priorizar selectedService (edição em massa)
-          due_date_type: selectedService.due_date_type || existingFormService.due_date_type,
-          due_days: selectedService.due_days !== undefined ? selectedService.due_days : existingFormService.due_days,
-          due_day: selectedService.due_day !== undefined ? selectedService.due_day : existingFormService.due_day,
-          due_next_month: selectedService.due_next_month !== undefined ? selectedService.due_next_month : existingFormService.due_next_month
+          // Dados de vencimento: priorizar selectedService (edição em massa) usando nullish coalescing
+          due_type: selectedService.due_type ?? existingFormService.due_type,
+          due_value: selectedService.due_value ?? existingFormService.due_value,
+          due_next_month: selectedService.due_next_month ?? existingFormService.due_next_month
         });
         
         return {
           ...selectedService,
           // AIDEV-NOTE: Para dados de vencimento, priorizar selectedService (edição em massa) sobre formulário
-          due_date_type: selectedService.due_date_type || existingFormService.due_date_type,
-          due_days: selectedService.due_days !== undefined ? selectedService.due_days : existingFormService.due_days,
-          due_day: selectedService.due_day !== undefined ? selectedService.due_day : existingFormService.due_day,
-          due_next_month: selectedService.due_next_month !== undefined ? selectedService.due_next_month : existingFormService.due_next_month,
+          // Usar nullish coalescing (??) para preservar valores falsy válidos (0, false, etc.)
+          due_type: selectedService.due_type ?? existingFormService.due_type,
+          due_value: selectedService.due_value ?? existingFormService.due_value,
+          due_next_month: selectedService.due_next_month ?? existingFormService.due_next_month,
           // AIDEV-NOTE: Priorizar valores válidos (não vazios) entre selectedService e formulário
           // Usar valores padrão válidos quando ambos estão vazios
           payment_method: selectedService.payment_method || existingFormService.payment_method || "PIX",
@@ -639,17 +634,17 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   }, [selectedServices, form]);
 
   // AIDEV-NOTE: Sincronizar dueDateData com selectedServices quando campos de vencimento são alterados na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante edição ativa
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    if (selectedServices.length > 0 && editingServiceId && !isEditingDueDateData) {
       // Atualizar o serviço atual nos selectedServices com os dados de vencimento
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
           console.log('🔄 Sincronizando dueDateData para serviço:', service.id, dueDateData);
           return {
             ...service,
-            due_date_type: dueDateData.due_date_type,
-            due_days: dueDateData.due_days,
-            due_day: dueDateData.due_day,
+            due_type: dueDateData.due_type,
+            due_value: dueDateData.due_value,
             due_next_month: dueDateData.due_next_month
           };
         }
@@ -658,7 +653,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       
       setSelectedServices(updatedServices);
     }
-   }, [dueDateData, editingServiceId]);
+   }, [dueDateData, editingServiceId, isEditingDueDateData]);
 
   // AIDEV-NOTE: Sincronizar billingData com selectedServices quando configuração de cobrança é alterada na edição normal
   React.useEffect(() => {
@@ -734,6 +729,74 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       setSelectedServices(updatedServices);
     }
   }, [taxData, editingServiceId]);
+
+  // AIDEV-NOTE: useEffect para carregar dados do serviço quando o modal de edição é aberto
+  // Corrige o problema de reset do formulário para valores padrão
+  React.useEffect(() => {
+    if (editingServiceId) {
+      console.log('🔄 Carregando dados do serviço para edição:', editingServiceId);
+      
+      // Encontrar o serviço atual nos selectedServices
+      const currentService = selectedServices.find(service => service.id === editingServiceId);
+      
+      if (currentService) {
+        console.log('✅ Serviço encontrado, carregando dados de vencimento:', currentService);
+        
+        // AIDEV-NOTE: Carregar dados de vencimento apenas se o serviço já possui dados salvos
+        // Evita sobrescrever valores configurados pelo usuário com valores padrão
+        // CORREÇÃO: Usar nullish coalescing (??) para preservar valores falsy válidos
+        if (currentService.due_type || currentService.due_value) {
+          setDueDateData({
+            due_type: currentService.due_type ?? 'days_after_billing',
+            due_value: currentService.due_value ?? 5,
+            due_next_month: currentService.due_next_month ?? false
+          });
+        }
+        
+        // AIDEV-NOTE: Carregar dados financeiros apenas se o serviço já possui dados salvos
+        if (currentService.payment_method || currentService.billing_type) {
+          setFinancialData({
+            payment_method: currentService.payment_method || 'PIX',
+            card_type: currentService.card_type || '',
+            billing_type: currentService.billing_type || 'Único',
+            recurrence_frequency: currentService.recurrence_frequency || '',
+            installments: currentService.installments || 1
+          });
+        }
+        
+        // AIDEV-NOTE: Carregar dados de impostos apenas se o serviço já possui dados salvos
+        if (currentService.nbs_code || currentService.iss_rate || currentService.ir_rate) {
+          setTaxData({
+            nbs_code: currentService.nbs_code || '',
+            deduction_value: currentService.deduction_value || 0,
+            calculation_base: currentService.calculation_base || 0,
+            iss_rate: currentService.iss_rate || 0,
+            iss_deduct: currentService.iss_deduct || false,
+            ir_rate: currentService.ir_rate || 0,
+            ir_deduct: currentService.ir_deduct || false,
+            csll_rate: currentService.csll_rate || 0,
+            csll_deduct: currentService.csll_deduct || false,
+            inss_rate: currentService.inss_rate || 0,
+            inss_deduct: currentService.inss_deduct || false,
+            pis_rate: currentService.pis_rate || 0,
+            pis_deduct: currentService.pis_deduct || false,
+            cofins_rate: currentService.cofins_rate || 0,
+            cofins_deduct: currentService.cofins_deduct || false
+          });
+        }
+        
+        console.log('📋 Dados carregados condicionalmente:', {
+          dueDateData: currentService.due_type ? {
+            due_type: currentService.due_type,
+            due_value: currentService.due_value,
+            due_next_month: currentService.due_next_month
+          } : 'Não carregado - preservando valores do formulário'
+        });
+      } else {
+        console.log('⚠️ Serviço não encontrado nos selectedServices');
+      }
+    }
+  }, [editingServiceId]);
    
   return (
     <div>
@@ -1019,10 +1082,14 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Como será calculado o vencimento?</Label>
                     <Select 
-                      value={dueDateData.due_date_type} 
-                      onValueChange={(value: 'days_after_billing' | 'fixed_day') => 
-                        setDueDateData(prev => ({ ...prev, due_date_type: value }))
-                      }
+                      value={dueDateData.due_type} 
+                      onValueChange={(value: 'days_after_billing' | 'fixed_day') => {
+                        // AIDEV-NOTE: Ativar flag de edição para evitar sincronização automática
+                        setIsEditingDueDateData(true);
+                        setDueDateData(prev => ({ ...prev, due_type: value }));
+                        // AIDEV-NOTE: Desativar flag após um pequeno delay para permitir a atualização
+                        setTimeout(() => setIsEditingDueDateData(false), 100);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o tipo de vencimento" />
@@ -1035,43 +1102,47 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   </div>
                   
                   {/* Campo condicional: Número de dias */}
-                  {dueDateData.due_date_type === 'days_after_billing' && (
+                  {dueDateData.due_type === 'days_after_billing' && (
                     <div className="space-y-2">
-                      <Label htmlFor="dueDays" className="text-sm font-medium">Número de dias</Label>
+                      <Label htmlFor="dueValue" className="text-sm font-medium">Número de dias</Label>
                       <Input 
-                        id="dueDays"
+                        id="dueValue"
                         type="number"
                         min={1}
                         max={365}
-                        value={dueDateData.due_days || ''}
+                        value={dueDateData.due_value ?? ''}
                         onChange={(e) => {
                           const value = e.target.value;
+                          // AIDEV-NOTE: Ativar flag de edição para evitar sincronização automática
+                          setIsEditingDueDateData(true);
                           // AIDEV-NOTE: Permite campo vazio durante edição, mas aplica valor mínimo 1 quando há conteúdo
                           if (value === '') {
-                            setDueDateData(prev => ({ ...prev, due_days: undefined }));
+                            setDueDateData(prev => ({ ...prev, due_value: undefined }));
                           } else {
                             const numValue = parseInt(value);
                             if (!isNaN(numValue) && numValue >= 1) {
-                              setDueDateData(prev => ({ ...prev, due_days: numValue }));
+                              setDueDateData(prev => ({ ...prev, due_value: numValue }));
                             }
                           }
                         }}
                         onBlur={(e) => {
                           // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
-                          if (!dueDateData.due_days) {
-                            setDueDateData(prev => ({ ...prev, due_days: 1 }));
+                          if (!dueDateData.due_value) {
+                            setDueDateData(prev => ({ ...prev, due_value: 1 }));
                           }
+                          // AIDEV-NOTE: Desativar flag de edição quando usuário terminar de editar
+                          setIsEditingDueDateData(false);
                         }}
                         placeholder="Ex: 5 dias após o faturamento"
                       />
                       <p className="text-xs text-muted-foreground">
-                        O vencimento será {dueDateData.due_days} dias após a data de faturamento do contrato
+                        O vencimento será {dueDateData.due_value} dias após a data de faturamento do contrato
                       </p>
                     </div>
                   )}
                   
                   {/* Campos condicionais: Dia fixo do mês */}
-                  {dueDateData.due_date_type === 'fixed_day' && (
+                  {dueDateData.due_type === 'fixed_day' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="dueDay" className="text-sm font-medium">Dia do Mês</Label>
@@ -1080,15 +1151,33 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           type="number"
                           min={1}
                           max={31}
-                          value={dueDateData.due_day}
-                          onChange={(e) => setDueDateData(prev => ({ 
-                            ...prev, 
-                            due_day: parseInt(e.target.value) || 1 
-                          }))}
+                          value={dueDateData.due_value ?? ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // AIDEV-NOTE: Ativar flag de edição para evitar sincronização automática
+                            setIsEditingDueDateData(true);
+                            // AIDEV-NOTE: Permite campo vazio durante edição, mas aplica valor mínimo 1 quando há conteúdo
+                            if (value === '') {
+                              setDueDateData(prev => ({ ...prev, due_value: undefined }));
+                            } else {
+                              const numValue = parseInt(value);
+                              if (!isNaN(numValue) && numValue >= 1 && numValue <= 31) {
+                                setDueDateData(prev => ({ ...prev, due_value: numValue }));
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
+                            if (!dueDateData.due_value) {
+                              setDueDateData(prev => ({ ...prev, due_value: 1 }));
+                            }
+                            // AIDEV-NOTE: Desativar flag de edição quando usuário terminar de editar
+                            setIsEditingDueDateData(false);
+                          }}
                           placeholder="Ex: 10 (dia 10 de cada mês)"
                         />
                         <p className="text-xs text-muted-foreground">
-                          O vencimento será sempre no dia {dueDateData.due_day} do mês
+                          O vencimento será sempre no dia {dueDateData.due_value} do mês
                         </p>
                       </div>
                       
@@ -1097,10 +1186,16 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                         <Checkbox
                           id="dueNextMonth"
                           checked={dueDateData.due_next_month}
-                          onCheckedChange={(checked) => setDueDateData(prev => ({ 
-                            ...prev, 
-                            due_next_month: !!checked 
-                          }))}
+                          onCheckedChange={(checked) => {
+                            // AIDEV-NOTE: Ativar flag de edição para evitar sincronização automática
+                            setIsEditingDueDateData(true);
+                            setDueDateData(prev => ({ 
+                              ...prev, 
+                              due_next_month: !!checked 
+                            }));
+                            // AIDEV-NOTE: Desativar flag após um pequeno delay para permitir a atualização
+                            setTimeout(() => setIsEditingDueDateData(false), 100);
+                          }}
                         />
                         <Label htmlFor="dueNextMonth" className="text-sm font-medium">
                           Próximo mês
@@ -1108,8 +1203,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {dueDateData.due_next_month 
-                          ? `O vencimento começará no próximo mês (dia ${dueDateData.due_day})` 
-                          : `O vencimento começará no mês atual (dia ${dueDateData.due_day})`
+                          ? `O vencimento começará no próximo mês (dia ${dueDateData.due_value})` 
+                          : `O vencimento começará no mês atual (dia ${dueDateData.due_value})`
                         }
                       </p>
                     </div>
@@ -1883,10 +1978,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
             <TabsContent value="due-date" className="space-y-4 mt-4">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="bulk-due-date-type">Tipo de Vencimento</Label>
+                  <Label htmlFor="bulk-due-type">Tipo de Vencimento</Label>
                   <Select 
-                    value={bulkEditData.due_date_type} 
-                    onValueChange={(value) => setBulkEditData(prev => ({ ...prev, due_date_type: value as 'days_after_billing' | 'fixed_day' }))}
+                    value={bulkEditData.due_type} 
+                    onValueChange={(value) => setBulkEditData(prev => ({ ...prev, due_type: value as 'days_after_billing' | 'fixed_day' }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecionar tipo" />
@@ -1898,31 +1993,31 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   </Select>
                 </div>
 
-                {bulkEditData.due_date_type === 'days_after_billing' && (
+                {bulkEditData.due_type === 'days_after_billing' && (
                   <div className="space-y-2">
-                    <Label htmlFor="bulk-due-days">Dias após faturamento</Label>
+                    <Label htmlFor="bulk-due-value">Dias após faturamento</Label>
                     <Input
-                      id="bulk-due-days"
+                      id="bulk-due-value"
                       type="number"
                       min="1"
                       max="365"
-                      value={bulkEditData.due_days || ''}
+                      value={bulkEditData.due_value?.toString() ?? ''}
                       onChange={(e) => {
                         const value = e.target.value;
                         // AIDEV-NOTE: Permite campo vazio durante edição para facilitar digitação
                         if (value === '') {
-                          setBulkEditData(prev => ({ ...prev, due_days: undefined }));
+                          setBulkEditData(prev => ({ ...prev, due_value: undefined }));
                         } else {
-                          const numValue = parseInt(value);
-                          if (!isNaN(numValue) && numValue >= 1) {
-                            setBulkEditData(prev => ({ ...prev, due_days: numValue }));
+                          const numValue = parseInt(value, 10);
+                          if (!isNaN(numValue) && numValue >= 1 && numValue <= 365) {
+                            setBulkEditData(prev => ({ ...prev, due_value: numValue }));
                           }
                         }
                       }}
                       onBlur={(e) => {
-                        // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
-                        if (!bulkEditData.due_days) {
-                          setBulkEditData(prev => ({ ...prev, due_days: 1 }));
+                        // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio ou inválido
+                        if (bulkEditData.due_value === undefined || bulkEditData.due_value === null || bulkEditData.due_value < 1) {
+                          setBulkEditData(prev => ({ ...prev, due_value: 1 }));
                         }
                       }}
                       placeholder="Ex: 30"
@@ -1930,17 +2025,34 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   </div>
                 )}
 
-                {bulkEditData.due_date_type === 'fixed_day' && (
+                {bulkEditData.due_type === 'fixed_day' && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="bulk-due-day">Dia do mês</Label>
+                      <Label htmlFor="bulk-due-value-day">Dia do mês</Label>
                       <Input
-                        id="bulk-due-day"
+                        id="bulk-due-value-day"
                         type="number"
                         min="1"
                         max="31"
-                        value={bulkEditData.due_day || ''}
-                        onChange={(e) => setBulkEditData(prev => ({ ...prev, due_day: parseInt(e.target.value) || 1 }))}
+                        value={bulkEditData.due_value?.toString() ?? ''}
+                        onChange={(e) => {
+                          // AIDEV-NOTE: Permite apagar dígitos sem forçar valor mínimo
+                          const value = e.target.value;
+                          if (value === '') {
+                            setBulkEditData(prev => ({ ...prev, due_value: undefined }));
+                          } else {
+                            const numValue = parseInt(value, 10);
+                            if (!isNaN(numValue) && numValue >= 1 && numValue <= 31) {
+                              setBulkEditData(prev => ({ ...prev, due_value: numValue }));
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio ou inválido
+                          if (bulkEditData.due_value === undefined || bulkEditData.due_value === null || bulkEditData.due_value < 1) {
+                            setBulkEditData(prev => ({ ...prev, due_value: 1 }));
+                          }
+                        }}
                         placeholder="Ex: 15"
                       />
                     </div>
@@ -1949,7 +2061,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       <div className="flex items-center space-x-2 pt-2">
                         <Checkbox
                           id="bulk-due-next-month"
-                          checked={bulkEditData.due_next_month || false}
+                          checked={bulkEditData.due_next_month ?? false}
                           onCheckedChange={(checked) => setBulkEditData(prev => ({ ...prev, due_next_month: checked as boolean }))}
                         />
                         <Label htmlFor="bulk-due-next-month" className="text-sm">

@@ -29,6 +29,9 @@ export function useSecureTenantQuery<T>(
 ) {
   const { currentTenant, userRole } = useTenantAccessGuard();
   
+  // AIDEV-NOTE: Instância do SecurityMiddleware para configurar contexto de tenant
+  const securityMiddleware = new SecurityMiddleware({ supabaseClient: supabase });
+  
   // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido
   const isValidTenant = currentTenant?.id && currentTenant?.active;
   
@@ -58,9 +61,22 @@ export function useSecureTenantQuery<T>(
         throw new Error('❌ ERRO: Tenant inativo - acesso negado');
       }
       
-      // ✅ Executar query com tenant_id garantido
-      const result = await queryFn(supabase, currentTenant.id);
-      return result;
+      // AIDEV-NOTE: CORREÇÃO CRÍTICA - Configurar contexto de tenant no banco ANTES da query
+      // Isso garante que as políticas RLS funcionem corretamente
+      const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id);
+      
+      if (!contextApplied) {
+        throw new Error('❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados');
+      }
+      
+      try {
+        // ✅ Executar query com contexto configurado
+        const result = await queryFn(supabase, currentTenant.id);
+        return result;
+      } finally {
+        // AIDEV-NOTE: Limpar contexto após a operação para segurança (opcional mas boa prática)
+        await securityMiddleware.clearTenantContext();
+      }
     },
     
     // 🔒 SÓ EXECUTA SE TENANT VÁLIDO

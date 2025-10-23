@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Loader2, MessageSquare, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, MessageSquare, Clock, CheckCircle, CheckCircle2, XCircle } from 'lucide-react';
 import {
   Table,
   TableBody,

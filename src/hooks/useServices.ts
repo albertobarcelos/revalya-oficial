@@ -275,6 +275,13 @@ export function useServices(filters: ServiceFilters = {}) {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
           }
         });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
       }
     }
   );
@@ -358,6 +365,13 @@ export function useServices(filters: ServiceFilters = {}) {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
           }
         });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
       }
     }
   );
@@ -403,6 +417,13 @@ export function useServices(filters: ServiceFilters = {}) {
         queryClient.invalidateQueries({
           predicate: (query) => {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
           }
         });
       }

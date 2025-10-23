@@ -10,6 +10,15 @@
 
 import * as z from 'zod';
 import { FieldConfig } from './EditModal';
+
+/**
+ * AIDEV-NOTE: Função para gerar placeholder dinâmico do código de serviço
+ * Utiliza o próximo código disponível ou fallback para "001"
+ */
+export function getServiceCodePlaceholder(nextAvailableCode?: string, isLoading?: boolean): string {
+  if (isLoading) return 'Carregando...';
+  return `Ex: ${nextAvailableCode || '001'}`;
+}
 import {
   User,
   Mail,
@@ -464,6 +473,24 @@ export const getDynamicServiceConfig = (unitType?: string) => {
         label: getCostPriceLabel(unitType),
         description: getCostPriceDescription(unitType),
         placeholder: getCostPricePlaceholder(unitType)
+      };
+    }
+    return field;
+  });
+
+  return {
+    fields: dynamicFields,
+    validation: serviceValidationSchema
+  };
+};
+
+// AIDEV-NOTE: Função para obter configuração de serviços com placeholder dinâmico
+export const getServiceEditConfig = (nextAvailableCode?: string, isLoading?: boolean) => {
+  const dynamicFields = serviceEditConfig.map(field => {
+    if (field.name === 'code') {
+      return {
+        ...field,
+        placeholder: getServiceCodePlaceholder(nextAvailableCode, isLoading)
       };
     }
     return field;

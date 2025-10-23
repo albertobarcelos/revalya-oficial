@@ -945,7 +945,7 @@ export default function FaturamentoKanban() {
       id: 'pendente',
       title: 'Faturamento Pendente',
       contracts: kanbanData['pendente'],
-      icon: <FileText className="h-4 w-4" />,
+      icon: <CalendarDays className="h-4 w-4" />,
       badgeVariant: 'secondary' as const
     },
     {
@@ -1064,19 +1064,6 @@ export default function FaturamentoKanban() {
                   >
                     <CreditCard className="h-4 w-4" />
                     <span>{showCheckboxes ? 'Cancelar Seleção' : 'Selecionar para Faturar'}</span>
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={refreshData}
-                    disabled={isLoading}
-                    className={cn(
-                      "flex items-center space-x-2 font-medium transition-all duration-200",
-                      "hover:shadow-md hover:scale-105 border-2 border-gray-200 bg-gray-50",
-                      "text-gray-700 hover:bg-gray-100"
-                    )}
-                  >
-                    <RotateCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-                    <span>Atualizar</span>
                   </Button>
                 </div>
               </div>

@@ -230,6 +230,8 @@ export function ContractFormActions({
     isPending, 
     setIsPending, 
     setFormChanged,
+    // AIDEV-NOTE: Função para aplicar alterações pendentes
+    applyPendingChanges
   } = useContractForm();
   
   // AIDEV-NOTE: Hook seguro para validação de acesso ao tenant
@@ -302,28 +304,6 @@ export function ContractFormActions({
 
   // AIDEV-NOTE: Hook seguro para operações de contratos com RLS
   const { createContract, updateContract } = useContracts();
-  
-  // AIDEV-NOTE: Hook seguro para inserção de produtos do contrato
-  const insertContractServicesMutation = useSecureTenantMutation(
-    async (supabase, tenantId, servicesToInsert: any[]) => {
-      const { data, error } = await supabase
-        .from('contract_services')
-        .insert(servicesToInsert)
-        .select();
-      
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        console.log('✅ Serviços inseridos com sucesso');
-      },
-      onError: (error) => {
-        console.error('❌ Erro ao inserir serviços:', error);
-      },
-      invalidateQueries: ['contracts', 'contract_services']
-    }
-  );
 
   // AIDEV-NOTE: Hook seguro para inserção de produtos do contrato
   const insertContractProductsMutation = useSecureTenantMutation(
@@ -357,6 +337,14 @@ export function ContractFormActions({
     try {
       setIsPending(true);
       
+      // AIDEV-NOTE: Aplicar alterações pendentes antes de salvar
+      console.log('🔄 Aplicando alterações pendentes antes de salvar...');
+      applyPendingChanges();
+      
+      // AIDEV-NOTE: Obter dados atualizados após aplicar alterações pendentes
+      const updatedData = form.getValues();
+      console.log('📋 Dados atualizados após aplicar alterações pendentes:', updatedData);
+      
       // AIDEV-NOTE: Configurar contexto de tenant para RLS funcionar corretamente
       try {
         await supabase.rpc('set_tenant_context_simple', {
@@ -368,9 +356,9 @@ export function ContractFormActions({
         throw new Error('Falha ao configurar contexto de segurança');
       }
       
-      // Validar configuração financeira dos serviços
-      if (data.services && data.services.length > 0) {
-        const servicesWithIncompleteConfig = data.services.filter((service: any) => {
+      // Validar configuração financeira dos serviços (usando dados atualizados)
+      if (updatedData.services && updatedData.services.length > 0) {
+        const servicesWithIncompleteConfig = updatedData.services.filter((service: any) => {
           const paymentMethod = service.payment_method || service.financial?.paymentMethod;
           const billingType = service.billing_type || service.financial?.billingType;
           const recurrenceFrequency = service.recurrence_frequency || service.financial?.recurrenceFrequency;
@@ -576,9 +564,8 @@ export function ContractFormActions({
             billing_type: mappedBillingType,
             recurrence_frequency: mappedRecurrenceFrequency,
             installments: service.installments || service.financial?.installments || 1,
-            due_date_type: service.due_date_type || 'days_after_billing',
-            due_days: service.due_days !== undefined && service.due_days !== null ? service.due_days : 5,
-            due_day: service.due_day !== undefined && service.due_day !== null ? service.due_day : 10,
+            due_type: service.due_type ?? 'days_after_billing',
+            due_value: service.due_value !== undefined && service.due_value !== null ? service.due_value : 5,
             due_next_month: service.due_next_month !== undefined && service.due_next_month !== null ? service.due_next_month : false,
             generate_billing: service.generate_billing !== undefined ? service.generate_billing : true,
             is_active: service.is_active !== false,
@@ -861,9 +848,8 @@ export function ContractFormActions({
             installments: product.installments || product.financial?.installments || 1,
             payment_gateway: product.payment_gateway || null,
             // AIDEV-NOTE: Campos de vencimento - preservar configurações do frontend
-            due_date_type: product.due_date_type || 'days_after_billing',
-            due_days: product.due_days !== undefined && product.due_days !== null ? product.due_days : 5,
-            due_day: product.due_day !== undefined && product.due_day !== null ? product.due_day : 10,
+            due_type: product.due_type ?? 'days_after_billing',
+            due_value: product.due_value !== undefined && product.due_value !== null ? product.due_value : 5,
             due_next_month: product.due_next_month !== undefined && product.due_next_month !== null ? product.due_next_month : false,
             // total_amount é calculado automaticamente pelo banco
             is_active: product.is_active !== false,

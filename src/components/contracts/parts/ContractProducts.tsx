@@ -53,9 +53,8 @@ interface SelectedProduct {
   recurrence_frequency?: string | null;
   installments?: number | null;
   payment_gateway?: string | null;
-  due_date_type?: string | null;
-  due_days?: number | null;
-  due_day?: number | null;
+  due_type?: string | null;
+  due_value?: number | null;
   due_next_month?: boolean | null;
   // Campo de cobrança
   generate_billing?: boolean;
@@ -90,9 +89,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
 
   // AIDEV-NOTE: Estados para dados de vencimento do produto
   const [dueDateData, setDueDateData] = React.useState({
-    due_date_type: 'days_after_billing' as 'days_after_billing' | 'fixed_day',
-    due_days: 5,
-    due_day: 10,
+    due_type: 'days_after_billing' as 'days_after_billing' | 'fixed_day',
+    due_value: 5,
     due_next_month: false
   });
 
@@ -142,9 +140,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
       recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
       payment_gateway: "",
-      due_date_type: "days_after_billing",
-      due_days: 5,
-      due_day: 10,
+      due_type: "days_after_billing",
+      due_value: 5,
       due_next_month: false,
       generate_billing: false
     };
@@ -184,9 +181,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
       recurrence_frequency: "", // Não obrigatório para billing_type "Único"
       installments: 1,
       payment_gateway: "",
-      due_date_type: "days_after_billing",
-      due_days: 5,
-      due_day: 10,
+      due_type: "days_after_billing",
+      due_value: 5,
       due_next_month: false
     };
     // Atualizar o campo do formulário diretamente
@@ -225,11 +221,24 @@ export function ContractProducts({ products }: ContractProductsProps) {
       });
       
       // AIDEV-NOTE: Inicializar dados de vencimento com valores salvos do produto
+      // CORREÇÃO: Usar nullish coalescing (??) para preservar valores falsy válidos
       setDueDateData({
-        due_date_type: currentProduct.due_date_type || 'days_after_billing',
-        due_days: currentProduct.due_days || 5,
-        due_day: currentProduct.due_day || 10,
-        due_next_month: currentProduct.due_next_month || false
+        due_type: currentProduct.due_type ?? 'days_after_billing',
+        due_value: currentProduct.due_value ?? 5,
+        due_next_month: currentProduct.due_next_month ?? false
+      });
+      
+      console.log('=== DADOS DE VENCIMENTO CARREGADOS (PRODUCTS) ===', {
+        original: {
+          due_type: currentProduct.due_type,
+          due_value: currentProduct.due_value,
+          due_next_month: currentProduct.due_next_month
+        },
+        final: {
+          due_type: currentProduct.due_type ?? 'days_after_billing',
+          due_value: currentProduct.due_value ?? 5,
+          due_next_month: currentProduct.due_next_month ?? false
+        }
       });
       
       // AIDEV-NOTE: Inicializar dados de impostos com valores salvos do produto
@@ -324,10 +333,10 @@ export function ContractProducts({ products }: ContractProductsProps) {
         installments: financialData.installments || 1,
         payment_gateway: financialData.payment_gateway || null,
         // Campos de vencimento
-        due_date_type: dueDateData.due_date_type || 'days_after_billing',
-        due_days: dueDateData.due_days !== undefined ? dueDateData.due_days : 5,
-        due_day: dueDateData.due_day !== undefined ? dueDateData.due_day : 10,
-        due_next_month: dueDateData.due_next_month || false,
+        // CORREÇÃO: Usar nullish coalescing (??) para preservar valores falsy válidos
+        due_type: dueDateData.due_type ?? 'days_after_billing',
+        due_value: dueDateData.due_value ?? 5,
+        due_next_month: dueDateData.due_next_month ?? false,
         // Campos de cobrança
         generate_billing: billingData.generate_billing ?? false,
         // Campos de impostos
@@ -648,9 +657,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
               installments: 1
             });
             setDueDateData({
-              due_date_type: 'days_after_billing',
-              due_days: 5,
-              due_day: 10,
+              due_type: 'days_after_billing',
+              due_value: 5,
               due_next_month: false
             });
             setTaxData({
@@ -798,9 +806,9 @@ export function ContractProducts({ products }: ContractProductsProps) {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Como será calculado o vencimento?</Label>
                     <Select 
-                      value={dueDateData.due_date_type} 
+                      value={dueDateData.due_type} 
                       onValueChange={(value: 'days_after_billing' | 'fixed_day') => 
-                        setDueDateData(prev => ({ ...prev, due_date_type: value }))
+                        setDueDateData(prev => ({ ...prev, due_type: value }))
                       }
                     >
                       <SelectTrigger>
@@ -814,43 +822,43 @@ export function ContractProducts({ products }: ContractProductsProps) {
                   </div>
                   
                   {/* Campo condicional: Número de dias */}
-                  {dueDateData.due_date_type === 'days_after_billing' && (
+                  {dueDateData.due_type === 'days_after_billing' && (
                     <div className="space-y-2">
-                      <Label htmlFor="dueDays" className="text-sm font-medium">Número de dias</Label>
+                      <Label htmlFor="dueValue" className="text-sm font-medium">Número de dias</Label>
                       <Input 
-                        id="dueDays"
+                        id="dueValue"
                         type="number"
                         min={1}
                         max={365}
-                        value={dueDateData.due_days || ''}
+                        value={dueDateData.due_value ?? ''}
                         onChange={(e) => {
                           const value = e.target.value;
                           // AIDEV-NOTE: Permite campo vazio durante edição, mas aplica valor mínimo 1 quando há conteúdo
                           if (value === '') {
-                            setDueDateData(prev => ({ ...prev, due_days: undefined }));
+                            setDueDateData(prev => ({ ...prev, due_value: undefined }));
                           } else {
                             const numValue = parseInt(value);
                             if (!isNaN(numValue) && numValue >= 1) {
-                              setDueDateData(prev => ({ ...prev, due_days: numValue }));
+                              setDueDateData(prev => ({ ...prev, due_value: numValue }));
                             }
                           }
                         }}
                         onBlur={(e) => {
                           // AIDEV-NOTE: Aplica valor padrão 1 quando o usuário sai do campo vazio
-                          if (!dueDateData.due_days) {
-                            setDueDateData(prev => ({ ...prev, due_days: 1 }));
+                          if (!dueDateData.due_value) {
+                            setDueDateData(prev => ({ ...prev, due_value: 1 }));
                           }
                         }}
                         placeholder="Ex: 5 dias após o faturamento"
                       />
                       <p className="text-xs text-muted-foreground">
-                        O vencimento será {dueDateData.due_days} dias após a data de faturamento do contrato
+                        O vencimento será {dueDateData.due_value} dias após a data de faturamento do contrato
                       </p>
                     </div>
                   )}
                   
                   {/* Campos condicionais: Dia fixo do mês */}
-                  {dueDateData.due_date_type === 'fixed_day' && (
+                  {dueDateData.due_type === 'fixed_day' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="dueDay" className="text-sm font-medium">Dia do Mês</Label>
@@ -859,15 +867,15 @@ export function ContractProducts({ products }: ContractProductsProps) {
                           type="number"
                           min={1}
                           max={31}
-                          value={dueDateData.due_day}
+                          value={dueDateData.due_value}
                           onChange={(e) => setDueDateData(prev => ({ 
                             ...prev, 
-                            due_day: parseInt(e.target.value) || 1 
+                            due_value: parseInt(e.target.value) ?? 1 
                           }))}
                           placeholder="Ex: 10 (dia 10 de cada mês)"
                         />
                         <p className="text-xs text-muted-foreground">
-                          O vencimento será sempre no dia {dueDateData.due_day} do mês
+                          O vencimento será sempre no dia {dueDateData.due_value} do mês
                         </p>
                       </div>
                       
@@ -887,8 +895,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {dueDateData.due_next_month 
-                          ? `O vencimento começará no próximo mês (dia ${dueDateData.due_day})` 
-                          : `O vencimento começará no mês atual (dia ${dueDateData.due_day})`
+                          ? `O vencimento começará no próximo mês (dia ${dueDateData.due_value})` 
+                          : `O vencimento começará no mês atual (dia ${dueDateData.due_value})`
                         }
                       </p>
                     </div>

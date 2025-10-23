@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/use-toast'
 import { useState } from 'react'
+import { getCurrentUser } from '@/utils/supabaseAuthManager'
 
 // Tipos para cobranças
 export interface Charge {
@@ -242,6 +243,15 @@ export function useCharges(params: UseChargesParams = {}) {
     async (supabase, tenantId, chargeId: string) => {
       console.log(`✏️ [AUDIT] Cancelando cobrança ${chargeId} para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
+      
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase
         .from('charges')
@@ -296,6 +306,15 @@ export function useCharges(params: UseChargesParams = {}) {
     async (supabase, tenantId, chargeId: string) => {
       console.log(`✏️ [AUDIT] Marcando cobrança ${chargeId} como recebida para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
+      
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase
         .from('charges')
@@ -346,6 +365,15 @@ export function useCharges(params: UseChargesParams = {}) {
   const updateCharge = useSecureTenantMutation(
     async (supabase, tenantId, { id, ...updates }: Partial<Charge> & { id: string }) => {
       console.log(`✏️ [AUDIT] Atualizando cobrança ${id} para tenant: ${tenantId}`);
+      
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
       
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase
