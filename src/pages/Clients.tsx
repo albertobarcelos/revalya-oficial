@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { PaginationControls, usePaginationState } from "@/components/ui/pagination-controls";
 import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
@@ -261,19 +262,21 @@ export default function Clients() {
                           <span className="hidden sm:inline">Novo Cliente</span>
                         </Button>
                       </DialogTrigger>
-                      <DialogContent>
+                      <DialogContent className="max-w-4xl max-h-[90vh]">
                         <DialogHeader>
                           <DialogTitle>Novo Cliente</DialogTitle>
                           <DialogDescription>
                             Cadastre um novo cliente no sistema
                           </DialogDescription>
                         </DialogHeader>
-                        <CreateClientForm onSuccess={(customerId) => {
-                          // AIDEV-NOTE: Garantir fechamento imediato do modal após sucesso
-                          setIsNewClientDialogOpen(false);
-                          // Invalidar queries para atualizar lista de clientes
-                          queryClient.invalidateQueries({ queryKey: ['customers'] });
-                        }} />
+                        <ScrollArea className="h-[60vh] pr-6">
+                          <CreateClientForm onSuccess={(customerId) => {
+                            // AIDEV-NOTE: Garantir fechamento imediato do modal após sucesso
+                            setIsNewClientDialogOpen(false);
+                            // Invalidar queries para atualizar lista de clientes
+                            queryClient.invalidateQueries({ queryKey: ['customers'] });
+                          }} />
+                        </ScrollArea>
                       </DialogContent>
                     </Dialog>
                   </div>

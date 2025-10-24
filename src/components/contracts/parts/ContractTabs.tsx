@@ -170,9 +170,7 @@ export function ContractTabs({ activeTab, setActiveTab, services, products = [],
                   {...field}
                 />
               </FormControl>
-              <FormDescription>
-                Estas observações são apenas para uso interno e não serão visíveis para o cliente.
-              </FormDescription>
+              
               <FormMessage />
             </FormItem>
           )}

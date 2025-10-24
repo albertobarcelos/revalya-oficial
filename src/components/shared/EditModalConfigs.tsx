@@ -10,15 +10,6 @@
 
 import * as z from 'zod';
 import { FieldConfig } from './EditModal';
-
-/**
- * AIDEV-NOTE: Função para gerar placeholder dinâmico do código de serviço
- * Utiliza o próximo código disponível ou fallback para "001"
- */
-export function getServiceCodePlaceholder(nextAvailableCode?: string, isLoading?: boolean): string {
-  if (isLoading) return 'Carregando...';
-  return `Ex: ${nextAvailableCode || '001'}`;
-}
 import {
   User,
   Mail,
@@ -34,6 +25,24 @@ import {
   BarChart3
 } from 'lucide-react';
 import { getCostPriceLabel, getCostPriceDescription, getCostPricePlaceholder } from '@/utils/serviceLabels';
+
+/**
+ * AIDEV-NOTE: Função para gerar placeholder dinâmico do código de serviço
+ * Utiliza o próximo código disponível ou fallback para "001"
+ */
+export function getServiceCodePlaceholder(nextAvailableCode?: string, isLoading?: boolean): string {
+  if (isLoading) return 'Carregando...';
+  return `Ex: ${nextAvailableCode || '001'}`;
+}
+
+/**
+ * AIDEV-NOTE: Função para gerar placeholder dinâmico do código de produto
+ * Utiliza o próximo código disponível ou fallback para "001"
+ */
+export function getProductCodePlaceholder(nextAvailableCode?: string, isLoading?: boolean): string {
+  if (isLoading) return 'Carregando...';
+  return `Ex: ${nextAvailableCode || '001'}`;
+}
 
 // AIDEV-NOTE: Configuração para edição de SERVIÇOS - REORGANIZADA conforme solicitação
 export const serviceEditConfig: FieldConfig[] = [
@@ -164,70 +173,115 @@ export const serviceEditConfig: FieldConfig[] = [
   }
 ];
 
-// AIDEV-NOTE: Configuração para edição de PRODUTOS
+// AIDEV-NOTE: Configuração para edição de PRODUTOS - Alinhada com estrutura real da tabela
 export const productEditConfig: FieldConfig[] = [
   {
     name: 'name',
     label: 'Nome do Produto',
     type: 'text',
-    placeholder: 'Ex: Software de Gestão',
+    placeholder: 'Ex: Notebook Dell Inspiron',
     required: true,
     icon: <Package className="h-4 w-4" />,
     group: 'basic'
   },
   {
+    name: 'code',
+    label: 'Código Interno',
+    type: 'text',
+    placeholder: 'Será gerado automaticamente',
+    required: false,
+    icon: <Hash className="h-4 w-4" />,
+    group: 'basic',
+    description: 'Código interno único do produto'
+  },
+  {
     name: 'description',
     label: 'Descrição',
     type: 'textarea',
-    placeholder: 'Descreva as características e benefícios do produto...',
+    placeholder: 'Descrição detalhada do produto...',
     required: false,
     icon: <FileText className="h-4 w-4" />,
-    group: 'basic'
+    group: 'details'
   },
   {
     name: 'sku',
     label: 'SKU',
     type: 'text',
-    placeholder: 'Ex: SOFT-001',
+    placeholder: 'Ex: NB-DELL-001',
     required: false,
     icon: <Hash className="h-4 w-4" />,
-    group: 'basic'
+    group: 'details',
+    description: 'Código único de identificação do produto'
+  },
+  {
+    name: 'barcode',
+    label: 'Código de Barras',
+    type: 'text',
+    placeholder: 'Ex: 7891234567890',
+    required: false,
+    icon: <Hash className="h-4 w-4" />,
+    group: 'details',
+    description: 'Código de barras do produto'
   },
   {
     name: 'category',
     label: 'Categoria',
-    type: 'select',
-    placeholder: 'Selecione uma categoria',
+    type: 'text',
+    placeholder: 'Ex: Eletrônicos',
     required: false,
     icon: <Tag className="h-4 w-4" />,
-    group: 'basic',
-    options: [
-      { value: 'software', label: 'Software' },
-      { value: 'hardware', label: 'Hardware' },
-      { value: 'licenca', label: 'Licença' },
-      { value: 'consultoria', label: 'Consultoria' },
-      { value: 'treinamento', label: 'Treinamento' },
-      { value: 'suporte', label: 'Suporte' }
-    ]
+    group: 'basic'
   },
   {
-    name: 'price',
-    label: 'Preço',
+    name: 'unit_price',
+    label: 'Preço de Venda',
     type: 'currency',
     placeholder: '0,00',
     required: true,
     icon: <DollarSign className="h-4 w-4" />,
-    group: 'financial'
+    group: 'basic',
+    description: 'Preço de venda ao cliente'
   },
   {
-    name: 'cost',
-    label: 'Custo',
+    name: 'cost_price',
+    label: 'Preço de Custo',
     type: 'currency',
     placeholder: '0,00',
     required: false,
     icon: <DollarSign className="h-4 w-4" />,
-    group: 'financial',
-    description: 'Custo de aquisição ou produção'
+    group: 'details',
+    description: 'Custo de aquisição do produto'
+  },
+  {
+    name: 'unit_of_measure',
+    label: 'Unidade de Medida',
+    type: 'select',
+    placeholder: 'Selecione a unidade',
+    required: false,
+    icon: <Package className="h-4 w-4" />,
+    group: 'details',
+    description: 'Unidade de medida do produto',
+    options: [
+      { value: 'un', label: 'Unidade (un)' },
+      { value: 'kg', label: 'Quilograma (kg)' },
+      { value: 'g', label: 'Grama (g)' },
+      { value: 'l', label: 'Litro (l)' },
+      { value: 'ml', label: 'Mililitro (ml)' },
+      { value: 'm', label: 'Metro (m)' },
+      { value: 'cm', label: 'Centímetro (cm)' },
+      { value: 'm2', label: 'Metro Quadrado (m²)' },
+      { value: 'm3', label: 'Metro Cúbico (m³)' }
+    ]
+  },
+  {
+    name: 'supplier',
+    label: 'Fornecedor',
+    type: 'text',
+    placeholder: 'Ex: Fornecedor LTDA',
+    required: false,
+    icon: <Building2 className="h-4 w-4" />,
+    group: 'details',
+    description: 'Fornecedor principal do produto'
   },
   {
     name: 'tax_rate',
@@ -236,7 +290,8 @@ export const productEditConfig: FieldConfig[] = [
     placeholder: '0',
     required: false,
     icon: <Percent className="h-4 w-4" />,
-    group: 'financial'
+    group: 'advanced',
+    description: 'Percentual de imposto aplicado'
   },
   {
     name: 'stock_quantity',
@@ -245,18 +300,26 @@ export const productEditConfig: FieldConfig[] = [
     placeholder: '0',
     required: false,
     icon: <Package className="h-4 w-4" />,
-    group: 'inventory',
-    description: 'Quantidade disponível em estoque'
+    group: 'advanced',
+    description: 'Quantidade atual disponível'
   },
   {
-    name: 'min_stock',
+    name: 'min_stock_quantity',
     label: 'Estoque Mínimo',
     type: 'number',
     placeholder: '0',
     required: false,
     icon: <Package className="h-4 w-4" />,
-    group: 'inventory',
+    group: 'advanced',
     description: 'Quantidade mínima para alerta de reposição'
+  },
+  {
+    name: 'has_inventory',
+    label: 'Controle de Estoque',
+    type: 'switch',
+    required: false,
+    group: 'advanced',
+    description: 'Define se o produto possui controle de estoque'
   },
   {
     name: 'is_active',
@@ -436,14 +499,19 @@ export const serviceValidationSchema = z.object({
 
 export const productValidationSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
+  code: z.string().optional(),
   description: z.string().optional(),
   sku: z.string().optional(),
+  barcode: z.string().optional(),
   category: z.string().optional(),
-  price: z.number().min(0, 'Preço deve ser positivo'),
-  cost: z.number().min(0).optional(),
+  unit_price: z.number().min(0, 'Preço deve ser positivo'),
+  cost_price: z.number().min(0).optional(),
+  unit_of_measure: z.string().optional(),
+  supplier: z.string().optional(),
   tax_rate: z.number().min(0).max(100).optional(),
   stock_quantity: z.number().min(0).optional(),
-  min_stock: z.number().min(0).optional(),
+  min_stock_quantity: z.number().min(0).optional(),
+  has_inventory: z.boolean().optional(),
   is_active: z.boolean().optional()
 });
 
@@ -462,6 +530,8 @@ export const clientValidationSchema = z.object({
   postal_code: z.string().optional(),
   active: z.boolean().optional()
 });
+
+// AIDEV-NOTE: Usando a função exportada getProductCodePlaceholder para consistência
 
 // AIDEV-NOTE: Função para obter configuração dinâmica de serviços baseada na unidade de cobrança
 export const getDynamicServiceConfig = (unitType?: string) => {
@@ -484,6 +554,24 @@ export const getDynamicServiceConfig = (unitType?: string) => {
   };
 };
 
+// AIDEV-NOTE: Função para obter configuração de produtos com placeholder dinâmico
+export const getProductEditConfig = (nextAvailableCode?: string, isLoading?: boolean) => {
+  const dynamicFields = productEditConfig.map(field => {
+    if (field.name === 'code') {
+      return {
+        ...field,
+        placeholder: getProductCodePlaceholder(nextAvailableCode, isLoading)
+      };
+    }
+    return field;
+  });
+
+  return {
+    fields: dynamicFields,
+    validation: productValidationSchema
+  };
+};
+
 // AIDEV-NOTE: Função para obter configuração de serviços com placeholder dinâmico
 export const getServiceEditConfig = (nextAvailableCode?: string, isLoading?: boolean) => {
   const dynamicFields = serviceEditConfig.map(field => {
@@ -503,18 +591,12 @@ export const getServiceEditConfig = (nextAvailableCode?: string, isLoading?: boo
 };
 
 // AIDEV-NOTE: Função helper para obter configuração por tipo de entidade
-export const getEditConfig = (entityType: 'service' | 'product' | 'client') => {
+export const getEditConfig = (entityType: 'service' | 'product' | 'client', nextAvailableCode?: string, isLoading?: boolean) => {
   switch (entityType) {
     case 'service':
-      return {
-        fields: serviceEditConfig,
-        validation: serviceValidationSchema
-      };
+      return getServiceEditConfig(nextAvailableCode, isLoading);
     case 'product':
-      return {
-        fields: productEditConfig,
-        validation: productValidationSchema
-      };
+      return getProductEditConfig(nextAvailableCode, isLoading);
     case 'client':
       return {
         fields: clientEditConfig,

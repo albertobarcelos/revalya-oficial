@@ -98,6 +98,7 @@ import { RecebimentosHistorico, Recebimento } from "./parts/RecebimentosHistoric
 import { ContractTaxes } from "./parts/ContractTaxes";
 import { ContractServices } from "./parts/ContractServices";
 import { ContractDiscounts } from "./parts/ContractDiscounts";
+import { ContractAttachments } from "./parts/ContractAttachments";
 
 // Schema de validação Zod integrado
 const contractSchema = z.object({
@@ -1739,31 +1740,48 @@ function ContractFormContent({
                       </div>
                     )}
                     {activeTab === "observacoes" && (
-                      <div>
+                      <div className="space-y-6">
                         <h2 className="font-medium flex items-center gap-2 mb-4">
                           <MessageSquare className="h-4 w-4 text-primary" />
-                          Observações
+                          Observações e Anexos
                         </h2>
-                        <FormField
-                          control={form.control}
-                          name="internal_notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-medium">Observações Internas</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Adicione observações internas sobre este contrato..."
-                                  className="resize-none h-24 text-sm"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs">
-                                Estas observações são apenas para uso interno e não serão visíveis para o cliente.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        
+                        {/* AIDEV-NOTE: Seção de observações internas */}
+                        <div className="bg-card rounded-lg border border-border/50 p-4">
+                          <FormField
+                            control={form.control}
+                            name="internal_notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-medium">Observações Internas</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Adicione observações internas sobre este contrato..."
+                                    className="resize-none h-24 text-sm"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {/* AIDEV-NOTE: Seção de anexos - só exibe se contractId existir */}
+                        {contractId && (
+                          <div className="bg-card rounded-lg border border-border/50 p-4">
+                            <ContractAttachments contractId={contractId} />
+                          </div>
+                        )}
+                        
+                        {/* AIDEV-NOTE: Aviso quando não há contractId */}
+                        {!contractId && (
+                          <div className="bg-muted/30 rounded-lg border border-border/30 p-4">
+                            <p className="text-sm text-muted-foreground text-center">
+                              Os anexos estarão disponíveis após salvar o contrato.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
