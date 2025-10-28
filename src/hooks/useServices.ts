@@ -23,6 +23,7 @@ export interface Service {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   is_active: boolean;
@@ -55,6 +56,7 @@ export interface ServiceData {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   is_active?: boolean;

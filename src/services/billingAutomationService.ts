@@ -343,21 +343,6 @@ export class BillingAutomationService {
             email,
             document,
             customer_asaas_id
-          ),
-          contract_services(
-            id,
-            service_id,
-            quantity,
-            unit_price,
-            discount_percentage,
-            tax_percentage,
-            services(
-              id,
-              name,
-              description,
-              category,
-              tax_classification
-            )
           )
         `)
         .eq('tenant_id', options.tenant_id)
@@ -387,11 +372,31 @@ export class BillingAutomationService {
       // Processar cada contrato
       for (const contract of contracts) {
         try {
+          // AIDEV-NOTE: Buscar serviços do contrato usando a view otimizada
+          const { data: contractServices, error: servicesError } = await supabase
+            .from('vw_contract_services_detailed')
+            .select('*')
+            .eq('tenant_id', options.tenant_id)
+            .eq('contract_id', contract.id);
+
+          if (servicesError) {
+            result.errors.push({
+              contract_id: contract.id,
+              error: `Erro ao buscar serviços do contrato: ${servicesError.message}`
+            });
+            continue;
+          }
+
+          // Enriquecer o contrato com os serviços
+          const enrichedContract = {
+            ...contract,
+            contract_services: contractServices || []
+          };
           // AIDEV-NOTE: Verificar se é contrato retroativo e processar com lógica específica
-          if (isRetroactiveContract(contract as RetroactiveContract)) {
+          if (isRetroactiveContract(enrichedContract as RetroactiveContract)) {
             // Processar contrato retroativo com lógica específica
             const retroactiveResult = await this.processRetroactiveContract(
-              contract as RetroactiveContract,
+              enrichedContract as RetroactiveContract,
               options,
               referenceDate
             );
@@ -412,7 +417,7 @@ export class BillingAutomationService {
             const { data: existingBilling } = await supabase
               .from('contract_billings')
               .select('id')
-              .eq('contract_id', contract.id)
+              .eq('contract_id', enrichedContract.id)
               .eq('reference_period', format(currentMonth, 'yyyy-MM'))
               .single();
 
@@ -423,20 +428,20 @@ export class BillingAutomationService {
 
           // Calcular valores do faturamento
           const calculation = await this.calculateBillingAmounts(
-            contract,
-            contract.contract_services || [],
+            enrichedContract,
+            enrichedContract.contract_services || [],
             referenceDate
           );
 
           // AIDEV-NOTE: Corrigido - usar billing_type dos serviços do contrato ao invés de payment_terms inexistente
           // Pegar o billing_type do primeiro serviço do contrato (assumindo que todos têm o mesmo)
-          const contractBillingType = contract.contract_services?.[0]?.billing_type;
+          const contractBillingType = enrichedContract.contract_services?.[0]?.billing_type;
           const paymentTerms = this.mapBillingTypeToPaymentTerms(contractBillingType);
 
           // Determinar data de vencimento
           const dueDate = this.calculateDueDate(
             paymentTerms,
-            contract.due_day || 10,
+            enrichedContract.due_day || 10,
             referenceDate
           );
 
@@ -448,7 +453,7 @@ export class BillingAutomationService {
 
           const billingData = {
             tenant_id: options.tenant_id,
-            contract_id: contract.id,
+            contract_id: enrichedContract.id,
             billing_number: billingNumber,
             installment_number: 1, // Para faturamento recorrente
             total_installments: 1,
@@ -467,8 +472,8 @@ export class BillingAutomationService {
           if (options.dry_run) {
             // Modo de teste - não salvar no banco
             result.billings.push({
-              id: 'dry-run-' + contract.id,
-              contract_id: contract.id,
+              id: 'dry-run-' + enrichedContract.id,
+              contract_id: enrichedContract.id,
               billing_number: billingNumber,
               net_amount: calculation.net_amount,
               due_date: format(dueDate, 'yyyy-MM-dd')
@@ -486,14 +491,14 @@ export class BillingAutomationService {
 
           if (billingError) {
             result.errors.push({
-              contract_id: contract.id,
+              contract_id: enrichedContract.id,
               error: `Erro ao criar faturamento: ${billingError.message}`
             });
             continue;
           }
 
           // Inserir itens do faturamento
-          const billingItems = (contract.contract_services || []).map(service => ({
+          const billingItems = (enrichedContract.contract_services || []).map(service => ({
             billing_id: billing.id,
             service_id: service.service_id,
             description: service.services?.name || 'Serviço',
@@ -527,7 +532,7 @@ export class BillingAutomationService {
 
             if (itemsError) {
               result.errors.push({
-                contract_id: contract.id,
+                contract_id: enrichedContract.id,
                 error: `Erro ao criar itens do faturamento: ${itemsError.message}`
               });
               continue;
@@ -536,7 +541,7 @@ export class BillingAutomationService {
 
           result.billings.push({
             id: billing.id,
-            contract_id: contract.id,
+            contract_id: enrichedContract.id,
             billing_number: billing.billing_number,
             net_amount: billing.net_amount,
             due_date: billing.due_date
@@ -545,22 +550,22 @@ export class BillingAutomationService {
           result.generated_count++;
 
           // Integrar automaticamente com gateway se configurado
-          if (options.auto_integrate && contract.auto_integrate_gateway) {
+          if (options.auto_integrate && enrichedContract.auto_integrate_gateway) {
             try {
-              const gatewayCode = contract.preferred_gateway || 'ASAAS';
+              const gatewayCode = enrichedContract.preferred_gateway || 'ASAAS';
               await chargeIntegrationService.createExternalCharge(
                 billing.id,
                 gatewayCode
               );
             } catch (integrationError) {
-              console.warn(`Erro na integração automática para contrato ${contract.id}:`, integrationError);
+              console.warn(`Erro na integração automática para contrato ${enrichedContract.id}:`, integrationError);
               // Não falhar o processo por erro de integração
             }
           }
 
         } catch (error) {
           result.errors.push({
-            contract_id: contract.id,
+            contract_id: enrichedContract.id,
             error: error instanceof Error ? error.message : 'Erro desconhecido'
           });
         }

@@ -26,6 +26,11 @@ const serviceItemSchema = z.object({
     .min(0, "A taxa não pode ser negativa")
     .default(0),
   tax_code: z.string().optional().nullable(),
+  cost_percentage: z.coerce
+    .number()
+    .min(0, "A porcentagem de custo não pode ser negativa")
+    .max(100, "A porcentagem de custo não pode ser maior que 100%")
+    .default(0),
   discount_percentage: z.coerce
     .number()
     .min(0, "O desconto não pode ser negativo")

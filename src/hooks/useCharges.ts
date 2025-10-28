@@ -115,16 +115,7 @@ export function useCharges(params: UseChargesParams = {}) {
           ),
           contracts(
             id,
-            contract_number,
-            services:contract_services(
-              id,
-              description,
-              service:services(
-                id,
-                name,
-                description
-              )
-            )
+            contract_number
           )
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
@@ -231,8 +222,56 @@ export function useCharges(params: UseChargesParams = {}) {
         throw new Error('Violação de segurança detectada')
       }
 
+      // AIDEV-NOTE: Buscar serviços dos contratos usando vw_contract_services_detailed
+      const contractIds = [...new Set(data?.filter(charge => charge.contract_id).map(charge => charge.contract_id))]
+      let contractServicesMap: Record<string, any[]> = {}
+
+      if (contractIds.length > 0) {
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('vw_contract_services_detailed')
+          .select(`
+            contract_id,
+            contract_service_id,
+            service_description,
+            service_id,
+            service_name
+          `)
+          .eq('tenant_id', tenantId)
+          .in('contract_id', contractIds)
+
+        if (servicesError) {
+          console.error('🚨 [ERROR] useCharges - Erro ao buscar serviços:', servicesError)
+        } else {
+          // Agrupar serviços por contract_id
+          contractServicesMap = (servicesData || []).reduce((acc, service) => {
+            if (!acc[service.contract_id]) {
+              acc[service.contract_id] = []
+            }
+            acc[service.contract_id].push({
+              id: service.contract_service_id,
+              description: service.service_description,
+              service: {
+                id: service.service_id,
+                name: service.service_name,
+                description: service.service_description
+              }
+            })
+            return acc
+          }, {} as Record<string, any[]>)
+        }
+      }
+
+      // AIDEV-NOTE: Enriquecer dados com serviços dos contratos
+      const enrichedData = data?.map(charge => ({
+        ...charge,
+        contracts: charge.contracts ? {
+          ...charge.contracts,
+          services: contractServicesMap[charge.contract_id!] || []
+        } : null
+      }))
+
       return {
-        data: data as Charge[],
+        data: enrichedData as Charge[],
         total: count || 0
       }
     }

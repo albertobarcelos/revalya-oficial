@@ -618,9 +618,9 @@ export function useContractServices(contractId?: string) {
       throttledAudit(`🛠️ Buscando serviços do contrato ${contractId} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
-        .from('contract_services')
+        .from('vw_contract_services_detailed')
         .select(`
-          id,
+          contract_service_id,
           tenant_id,
           contract_id,
           service_id,
@@ -631,7 +631,7 @@ export function useContractServices(contractId?: string) {
           total_amount,
           tax_rate,
           tax_amount,
-          description,
+          service_description,
           is_active,
           created_at,
           updated_at,
@@ -640,18 +640,16 @@ export function useContractServices(contractId?: string) {
           billing_type,
           recurrence_frequency,
           installments,
-          payment_gateway,
           due_type,
           due_value,
           due_next_month,
-          due_date_value,
           no_charge,
           generate_billing,
-          services:service_id(
-            id,
-            name,
-            description
-          )
+          service_name,
+          default_price,
+          cost_price,
+          unit_type,
+          service_tax_rate
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
         .eq('contract_id', contractId)

@@ -71,25 +71,38 @@ export function useContractEdit(): UseContractEditReturn {
           .eq('tenant_id', currentTenant.id)
           .single(),
         
-        // Buscar serviços do contrato
+        // Buscar serviços do contrato usando a view detalhada
         supabase
-          .from('contract_services')
+          .from('vw_contract_services_detailed')
           .select(`
-            *,
-            payment_method,
-            card_type,
+            contract_service_id,
+            contract_id,
+            service_id,
+            quantity,
+            unit_price,
+            discount_percentage,
+            discount_amount,
+            total_amount,
+            tax_rate,
+            tax_amount,
             billing_type,
             recurrence_frequency,
-            installments,
+            payment_method,
             due_type,
             due_value,
             due_next_month,
-            service:services(
-              id,
-              name,
-              description,
-              default_price
-            )
+            no_charge,
+            generate_billing,
+            is_active,
+            created_at,
+            updated_at,
+            tenant_id,
+            service_name,
+            service_description,
+            default_price,
+            cost_price,
+            unit_type,
+            service_tax_rate
           `)
           .eq('contract_id', contractId)
           .eq('tenant_id', currentTenant.id)
@@ -208,13 +221,13 @@ export function useContractEdit(): UseContractEditReturn {
       
       const formattedServices = services.map(service => {
         const formattedService = {
-          id: service.id,
+          id: service.contract_service_id, // AIDEV-NOTE: Usando contract_service_id da view
           service_id: service.service_id,
-          name: service.service?.name || service.description,
-          description: service.description,
+          name: service.service_name || service.service_description, // AIDEV-NOTE: Usando service_name da view
+          description: service.service_description,
           quantity: service.quantity,
           unit_price: service.unit_price,
-          default_price: service.service?.default_price || service.unit_price,
+          default_price: service.default_price || service.unit_price,
           discount_percentage: service.discount_percentage,
           tax_rate: service.tax_rate,
           total_amount: service.total_amount,

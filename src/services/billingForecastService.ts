@@ -60,8 +60,7 @@ class BillingForecastService {
       .from('contracts')
       .select(`
         *,
-        customer:customers(*),
-        contract_services(*)
+        customer:customers(*)
       `)
       .eq('tenant_id', tenant_id)
       .eq('status', 'ACTIVE')
@@ -81,8 +80,26 @@ class BillingForecastService {
     const forecasts: Omit<ContractBilling, 'id' | 'created_at' | 'updated_at'>[] = [];
 
     for (const contract of contracts) {
+      // AIDEV-NOTE: Buscar serviços do contrato usando view otimizada
+      const { data: contractServices, error: servicesError } = await supabase
+        .from('vw_contract_services_detailed')
+        .select('*')
+        .eq('tenant_id', tenant_id)
+        .eq('contract_id', contract.id);
+
+      if (servicesError) {
+        console.error(`Erro ao buscar serviços do contrato ${contract.id}:`, servicesError);
+        continue;
+      }
+
+      // Enriquecer contrato com serviços
+      const enrichedContract = {
+        ...contract,
+        contract_services: contractServices || []
+      };
+
       const contractForecasts = await this.generateContractForecasts(
-        contract as any,
+        enrichedContract as any,
         months_ahead
       );
       forecasts.push(...contractForecasts);

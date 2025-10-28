@@ -569,7 +569,7 @@ class InvoiceService {
     const customer = financeEntry.contracts?.customers;
     const contract = financeEntry.contract;
 
-    // Buscar serviços do contrato
+    // AIDEV-NOTE: Buscar serviços do contrato usando campos atualizados
     const { data: contractServices, error } = await supabase
       .from('contract_services')
       .select(`
@@ -584,9 +584,9 @@ class InvoiceService {
 
     const services = contractServices?.map(cs => ({
       description: cs.service?.name || cs.description || 'Serviço',
-      quantity: 1,
-      unit_price: cs.price || financeEntry.gross_amount,
-      total_price: cs.price || financeEntry.gross_amount,
+      quantity: cs.quantity || 1,
+      unit_price: cs.unit_price || financeEntry.gross_amount,
+      total_price: cs.total_amount || (cs.unit_price * (cs.quantity || 1)) || financeEntry.gross_amount,
       service_code: cs.service?.code || '01.01'
     })) || [{
       description: financeEntry.description || 'Serviço prestado',

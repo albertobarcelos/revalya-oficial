@@ -999,23 +999,31 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                         })()}
                         onChange={(e) => {
                           const inputValue = e.target.value;
-                          // Permite apenas números, vírgula e ponto
-                          const sanitizedValue = inputValue.replace(/[^0-9.,]/g, '').replace(',', '.');
-                          const newValue = sanitizedValue === '' ? 0 : parseFloat(sanitizedValue);
+                          // AIDEV-NOTE: Permite números, vírgula, ponto e espaços para melhor UX
+                          // Remove caracteres inválidos mas preserva vírgulas e pontos para formatação
+                          const sanitizedValue = inputValue.replace(/[^0-9.,\s]/g, '');
+                          
+                          // AIDEV-NOTE: Converte vírgula para ponto para parseFloat, mas preserva a entrada do usuário
+                          let numericValue = 0;
+                          if (sanitizedValue.trim() !== '') {
+                            // Trata vírgula como separador decimal brasileiro
+                            const normalizedValue = sanitizedValue.replace(/\s/g, '').replace(',', '.');
+                            numericValue = parseFloat(normalizedValue);
+                          }
                           
                           setSelectedServices(prev => 
                             prev.map(service => 
                               service.id === editingServiceId 
                                 ? { 
                                     ...service, 
-                                    unit_price: isNaN(newValue) ? 0 : newValue,
-                                    total: (isNaN(newValue) ? 0 : newValue) * (service.quantity || 1)
+                                    unit_price: isNaN(numericValue) ? 0 : numericValue,
+                                    total: (isNaN(numericValue) ? 0 : numericValue) * (service.quantity || 1)
                                   }
                                 : service
                             )
                           );
                         }}
-                        placeholder="Ex: 1500.00"
+                        placeholder="Ex: 1500,00 ou 1500.00"
                       />
                       <p className="text-xs text-muted-foreground">
                         Valor cobrado por unidade do serviço
