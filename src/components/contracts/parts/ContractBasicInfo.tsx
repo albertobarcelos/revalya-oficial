@@ -38,6 +38,7 @@ import { ClientSearch } from "./ClientSearch";
 import { ClientCreation } from "./ClientCreation";
 import { ContractFormValues } from "../schema/ContractFormSchema";
 import { FieldSkeleton } from "./FieldSkeleton";
+import { useContractForm } from "../form/ContractFormProvider";
 
 interface ContractBasicInfoProps {
   customers: any[];
@@ -51,6 +52,7 @@ export function ContractBasicInfo({
   isFieldLoading = () => false 
 }: ContractBasicInfoProps) {
   const form = useFormContext<ContractFormValues>();
+  const { contractData, isLoadingContract } = useContractForm(); // AIDEV-NOTE: Acessar dados do contrato do contexto
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [openInitialDatePicker, setOpenInitialDatePicker] = useState(false);
@@ -61,6 +63,20 @@ export function ContractBasicInfo({
   const initialDate = useWatch({ control: form.control, name: 'initial_date' });
   const finalDate = useWatch({ control: form.control, name: 'final_date' });
   const customerId = useWatch({ control: form.control, name: 'customer_id' });
+  
+  // AIDEV-NOTE: Log para monitorar mudanças no contractData
+  useEffect(() => {
+    console.log('📊 ContractBasicInfo - Estado do contractData:', {
+      isLoadingContract,
+      contractData,
+      hasCustomer: !!contractData?.customer,
+      customerFromContract: contractData?.customer
+    });
+  }, [contractData, isLoadingContract]);
+  
+  // AIDEV-NOTE: Log removido para evitar execução excessiva
+  // O log anterior estava sendo executado a cada mudança de contractData/isLoadingContract
+  // Substituído por logs condicionais apenas quando necessário para debug específico
   
   // Configuração de localização e funções auxiliares
   const locale: Locale = ptBR || pt;
@@ -79,6 +95,9 @@ export function ContractBasicInfo({
 
   // AIDEV-NOTE: Efeito para sincronizar cliente selecionado quando customer_id mudar
   useEffect(() => {
+    // AIDEV-NOTE: Log de debug removido para evitar execução excessiva
+    // Logs condicionais apenas para casos específicos de debug
+
     if (!customerId) {
       setSelectedClient(null);
       return;
@@ -89,13 +108,26 @@ export function ContractBasicInfo({
       return;
     }
     
+    // Primeiro, verifica se temos dados do cliente no contexto do contrato (modo edição)
+    if (contractData?.customer && contractData.customer.id === customerId) {
+      // Log condicional apenas quando encontra cliente no contractData
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Usando cliente do contractData:', contractData.customer);
+      }
+      setSelectedClient(contractData.customer);
+      return;
+    }
+    
     // Procura o cliente no array customers (para casos onde o cliente está na primeira página)
     const foundClient = customers.find(c => c.id === customerId);
     if (foundClient) {
+      console.log('✅ Cliente encontrado no array customers:', foundClient);
       setSelectedClient(foundClient);
+    } else {
+      console.log('❌ Cliente não encontrado no array customers');
     }
     // Se não encontrou, mantém o selectedClient atual (caso de paginação)
-  }, [customerId, customers, selectedClient]);
+  }, [customerId, customers, selectedClient, contractData?.customer]);
 
   // Efeito para validar data final não pode ser anterior à data inicial
   useEffect(() => {
@@ -140,6 +172,14 @@ export function ContractBasicInfo({
                     onClick={() => setShowClientSearch(true)}
                     disabled={isFieldLoading("customer_id")}
                   />
+                  {/* AIDEV-NOTE: Debug do selectedClient */}
+                  {console.log('🎯 Campo Cliente - Debug:', {
+                    selectedClient,
+                    selectedClientName: selectedClient?.name,
+                    customerId,
+                    contractCustomer: contractData?.customer,
+                    displayValue: selectedClient?.name || ""
+                  })}
                   <Button
                     type="button"
                     variant="ghost"

@@ -4,6 +4,7 @@ import { useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/use-toast'
 import { throttledAudit } from '@/utils/logThrottle'
+import { getCurrentUser } from '@/utils/supabaseAuthManager'
 
 // Tipos básicos para contratos
 export interface Contract {
@@ -62,9 +63,28 @@ export interface ContractService {
   service_id: string
   quantity: number
   unit_price: number
-  total: number
+  discount_percentage?: number
+  discount_amount?: number
+  total_amount: number
+  tax_rate?: number
+  tax_amount?: number
+  description?: string
+  is_active: boolean
   created_at: string
   updated_at: string
+  // AIDEV-NOTE: Campos de configuração financeira
+  payment_method?: string
+  card_type?: string
+  billing_type?: string
+  recurrence_frequency?: string
+  installments?: number
+  payment_gateway?: string
+  due_type?: string
+  due_value?: number
+  due_next_month?: boolean
+  due_date_value?: number
+  no_charge?: boolean
+  generate_billing?: boolean
   services?: {
     id: string
     name: string
@@ -178,6 +198,16 @@ export function useContracts(filters: ContractFilters = {}) {
     async (supabase, tenantId, contractData: Partial<Contract>) => {
       throttledAudit(`✏️ Criando contrato para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || null;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular created_by e updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId,
+        p_user_id: userId
+      });
+      
       const { data, error } = await supabase
         .from('contracts')
         .insert({
@@ -205,7 +235,14 @@ export function useContracts(filters: ContractFilters = {}) {
           description: "Contrato criado com sucesso!",
         })
       },
-      invalidateQueries: ['contracts']
+      // AIDEV-NOTE: Invalidar cache do kanban de faturamento quando contrato é criado
+      // Isso garante que novos contratos apareçam automaticamente no kanban
+      invalidateQueries: [
+        'contracts', 
+        'billing_kanban', 
+        'billing_periods', 
+        'contract_billing_periods'
+      ]
     }
   )
 
@@ -213,6 +250,16 @@ export function useContracts(filters: ContractFilters = {}) {
   const updateContract = useSecureTenantMutation(
     async (supabase, tenantId, { id, ...updates }: Partial<Contract> & { id: string }) => {
       throttledAudit(`✏️ Atualizando contrato ${id} para tenant: ${tenantId}`);
+      
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || null;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId,
+        p_user_id: userId
+      });
       
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que o contrato pertence ao tenant
       const { data: existingContract } = await supabase
@@ -247,7 +294,14 @@ export function useContracts(filters: ContractFilters = {}) {
           description: "Contrato atualizado com sucesso!",
         })
       },
-      invalidateQueries: ['contracts']
+      // AIDEV-NOTE: Invalidar cache do kanban de faturamento quando contrato é atualizado
+      // Mudanças no contrato podem afetar sua posição ou dados no kanban
+      invalidateQueries: [
+        'contracts', 
+        'billing_kanban', 
+        'billing_periods', 
+        'contract_billing_periods'
+      ]
     }
   )
 
@@ -272,7 +326,14 @@ export function useContracts(filters: ContractFilters = {}) {
           description: "Contrato deletado com sucesso!",
         })
       },
-      invalidateQueries: ['contracts']
+      // AIDEV-NOTE: Invalidar cache do kanban de faturamento quando contrato é deletado
+      // Remoção de contratos deve atualizar o kanban imediatamente
+      invalidateQueries: [
+        'contracts', 
+        'billing_kanban', 
+        'billing_periods', 
+        'contract_billing_periods'
+      ]
     }
   )
 
@@ -299,7 +360,14 @@ export function useContracts(filters: ContractFilters = {}) {
           description: "Status do contrato atualizado com sucesso!",
         })
       },
-      invalidateQueries: ['contracts']
+      // AIDEV-NOTE: Invalidar cache do kanban de faturamento quando status do contrato muda
+      // Mudanças de status podem mover contratos entre colunas do kanban
+      invalidateQueries: [
+        'contracts', 
+        'billing_kanban', 
+        'billing_periods', 
+        'contract_billing_periods'
+      ]
     }
   )
 
@@ -326,9 +394,8 @@ export function useContracts(filters: ContractFilters = {}) {
           billing_type: serviceData.billing_type,
           recurrence_frequency: serviceData.recurrence_frequency,
           installments: serviceData.installments,
-          due_date_type: serviceData.due_date_type,
-          due_days: serviceData.due_days,
-          due_day: serviceData.due_day,
+          due_type: serviceData.due_type,
+          due_value: serviceData.due_value,
           due_next_month: serviceData.due_next_month,
           generate_billing: serviceData.generate_billing,
           // AIDEV-NOTE: Não permitir alteração de tenant_id, contract_id ou service_id por segurança
@@ -453,6 +520,15 @@ export function useContractStages() {
     async (supabase, tenantId, { id, ...updates }: Partial<ContractStage> & { id: string }) => {
       throttledAudit(`✏️ Atualizando stage ${id} para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
+      
       const { data, error } = await supabase
         .from('contract_stages')
         .update(updates)
@@ -542,14 +618,38 @@ export function useContractServices(contractId?: string) {
       throttledAudit(`🛠️ Buscando serviços do contrato ${contractId} para tenant: ${tenantId}`);
       
       const { data, error } = await supabase
-        .from('contract_services')
+        .from('vw_contract_services_detailed')
         .select(`
-          *,
-          services:service_id(
-            id,
-            name,
-            description
-          )
+          contract_service_id,
+          tenant_id,
+          contract_id,
+          service_id,
+          quantity,
+          unit_price,
+          discount_percentage,
+          discount_amount,
+          total_amount,
+          tax_rate,
+          tax_amount,
+          service_description,
+          is_active,
+          created_at,
+          updated_at,
+          payment_method,
+          card_type,
+          billing_type,
+          recurrence_frequency,
+          installments,
+          due_type,
+          due_value,
+          due_next_month,
+          no_charge,
+          generate_billing,
+          service_name,
+          default_price,
+          cost_price,
+          unit_type,
+          service_tax_rate
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
         .eq('contract_id', contractId)

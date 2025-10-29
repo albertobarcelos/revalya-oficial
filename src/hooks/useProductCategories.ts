@@ -118,23 +118,28 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, categoryData: CreateProductCategoryDTO) => {
       console.log(`📝 [AUDIT] Criando categoria para tenant: ${tenantId}`);
       
-      const { data, error } = await supabase
+      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
+      // O INSERT é bem-sucedido, mas o SELECT posterior não respeita o contexto de tenant
+      const { error } = await supabase
         .from('product_categories')
         .insert({
           ...categoryData,
           tenant_id: tenantId,
           created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+        });
       
       if (error) {
         console.error('🚨 [ERROR] Falha ao criar categoria:', error);
         throw error;
       }
       
-      console.log(`✅ [SUCCESS] Categoria criada: ${data.name}`);
-      return data;
+      console.log(`✅ [SUCCESS] Categoria criada com sucesso`);
+      // AIDEV-NOTE: Retornando dados básicos sem consulta adicional para evitar RLS
+      return {
+        ...categoryData,
+        tenant_id: tenantId,
+        created_at: new Date().toISOString()
+      };
     },
     {
       onSuccess: () => {
@@ -149,24 +154,29 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, { id, ...categoryData }: { id: string } & Partial<CreateProductCategoryDTO>) => {
       console.log(`📝 [AUDIT] Atualizando categoria ${id} para tenant: ${tenantId}`);
       
-      const { data, error } = await supabase
+      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
+      const { error } = await supabase
         .from('product_categories')
         .update({
           ...categoryData,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
-        .eq('tenant_id', tenantId)
-        .select()
-        .single();
+        .eq('tenant_id', tenantId);
       
       if (error) {
         console.error('🚨 [ERROR] Falha ao atualizar categoria:', error);
         throw error;
       }
       
-      console.log(`✅ [SUCCESS] Categoria atualizada: ${data.name}`);
-      return data;
+      console.log(`✅ [SUCCESS] Categoria atualizada com sucesso`);
+      // AIDEV-NOTE: Retornando dados básicos sem consulta adicional
+      return {
+        id,
+        ...categoryData,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString()
+      };
     },
     {
       onSuccess: () => {
@@ -208,24 +218,29 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, { id, is_active }: { id: string; is_active: boolean }) => {
       console.log(`🔄 [AUDIT] Alternando status da categoria ${id} para tenant: ${tenantId}`);
       
-      const { data, error } = await supabase
+      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
+      const { error } = await supabase
         .from('product_categories')
         .update({
           is_active,
           updated_at: new Date().toISOString()
         })
         .eq('id', id)
-        .eq('tenant_id', tenantId)
-        .select()
-        .single();
+        .eq('tenant_id', tenantId);
       
       if (error) {
         console.error('🚨 [ERROR] Falha ao alterar status da categoria:', error);
         throw error;
       }
       
-      console.log(`✅ [SUCCESS] Status da categoria alterado: ${data.name} -> ${is_active ? 'ativo' : 'inativo'}`);
-      return data;
+      console.log(`✅ [SUCCESS] Status da categoria alterado -> ${is_active ? 'ativo' : 'inativo'}`);
+      // AIDEV-NOTE: Retornando dados básicos sem consulta adicional
+      return {
+        id,
+        is_active,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString()
+      };
     },
     {
       onSuccess: () => {
@@ -247,10 +262,10 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     
     // 🔄 Ações
     refetch,
-    createCategory: createCategoryMutation.mutate,
-    updateCategory: updateCategoryMutation.mutate,
-    deleteCategory: deleteCategoryMutation.mutate,
-    toggleCategoryStatus: toggleCategoryStatusMutation.mutate,
+    createCategory: createCategoryMutation.mutate, // AIDEV-NOTE: Retorna função mutate direta (mesmo padrão de useCustomers)
+    updateCategory: updateCategoryMutation.mutate, // AIDEV-NOTE: Consistência no padrão
+    deleteCategory: deleteCategoryMutation.mutate, // AIDEV-NOTE: Consistência no padrão
+    toggleCategoryStatus: toggleCategoryStatusMutation.mutate, // AIDEV-NOTE: Consistência no padrão
     
     // 🔄 Estados das mutações
     isCreating: createCategoryMutation.isPending,

@@ -731,12 +731,15 @@ export interface Notification {
 
 export interface MessageHistory {
   id: string;
-  charge_id: string;
-  template_id: string;
-  sent_at: string;
-  status: 'success' | 'error';
-  error_message?: string;
-  message_content: string;
-  customer_name: string;
-  customer_phone: string;
+  tenant_id: string;
+  charge_id: string | null;
+  template_id: string | null;
+  customer_id: string | null;
+  message: string | null;
+  status: string | null;
+  error_details: string | null;
+  metadata: any | null;
+  created_at: string;
+  updated_at: string;
+  batch_id: string | null;
 }

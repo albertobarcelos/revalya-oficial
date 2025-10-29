@@ -23,14 +23,14 @@ export function PersonalInfoFields({ formData, onChange, onBulkChange }: Persona
   });
   const { isLoading, consultarEPreencherDados } = useCNPJLookup();
   
-  // Sincronizar o estado local com formData.cpfCnpj
+  // AIDEV-NOTE: Sincronização do CPF/CNPJ com o formData
+  // Otimizado para evitar logs excessivos - só loga em casos críticos
   useEffect(() => {
-    console.log('PersonalInfoFields useEffect - formData.cpfCnpj:', formData.cpfCnpj);
-    console.log('PersonalInfoFields useEffect - cpfCnpjValue atual:', cpfCnpjValue);
-    console.log('PersonalInfoFields useEffect - São diferentes?', formData.cpfCnpj !== cpfCnpjValue);
-    
     if (formData.cpfCnpj !== cpfCnpjValue) {
-      console.log('PersonalInfoFields useEffect - Atualizando cpfCnpjValue para:', formData.cpfCnpj || '');
+      // AIDEV-NOTE: Log removido para evitar spam - só em desenvolvimento e casos críticos
+      if (process.env.NODE_ENV === 'development' && !formData.cpfCnpj && cpfCnpjValue) {
+        console.log('PersonalInfoFields - CPF/CNPJ sendo limpo:', { from: cpfCnpjValue, to: formData.cpfCnpj });
+      }
       setCpfCnpjValue(formData.cpfCnpj || '');
     }
   }, [formData.cpfCnpj, cpfCnpjValue]);

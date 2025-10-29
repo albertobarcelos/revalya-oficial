@@ -10,7 +10,8 @@ export interface Product {
   code?: string;
   sku: string;
   barcode?: string;
-  category?: string;
+  category?: string; // AIDEV-NOTE: Campo legado - será depreciado
+  category_id?: string; // AIDEV-NOTE: Nova foreign key para product_categories
   unit_price: number;
   cost_price?: number;
   stock_quantity: number;
@@ -34,7 +35,8 @@ export interface CreateProductDTO {
   code?: string;
   sku: string;
   barcode?: string;
-  category?: string;
+  category?: string; // AIDEV-NOTE: Campo legado - será depreciado
+  category_id?: string; // AIDEV-NOTE: Nova foreign key para product_categories
   unit_price: number;
   cost_price?: number;
   stock_quantity: number;
@@ -332,6 +334,17 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
   };
 }
 
+// AIDEV-NOTE: Interface para categorias de produtos da tabela product_categories
+export interface ProductCategory {
+  id: string;
+  name: string;
+  description?: string;
+  tenant_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * 🔐 Hook para obter categorias de produtos (com cache isolado por tenant)
  */
@@ -349,21 +362,19 @@ export function useProductCategories() {
       console.log(`[AUDIT] Consultando categorias de produtos - Tenant: ${tenantId}`);
       
       const { data, error } = await supabase
-        .from('products')
-        .select('category')
+        .from('product_categories')
+        .select('id, name, description, is_active, created_at, updated_at')
         .eq('tenant_id', tenantId)
-        .not('category', 'is', null);
+        .eq('is_active', true)
+        .order('name');
       
       if (error) {
         console.error('[AUDIT] Erro ao consultar categorias:', error);
         throw error;
       }
       
-      // Extrair categorias únicas
-      const categories = [...new Set(data.map(item => item.category).filter(Boolean))];
-      
-      console.log(`[AUDIT] Categorias consultadas - ${categories.length} encontradas`);
-      return categories;
+      console.log(`[AUDIT] Categorias consultadas - ${data?.length || 0} encontradas`);
+      return data as ProductCategory[];
     },
     {
       enabled: !!currentTenant?.id,

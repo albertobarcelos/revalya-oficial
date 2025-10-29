@@ -8,12 +8,16 @@
  * @module ProductsPage
  */
 
-import React, { useState, useMemo } from 'react';
+'use client';
+
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
+  MoreHorizontal, 
   Edit, 
   Trash2, 
+  Eye,
   AlertCircle,
   Package,
   Info
@@ -21,6 +25,7 @@ import {
 
 // Shadcn/UI Components
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Table, 
@@ -30,24 +35,36 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 // Hooks e Utilitários
 import { useSecureProducts, Product } from '@/hooks/useSecureProducts';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
+import { useProductCodeGenerator } from '@/hooks/useProductCodeGenerator';
 import { usePagination } from '@/hooks/usePagination';
 import { Layout } from '@/components/layout/Layout';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { EditProductDialog } from '@/components/products/EditProductDialog';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatCurrency } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+
+// Componentes específicos para produtos
+import { CreateProductDialog } from '@/components/products/CreateProductDialog';
+import { EditProductDialog } from '@/components/products/EditProductDialog';
 
 // AIDEV-NOTE: Função para traduzir unidades do inglês para português
 const translateUnit = (unit: string): string => {
@@ -80,18 +97,27 @@ export default function ProductsPage() {
   // AIDEV-NOTE: Proteção de acesso multi-tenant obrigatória
   const { hasAccess, isLoading: accessLoading, currentTenant, accessError } = useTenantAccessGuard();
   
-  // AIDEV-NOTE: Estados locais para busca, filtros e modais
+  // AIDEV-NOTE: Estados para controle da interface seguindo padrão de serviços
   const [searchTerm, setSearchTerm] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   // AIDEV-NOTE: Hook seguro para produtos com validação multi-tenant
   const {
     products = [],
     isLoading,
     error,
-    refetch
+    refetch,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    createError,
+    updateError,
+    deleteError
   } = useSecureProducts({
     searchTerm,
     page: 1,
@@ -100,6 +126,13 @@ export default function ProductsPage() {
     enabled: hasAccess && !!currentTenant?.id
   });
 
+  // AIDEV-NOTE: Hook para geração automática de código de produto
+  const { 
+    nextAvailableCode, 
+    isLoading: isLoadingMaxCode, 
+    validateCode 
+  } = useProductCodeGenerator();
+
   // AIDEV-NOTE: Hook para paginação reutilizável
   const pagination = usePagination({
     data: products,
@@ -107,7 +140,6 @@ export default function ProductsPage() {
   });
 
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // AIDEV-NOTE: Produtos paginados para renderização
   const paginatedProducts = useMemo(() => {
@@ -116,109 +148,51 @@ export default function ProductsPage() {
     return products.slice(startIndex, endIndex);
   }, [products, pagination.currentPage, pagination.itemsPerPage]);
 
-  // AIDEV-NOTE: Função para refresh da página
-  const refresh = () => {
+  // AIDEV-NOTE: Handlers para ações da interface seguindo padrão de serviços
+  const handleRefresh = useCallback(() => {
     refetch();
-  };
+  }, [refetch]);
 
-  // AIDEV-NOTE: Mutations para operações CRUD
-  const deleteProductMutation = useMutation({
-    mutationFn: async (productId: string) => {
-      // Implementar delete do produto
-      throw new Error('Delete não implementado ainda');
-    },
-    onSuccess: () => {
-      toast({
-        title: "Produto excluído",
-        description: "O produto foi excluído com sucesso.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao excluir produto",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateProductMutation = useMutation({
-    mutationFn: async (data: Partial<Product>) => {
-      // Implementar update do produto
-      throw new Error('Update não implementado ainda');
-    },
-    onSuccess: () => {
-      toast({
-        title: "Produto atualizado",
-        description: "O produto foi atualizado com sucesso.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      setIsEditModalOpen(false);
-      setEditingProduct(null);
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao atualizar produto",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const createProductMutation = useMutation({
-    mutationFn: async (data: Omit<Product, 'id'>) => {
-      // Implementar criação do produto
-      throw new Error('Create não implementado ainda');
-    },
-    onSuccess: () => {
-      toast({
-        title: "Produto criado",
-        description: "O produto foi criado com sucesso.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      setIsCreateModalOpen(false);
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro ao criar produto",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // AIDEV-NOTE: Handlers para ações da interface
-  const handleCreateProduct = () => {
-    setIsCreateModalOpen(true);
-  };
-
-  const handleEditProduct = (product: Product) => {
+  const handleEditProduct = useCallback((product: Product) => {
     setEditingProduct(product);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
-  const handleDeleteProduct = async (product: Product) => {
-    if (window.confirm(`Tem certeza que deseja excluir o produto "${product.name}"?`)) {
-      deleteProductMutation.mutate(product.id);
+  const handleDeleteProduct = useCallback((productId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este produto?')) {
+      deleteProduct(productId);
     }
-  };
+  }, [deleteProduct]);
 
-  const handleSaveProduct = async (data: any) => {
-    if (editingProduct) {
-      // Atualizar produto existente
-      updateProductMutation.mutate({ ...editingProduct, ...data });
-    } else {
-      // Criar novo produto
-      createProductMutation.mutate(data);
-    }
-  };
+  const handleCreateProduct = useCallback(() => {
+    setIsCreateModalOpen(true);
+  }, []);
 
-  const handleCancelEdit = () => {
-    setIsEditModalOpen(false);
+  const handleCreateSuccess = useCallback(() => {
     setIsCreateModalOpen(false);
+    refetch(); // Atualiza a lista de produtos
+  }, [refetch]);
+
+  const handleEditSuccess = useCallback(() => {
+    setIsEditModalOpen(false);
     setEditingProduct(null);
-  };
+    refetch(); // Atualiza a lista de produtos
+  }, [refetch]);
+
+  const handleCancelCreate = useCallback(() => {
+    setIsCreateModalOpen(false);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditModalOpen(false);
+    setEditingProduct(null);
+  }, []);
+
+  // AIDEV-NOTE: Handler para validação de código seguindo padrão de serviços
+  const handleCodeValidation = useCallback(async (code: string, currentId?: string) => {
+    if (!code.trim()) return true; // Código vazio é válido (será gerado automaticamente)
+    return await validateCode(code, currentId);
+  }, [validateCode]);
 
   // 🎨 COMPONENTE REUTILIZÁVEL PARA HEADER DA TABELA
   const TableHeaderComponent = ({ isSticky = false }: { isSticky?: boolean }) => (
@@ -421,7 +395,7 @@ export default function ProductsPage() {
         searchPlaceholder="Buscar produto..."
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
-        onRefresh={refresh}
+        onRefresh={handleRefresh}
         isRefreshing={isLoading}
         actionButtons={
           <Button onClick={handleCreateProduct}>
@@ -442,32 +416,20 @@ export default function ProductsPage() {
         {renderTableContent()}
       </PageLayout>
 
-      {/* AIDEV-NOTE: Modal de Edição usando EditProductDialog específico */}
-      {editingProduct && (
-        <EditProductDialog
-          product={editingProduct}
-          open={isEditModalOpen}
-          onOpenChange={setIsEditModalOpen}
-          onSuccess={() => {
-            setIsEditModalOpen(false);
-            setEditingProduct(null);
-            queryClient.invalidateQueries(['secure-products']);
-          }}
-        />
-      )}
-
-      {/* AIDEV-NOTE: Modal de Criação usando CreateProductDialog */}
-      {isCreateModalOpen && (
-        <EditProductDialog
-          product={{} as Product} // Produto vazio para criação
-          open={isCreateModalOpen}
-          onOpenChange={setIsCreateModalOpen}
-          onSuccess={() => {
-            setIsCreateModalOpen(false);
-            queryClient.invalidateQueries(['secure-products']);
-          }}
-        />
-      )}
+      {/* AIDEV-NOTE: Modal específico para criação de produtos */}
+      <CreateProductDialog
+        open={isCreateModalOpen}
+        close={handleCancelCreate}
+        onSuccess={handleCreateSuccess}
+      />
+      
+      {/* AIDEV-NOTE: Modal específico para edição de produtos */}
+      <EditProductDialog
+        Open={isEditModalOpen}
+        Close={handleCancelEdit}
+        onSuccess={handleEditSuccess}
+        product={editingProduct}
+      />
     </Layout>
   );
 }

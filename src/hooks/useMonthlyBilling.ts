@@ -92,7 +92,7 @@ export function useMonthlyBilling(
       setLoading(true);
       setError(null);
 
-      // Buscar dados do contrato com serviços e produtos
+      // Buscar dados do contrato
       const { data: contractData, error: contractError } = await supabase
         .from('contracts')
         .select(`
@@ -104,19 +104,6 @@ export function useMonthlyBilling(
           customers!inner(
             id,
             name
-          ),
-          contract_services(
-            id,
-            description,
-            quantity,
-            unit_price,
-            total_amount,
-            discount_amount,
-            payment_method,
-            billing_type,
-            tax_rate,
-            tax_amount,
-            is_active
           ),
           contract_products(
             id,
@@ -143,13 +130,35 @@ export function useMonthlyBilling(
         throw new Error('Contrato não encontrado');
       }
 
+      // Buscar serviços do contrato usando a view detalhada
+      const { data: servicesData, error: servicesError } = await supabase
+        .from('vw_contract_services_detailed')
+        .select(`
+          contract_service_id,
+          service_description,
+          quantity,
+          unit_price,
+          total_amount,
+          discount_amount,
+          payment_method,
+          billing_type,
+          tax_rate,
+          tax_amount,
+          is_active
+        `)
+        .eq('contract_id', contractId)
+        .eq('is_active', true);
+
+      if (servicesError) {
+        throw new Error(`Erro ao buscar serviços: ${servicesError.message}`);
+      }
+
       // Processar serviços ativos
-      const services: MonthlyBillingItem[] = (contractData.contract_services || [])
-        .filter((service: any) => service.is_active)
+      const services: MonthlyBillingItem[] = (servicesData || [])
         .map((service: any) => ({
-          id: service.id,
+          id: service.contract_service_id, // AIDEV-NOTE: Usando contract_service_id da view
           type: 'service' as const,
-          description: service.description || 'Serviço sem descrição',
+          description: service.service_description || 'Serviço sem descrição',
           quantity: service.quantity || 1,
           unit_price: service.unit_price || 0,
           total_amount: service.total_amount || 0,

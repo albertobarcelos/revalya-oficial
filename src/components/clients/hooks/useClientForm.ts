@@ -49,28 +49,40 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
     };
   });
   
-  // Atualizar o formData quando o customer mudar
+  // AIDEV-NOTE: Atualizar formData quando customer muda
+  // Otimizado para evitar logs excessivos - só loga mudanças críticas
   useEffect(() => {
-    if (initializedRef.current && customer) {
-      console.log('useEffect - Atualizando dados do cliente:', customer);
-      console.log('useEffect - CPF/CNPJ do customer:', customer.cpf_cnpj);
-      console.log('useEffect - Tipo do CPF/CNPJ:', typeof customer.cpf_cnpj);
-      setFormData(prev => {
-        const newFormData = {
-          ...prev,
-          cpfCnpj: customer.cpf_cnpj ? String(customer.cpf_cnpj) : prev.cpfCnpj,
-          address: customer.address || prev.address,
-          addressNumber: customer.address_number || prev.addressNumber, // AIDEV-NOTE: Incluir address_number na atualização
-          complement: customer.complement || prev.complement, // AIDEV-NOTE: Incluir complement na atualização
-          neighborhood: customer.neighborhood || prev.neighborhood, // AIDEV-NOTE: Campo neighborhood estava faltando na atualização
-          city: customer.city || prev.city,
-          state: customer.state || prev.state,
-          postal_code: customer.postal_code || prev.postal_code // AIDEV-NOTE: Campo correto conforme schema da tabela customers
-        };
-        console.log('useEffect - Novo formData.cpfCnpj:', newFormData.cpfCnpj);
-        console.log('useEffect - Campo neighborhood atualizado:', newFormData.neighborhood);
-        return newFormData;
-      });
+    if (customer) {
+      // AIDEV-NOTE: Log removido para evitar spam - só em desenvolvimento para mudanças críticas
+      if (process.env.NODE_ENV === 'development' && !customer.cpf_cnpj) {
+        console.log('useClientForm - Customer sem CPF/CNPJ:', customer);
+      }
+      
+      const newFormData = {
+        name: customer.name || '',
+        email: customer.email || '',
+        phone: customer.phone || '',
+        cpfCnpj: customer.cpf_cnpj || '',
+        company: customer.company || '', // AIDEV-NOTE: Campo company adicionado para sincronização correta
+        address: customer.address || '',
+        neighborhood: customer.neighborhood || '',
+        city: customer.city || '',
+        state: customer.state || '',
+        postal_code: customer.postal_code || '',
+        complement: customer.complement || '',
+        address_number: customer.address_number || '',
+        observations: customer.observations || '',
+      };
+      
+      // AIDEV-NOTE: Log removido para evitar spam - só para casos específicos
+      if (process.env.NODE_ENV === 'development' && customer.neighborhood && !newFormData.neighborhood) {
+        console.log('useClientForm - Problema na sincronização do neighborhood:', { 
+          customer: customer.neighborhood, 
+          formData: newFormData.neighborhood 
+        });
+      }
+      
+      setFormData(newFormData);
     }
   }, [customer]);
   

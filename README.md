@@ -24,6 +24,116 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Sistema de Anexos de Contratos
+
+Implementamos um sistema completo de gerenciamento de anexos para contratos com segurança multi-tenant e integração com Supabase Storage.
+
+#### 🔍 **Funcionalidades Implementadas**
+
+**Upload de Arquivos**:
+- Interface drag-and-drop intuitiva
+- Validação de tipos: PDF, DOCX, XLSX, JPEG, PNG
+- Limite de 10MB por arquivo
+- Categorização de anexos (Contrato, Aditivo, Documento do Cliente, Nota Fiscal, Outro)
+
+**Segurança Multi-Tenant**:
+- Bucket `contract-attachments` no Supabase Storage
+- Políticas RLS para todas as operações (SELECT, INSERT, UPDATE, DELETE)
+- Controle de acesso baseado em `tenant_id`
+- Validação dupla: client-side + server-side
+
+**Interface de Usuário**:
+- Design responsivo com Shadcn/UI + Tailwind CSS
+- Animações suaves com Framer Motion
+- Busca e ordenação de anexos
+- Download seguro com URLs temporárias
+- Remoção de arquivos com confirmação
+
+#### 🛠️ **Arquivos Implementados**
+
+1. **Componente Principal**:
+   - `src/components/contracts/parts/ContractAttachments.tsx` - Interface completa de anexos
+   - Integração na aba "Observações" do formulário de contratos
+
+2. **Hook de Gerenciamento**:
+   - `src/hooks/useContractAttachments.ts` - Lógica de negócio e operações seguras
+   - Implementa `useTenantAccessGuard` e `useSecureTenantQuery`
+
+3. **Estrutura de Banco**:
+   - Tabela `contract_attachments` com coluna `tenant_id`
+   - Bucket `contract-attachments` no Supabase Storage
+   - Políticas RLS configuradas para segurança multi-tenant
+
+#### 🎯 **Localização no Sistema**
+
+O sistema de anexos está integrado no formulário de contratos:
+- **Caminho**: Contratos → Novo/Editar Contrato → Aba "Observações"
+- **Disponibilidade**: Apenas após salvar o contrato (quando `contractId` existe)
+
+#### 🔒 **Segurança Implementada**
+
+```typescript
+// AIDEV-NOTE: 5 Camadas de Segurança Multi-Tenant
+1. Validação de Acesso: useTenantAccessGuard()
+2. Consultas Seguras: useSecureTenantQuery()
+3. Query Keys: Sempre incluir tenant_id
+4. Validação Dupla: Client-side + RLS
+5. Auditoria: Logs em operações críticas
+```
+
+### Janeiro 2025: Correção da Estrutura da Tabela message_history
+
+Realizamos uma correção completa da estrutura da tabela `message_history` para alinhar o código com o schema real do banco de dados.
+
+#### 🔍 **Problema Identificado**
+
+**Inconsistências entre código e banco**:
+- Interface `MessageHistory` no código não refletia a estrutura real da tabela
+- Campos inexistentes sendo utilizados (`template_name`, `sent_at`, `message_content`, etc.)
+- Queries falhando por tentar selecionar campos que não existem
+
+#### 🛠️ **Correções Implementadas**
+
+1. **Atualização da Interface MessageHistory**:
+   ```typescript
+   interface MessageHistory {
+     id: string;
+     tenant_id: string;
+     charge_id: string | null;
+     template_id: string | null;
+     customer_id: string | null;
+     message: string | null;
+     status: string | null;
+     error_details: string | null;
+     metadata: any | null;
+     created_at: string;
+     updated_at: string | null;
+     batch_id: string | null;
+   }
+   ```
+
+2. **Arquivos Corrigidos**:
+   - ✅ `src/hooks/useMessageHistory.ts` - Interface e query corrigidas
+   - ✅ `src/components/charges/ChargeMessageHistory.tsx` - Campos de exibição atualizados
+   - ✅ `src/components/charges/ChargeDetails.test.tsx` - Mock data corrigido
+   - ✅ `src/types/database.ts` - Interface principal atualizada
+   - ✅ `src/services/messageService.ts` - Função `recordMessageHistory` corrigida
+
+3. **Mapeamento de Campos Corrigido**:
+   - `sent_at` → `created_at`
+   - `template_name` → `template_id`
+   - `message_content` → `message`
+   - `customer_name` → `metadata.customer_name`
+   - `customer_phone` → `metadata.customer_phone`
+   - `error_message` → `error_details`
+
+#### 🎯 **Resultados**
+
+- ✅ **Consistência**: Código alinhado com schema real do banco
+- ✅ **Funcionalidade**: Histórico de mensagens funcionando corretamente
+- ✅ **Manutenibilidade**: Interface TypeScript reflete estrutura real
+- ✅ **Testes**: Mocks atualizados para refletir dados reais
+
 ### Janeiro 2025: Sistema de Monitoramento de Constraint Violations
 
 Implementamos um sistema completo de monitoramento e prevenção de violações de constraint na tabela `conciliation_staging`, especificamente para o erro `conciliation_staging_origem_check`.

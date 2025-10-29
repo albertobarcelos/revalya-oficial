@@ -8,27 +8,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button as PrimeButton } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
-import { InputSwitch } from 'primereact/inputswitch';
-import { InputTextarea } from 'primereact/inputtextarea';
-import { Checkbox as PrimeCheckbox } from 'primereact/checkbox';
-import { Dialog as PrimeDialog } from 'primereact/dialog';
-import { TabView, TabPanel } from 'primereact/tabview';
-import { Card } from 'primereact/card';
-import { Divider } from 'primereact/divider';
-import { InputNumber } from 'primereact/inputnumber';
-import { Calendar } from 'primereact/calendar';
-import { Panel } from 'primereact/panel';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { Toolbar } from 'primereact/toolbar';
-import { Sidebar } from 'primereact/sidebar';
-import { Badge } from 'primereact/badge';
-import { Tag } from 'primereact/tag';
-import { ProgressSpinner } from 'primereact/progressspinner';
-import { Splitter, SplitterPanel } from 'primereact/splitter';
-import { ScrollPanel } from 'primereact/scrollpanel';
-import { SelectButton } from 'primereact/selectbutton';
-import { Avatar } from 'primereact/avatar';
 
 // PrimeReact CSS
 import 'primereact/resources/themes/lara-light-blue/theme.css';
@@ -98,6 +77,7 @@ import { RecebimentosHistorico, Recebimento } from "./parts/RecebimentosHistoric
 import { ContractTaxes } from "./parts/ContractTaxes";
 import { ContractServices } from "./parts/ContractServices";
 import { ContractDiscounts } from "./parts/ContractDiscounts";
+import { ContractAttachments } from "./parts/ContractAttachments";
 
 // Schema de validação Zod integrado
 const contractSchema = z.object({
@@ -143,32 +123,6 @@ interface FinancialData {
   installments?: number;
   paymentGateway?: string;
 }
-
-// Interface para dados de impostos
-interface TaxData {
-  nbs_code: string;
-  deduction_value: number;
-  service_calculation_base: number;
-  iss_rate: number;
-  iss_value: number;
-  iss_withholding: boolean;
-  ir_rate: number;
-  ir_value: number;
-  ir_withholding: boolean;
-  pis_rate: number;
-  pis_value: number;
-  pis_withholding: boolean;
-  cofins_rate: number;
-  cofins_value: number;
-  cofins_withholding: boolean;
-  withholding_at_source: boolean;
-  municipal_service: boolean;
-  exempt_iss: boolean;
-  suspended_iss: boolean;
-}
-
-// Removido o componente ContractServices local - agora usando o importado de ./parts/ContractServices
-
 // Interface para dados de impostos e retenções
 interface TaxData {
   nbs_code: string;
@@ -207,6 +161,7 @@ interface ServiceDetailFormProps {
     description?: string;
     quantity?: number;
     unit_price?: number;
+    cost_price?: number;
     tax_rate?: number;
     discount_percentage?: number;
     total_amount?: number;
@@ -231,6 +186,7 @@ interface ServiceDetailFormProps {
     description?: string;
     quantity?: number;
     unit_price?: number;
+    cost_price?: number;
     tax_rate?: number;
     discount_percentage?: number;
     total_amount?: number;
@@ -1739,31 +1695,48 @@ function ContractFormContent({
                       </div>
                     )}
                     {activeTab === "observacoes" && (
-                      <div>
+                      <div className="space-y-6">
                         <h2 className="font-medium flex items-center gap-2 mb-4">
                           <MessageSquare className="h-4 w-4 text-primary" />
-                          Observações
+                          Observações e Anexos
                         </h2>
-                        <FormField
-                          control={form.control}
-                          name="internal_notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-medium">Observações Internas</FormLabel>
-                              <FormControl>
-                                <Textarea
-                                  placeholder="Adicione observações internas sobre este contrato..."
-                                  className="resize-none h-24 text-sm"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormDescription className="text-xs">
-                                Estas observações são apenas para uso interno e não serão visíveis para o cliente.
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        
+                        {/* AIDEV-NOTE: Seção de observações internas */}
+                        <div className="bg-card rounded-lg border border-border/50 p-4">
+                          <FormField
+                            control={form.control}
+                            name="internal_notes"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-medium">Observações Internas</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Adicione observações internas sobre este contrato..."
+                                    className="resize-none h-24 text-sm"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {/* AIDEV-NOTE: Seção de anexos - só exibe se contractId existir */}
+                        {contractId && (
+                          <div className="bg-card rounded-lg border border-border/50 p-4">
+                            <ContractAttachments contractId={contractId} />
+                          </div>
+                        )}
+                        
+                        {/* AIDEV-NOTE: Aviso quando não há contractId */}
+                        {!contractId && (
+                          <div className="bg-muted/30 rounded-lg border border-border/30 p-4">
+                            <p className="text-sm text-muted-foreground text-center">
+                              Os anexos estarão disponíveis após salvar o contrato.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 

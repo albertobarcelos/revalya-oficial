@@ -23,6 +23,7 @@ export interface Service {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   is_active: boolean;
@@ -55,6 +56,7 @@ export interface ServiceData {
   description?: string;
   code?: string;
   default_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo para cálculo de margem
   tax_rate: number;
   tax_code?: string;
   is_active?: boolean;
@@ -275,6 +277,13 @@ export function useServices(filters: ServiceFilters = {}) {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
           }
         });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
       }
     }
   );
@@ -358,6 +367,13 @@ export function useServices(filters: ServiceFilters = {}) {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
           }
         });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
       }
     }
   );
@@ -403,6 +419,13 @@ export function useServices(filters: ServiceFilters = {}) {
         queryClient.invalidateQueries({
           predicate: (query) => {
             return query.queryKey[0] === 'services' && query.queryKey[1] === currentTenant?.id;
+          }
+        });
+        
+        // AIDEV-NOTE: Invalidar também o cache do gerador de código para garantir que o próximo código seja recalculado
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            return query.queryKey[0] === 'service-max-code' && query.queryKey[1] === currentTenant?.id;
           }
         });
       }

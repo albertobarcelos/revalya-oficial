@@ -14,11 +14,17 @@ import { useTenantAccessGuard, useSecureTenantQuery } from './templates/useSecur
 
 export interface MessageHistory {
   id: string;
-  sent_at: string;
-  template_name: string;
-  status: 'delivered' | 'read' | 'sent';
-  message: string;
   tenant_id: string; // 🛡️ OBRIGATÓRIO para segurança multi-tenant
+  charge_id: string;
+  template_id: string | null;
+  customer_id: string | null;
+  message: string;
+  status: string;
+  error_details: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+  batch_id: string | null;
 }
 
 export function useMessageHistory(chargeId: string | null) {
@@ -64,10 +70,10 @@ export function useMessageHistory(chargeId: string | null) {
       // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
       const { data, error } = await supabase
         .from('message_history')
-        .select('id, sent_at, template_name, status, message, tenant_id')
+        .select('id, tenant_id, charge_id, template_id, customer_id, message, status, error_details, metadata, created_at, updated_at, batch_id')
         .eq('tenant_id', tenantId) // 🛡️ FILTRO CRÍTICO
         .eq('charge_id', chargeId)
-        .order('sent_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('🚨 [ERROR] useMessageHistory - Erro na consulta:', error);

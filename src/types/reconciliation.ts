@@ -129,6 +129,10 @@ export interface ImportedMovement {
   installment_number?: number;           // Número da parcela
   installment_count?: number;            // Total de parcelas
   
+  // AIDEV-NOTE: Campos de pagamento
+  pix_key?: string;                      // Chave PIX
+  barcode?: string;                      // Código de barras
+  
   // AIDEV-NOTE: URLs e documentos
   invoice_url?: string;                  // URL da fatura
   bank_slip_url?: string;                // URL do boleto

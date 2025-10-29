@@ -180,9 +180,15 @@ export function ClientSearch({
                                   {customer.company}
                                 </Badge>
                               )}
+                              {customer.cpf_cnpj && (
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  {formatDocument(customer.cpf_cnpj)}
+                                </Badge>
+                              )}
                             </div>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
                               {customer.email && (
                                 <div className="flex items-center gap-2">
                                   <Mail className="h-4 w-4 flex-shrink-0" />
@@ -194,13 +200,6 @@ export function ClientSearch({
                                 <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 flex-shrink-0" />
                                   <span>{customer.phone}</span>
-                                </div>
-                              )}
-                              
-                              {customer.cpf_cnpj && (
-                                <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 flex-shrink-0" />
-                                  <span>{formatDocument(customer.cpf_cnpj)}</span>
                                 </div>
                               )}
                             </div>

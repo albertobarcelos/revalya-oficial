@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
+import { getCurrentUser } from '@/utils/supabaseAuthManager';
 import {
   DigitalContract,
   DigitalContractSignature,
@@ -204,6 +205,17 @@ export const useDigitalContracts = (): UseDigitalContractsReturn => {
     setError(null);
 
     try {
+      // AIDEV-NOTE: Obter usuário atual para configurar contexto
+      const currentUser = await getCurrentUser();
+      const userId = currentUser?.id || null;
+      const tenantId = user.user_metadata?.tenant_id;
+      
+      // AIDEV-NOTE: Configurar contexto com user_id para popular updated_by
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId,
+        p_user_id: userId
+      });
+
       const { error } = await supabase
         .from('digital_contracts')
         .update({
@@ -211,7 +223,7 @@ export const useDigitalContracts = (): UseDigitalContractsReturn => {
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
-        .eq('tenant_id', user.user_metadata?.tenant_id);
+        .eq('tenant_id', tenantId);
 
       if (error) {
         throw new Error(error.message || 'Erro ao atualizar contrato');
