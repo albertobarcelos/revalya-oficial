@@ -7,6 +7,8 @@ import { AlertCircle } from "lucide-react";
 import { useContractReceivables, FinanceEntry } from "@/hooks/useFinanceEntries";
 import { useTenantAccessGuard, useSecureTenantQuery } from "@/hooks/templates/useSecureTenantQuery";
 import { formatCurrency } from "@/lib/utils";
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Tipo de recebimento (mock inicial - mantido para compatibilidade)
 export interface Recebimento {
@@ -126,8 +128,18 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
     }).format(value);
   };
 
+  // AIDEV-NOTE: Função corrigida para evitar problemas de timezone
+  // Usa date-fns para garantir formatação correta das datas do banco
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    try {
+      // parseISO trata corretamente strings de data ISO sem problemas de timezone
+      const date = parseISO(dateString);
+      return format(date, 'dd/MM/yyyy', { locale: ptBR });
+    } catch (error) {
+      console.warn('Erro ao formatar data:', dateString, error);
+      // Fallback para o formato original em caso de erro
+      return new Date(dateString).toLocaleDateString('pt-BR');
+    }
   };
 
   const getStatusLabel = (status: string) => {

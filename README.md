@@ -24,6 +24,239 @@ O sistema implementa uma arquitetura multi-tenant sofisticada com:
 
 ## Atualizações Recentes
 
+### Janeiro 2025: Sistema de Anexos de Contratos
+
+Implementamos um sistema completo de gerenciamento de anexos para contratos com segurança multi-tenant e integração com Supabase Storage.
+
+#### 🔍 **Funcionalidades Implementadas**
+
+**Upload de Arquivos**:
+- Interface drag-and-drop intuitiva
+- Validação de tipos: PDF, DOCX, XLSX, JPEG, PNG
+- Limite de 10MB por arquivo
+- Categorização de anexos (Contrato, Aditivo, Documento do Cliente, Nota Fiscal, Outro)
+
+**Segurança Multi-Tenant**:
+- Bucket `contract-attachments` no Supabase Storage
+- Políticas RLS para todas as operações (SELECT, INSERT, UPDATE, DELETE)
+- Controle de acesso baseado em `tenant_id`
+- Validação dupla: client-side + server-side
+
+**Interface de Usuário**:
+- Design responsivo com Shadcn/UI + Tailwind CSS
+- Animações suaves com Framer Motion
+- Busca e ordenação de anexos
+- Download seguro com URLs temporárias
+- Remoção de arquivos com confirmação
+
+#### 🛠️ **Arquivos Implementados**
+
+1. **Componente Principal**:
+   - `src/components/contracts/parts/ContractAttachments.tsx` - Interface completa de anexos
+   - Integração na aba "Observações" do formulário de contratos
+
+2. **Hook de Gerenciamento**:
+   - `src/hooks/useContractAttachments.ts` - Lógica de negócio e operações seguras
+   - Implementa `useTenantAccessGuard` e `useSecureTenantQuery`
+
+3. **Estrutura de Banco**:
+   - Tabela `contract_attachments` com coluna `tenant_id`
+   - Bucket `contract-attachments` no Supabase Storage
+   - Políticas RLS configuradas para segurança multi-tenant
+
+#### 🎯 **Localização no Sistema**
+
+O sistema de anexos está integrado no formulário de contratos:
+- **Caminho**: Contratos → Novo/Editar Contrato → Aba "Observações"
+- **Disponibilidade**: Apenas após salvar o contrato (quando `contractId` existe)
+
+#### 🔒 **Segurança Implementada**
+
+```typescript
+// AIDEV-NOTE: 5 Camadas de Segurança Multi-Tenant
+1. Validação de Acesso: useTenantAccessGuard()
+2. Consultas Seguras: useSecureTenantQuery()
+3. Query Keys: Sempre incluir tenant_id
+4. Validação Dupla: Client-side + RLS
+5. Auditoria: Logs em operações críticas
+```
+
+### Janeiro 2025: Correção da Estrutura da Tabela message_history
+
+Realizamos uma correção completa da estrutura da tabela `message_history` para alinhar o código com o schema real do banco de dados.
+
+#### 🔍 **Problema Identificado**
+
+**Inconsistências entre código e banco**:
+- Interface `MessageHistory` no código não refletia a estrutura real da tabela
+- Campos inexistentes sendo utilizados (`template_name`, `sent_at`, `message_content`, etc.)
+- Queries falhando por tentar selecionar campos que não existem
+
+#### 🛠️ **Correções Implementadas**
+
+1. **Atualização da Interface MessageHistory**:
+   ```typescript
+   interface MessageHistory {
+     id: string;
+     tenant_id: string;
+     charge_id: string | null;
+     template_id: string | null;
+     customer_id: string | null;
+     message: string | null;
+     status: string | null;
+     error_details: string | null;
+     metadata: any | null;
+     created_at: string;
+     updated_at: string | null;
+     batch_id: string | null;
+   }
+   ```
+
+2. **Arquivos Corrigidos**:
+   - ✅ `src/hooks/useMessageHistory.ts` - Interface e query corrigidas
+   - ✅ `src/components/charges/ChargeMessageHistory.tsx` - Campos de exibição atualizados
+   - ✅ `src/components/charges/ChargeDetails.test.tsx` - Mock data corrigido
+   - ✅ `src/types/database.ts` - Interface principal atualizada
+   - ✅ `src/services/messageService.ts` - Função `recordMessageHistory` corrigida
+
+3. **Mapeamento de Campos Corrigido**:
+   - `sent_at` → `created_at`
+   - `template_name` → `template_id`
+   - `message_content` → `message`
+   - `customer_name` → `metadata.customer_name`
+   - `customer_phone` → `metadata.customer_phone`
+   - `error_message` → `error_details`
+
+#### 🎯 **Resultados**
+
+- ✅ **Consistência**: Código alinhado com schema real do banco
+- ✅ **Funcionalidade**: Histórico de mensagens funcionando corretamente
+- ✅ **Manutenibilidade**: Interface TypeScript reflete estrutura real
+- ✅ **Testes**: Mocks atualizados para refletir dados reais
+
+### Janeiro 2025: Sistema de Monitoramento de Constraint Violations
+
+Implementamos um sistema completo de monitoramento e prevenção de violações de constraint na tabela `conciliation_staging`, especificamente para o erro `conciliation_staging_origem_check`.
+
+#### 🔍 **Problema Investigado**
+
+**Erro Principal**: `new row for relation "conciliation_staging" violates check constraint "conciliation_staging_origem_check"`
+
+**Investigação Realizada**:
+- ✅ Análise completa de logs do PostgreSQL
+- ✅ Verificação de todas as Edge Functions ASAAS
+- ✅ Auditoria de APIs de reconciliação
+- ✅ Busca por scripts de importação manual
+- ✅ Verificação de processos externos
+
+**Conclusão**: Nenhum código estava inserindo dados incorretos. Todos os sistemas estão corretamente configurados para usar `origem: 'ASAAS'` (maiúsculo).
+
+#### 🛠️ **Sistema de Monitoramento Implementado**
+
+1. **Tabela de Log de Violações**:
+   ```sql
+   CREATE TABLE constraint_violation_log (
+     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+     table_name TEXT NOT NULL,
+     constraint_name TEXT NOT NULL,
+     attempted_value TEXT,
+     tenant_id UUID,
+     error_message TEXT,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+2. **Edge Function de Monitoramento**:
+   - 🔍 Detecção automática de violações
+   - 📊 Análise de tendências e estatísticas
+   - 🚨 Sistema de alertas por severidade
+   - 📝 Logging completo de verificações
+
+3. **Trigger de Captura**:
+   ```sql
+   -- Captura tentativas de inserção inválidas antes que causem erro
+   CREATE TRIGGER conciliation_staging_violation_log
+   BEFORE INSERT OR UPDATE ON conciliation_staging
+   FOR EACH ROW EXECUTE FUNCTION trigger_log_conciliation_staging_violation();
+   ```
+
+#### 📊 **Níveis de Alerta**
+- 🔴 **CRÍTICO**: > 10 violações/hora
+- 🟡 **ATENÇÃO**: 5-10 violações/hora
+- 🟢 **NORMAL**: < 5 violações/hora
+
+#### 📚 **Documentação Criada**
+- [`TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md`](./TROUBLESHOOTING_CONSTRAINT_VIOLATIONS.md) - Guia completo de troubleshooting
+- [`MONITORAMENTO_CONSTRAINT_VIOLATIONS.md`](./MONITORAMENTO_CONSTRAINT_VIOLATIONS.md) - Sistema de monitoramento
+- [`SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md`](./SOLUCAO_FINAL_CONSTRAINT_VIOLATIONS.md) - Documentação da solução final
+
+#### 🎯 **Resultados**
+- ✅ **Sistema preventivo** implementado
+- ✅ **Monitoramento automático** a cada 15 minutos
+- ✅ **Documentação completa** para troubleshooting
+- ✅ **Alertas proativos** para problemas futuros
+
+### Janeiro 2025: Correções na Integração ASAAS - Mapeamento Completo de Dados
+
+Implementamos correções críticas na integração ASAAS para garantir o mapeamento completo de todos os campos de cliente e dados de cobrança.
+
+#### 🐛 **Problemas Identificados e Corrigidos**
+
+1. **Campo `invoice_number` Ausente**:
+   - **Problema**: Campo `invoice_number` não existia na tabela `conciliation_staging`
+   - **Solução**: Adicionada migração para incluir o campo `invoice_number` com índice otimizado
+   - **Impacto**: Agora capturamos o número da nota fiscal do ASAAS corretamente
+
+2. **Mapeamento Incompleto de Dados do Cliente**:
+   - **Problema**: Função de importação ASAAS não mapeava todos os campos de cliente disponíveis
+   - **Campos Corrigidos**:
+     - `customer_phone` ← `customerData?.phone`
+     - `customer_mobile_phone` ← `customerData?.mobilePhone`
+     - `customer_address` ← `customerData?.address`
+     - `customer_address_number` ← `customerData?.addressNumber`
+     - `customer_complement` ← `customerData?.complement`
+     - `customer_province` ← `customerData?.neighborhood`
+     - `customer_city` ← `customerData?.cityName`
+     - `customer_state` ← `customerData?.state`
+     - `customer_postal_code` ← `customerData?.postalCode`
+     - `customer_country` ← `customerData?.country`
+     - `invoice_number` ← `payment.invoiceNumber`
+
+3. **Atualização de Registros Existentes**:
+   - **Problema**: Ao atualizar registros existentes, dados do cliente não eram atualizados
+   - **Solução**: Implementada busca e atualização completa dos dados do cliente em ambos os fluxos (inserção e atualização)
+
+#### 🛠️ **Alterações Técnicas Implementadas**
+
+1. **Migração de Banco de Dados**:
+   ```sql
+   -- Adição do campo invoice_number
+   ALTER TABLE conciliation_staging 
+   ADD COLUMN IF NOT EXISTS invoice_number TEXT;
+   
+   -- Índice para performance
+   CREATE INDEX IF NOT EXISTS idx_conciliation_staging_invoice_number
+   ON conciliation_staging(tenant_id, invoice_number) 
+   WHERE invoice_number IS NOT NULL;
+   ```
+
+2. **Atualização da Edge Function `asaas-import-charges`**:
+   - ✅ Mapeamento completo de todos os campos de cliente
+   - ✅ Inclusão do campo `invoice_number`
+   - ✅ Atualização de dados do cliente em registros existentes
+   - ✅ Busca de dados do cliente via API ASAAS em ambos os fluxos
+
+3. **Consistência com Webhook ASAAS**:
+   - ✅ Verificado que o webhook `asaas-webhook-charges` já possui mapeamento completo
+   - ✅ Ambos os sistemas (import e webhook) agora têm paridade de dados
+
+#### 🎯 **Resultados**
+
+- ✅ **Dados Completos**: Todos os campos de cliente do ASAAS são capturados
+- ✅ **Nota Fiscal**: Campo `invoice_number` disponível para reconciliação
+- ✅ **Consistência**: Paridade entre webhook e importação manual
+- ✅ **Performance**: Índices otimizados para consultas por `invoice_number`
+- ✅ **Integridade**: Dados do cliente sempre atualizados, mesmo em registros existentes
 ### Janeiro 2025: Campo Generate Billing para Controle de Faturamento Automático
 
 Implementamos o campo `generate_billing` na tabela `contracts` para permitir controle granular sobre quais contratos devem gerar cobranças automáticas no sistema.

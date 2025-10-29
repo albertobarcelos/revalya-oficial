@@ -3,7 +3,7 @@ const https = require('https');
 
 // AIDEV-NOTE: Configurações do teste
 const WEBHOOK_URL = 'https://wyehpiutzvwplllumgdk.supabase.co/functions/v1/asaas-webhook-charges/8d2888f1-64a5-445f-84f5-2614d5160251';
-const ASAAS_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5ZWhwaXV0enZ3cGxsbHVtZ2RrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI3MDMxNzQsImV4cCI6MjA1ODI3OTE3NH0.j2vPVxP6pP9WyGgKqaI3imNQmkfMBzFTqzBdj2CJhaY';
+const ASAAS_TOKEN = 'asaas_webhook_secret_7c8b19f84a1b4a7d9f2e65c34eaf8d90f72b3c1a7d4c8b6e0f15a3c2e9b8d7f4';
 
 // AIDEV-NOTE: Payload real do ASAAS fornecido pelo usuário
 const realPayload = {

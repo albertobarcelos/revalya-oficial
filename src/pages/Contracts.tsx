@@ -55,9 +55,12 @@ export default function Contracts() {
   
   // 🛡️ PROTEÇÃO CRÍTICA CONTRA VAZAMENTO DE DADOS ENTRE TENANTS
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+
+  // ✅ TODOS OS HOOKS DEVEM SER DECLARADOS ANTES DOS EARLY RETURNS
+  // AIDEV-NOTE: Movendo todos os hooks para antes dos guard clauses para evitar "Rendered fewer hooks than expected"
   const queryClient = useQueryClient();
   
-  // Estados do componente - SEMPRE declarados antes de qualquer return condicional
+  // Estados do componente - SEMPRE declarados antes de qualquer early return
   const [viewState, setViewState] = useState<ViewState>("list");
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -68,8 +71,9 @@ export default function Contracts() {
   
   // Hook para atualizar a lista de contratos após operações - SEMPRE chamado
   const { refetch: forceRefreshContracts } = useContracts({});
-  
+
   // 🚨 FORÇA LIMPEZA COMPLETA DO CACHE AO TROCAR TENANT
+  // AIDEV-NOTE: Otimizado para evitar re-renders excessivos - removido queryClient das dependências
   React.useEffect(() => {
     if (currentTenant?.id) {
       console.log(`🧹 [CACHE] Limpando cache para tenant: ${currentTenant.name} (${currentTenant.id})`);
@@ -78,7 +82,7 @@ export default function Contracts() {
       // Remover dados em cache que possam estar contaminados
       queryClient.removeQueries({ queryKey: ['contracts'] });
     }
-  }, [currentTenant?.id, queryClient]);
+  }, [currentTenant?.id]); // AIDEV-NOTE: Removido queryClient para evitar re-renders desnecessários
 
   // Título dinâmico baseado no modo do formulário - SEMPRE calculado
   const formTitle = useMemo(() => {
@@ -90,7 +94,7 @@ export default function Contracts() {
     }
   }, [formMode]);
 
-  // Manipuladores de eventos - SEMPRE declarados antes do guard clause
+  // Manipuladores de eventos - SEMPRE declarados antes dos guard clauses
   const handleBackToList = useCallback(() => {
     setSelectedContractId(null);
     setIsFormDialogOpen(false);
@@ -194,7 +198,7 @@ export default function Contracts() {
     navigate(`/${slug}/contratos`);
   }, [hasUnsavedChanges, formMode, navigate, slug]);
 
-  // Efeito para sincronizar com a URL - SEMPRE declarado antes do guard clause
+  // Efeito para sincronizar com a URL - SEMPRE declarado antes dos guard clauses
   React.useEffect(() => {
     const id = searchParams.get('id');
     const mode = searchParams.get('mode') || 'view';
@@ -222,17 +226,15 @@ export default function Contracts() {
     }
   }, [searchParams]);
   
-  // 🔍 DEBUG: Log do estado do tenant na página
-  console.log(`🔍 [DEBUG] Contracts Page - Tenant:`, {
-    hasAccess,
-    accessError,
-    currentTenant,
-    tenantId: currentTenant?.id,
-    tenantName: currentTenant?.name,
-    tenantSlug: currentTenant?.slug,
-    urlSlug: slug,
-    slugMatch: currentTenant?.slug === slug
-  });
+  // 🔍 AUDIT LOG: Página renderizada com sucesso - APENAS UMA VEZ por sessão
+  React.useEffect(() => {
+    if (currentTenant?.id) {
+      console.log(`✅ [AUDIT] Página Contratos renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
+    }
+  }, [currentTenant?.id]); // Executa apenas quando o tenant muda
+
+  // 🚨 GUARD CLAUSES CRÍTICOS - EXECUTADOS APÓS TODOS OS HOOKS
+  // AIDEV-NOTE: Movidos para depois dos hooks para evitar erro "Rendered fewer hooks than expected"
   
   // 🚨 VALIDAÇÃO CRÍTICA: Verificar se o tenant corresponde ao slug da URL
   if (currentTenant && currentTenant.slug !== slug) {
@@ -251,29 +253,13 @@ export default function Contracts() {
 
   // 🚨 GUARD CLAUSE CRÍTICO - IMPEDE RENDERIZAÇÃO SEM ACESSO VÁLIDO
   if (!hasAccess) {
-    console.log(`🚨 [DEBUG] Acesso negado - hasAccess: ${hasAccess}, accessError: ${accessError}`);
+    // AIDEV-NOTE: Log condicional apenas quando há erro de acesso
+    if (accessError) {
+      console.log(`🚨 [DEBUG] Acesso negado - hasAccess: ${hasAccess}, accessError: ${accessError}`);
+    }
     return (
       <Layout>
         <ContractFormSkeletonSimple />
-      </Layout>
-    );
-  }
-  
-  // 🔍 AUDIT LOG: Página renderizada com sucesso
-  console.log(`✅ [AUDIT] Página Contratos renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
-
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="space-y-6 p-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <div className="h-8 w-32 bg-slate-700 rounded animate-pulse"></div>
-            </div>
-            <div className="h-9 w-24 bg-slate-700 rounded animate-pulse"></div>
-          </div>
-          <ContractFormSkeleton />
-        </div>
       </Layout>
     );
   }
@@ -281,11 +267,6 @@ export default function Contracts() {
   return (
     <Layout>
       <div className={viewState !== "list" ? "hidden" : ""}>
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Contratos - {currentTenant?.name}</h1>
-          <div className="flex gap-2">
-          </div>
-        </div>
         <ContractList 
           onCreateContract={handleCreateContract} 
           onViewContract={handleViewContract}

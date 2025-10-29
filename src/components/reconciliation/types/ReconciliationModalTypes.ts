@@ -147,15 +147,15 @@ export const RECONCILIATION_MODAL_CONFIG: ReconciliationModalConfig = {
   }
 };
 
-// AIDEV-NOTE: Estado inicial padrão para filtros
+// AIDEV-NOTE: Estado inicial padrão para filtros - Ajustado para mostrar todos os registros inicialmente
 export const getInitialFilters = (): ReconciliationFilters => {
-  const monthRange = RECONCILIATION_MODAL_CONFIG.filters.defaultDateRange();
+  // AIDEV-NOTE: Removendo filtros restritivos para mostrar todos os dados importados
   return {
-    status: ReconciliationStatus.PENDING,
+    status: 'ALL' as any, // Mudança: era PENDING, agora ALL
     source: 'ALL' as any,
     hasContract: 'ALL' as any,
-    dateFrom: monthRange.start,
-    dateTo: monthRange.end,
+    dateFrom: '', // Mudança: era monthRange.start, agora vazio (sem filtro de data)
+    dateTo: '', // Mudança: era monthRange.end, agora vazio (sem filtro de data)
     search: '',
     accountFilter: '',
     asaasNossoNumero: '',
@@ -192,13 +192,13 @@ export const INITIAL_PAGINATION_STATE: ReconciliationPagination = {
   total: 0
 };
 
-// AIDEV-NOTE: Constante para estado inicial de filtros (compatibilidade)
+// AIDEV-NOTE: Constante para estado inicial de filtros (compatibilidade) - Ajustado para mostrar todos os registros
 export const INITIAL_FILTERS_STATE: ReconciliationFilters = {
-  status: ReconciliationStatus.PENDING,
+  status: 'ALL' as any, // Mudança: era PENDING, agora ALL
   source: 'ALL' as any,
   hasContract: 'ALL' as any,
-  dateFrom: '',
-  dateTo: '',
+  dateFrom: '', // Mudança: era vazio, mantido vazio (sem filtro de data)
+  dateTo: '', // Mudança: era vazio, mantido vazio (sem filtro de data)
   search: '',
   accountFilter: '',
   asaasNossoNumero: '',

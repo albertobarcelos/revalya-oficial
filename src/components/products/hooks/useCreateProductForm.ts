@@ -24,7 +24,7 @@ interface CreateProductFormData {
 export function useCreateProductForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { currentTenant } = useTenantContext();
+  const { tenant: currentTenant } = useTenantContext();
 
   // 🔄 Estado inicial do formulário para criação
   const [formData, setFormData] = useState<CreateProductFormData>({
@@ -40,6 +40,8 @@ export function useCreateProductForm() {
     unit_of_measure: null,
     is_active: true,
   });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 🔐 Mutação segura para criação de produtos
   const createProductMutation = useSecureTenantMutation(
@@ -183,18 +185,23 @@ export function useCreateProductForm() {
   }, [formData, currentTenant, toast]);
 
   // 🔄 Função para submeter o formulário
-  const handleSubmit = useCallback(async (): Promise<boolean> => {
-    if (!validateForm()) {
-      return false;
-    }
+  const handleSubmit = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!validateForm()) {
+        resolve(false);
+        return;
+      }
 
-    try {
-      await createProductMutation.mutateAsync(formData);
-      return true;
-    } catch (error) {
-      console.error('[ERROR] Erro na submissão:', error);
-      return false;
-    }
+      createProductMutation.mutate(formData, {
+        onSuccess: () => {
+          resolve(true);
+        },
+        onError: (error) => {
+          console.error('[ERROR] Erro na submissão:', error);
+          resolve(false);
+        }
+      });
+    });
   }, [formData, validateForm, createProductMutation]);
 
   return {

@@ -266,12 +266,17 @@ class GatewayService {
   }
 
   private mapAsaasStatus(status: string): string {
+    // AIDEV-NOTE: Mapeamento padronizado conforme constantes em chargeStatus.ts
     const statusMap: Record<string, string> = {
       'PENDING': 'PENDING',
-      'RECEIVED': 'PAID',
+      'RECEIVED': 'RECEIVED',
       'CONFIRMED': 'CONFIRMED',
       'OVERDUE': 'OVERDUE',
-      'REFUNDED': 'REFUNDED'
+      'REFUNDED': 'REFUNDED',
+      'DELETED': 'CANCELLED',
+      'FAILED': 'FAILED',
+      'AWAITING_RISK_ANALYSIS': 'BANK_PROCESSING',
+      'PROCESSING': 'BANK_PROCESSING'
     };
     return statusMap[status] || status;
   }

@@ -8,14 +8,14 @@ const mockStagingData = [
   {
     id: "e87e3382-acf0-4905-850e-cd9e2874d586",
     tenant_id: "8d2888f1-64a5-445f-84f5-2614d5160251",
-    origem: "asaas",
+    origem: "ASAAS", // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
     id_externo: "pay_fmfs6n2lleuy79n4",
     customer_name: "Marcia de Lima Aguiar",
     customer_document: "61682501000190",
     valor_cobranca: "299.90",
     valor_pago: "299.90",
     status_externo: "received",
-    status_conciliacao: "PENDING"
+    status_conciliacao: "PENDENTE" // AIDEV-NOTE: Status em MAIÚSCULO
   }
 ];
 

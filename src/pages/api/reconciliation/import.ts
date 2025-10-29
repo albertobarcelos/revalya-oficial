@@ -91,7 +91,7 @@ export default async function handler(
       .from('conciliation_staging')
       .select('id, id_externo')
       .eq('tenant_id', tenantId)
-      .eq('origem', 'ASAAS')
+      .eq('origem', 'ASAAS') // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
       .in('id_externo', externalIds);
 
     const existingIds = new Set(existingRecords?.map(record => record.id_externo) || []);
@@ -111,12 +111,12 @@ export default async function handler(
     // AIDEV-NOTE: Preparar dados para inserção na tabela conciliation_staging
     const recordsToInsert = newRecords.map((payment: any) => ({
       tenant_id: tenantId,
-      origem: 'ASAAS',
+      origem: 'ASAAS', // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
       id_externo: payment.id,
       valor_cobranca: parseFloat(payment.value || '0'),
       valor_pago: parseFloat(payment.netValue || payment.value || '0'),
       status_externo: payment.status || 'PENDING',
-      status_conciliacao: 'PENDING',
+      status_conciliacao: 'PENDENTE', // AIDEV-NOTE: Status padrão em MAIÚSCULO
       juros_multa_diferenca: (parseFloat(payment.interestValue || '0') + parseFloat(payment.fineValue || '0') - parseFloat(payment.discountValue || '0')),
       data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString() : null,
       data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,

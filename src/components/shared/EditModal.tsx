@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useServiceCodeGenerator } from '@/hooks/useServiceCodeGenerator';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +59,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Save, X, AlertCircle, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { getEditConfig, getDynamicServiceConfig } from './EditModalConfigs';
+import { getEditConfig, getDynamicServiceConfig, getServiceEditConfig } from './EditModalConfigs';
 
 // AIDEV-NOTE: Tipos para configuração dinâmica de campos
 export interface FieldConfig {
@@ -396,13 +397,31 @@ export function EditModal<T = any>({
   // AIDEV-NOTE: Referência para timeout de debounce na validação de código
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // AIDEV-NOTE: Hook para geração automática de códigos de serviços
+  const {
+    hasAccess: hasCodeAccess,
+    nextAvailableCode,
+    isLoadingMaxCode,
+    generateNextCode,
+    validateCodeExists,
+    refreshMaxCode
+  } = useServiceCodeGenerator();
+  
   // AIDEV-NOTE: Obter configuração baseada no tipo de entidade ou usar campos customizados
   // Para serviços, usa configuração dinâmica baseada na unidade de cobrança
   const [dynamicFields, setDynamicFields] = useState<FieldConfig[]>([]);
   
-  const config = entityType ? getEditConfig(entityType) : null;
+  // AIDEV-NOTE: Configuração com placeholder dinâmico para serviços
+  const getServiceConfig = () => {
+    if (entityType === 'service' && !customFields) {
+      return getServiceEditConfig(nextAvailableCode, isLoadingMaxCode);
+    }
+    return entityType ? getEditConfig(entityType) : null;
+  };
+  
+  const config = getServiceConfig();
   const baseFields = customFields || config?.fields || [];
-  const fields = entityType === 'service' ? dynamicFields : baseFields;
+  const fields = entityType === 'service' && !customFields ? baseFields : (entityType === 'service' ? dynamicFields : baseFields);
   const validationSchema = customValidation || config?.validation;
 
   // AIDEV-NOTE: Configuração do formulário com React Hook Form + Zod
@@ -412,7 +431,7 @@ export function EditModal<T = any>({
     mode: 'onChange' // Habilita validação em tempo real
   });
 
-  // AIDEV-NOTE: Reset form quando data muda
+  // AIDEV-NOTE: Reset form quando data muda ou quando modal abre para criação
   useEffect(() => {
     if (data) {
       // Processa valores null/undefined para campos opcionais
@@ -424,8 +443,12 @@ export function EditModal<T = any>({
       }, {} as any);
       
       form.reset(processedData);
+    } else if (isOpen) {
+      // AIDEV-NOTE: Limpa o formulário quando abre para criação (data é null/undefined)
+      console.log('🧹 [FORM-RESET] Limpando formulário para novo registro');
+      form.reset({});
     }
-  }, [data, form]);
+  }, [data, form, isOpen]);
 
   // AIDEV-NOTE: Inicializar campos dinâmicos para serviços
   useEffect(() => {
@@ -452,6 +475,18 @@ export function EditModal<T = any>({
       validationTimeoutRef.current = null;
     }
   }, [isOpen]);
+
+  // AIDEV-NOTE: Geração automática de código para novos serviços
+  useEffect(() => {
+    if (isOpen && entityType === 'service' && !data && hasCodeAccess && nextAvailableCode) {
+      // Só gera código se for criação (não edição) e se não há código já definido
+      const currentCode = form.getValues('code');
+      if (!currentCode || currentCode.trim() === '') {
+        console.log('🔢 [AUTO-GENERATE] Gerando código automático para novo serviço:', nextAvailableCode);
+        form.setValue('code', nextAvailableCode, { shouldValidate: true });
+      }
+    }
+  }, [isOpen, entityType, data, hasCodeAccess, nextAvailableCode, form]);
 
   // AIDEV-NOTE: Função de submit com tratamento de erro
   const handleSubmit = async (formData: any) => {

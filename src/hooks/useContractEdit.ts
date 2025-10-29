@@ -71,26 +71,38 @@ export function useContractEdit(): UseContractEditReturn {
           .eq('tenant_id', currentTenant.id)
           .single(),
         
-        // Buscar serviços do contrato
+        // Buscar serviços do contrato usando a view detalhada
         supabase
-          .from('contract_services')
+          .from('vw_contract_services_detailed')
           .select(`
-            *,
-            payment_method,
-            card_type,
+            contract_service_id,
+            contract_id,
+            service_id,
+            quantity,
+            unit_price,
+            discount_percentage,
+            discount_amount,
+            total_amount,
+            tax_rate,
+            tax_amount,
             billing_type,
             recurrence_frequency,
-            installments,
-            due_date_type,
-            due_days,
-            due_day,
+            payment_method,
+            due_type,
+            due_value,
             due_next_month,
-            service:services(
-              id,
-              name,
-              description,
-              default_price
-            )
+            no_charge,
+            generate_billing,
+            is_active,
+            created_at,
+            updated_at,
+            tenant_id,
+            service_name,
+            service_description,
+            default_price,
+            cost_price,
+            unit_type,
+            service_tax_rate
           `)
           .eq('contract_id', contractId)
           .eq('tenant_id', currentTenant.id)
@@ -129,11 +141,15 @@ export function useContractEdit(): UseContractEditReturn {
       const services = servicesResult.data || [];
       const products = productsResult.data || [];
       
+      // AIDEV-NOTE: Corrigir mapeamento do cliente - Supabase retorna em 'customers', não 'customer'
+      const customer = contract.customers || null;
+      
       console.log('✅ Dados carregados:', {
         contract: contract.contract_number,
         servicesCount: services.length,
         productsCount: products.length,
-        customer: contract.customer?.name
+        customer: customer?.name || 'Cliente não encontrado',
+        customerData: customer
       });
 
       // 🔧 PREPARAR DADOS PARA O FORMULÁRIO
@@ -205,13 +221,13 @@ export function useContractEdit(): UseContractEditReturn {
       
       const formattedServices = services.map(service => {
         const formattedService = {
-          id: service.id,
+          id: service.contract_service_id, // AIDEV-NOTE: Usando contract_service_id da view
           service_id: service.service_id,
-          name: service.service?.name || service.description,
-          description: service.description,
+          name: service.service_name || service.service_description, // AIDEV-NOTE: Usando service_name da view
+          description: service.service_description,
           quantity: service.quantity,
           unit_price: service.unit_price,
-          default_price: service.service?.default_price || service.unit_price,
+          default_price: service.default_price || service.unit_price,
           discount_percentage: service.discount_percentage,
           tax_rate: service.tax_rate,
           total_amount: service.total_amount,
@@ -224,9 +240,8 @@ export function useContractEdit(): UseContractEditReturn {
           recurrence_frequency: reverseMapRecurrenceFrequency(service.recurrence_frequency),
           installments: service.installments || 1,
           // Campos de vencimento - AIDEV-NOTE: Preservar dados de vencimento do banco (não usar padrões se não existirem)
-          due_date_type: service.due_date_type,
-          due_days: service.due_days,
-          due_day: service.due_day,
+          due_type: service.due_type,
+          due_value: service.due_value,
           due_next_month: service.due_next_month
         };
         
@@ -236,9 +251,8 @@ export function useContractEdit(): UseContractEditReturn {
             billing_type: service.billing_type,
             recurrence_frequency: service.recurrence_frequency,
             // AIDEV-NOTE: Debug dos dados de vencimento carregados do banco
-            due_date_type: service.due_date_type,
-            due_days: service.due_days,
-            due_day: service.due_day,
+            due_type: service.due_type,
+            due_value: service.due_value,
             due_next_month: service.due_next_month
           },
           mapped: {
@@ -246,9 +260,8 @@ export function useContractEdit(): UseContractEditReturn {
             billing_type: formattedService.billing_type,
             recurrence_frequency: formattedService.recurrence_frequency,
             // AIDEV-NOTE: Debug dos dados de vencimento formatados
-            due_date_type: formattedService.due_date_type,
-            due_days: formattedService.due_days,
-            due_day: formattedService.due_day,
+            due_type: formattedService.due_type,
+            due_value: formattedService.due_value,
             due_next_month: formattedService.due_next_month
           }
         });
@@ -282,9 +295,8 @@ export function useContractEdit(): UseContractEditReturn {
           installments: product.installments || 1,
           payment_gateway: product.payment_gateway,
           // Campos de vencimento - AIDEV-NOTE: Preservar dados de vencimento do banco (não usar padrões se não existirem)
-          due_date_type: product.due_date_type,
-          due_days: product.due_days,
-          due_day: product.due_day,
+          due_type: product.due_type,
+          due_value: product.due_value,
           due_next_month: product.due_next_month,
           // AIDEV-NOTE: Incluir dados de impostos salvos no banco
           nbs_code: product.nbs_code,
@@ -310,9 +322,8 @@ export function useContractEdit(): UseContractEditReturn {
             billing_type: product.billing_type,
             recurrence_frequency: product.recurrence_frequency,
             // AIDEV-NOTE: Debug dos dados de vencimento carregados do banco
-            due_date_type: product.due_date_type,
-            due_days: product.due_days,
-            due_day: product.due_day,
+            due_type: product.due_type,
+            due_value: product.due_value,
             due_next_month: product.due_next_month
           },
           mapped: {
@@ -320,9 +331,8 @@ export function useContractEdit(): UseContractEditReturn {
             billing_type: formattedProduct.billing_type,
             recurrence_frequency: formattedProduct.recurrence_frequency,
             // AIDEV-NOTE: Debug dos dados de vencimento formatados
-            due_date_type: formattedProduct.due_date_type,
-            due_days: formattedProduct.due_days,
-            due_day: formattedProduct.due_day,
+            due_type: formattedProduct.due_type,
+            due_value: formattedProduct.due_value,
             due_next_month: formattedProduct.due_next_month
           }
         });
@@ -367,7 +377,7 @@ export function useContractEdit(): UseContractEditReturn {
         contract,
         services: formattedServices,
         products: formattedProducts,
-        customer: contract.customer
+        customer: customer // AIDEV-NOTE: Usar a variável customer corrigida
       };
       
       setData(contractEditData);

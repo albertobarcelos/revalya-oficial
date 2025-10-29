@@ -175,7 +175,6 @@ export interface CreateCustomerDTO {
   addressNumber?: string;
   complement?: string;
   neighborhood?: string; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
-  neighborhood?: string; // Campo explícito para bairro
   postal_code?: string; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
   city?: string;
   state?: string;

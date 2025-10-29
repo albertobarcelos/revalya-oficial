@@ -181,13 +181,9 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
       </Tabs>
 
       <div className="flex flex-col gap-4 mt-6">
-        {/* AIDEV-NOTE: Botão para dar baixa na cobrança - só aparece se não estiver paga ou cancelada */}
-        {chargeDetails?.status !== "PAID" && 
-         chargeDetails?.status !== "CANCELLED" && 
-         chargeDetails?.status !== "RECEIVED" &&
-         chargeDetails?.status !== "RECEIVED_PIX" &&
-         chargeDetails?.status !== "RECEIVED_BOLETO" &&
-         chargeDetails?.status !== "RECEIVED_IN_CASH" && (
+        {/* AIDEV-NOTE: Botão para dar baixa na cobrança - só aparece se não estiver recebida ou cancelada */}
+        {chargeDetails?.status !== "RECEIVED" && 
+         chargeDetails?.status !== "CANCELLED" && (
           <Button 
             variant="default" 
             onClick={handleMarkAsPaid} 
@@ -203,7 +199,7 @@ export function ChargeDetails({ charge, onRefresh }: ChargeDetailsProps) {
           </Button>
         )}
 
-        {chargeDetails?.status !== "PAID" && chargeDetails?.status !== "CANCELLED" && (
+        {chargeDetails?.status !== "RECEIVED" && chargeDetails?.status !== "CANCELLED" && (
           <Button variant="destructive" onClick={handleCancelCharge} disabled={isCancelling}>
             {isCancelling ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />

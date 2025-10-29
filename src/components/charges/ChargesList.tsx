@@ -45,7 +45,7 @@ import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { formatInstallmentDisplay, getInstallmentBadgeVariant } from '@/utils/installmentUtils';
 
 const formatChargeType = (type: string | null, status?: string | null): string => {
-  if (status === "RECEIVED_IN_CASH") {
+  if (status === "RECEIVED") {
     return "DINHEIRO";
   }
   

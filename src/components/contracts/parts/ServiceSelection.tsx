@@ -77,20 +77,28 @@ export function ServiceSelection({
   const handleSelectServices = () => {
     const selected = services
       .filter(service => selectedServices.includes(service.id))
-      .map(service => ({
-        id: service.id,
-        name: service.name,
-        description: service.description || null,
-        default_price: service.default_price,
-        tax_rate: service.tax_rate || 0,
-        is_active: service.is_active ?? true,
-        created_at: 'created_at' in service ? service.created_at : new Date().toISOString(),
-        tenant_id: 'tenant_id' in service ? service.tenant_id : '',
-        quantity: 1,
-        unit_price: service.default_price,
-        discount_percentage: 0,
-        discount_amount: 0,
-      }));
+      .map(service => {
+        // AIDEV-NOTE: Calcular cost_percentage a partir de cost_price e default_price
+        const costPrice = (service as any).cost_price || 0;
+        const defaultPrice = service.default_price || 0;
+        const costPercentage = defaultPrice > 0 ? (costPrice / defaultPrice) * 100 : 0;
+        
+        return {
+          id: service.id,
+          name: service.name,
+          description: service.description || null,
+          default_price: service.default_price,
+          tax_rate: service.tax_rate || 0,
+          is_active: service.is_active ?? true,
+          created_at: 'created_at' in service ? service.created_at : new Date().toISOString(),
+          tenant_id: 'tenant_id' in service ? service.tenant_id : '',
+          quantity: 1,
+          unit_price: service.default_price,
+          discount_percentage: 0,
+          discount_amount: 0,
+          cost_percentage: Math.round(costPercentage * 100) / 100, // Arredondar para 2 casas decimais
+        };
+      });
     
     onServiceSelect(selected);
   };
@@ -105,6 +113,11 @@ export function ServiceSelection({
       // Modo seleção única: chama o callback imediatamente
       const service = services.find(s => s.id === serviceId);
       if (service) {
+        // AIDEV-NOTE: Calcular cost_percentage a partir de cost_price e default_price
+        const costPrice = (service as any).cost_price || 0;
+        const defaultPrice = service.default_price || 0;
+        const costPercentage = defaultPrice > 0 ? (costPrice / defaultPrice) * 100 : 0;
+        
         const serviceItem = {
           id: service.id,
           name: service.name,
@@ -118,6 +131,7 @@ export function ServiceSelection({
           unit_price: service.default_price,
           discount_percentage: 0,
           discount_amount: 0,
+          cost_percentage: Math.round(costPercentage * 100) / 100, // Arredondar para 2 casas decimais
         };
         onServiceSelect(serviceItem);
       }

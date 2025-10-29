@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +42,8 @@ import {
   Eye, 
   EyeOff, 
   Loader2,
-  Package
+  Package,
+  ShieldAlert
 } from 'lucide-react';
 import { useProductCategories, useActiveProductCategories } from '@/hooks/useProductCategories';
 import { motion } from 'framer-motion';
@@ -61,6 +62,7 @@ interface EditCategoryFormData extends CreateCategoryFormData {
  * AIDEV-NOTE: Componente de gerenciamento de categorias de produtos
  * Permite criar, editar, ativar/desativar e excluir categorias
  * Segue padrões de UI/UX com Shadcn + Motion.dev para microinterações
+ * Implementa 5 camadas de segurança multi-tenant obrigatórias
  */
 export function ProductCategoriesManager() {
   const { toast } = useToast();
@@ -75,46 +77,80 @@ export function ProductCategoriesManager() {
     is_active: true
   });
 
-  // Hooks para gerenciamento de categorias
+  // AIDEV-NOTE: Hooks para gerenciamento de categorias com segurança multi-tenant
   const { 
     categories, 
     isLoading, 
+    hasAccess,
+    error,
     createCategory, 
     updateCategory, 
     deleteCategory, 
     toggleCategoryStatus 
   } = useProductCategories();
 
-  // AIDEV-NOTE: Função para criar nova categoria
-  const handleCreateCategory = async () => {
+  // AIDEV-NOTE: Log de auditoria obrigatório para acesso à página
+  useEffect(() => {
+    if (hasAccess) {
+      console.log('🔍 [AUDIT] Usuário acessou página de gerenciamento de categorias de produtos');
+    }
+  }, [hasAccess]);
+
+  // AIDEV-NOTE: Guard clause obrigatória - Early return para validação de acesso
+  if (!hasAccess) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col items-center justify-center min-h-[400px] space-y-4"
+      >
+        <ShieldAlert className="h-16 w-16 text-destructive" />
+        <div className="text-center space-y-2">
+          <h3 className="text-lg font-semibold">Acesso Negado</h3>
+          <p className="text-muted-foreground">
+            Você não tem permissão para acessar o gerenciamento de categorias de produtos.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // AIDEV-NOTE: Handler para criar categoria com validação
+  const handleCreateCategory = () => {
     if (!createForm.name.trim()) {
       toast({
         title: "Erro",
         description: "Nome da categoria é obrigatório",
-        variant: "destructive"
-      });
-      return;
+        variant: "destructive",
+      })
+      return
     }
 
-    try {
-      await createCategory.mutateAsync(createForm);
-      toast({
-        title: "Sucesso",
-        description: "Categoria criada com sucesso!"
-      });
-      setCreateForm({ name: '', description: '', is_active: true });
-      setIsCreateDialogOpen(false);
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro ao criar categoria",
-        variant: "destructive"
-      });
-    }
-  };
+    // AIDEV-NOTE: Usar createCategory diretamente (padrão do projeto)
+    createCategory(createForm, {
+      onSuccess: () => {
+        // AIDEV-NOTE: Resetar formulário e fechar diálogo após sucesso
+        setCreateForm({ name: '', description: '', is_active: true })
+        setIsCreateDialogOpen(false)
+        
+        toast({
+          title: "Sucesso!",
+          description: "Categoria criada com sucesso!",
+        })
+      },
+      onError: (error) => {
+        console.error('Erro ao criar categoria:', error)
+        toast({
+          title: "Erro",
+          description: "Erro ao criar categoria. Tente novamente.",
+          variant: "destructive",
+        })
+      }
+    })
+  }
 
-  // AIDEV-NOTE: Função para editar categoria existente
-  const handleEditCategory = async () => {
+  // AIDEV-NOTE: Função para editar categoria com log de auditoria
+  const handleEditCategory = () => {
     if (!editingCategory || !editingCategory.name.trim()) {
       toast({
         title: "Erro",
@@ -124,65 +160,79 @@ export function ProductCategoriesManager() {
       return;
     }
 
-    try {
-      await updateCategory.mutateAsync({
-        id: editingCategory.id,
-        data: {
-          name: editingCategory.name,
-          description: editingCategory.description,
-          is_active: editingCategory.is_active
-        }
-      });
-      toast({
-        title: "Sucesso",
-        description: "Categoria atualizada com sucesso!"
-      });
-      setEditingCategory(null);
-      setIsEditDialogOpen(false);
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro ao atualizar categoria",
-        variant: "destructive"
-      });
-    }
+    console.log('📝 [AUDIT] Iniciando edição de categoria:', editingCategory.id);
+    updateCategory({
+      id: editingCategory.id,
+      name: editingCategory.name,
+      description: editingCategory.description,
+      is_active: editingCategory.is_active
+    }, {
+      onSuccess: () => {
+        setIsEditDialogOpen(false);
+        setEditingCategory(null);
+        
+        toast({
+          title: "Sucesso",
+          description: "Categoria atualizada com sucesso"
+        });
+        
+        console.log('✅ [AUDIT] Categoria editada com sucesso:', editingCategory.id);
+      },
+      onError: (error) => {
+        console.error('🚨 [AUDIT] Erro ao editar categoria:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao atualizar categoria",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
-  // AIDEV-NOTE: Função para alternar status da categoria
-  const handleToggleStatus = async (categoryId: string, currentStatus: boolean) => {
-    try {
-      await toggleCategoryStatus.mutateAsync({ 
-        id: categoryId, 
-        is_active: !currentStatus 
-      });
-      toast({
-        title: "Sucesso",
-        description: `Categoria ${!currentStatus ? 'ativada' : 'desativada'} com sucesso!`
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro ao alterar status da categoria",
-        variant: "destructive"
-      });
-    }
+  // AIDEV-NOTE: Função para deletar categoria com log de auditoria
+  const handleDeleteCategory = (categoryId: string, categoryName: string) => {
+    console.log('🗑️ [AUDIT] Iniciando exclusão de categoria:', categoryId);
+    deleteCategory(categoryId, {
+      onSuccess: () => {
+        toast({
+          title: "Sucesso",
+          description: "Categoria excluída com sucesso"
+        });
+        
+        console.log('✅ [AUDIT] Categoria excluída com sucesso:', categoryId);
+      },
+      onError: (error) => {
+        console.error('🚨 [AUDIT] Erro ao excluir categoria:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir categoria",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
-  // AIDEV-NOTE: Função para excluir categoria
-  const handleDeleteCategory = async (categoryId: string) => {
-    try {
-      await deleteCategory.mutateAsync(categoryId);
-      toast({
-        title: "Sucesso",
-        description: "Categoria excluída com sucesso!"
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro ao excluir categoria",
-        variant: "destructive"
-      });
-    }
+  // AIDEV-NOTE: Função para alternar status com log de auditoria
+  const handleToggleStatus = (categoryId: string, currentStatus: boolean, categoryName: string) => {
+    console.log('🔄 [AUDIT] Alterando status de categoria:', categoryId, 'para:', !currentStatus);
+    toggleCategoryStatus({ id: categoryId, is_active: !currentStatus }, {
+      onSuccess: () => {
+        toast({
+          title: "Sucesso",
+          description: `Categoria ${!currentStatus ? 'ativada' : 'desativada'} com sucesso`
+        });
+        
+        console.log('✅ [AUDIT] Status de categoria alterado com sucesso:', categoryId);
+      },
+      onError: (error) => {
+        console.error('🚨 [AUDIT] Erro ao alterar status da categoria:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao alterar status da categoria",
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   if (isLoading) {
@@ -346,7 +396,7 @@ export function ProductCategoriesManager() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleToggleStatus(category.id, category.is_active)}
+                            onClick={() => handleToggleStatus(category.id, category.is_active, category.name)}
                             disabled={toggleCategoryStatus.isPending}
                           >
                             {category.is_active ? (
@@ -396,7 +446,7 @@ export function ProductCategoriesManager() {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => handleDeleteCategory(category.id)}
+                                onClick={() => handleDeleteCategory(category.id, category.name)}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Excluir

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/use-toast'
 import { useState } from 'react'
+import { getCurrentUser } from '@/utils/supabaseAuthManager'
 
 // Tipos para cobranças
 export interface Charge {
@@ -114,16 +115,7 @@ export function useCharges(params: UseChargesParams = {}) {
           ),
           contracts(
             id,
-            contract_number,
-            services:contract_services(
-              id,
-              description,
-              service:services(
-                id,
-                name,
-                description
-              )
-            )
+            contract_number
           )
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
@@ -230,8 +222,56 @@ export function useCharges(params: UseChargesParams = {}) {
         throw new Error('Violação de segurança detectada')
       }
 
+      // AIDEV-NOTE: Buscar serviços dos contratos usando vw_contract_services_detailed
+      const contractIds = [...new Set(data?.filter(charge => charge.contract_id).map(charge => charge.contract_id))]
+      let contractServicesMap: Record<string, any[]> = {}
+
+      if (contractIds.length > 0) {
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('vw_contract_services_detailed')
+          .select(`
+            contract_id,
+            contract_service_id,
+            service_description,
+            service_id,
+            service_name
+          `)
+          .eq('tenant_id', tenantId)
+          .in('contract_id', contractIds)
+
+        if (servicesError) {
+          console.error('🚨 [ERROR] useCharges - Erro ao buscar serviços:', servicesError)
+        } else {
+          // Agrupar serviços por contract_id
+          contractServicesMap = (servicesData || []).reduce((acc, service) => {
+            if (!acc[service.contract_id]) {
+              acc[service.contract_id] = []
+            }
+            acc[service.contract_id].push({
+              id: service.contract_service_id,
+              description: service.service_description,
+              service: {
+                id: service.service_id,
+                name: service.service_name,
+                description: service.service_description
+              }
+            })
+            return acc
+          }, {} as Record<string, any[]>)
+        }
+      }
+
+      // AIDEV-NOTE: Enriquecer dados com serviços dos contratos
+      const enrichedData = data?.map(charge => ({
+        ...charge,
+        contracts: charge.contracts ? {
+          ...charge.contracts,
+          services: contractServicesMap[charge.contract_id!] || []
+        } : null
+      }))
+
       return {
-        data: data as Charge[],
+        data: enrichedData as Charge[],
         total: count || 0
       }
     }
@@ -241,6 +281,15 @@ export function useCharges(params: UseChargesParams = {}) {
   const cancelCharge = useSecureTenantMutation(
     async (supabase, tenantId, chargeId: string) => {
       console.log(`✏️ [AUDIT] Cancelando cobrança ${chargeId} para tenant: ${tenantId}`);
+      
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
       
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase
@@ -296,6 +345,15 @@ export function useCharges(params: UseChargesParams = {}) {
     async (supabase, tenantId, chargeId: string) => {
       console.log(`✏️ [AUDIT] Marcando cobrança ${chargeId} como recebida para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
+      
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase
         .from('charges')
@@ -346,6 +404,15 @@ export function useCharges(params: UseChargesParams = {}) {
   const updateCharge = useSecureTenantMutation(
     async (supabase, tenantId, { id, ...updates }: Partial<Charge> & { id: string }) => {
       console.log(`✏️ [AUDIT] Atualizando cobrança ${id} para tenant: ${tenantId}`);
+      
+      // AIDEV-NOTE: Configurar contexto do usuário para auditoria
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId,
+          p_user_id: currentUser.id
+        });
+      }
       
       // 🛡️ VERIFICAÇÃO DUPLA: Confirmar que a cobrança pertence ao tenant
       const { data: existingCharge } = await supabase

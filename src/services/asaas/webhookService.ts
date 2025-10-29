@@ -32,9 +32,27 @@ async function configureAsaasWebhook(
   tenantId: string,
   apiKey: string,
   apiUrl: string,
-  webhookConfig: WebhookConfig
+  webhookConfig: WebhookConfig,
+  contextAlreadySet: boolean = false
 ): Promise<AsaasApiResponse> {
   try {
+    // AIDEV-NOTE: Configurar contexto do tenant se ainda não foi configurado
+    if (!contextAlreadySet) {
+      console.log('🔍 [DEBUG] Configurando contexto do tenant para configureAsaasWebhook:', tenantId)
+      
+      const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId
+      })
+
+      if (contextError) {
+        console.error('❌ Erro ao configurar contexto do tenant:', contextError)
+        return {
+          success: false,
+          error: 'Erro ao configurar contexto do tenant'
+        }
+      }
+    }
+
     // AIDEV-NOTE: Configura webhook no ASAAS
     const response = await fetch(`${apiUrl}/v3/webhook`, {
       method: 'POST',
@@ -100,7 +118,22 @@ async function configureAsaasWebhook(
 // AIDEV-NOTE: Função para configurar webhook para um tenant
 export async function setupTenantWebhook(tenantId: string): Promise<AsaasApiResponse> {
   try {
-    // AIDEV-NOTE: Busca credenciais do tenant
+    // AIDEV-NOTE: Configurar contexto do tenant para segurança multi-tenant
+    console.log('🔍 [DEBUG] Configurando contexto do tenant para setup webhook:', tenantId)
+    
+    const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: tenantId
+    })
+
+    if (contextError) {
+      console.error('❌ Erro ao configurar contexto do tenant:', contextError)
+      return {
+        success: false,
+        error: 'Erro ao configurar contexto do tenant'
+      }
+    }
+
+    // AIDEV-NOTE: Busca credenciais do tenant com contexto configurado
     const { data: credentials, error: credentialsError } = await supabase
       .rpc('get_tenant_asaas_credentials', {
         p_tenant_id: tenantId
@@ -108,7 +141,7 @@ export async function setupTenantWebhook(tenantId: string): Promise<AsaasApiResp
       .single()
 
     if (credentialsError || !credentials) {
-      console.error('Erro ao buscar credenciais:', credentialsError)
+      console.error('❌ Erro ao buscar credenciais:', credentialsError)
       return {
         success: false,
         error: 'Credenciais não encontradas'
@@ -121,12 +154,13 @@ export async function setupTenantWebhook(tenantId: string): Promise<AsaasApiResp
       token: generateSecureToken(32) // Token de 32 caracteres
     }
 
-    // AIDEV-NOTE: Configura webhook
+    // AIDEV-NOTE: Configura webhook (contexto já configurado)
     return await configureAsaasWebhook(
       tenantId,
       credentials.api_key,
       credentials.api_url,
-      webhookConfig
+      webhookConfig,
+      true // contexto já foi configurado
     )
   } catch (error) {
     console.error('Erro ao configurar webhook do tenant:', error)
@@ -140,7 +174,22 @@ export async function setupTenantWebhook(tenantId: string): Promise<AsaasApiResp
 // AIDEV-NOTE: Função para remover webhook do ASAAS
 export async function removeTenantWebhook(tenantId: string): Promise<AsaasApiResponse> {
   try {
-    // AIDEV-NOTE: Busca credenciais do tenant
+    // AIDEV-NOTE: Configurar contexto do tenant para segurança multi-tenant
+    console.log('🔍 [DEBUG] Configurando contexto do tenant para remover webhook:', tenantId)
+    
+    const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: tenantId
+    })
+
+    if (contextError) {
+      console.error('❌ Erro ao configurar contexto do tenant:', contextError)
+      return {
+        success: false,
+        error: 'Erro ao configurar contexto do tenant'
+      }
+    }
+
+    // AIDEV-NOTE: Busca credenciais do tenant com contexto configurado
     const { data: credentials, error: credentialsError } = await supabase
       .rpc('get_tenant_asaas_credentials', {
         p_tenant_id: tenantId
@@ -148,7 +197,7 @@ export async function removeTenantWebhook(tenantId: string): Promise<AsaasApiRes
       .single()
 
     if (credentialsError || !credentials) {
-      console.error('Erro ao buscar credenciais:', credentialsError)
+      console.error('❌ Erro ao buscar credenciais:', credentialsError)
       return {
         success: false,
         error: 'Credenciais não encontradas'
@@ -219,7 +268,19 @@ interface WebhookStatus {
 // AIDEV-NOTE: Função para verificar status do webhook
 export async function checkWebhookStatus(tenantId: string): Promise<WebhookStatus> {
   try {
-    // AIDEV-NOTE: Busca configuração do webhook
+    // AIDEV-NOTE: Configurar contexto do tenant para segurança multi-tenant
+    console.log('🔍 [DEBUG] Configurando contexto do tenant para webhook:', tenantId)
+    
+    const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: tenantId
+    })
+
+    if (contextError) {
+      console.error('❌ Erro ao configurar contexto do tenant:', contextError)
+      return { isConfigured: false }
+    }
+
+    // AIDEV-NOTE: Busca configuração do webhook com contexto configurado
     const { data, error } = await supabase
       .rpc('get_tenant_asaas_webhook', {
         p_tenant_id: tenantId
@@ -227,9 +288,16 @@ export async function checkWebhookStatus(tenantId: string): Promise<WebhookStatu
       .single()
 
     if (error) {
-      console.error('Erro ao buscar status do webhook:', error)
+      console.error('❌ Erro ao buscar status do webhook:', error)
       return { isConfigured: false }
     }
+
+    console.log('✅ [DEBUG] Status do webhook carregado com sucesso:', {
+      tenantId,
+      isConfigured: Boolean(data?.webhook_url && data?.webhook_token),
+      hasUrl: Boolean(data?.webhook_url),
+      hasToken: Boolean(data?.webhook_token)
+    })
 
     return {
       isConfigured: Boolean(data?.webhook_url && data?.webhook_token),
@@ -237,7 +305,7 @@ export async function checkWebhookStatus(tenantId: string): Promise<WebhookStatu
       token: data?.webhook_token
     }
   } catch (error) {
-    console.error('Erro ao verificar status do webhook:', error)
+    console.error('❌ Erro ao verificar status do webhook:', error)
     return { isConfigured: false }
   }
 }

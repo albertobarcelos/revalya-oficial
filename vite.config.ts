@@ -85,7 +85,9 @@ export default defineConfig(({ command, mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      sourcemap: mode === 'development',
+      // AIDEV-NOTE: Sourcemap configurado para evitar erros em produção
+      // 'hidden' gera sourcemaps sem referências no código final
+      sourcemap: mode === 'production' ? 'hidden' : true,
       minify: mode === 'production' ? 'esbuild' : false,
       target: 'es2020',
       

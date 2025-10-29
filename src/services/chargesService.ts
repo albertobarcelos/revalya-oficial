@@ -220,7 +220,7 @@ export const chargesService = {
     };
 
     // Se a cobrança for marcada como recebida em dinheiro, atualize o tipo para CASH
-    if (data.status === 'RECEIVED_IN_CASH') {
+    if (data.status === 'RECEIVED' && data.tipo === 'CASH') {
       formattedData = {
         ...formattedData,
         tipo: 'CASH'
@@ -306,7 +306,7 @@ export const chargesService = {
    */
   async markAsReceivedInCash(id: string, paymentDate?: string): Promise<Cobranca> {
     return this.updateCharge(id, { 
-      status: 'RECEIVED_IN_CASH',
+      status: 'RECEIVED',
       tipo: 'CASH',
       data_pagamento: paymentDate || new Date().toISOString() 
     });

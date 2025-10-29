@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useAuthStore } from '@/store/authStore';
+import { throttledDebug } from '@/utils/logThrottle'; // AIDEV-NOTE: Usar throttling para logs
 
 /**
  * Hook que sincroniza o estado de autenticação do Supabase com o Zustand
@@ -46,10 +47,10 @@ export function useZustandAuth() {
       } else if (event === 'TOKEN_REFRESHED') {
         // Nada a fazer, o usuário continua o mesmo
       } else if (event === 'INITIAL_SESSION') {
-        // Sessão inicial carregada
+        // Sessão inicial carregada - AIDEV-NOTE: Usando throttling para evitar spam
         setUser(session?.user || null);
         setLoading(false);
-        console.log('[useZustandAuth] Sessão inicial carregada:', session?.user?.id);
+        throttledDebug('auth_session', 'Sessão inicial carregada', { userId: session?.user?.id });
       } else {
         console.warn('[useZustandAuth] Evento de autenticação não tratado:', event);
       }

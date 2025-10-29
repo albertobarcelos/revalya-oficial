@@ -9,6 +9,7 @@ import { Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
   ReconciliationFilters as IReconciliationFilters, 
   ReconciliationFiltersProps,
@@ -35,18 +36,14 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
     });
   };
 
-  // AIDEV-NOTE: Função para limpar filtros com valores padrão bem definidos
+  // AIDEV-NOTE: Função para limpar filtros com valores padrão bem definidos - Ajustado para mostrar todos os registros
   const clearFilters = () => {
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    
     const defaultFilters: IReconciliationFilters = {
-      status: ReconciliationStatus.PENDING,
+      status: 'ALL' as any, // Mudança: era PENDING, agora ALL para mostrar todos os registros
       source: 'ALL',
       hasContract: 'ALL',
-      dateFrom: firstDay.toISOString().split('T')[0],
-      dateTo: lastDay.toISOString().split('T')[0],
+      dateFrom: '', // Mudança: removido filtro de data padrão
+      dateTo: '', // Mudança: removido filtro de data padrão
       search: '',
       accountFilter: '',
       asaasNossoNumero: '',
@@ -99,6 +96,37 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
     
     return count;
   };
+
+  // =====================================================
+  // LOADING STATE - AIDEV-NOTE: Estado de loading robusto com skeleton
+  // =====================================================
+
+  if (loading) {
+    return (
+      <div className="bg-white border-b border-gray-200">
+        {/* Header Loading */}
+        <div className="flex items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-8 w-16" />
+        </div>
+        
+        {/* Filters Loading */}
+        <div className="px-6 pb-4">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {[1, 2, 3, 4, 5].map((index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Skeleton className="h-3 w-12" />
+                <Skeleton className="h-8 w-32" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // =====================================================
   // RENDER - Design Extremamente Minimalista
@@ -187,8 +215,8 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todos</SelectItem>
-                <SelectItem value="true">Com Contrato</SelectItem>
-                <SelectItem value="false">Sem Contrato</SelectItem>
+                <SelectItem value="WITH_CONTRACT">Com Contrato</SelectItem>
+                <SelectItem value="WITHOUT_CONTRACT">Sem Contrato</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -245,16 +273,16 @@ const ReconciliationFilters: React.FC<ReconciliationFiltersProps> = ({
           {/* AIDEV-NOTE: Filtros específicos ASAAS - aparecem apenas quando ASAAS está selecionado */}
           {filters.source === ReconciliationSource.ASAAS && (
             <>
-              {/* Nosso Número Filter */}
+              {/* Observações Filter */}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-blue-600">Nosso Número:</span>
+                <span className="text-xs text-blue-600">Observações:</span>
                 <Input
                   type="text"
                   value={filters.asaasNossoNumero || ''}
                   onChange={(e) => handleFilterChange('asaasNossoNumero', e.target.value)}
                   disabled={loading}
                   className="h-8 w-32 text-xs border-blue-300 focus:border-blue-500"
-                  placeholder="Nosso número"
+                  placeholder="Observações"
                 />
               </div>
 

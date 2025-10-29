@@ -49,7 +49,11 @@ export enum ReconciliationAction {
   CREATE_STANDALONE = 'CREATE_STANDALONE',         // Criar cobrança avulsa
   COMPLEMENT_EXISTING = 'COMPLEMENT_EXISTING',     // Complementar cobrança existente
   REGISTER_CUSTOMER = 'REGISTER_CUSTOMER',         // Cadastrar novo cliente
-  DELETE_IMPORTED = 'DELETE_IMPORTED'              // Excluir item importado
+  DELETE_IMPORTED = 'DELETE_IMPORTED',             // Excluir item importado
+  IMPORT_TO_CHARGE = 'IMPORT_TO_CHARGE',           // Importar para tabela de cobranças
+  MARK_AS_RECONCILED = 'MARK_AS_RECONCILED',       // Marcar como reconciliado
+  EXPORT = 'EXPORT',                               // Exportar selecionados
+  IGNORE = 'IGNORE'                                // Ignorar selecionados
 }
 
 // =====================================================
@@ -125,6 +129,10 @@ export interface ImportedMovement {
   installment_number?: number;           // Número da parcela
   installment_count?: number;            // Total de parcelas
   
+  // AIDEV-NOTE: Campos de pagamento
+  pix_key?: string;                      // Chave PIX
+  barcode?: string;                      // Código de barras
+  
   // AIDEV-NOTE: URLs e documentos
   invoice_url?: string;                  // URL da fatura
   bank_slip_url?: string;                // URL do boleto
@@ -135,7 +143,7 @@ export interface ImportedMovement {
   webhook_signature?: string;            // Assinatura do webhook
   
   // AIDEV-NOTE: Dados brutos e processamento
-  raw_data?: any;                        // Dados brutos do webhook/API
+  raw_data?: Record<string, unknown>;    // Dados brutos do webhook/API
   processed?: boolean;                   // Flag de processamento
   processed_at?: string;                 // Data de processamento
   processing_attempts?: number;          // Tentativas de processamento
@@ -159,6 +167,14 @@ export interface ImportedMovement {
   customerName?: string;                 // Alias para customer_name
   customerDocument?: string;             // Alias para customer_document
   description?: string;                  // Derivado de observacao
+  
+  // AIDEV-NOTE: Campos críticos para exibição das colunas de valor na tabela
+  chargeAmount?: number;                 // Valor da cobrança (derivado de valor_cobranca)
+  paidAmount: number;                    // Valor pago (derivado de valor_pago)
+  
+  // AIDEV-NOTE: Campos de status mapeados para compatibilidade com hooks
+  paymentStatus?: PaymentStatus;         // Status de pagamento mapeado do status_externo
+  reconciliationStatus?: ReconciliationStatus; // Status de conciliação mapeado do status_conciliacao
 }
 
 /**
@@ -297,9 +313,9 @@ export interface ReconciliationHistory {
   performedBy: string;
   performedAt: string;
   observations?: string;
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
-  metadata?: Record<string, any>;
+  oldValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -364,7 +380,7 @@ export interface ReconciliationTableProps {
   movements: ImportedMovement[];
   loading?: boolean;
   isLoading?: boolean;
-  onAction: (action: ReconciliationAction, movement: ImportedMovement) => void;
+  onAction: (action: ReconciliationAction, movement: ImportedMovement) => Promise<void>;
   selectedMovements?: string[];
   onSelectionChange?: (selectedIds: string[]) => void;
   pagination?: {
@@ -384,7 +400,7 @@ export interface ReconciliationActionModalProps {
   onClose: () => void;
   action: ReconciliationAction;
   movement: ImportedMovement;
-  onConfirm: (data: any) => Promise<void>;
+  onConfirm: (data: Record<string, unknown>) => Promise<void>;
   loading?: boolean;
 }
 

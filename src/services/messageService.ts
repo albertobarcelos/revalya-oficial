@@ -7,13 +7,15 @@ import { whatsappService } from './whatsappService';
 import { edgeFunctionService } from './edgeFunctionService';
 
 interface MessageRecord {
-  charge_id: string;
-  template_id: string;
-  message_content: string;
-  customer_name: string;
-  customer_phone: string;
-  status?: string;
-  error_message?: string;
+  tenant_id: string;
+  charge_id: string | null;
+  template_id: string | null;
+  customer_id: string | null;
+  message: string | null;
+  status: string | null;
+  error_details: string | null;
+  metadata: any | null;
+  batch_id: string | null;
 }
 
 export const messageService = {
@@ -230,14 +232,18 @@ export const messageService = {
         const messageObj = messages.find(m => m.charge.id === charge.id);
         
         return {
+          tenant_id: tenantId, // AIDEV-NOTE: Campo obrigatório para RLS multi-tenant
           charge_id: charge.id,
           template_id: isCustomMessage ? fallbackTemplateId : templateId,
-          sent_at: new Date().toISOString(),
+          customer_id: charge.customer_id,
+          message: messageObj?.template.message || this.lastCustomMessage || '',
           status: 'success',
-          message_content: messageObj?.template.message || this.lastCustomMessage || '',
-          customer_name: charge.customer?.name || 'Cliente',
-          customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000',
-          tenant_id: tenantId // AIDEV-NOTE: Campo obrigatório para RLS multi-tenant
+          error_details: null,
+          metadata: {
+            customer_name: charge.customer?.name || 'Cliente',
+            customer_phone: charge.customer?.phone?.replace(/\D/g, '') || '0000000000'
+          },
+          batch_id: null
         };
       });
       

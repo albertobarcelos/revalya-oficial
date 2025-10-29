@@ -20,6 +20,7 @@ const supabase = createClient(
 interface AsaasCustomer {
   id: string;
   name: string;
+  company?: string;
   email?: string;
   phone?: string;
   mobilePhone?: string;
@@ -134,6 +135,7 @@ serve(async (req) => {
     // AIDEV-NOTE: Mapear dados do ASAAS para as colunas da tabela conciliation_staging
     const mappedData = {
       customer_name: customerData.name,
+      customer_company: customerData.company,
       customer_email: customerData.email,
       customer_document: customerData.cpfCnpj,
       customer_phone: customerData.phone,

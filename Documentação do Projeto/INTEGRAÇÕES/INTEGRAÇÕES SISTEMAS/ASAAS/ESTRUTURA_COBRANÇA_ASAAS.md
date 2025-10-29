@@ -90,7 +90,7 @@ await supabase
 const stagingData = {
   tenant_id: tenantId,
   id_externo: payment.id,           // ID do pagamento no ASAAS
-  origem: 'asaas',                  // Sempre 'asaas' para esta integração
+  origem: 'ASAAS',                  // Sempre 'ASAAS' para esta integração
   valor_cobranca: payment.value,
   valor_pago: payment.netValue || payment.value,
   status_externo: payment.status,
@@ -349,7 +349,7 @@ CREATE INDEX idx_tenant_integrations_active ON tenant_integrations(is_active);
 CREATE TABLE conciliation_staging (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
-  origem TEXT NOT NULL,                     -- 'asaas', 'pix', 'manual'
+  origem TEXT NOT NULL,                     -- 'ASAAS', 'PIX', 'MANUAL', 'CORA', 'ITAU', 'BRADESCO', 'SANTANDER'
   id_externo TEXT NOT NULL,                 -- ID único do sistema externo
   valor_cobranca NUMERIC(10,2),            -- Valor original da cobrança
   valor_pago NUMERIC(10,2),                -- Valor efetivamente pago
@@ -694,7 +694,7 @@ SELECT
   MIN(created_at) as oldest,
   MAX(created_at) as newest
 FROM conciliation_staging 
-WHERE tenant_id = '{TENANT_ID}' AND origem = 'asaas';
+WHERE tenant_id = '{TENANT_ID}' AND origem = 'ASAAS';
 ```
 
 ### **4. Como Fazer Manutenção**

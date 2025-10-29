@@ -319,7 +319,7 @@ export function useBillingKanban() {
     try {
       console.log('🔄 Atualizando status do contrato:', { contractId, chargeId, newStatus });
 
-      if (newStatus === 'PAID') {
+      if (newStatus === 'RECEIVED') {
         // AIDEV-NOTE: Se há chargeId, atualizar a charge usando query segura
         if (chargeId) {
           const { error } = await supabase

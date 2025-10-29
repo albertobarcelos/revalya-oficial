@@ -56,9 +56,7 @@ export const useReconciliationFilters = ({
 
   // AIDEV-NOTE: Função otimizada para aplicar filtros com performance melhorada
   const applyFilters = useCallback((data: ImportedMovement[], currentFilters: ReconciliationFilters): ImportedMovement[] => {
-    console.group('🔍 DEBUG - Aplicação de Filtros');
-    console.log('📊 Total de registros antes dos filtros:', data.length);
-    console.log('🎛️ Filtros aplicados:', currentFilters);
+    // AIDEV-NOTE: Logs removidos para melhorar performance
     
     const filteredData = data.filter(movement => {
       // AIDEV-NOTE: Filtro por status - usando a propriedade correta
@@ -100,7 +98,7 @@ export const useReconciliationFilters = ({
       }
       
       // AIDEV-NOTE: Filtro por termo de busca - usando múltiplos campos para busca
-      if (currentFilters.search && currentFilters.search.trim()) {
+      if (currentFilters.search && currentFilters.search.length > 0) { // AIDEV-NOTE: Removido trim() para permitir espaços na busca
         const searchLower = currentFilters.search.toLowerCase();
         const matchesSearch = 
           movement.externalId?.toLowerCase().includes(searchLower) ||
@@ -148,8 +146,7 @@ export const useReconciliationFilters = ({
       return true;
     });
     
-    console.log('📊 Total de registros após filtros:', filteredData.length);
-    console.groupEnd();
+    // AIDEV-NOTE: Log removido para melhorar performance
     
     return filteredData;
   }, []);
@@ -159,17 +156,22 @@ export const useReconciliationFilters = ({
     return applyFilters(movements, filters);
   }, [movements, filters, applyFilters]);
 
-  // AIDEV-NOTE: Effect para atualizar dados filtrados e indicadores
+  // AIDEV-NOTE: Effect para atualizar dados filtrados e indicadores (com debounce otimizado)
   useEffect(() => {
     if (movements.length > 0) {
-      const filtered = filteredMovements;
-      const indicators = calculateIndicators(filtered);
-      
-      onFilteredChange(filtered);
-      onIndicatorsChange(indicators);
-      
-      // AIDEV-NOTE: Resetar paginação quando filtros mudam
-      onPaginationChange({ total: filtered.length, page: 1 });
+      // AIDEV-NOTE: Debounce aumentado para reduzir re-renders
+      const timeoutId = setTimeout(() => {
+        const filtered = filteredMovements;
+        const indicators = calculateIndicators(filtered);
+        
+        onFilteredChange(filtered);
+        onIndicatorsChange(indicators);
+        
+        // AIDEV-NOTE: Resetar paginação quando filtros mudam
+        onPaginationChange({ total: filtered.length, page: 1 });
+      }, 300); // Aumentado de 100ms para 300ms
+
+      return () => clearTimeout(timeoutId);
     }
   }, [filteredMovements, movements.length, onFilteredChange, onIndicatorsChange, onPaginationChange, calculateIndicators]);
 
@@ -183,7 +185,7 @@ export const useReconciliationFilters = ({
     // AIDEV-NOTE: Validação básica dos filtros
     const validatedFilters = {
       ...newFilters,
-      search: newFilters.search?.trim() || '',
+      search: newFilters.search || '', // AIDEV-NOTE: Removido trim() para permitir espaços na busca
       accountFilter: newFilters.accountFilter?.trim() || '',
       asaasNossoNumero: newFilters.asaasNossoNumero?.trim() || ''
     };

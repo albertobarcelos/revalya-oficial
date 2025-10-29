@@ -15,9 +15,30 @@ import { SelectionCheckbox } from './SelectionCheckbox';
 import { StatusBadge } from './StatusBadge';
 import { ActionButtons } from './ActionButtons';
 import { ValueCell } from './ValueCell';
+import ImportedIndicator from './ImportedIndicator';
 import { TableRowProps } from '../types/table-parts';
 import { ReconciliationSource, ReconciliationAction } from '@/types/reconciliation';
 import { formatDate } from '@/lib/utils';
+
+// AIDEV-NOTE: Função para mapear payment_method para nomes amigáveis em português
+const getPaymentMethodDisplayName = (paymentMethod: string | null | undefined): string => {
+  if (!paymentMethod) return 'N/A';
+  
+  const paymentMethodMap: Record<string, string> = {
+    'CREDIT_CARD': 'CRÉDITO',
+    'DEBIT_CARD': 'DÉBITO', 
+    'PIX': 'PIX',
+    'BOLETO': 'BOLETO',
+    'BANK_SLIP': 'BOLETO BANCÁRIO',
+    'TRANSFER': 'TRANSFERÊNCIA',
+    'DEPOSIT': 'DEPÓSITO',
+    'CASH': 'DINHEIRO',
+    'CHECK': 'CHEQUE',
+    'OUTROS': 'OUTROS'
+  };
+  
+  return paymentMethodMap[paymentMethod.toUpperCase()] || paymentMethod;
+};
 
 interface TableRowComponentProps extends TableRowProps {
   isExpanded?: boolean;
@@ -44,7 +65,6 @@ export function TableRow({
   return (
     <ShadcnTableRow 
       className={`
-        ${isSelected ? 'bg-blue-50' : ''}
         ${hasDifference ? 'border-l-4 border-l-orange-400' : ''}
         hover:bg-slate-50 transition-colors
       `}
@@ -81,27 +101,37 @@ export function TableRow({
         </div>
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Nosso Número - específica para ASAAS */}
-      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.externalReference ? (
-          <span className="text-slate-700">{movement.externalReference}</span>
+      {/* AIDEV-NOTE: Coluna Observações - exibe observacao da tabela conciliation_staging */}
+      <TableCell className="font-mono text-sm py-1 sm:py-2 text-left max-w-[200px]">
+        {movement.observacao ? (
+          <span 
+            className="text-slate-700 block truncate" 
+            title={movement.observacao}
+          >
+            {movement.observacao}
+          </span>
         ) : (
           <span className="text-slate-400">-</span>
         )}
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Nome do Cliente - específica para ASAAS */}
-      <TableCell className="py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.customerName ? (
-          <span className="text-slate-700 font-medium">{movement.customerName}</span>
+      {/* AIDEV-NOTE: Coluna Nome do Cliente - exibe para todas as origens */}
+      <TableCell className="py-1 sm:py-2 text-left max-w-[180px]">
+        {movement.customerName ? (
+          <span 
+            className="text-slate-700 font-medium block truncate" 
+            title={movement.customerName}
+          >
+            {movement.customerName}
+          </span>
         ) : (
           <span className="text-slate-400">-</span>
         )}
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna CNPJ/CPF - específica para ASAAS */}
+      {/* AIDEV-NOTE: Coluna CNPJ/CPF - exibe para todas as origens */}
       <TableCell className="font-mono text-sm py-1 sm:py-2 text-left">
-        {movement.source === ReconciliationSource.ASAAS && movement.customerDocument ? (
+        {movement.customerDocument ? (
           <span className="text-slate-700">{movement.customerDocument}</span>
         ) : (
           <span className="text-slate-400">-</span>
@@ -110,15 +140,9 @@ export function TableRow({
       
       {/* AIDEV-NOTE: Coluna Tipo de Cobrança - específica para ASAAS */}
       <TableCell className="py-1 sm:py-2 text-center">
-        {movement.source === ReconciliationSource.ASAAS ? (
-          <Badge variant="outline" className="text-xs">
-            {movement.description?.includes('PIX') ? 'PIX' : 
-             movement.description?.includes('BOLETO') ? 'BOLETO' : 
-             movement.description?.includes('CARTAO') ? 'CARTÃO' : 'OUTROS'}
-          </Badge>
-        ) : (
-          <span className="text-slate-400">-</span>
-        )}
+        <Badge variant="outline" className="text-xs">
+          {getPaymentMethodDisplayName(movement.payment_method)}
+        </Badge>
       </TableCell>
       
       {/* AIDEV-NOTE: Coluna Valor Cobrança */}
@@ -149,18 +173,17 @@ export function TableRow({
         />
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Status */}
+      {/* AIDEV-NOTE: Coluna Status de Vinculação */}
       <TableCell className="py-1 sm:py-2 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <StatusBadge status={movement.reconciliationStatus} />
-          {/* AIDEV-NOTE: Indicador visual de importação para charges */}
-          {movement.charge_id && movement.imported_at && (
-            <div className="flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-green-600" />
-              <span className="text-xs text-green-600 font-medium">Importado</span>
-            </div>
-          )}
-        </div>
+        <StatusBadge status={movement.reconciliationStatus} />
+      </TableCell>
+      
+      {/* AIDEV-NOTE: Coluna Processado */}
+      <TableCell className="py-1 sm:py-2 text-center">
+        <ImportedIndicator 
+          chargeId={movement.charge_id}
+          importedAt={movement.imported_at}
+        />
       </TableCell>
       
       {/* AIDEV-NOTE: Coluna Pagamento */}
@@ -173,7 +196,9 @@ export function TableRow({
         {movement.hasContract ? (
           <div className="flex items-center justify-center gap-1">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="text-sm font-mono">{movement.contractId}</span>
+            <span className="text-sm font-mono">
+              {movement.contractNumber}
+            </span>
           </div>
         ) : (
           <span className="text-slate-400 text-sm">Sem contrato</span>

@@ -38,6 +38,7 @@ export interface ServiceSelectionItem {
   name: string;
   description?: string | null;
   default_price: number;
+  cost_price?: number;
   tax_rate: number;
   is_active: boolean;
   created_at?: string;

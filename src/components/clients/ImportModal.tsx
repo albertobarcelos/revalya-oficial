@@ -62,16 +62,24 @@ export function ImportModal({
   // AIDEV-NOTE: Handler para importação do Asaas
   const handleAsaasImport = async () => {
     if (!currentTenant?.id) {
-      toast({
-        title: "Erro de autenticação",
-        description: "Tenant não identificado. Faça login novamente.",
-        variant: "destructive",
-      });
+      toast.error('Tenant não identificado');
       return;
     }
 
+    // AIDEV-NOTE: Debug temporário para verificar tenant_id
+    console.log('🔍 [DEBUG] Tenant atual no ImportModal:', {
+      currentTenant,
+      tenantId: currentTenant.id,
+      tenantName: currentTenant.name,
+      tenantActive: currentTenant.active
+    });
+
     setIsLoadingAsaas(true);
+
     try {
+      // AIDEV-NOTE: Debug da chamada para o serviço
+      console.log('🔍 [DEBUG] Chamando getAllCustomersWithPagination com tenant_id:', currentTenant.id);
+      
       const customers = await asaasService.getAllCustomersWithPagination(currentTenant.id);
       
       if (!customers || customers.length === 0) {
