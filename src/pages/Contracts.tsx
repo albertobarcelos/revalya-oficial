@@ -84,6 +84,13 @@ export default function Contracts() {
     }
   }, [currentTenant?.id]); // AIDEV-NOTE: Removido queryClient para evitar re-renders desnecessários
 
+  // 🔍 AUDIT LOG: Página renderizada com sucesso - APENAS UMA VEZ por sessão
+  React.useEffect(() => {
+    if (currentTenant?.id) {
+      console.log(`✅ [AUDIT] Página Contratos renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
+    }
+  }, [currentTenant?.id]); // Executa apenas quando o tenant muda
+
   // Título dinâmico baseado no modo do formulário - SEMPRE calculado
   const formTitle = useMemo(() => {
     switch (formMode) {

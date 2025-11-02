@@ -20,10 +20,6 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ConnectionStatusIndicator } from "@/components/ui/ConnectionStatusIndicator";
 import { AppRouter } from "./components/router/AppRouter";
 
-// Log temporário para debug
-console.log('[DEBUG] App.tsx carregado - URL atual:', window.location.href);
-// SingletonTest removido após validação bem-sucedida
-
 // Providers de autenticação e tenant
 import { AuthProvider } from "@/core/auth/AuthProvider";
 import { UnifiedTenantProvider } from "@/core/tenant";
@@ -36,29 +32,27 @@ import { useAppRecovery } from "@/hooks/useAppRecovery";
 import { TenantSessionManager } from "@/lib/TenantSessionManager";
 
 /**
- * Componente principal da aplicação
- * 
- * Implementa uma estrutura simplificada com menos aninhamento de componentes
- * e uma abordagem mais declarativa para roteamento e autenticação.
+ * AIDEV-NOTE: Ordem otimizada dos providers para evitar dependências circulares
+ * 1. ErrorBoundary (captura erros globais)
+ * 2. ThemeProvider (tema global)
+ * 3. QueryClientProvider (cache e estado global)
+ * 4. SupabaseProvider (cliente Supabase)
+ * 5. AuthProvider (autenticação)
+ * 6. UnifiedTenantProvider (contexto de tenant)
+ * 7. Providers específicos da aplicação
  */
 const App = () => {
-  // Inicializa proteções contra erros de extensões do navegador
   useEffect(() => {
     initializeErrorProtection();
-    
-    // Inicializar limpeza automática de sessões multi-tenant
     TenantSessionManager.startAutoCleanup();
-    
     console.log('[App] Sistema de limpeza automática de sessões inicializado');
   }, []);
 
-  // Hook para controle de timeout por inatividade (30 minutos)
   const IdleTimeoutComponent = () => {
-    useIdleTimeout(); // Reativado após correção do timer problemático
+    useIdleTimeout();
     return null;
   };
   
-  // Componente para sistema de recuperação
   const AppRecoveryComponent = () => {
     useAppRecovery();
     return null;
@@ -67,57 +61,55 @@ const App = () => {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="system" storageKey="regua-cobranca-theme">
-        <SkeletonProvider>
-          <PrimeReactProvider>
-            <QueryClientProvider client={queryClient}>
-              <SupabaseProvider>
-                <AuthProvider>
-                  <UnifiedTenantProvider
-                    useCore={true}
-                    useFeatures={true}
-                    useZustand={true}
-                    onTenantChange={(tenant) => {
-                      console.log('[App Migration] Tenant changed:', tenant);
-                      // Limpar cache ao trocar tenant (segurança multi-tenant)
-                      if (tenant?.id) {
-                        queryClient.invalidateQueries();
-                      }
-                    }}
-                  >
-                    <AppInitializationProvider>
-                      <TooltipProvider>
+        <QueryClientProvider client={queryClient}>
+          <SupabaseProvider>
+            <AuthProvider>
+              <UnifiedTenantProvider
+                useCore={true}
+                useFeatures={true}
+                useZustand={true}
+                onTenantChange={(tenant) => {
+                  console.log('[App Migration] Tenant changed:', tenant);
+                  if (tenant?.id) {
+                    queryClient.invalidateQueries();
+                  }
+                }}
+              >
+                <AppInitializationProvider>
+                  <TooltipProvider>
+                    <SkeletonProvider>
+                      <PrimeReactProvider>
                         <PortalProvider>
                           <BrowserRouter>
-                        {/* Componentes auxiliares */}
-                        {/* <IdleTimeoutComponent /> Timeout reativado - 30 minutos */}
-                        <AppRecoveryComponent />
-                        <ConnectionStatusIndicator status={{ online: true, lastChecked: null, reconnectAttempts: 0 }} />
-                        
-                        {/* Testes de singleton concluídos com sucesso */}
-                        
-                        
-                            {/* Router centralizado */}
+                            <AppRecoveryComponent />
+                            <ConnectionStatusIndicator 
+                              status={{ 
+                                online: true, 
+                                lastChecked: null, 
+                                reconnectAttempts: 0 
+                              }} 
+                            />
+                            
                             <AppRouter />
                             
-                            {/* Notificações */}
                             <Toaster />
                             <Sonner />
                           </BrowserRouter>
                         </PortalProvider>
-                      </TooltipProvider>
-                    </AppInitializationProvider>
-                  </UnifiedTenantProvider>
-                </AuthProvider>
-              </SupabaseProvider>
-              {config.showDevTools && process.env.NODE_ENV === 'development' && (
-                <ReactQueryDevtools 
-                  initialIsOpen={false} 
-                  position="bottom" 
-                />
-              )}
-            </QueryClientProvider>
-          </PrimeReactProvider>
-        </SkeletonProvider>
+                      </PrimeReactProvider>
+                    </SkeletonProvider>
+                  </TooltipProvider>
+                </AppInitializationProvider>
+              </UnifiedTenantProvider>
+            </AuthProvider>
+          </SupabaseProvider>
+          {config.showDevTools && process.env.NODE_ENV === 'development' && (
+            <ReactQueryDevtools 
+              initialIsOpen={false} 
+              position="bottom" 
+            />
+          )}
+        </QueryClientProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -249,17 +249,19 @@ export const useReconciliationActions = ({
   }, [currentTenant, filteredMovements, validateTenantContext, logSecurityEvent, logAction, toast]);
 
   // AIDEV-NOTE: Função para abrir modal de ação
-  const handleReconciliationAction = useCallback((action: any, movement: ReconciliationMovement): void => {
+  const handleReconciliationAction = useCallback((movement: ReconciliationMovement, action: ReconciliationAction, selectedMovements?: ReconciliationMovement[]): void => {
     setActionModal({
       isOpen: true,
       action,
-      movement
+      movement,
+      movements: selectedMovements // Adicionando suporte para múltiplas seleções
     });
 
     logSecurityEvent('action_modal_opened', {
       movement_id: movement.id,
       action_type: action,
-      current_status: movement.reconciliationStatus
+      current_status: movement.reconciliationStatus,
+      batch_size: selectedMovements?.length || 1
     });
   }, [logSecurityEvent]);
 

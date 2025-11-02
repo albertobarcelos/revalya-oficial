@@ -1,22 +1,26 @@
-# Revalya - Nova Versão
+# Supabase CLI
 
-Sistema financeiro multi-tenant com segurança avançada e controle granular de acesso.
+[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
+](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
 
-## Sobre o Projeto
+[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
 
-Revalya é uma plataforma financeira completa, desenvolvida com arquitetura multi-tenant que permite que múltiplos clientes utilizem a mesma infraestrutura de forma segura e isolada.
+This repository contains all the functionality for Supabase CLI.
 
-## Tecnologias Utilizadas
+- [x] Running Supabase locally
+- [x] Managing database migrations
+- [x] Creating and deploying Supabase Functions
+- [x] Generating types directly from your database schema
+- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
-- **Frontend**: React, TypeScript, TailwindCSS
-- **Backend**: Supabase (PostgreSQL)
-- **Autenticação**: Supabase Auth
-- **Segurança**: Row-Level Security (RLS) do PostgreSQL
+## Getting started
 
-## Arquitetura Multi-Tenant
+### Install the CLI
 
-O sistema implementa uma arquitetura multi-tenant sofisticada com:
+Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
 
+```bash
+npm i supabase --save-dev
 - Isolamento completo de dados entre tenants
 - Sistema de convites para acesso entre tenants
 - Controle de acesso baseado em papéis (RBAC)
@@ -582,603 +586,161 @@ if (installmentResults.successCount > 0 && installmentResults.results[0]?.data?.
 }
 ```
 
-**Resultado**: Vinculação automática de cobranças aos períodos, garantindo atualização correta do status para `BILLED` e movimentação dos cards no Kanban.
+To install the beta release channel:
 
-**Documentação**: [`CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md`](./CORRECAO_KANBAN_VINCULACAO_COBRANCAS.md)
-
-### Janeiro 2025: Correção de Contexto de Tenant em Operações de Criação
-
-Corrigimos um problema crítico onde a função `createService` no hook `useServices.ts` não estava configurando corretamente o contexto do tenant antes de realizar operações de inserção no banco de dados.
-
-#### 🐛 **Problema Identificado**
-
-- **Erro**: `unrecognized configuration parameter "app.current_tenant_id"`
-- **Causa**: A função `createService` não chamava `supabase.rpc('set_config')` para configurar o contexto do tenant
-- **Impacto**: Falha na criação de novos serviços devido à falta de configuração do tenant
-
-#### ✅ **Solução Implementada**
-
-1. **Correção na função `createService`**:
-   - Adicionada chamada `supabase.rpc('set_config', { parameter_name: 'app.current_tenant_id', parameter_value: tenantId })`
-   - Configuração do contexto antes da operação de inserção
-   - Alinhamento com o padrão usado nas funções `updateService` e `deleteService`
-
-2. **Verificação de Consistência**:
-   - Auditoria de outras funções de criação no sistema
-   - Identificação de padrões inconsistentes entre hooks
-   - Validação de que a correção resolve o problema
-
-#### 🔧 **Detalhes Técnicos**
-
-- **Arquivo modificado**: `src/hooks/useServices.ts`
-- **Função corrigida**: `createService` no hook `useSecureTenantMutation`
-- **Padrão aplicado**: Configuração de `app.current_tenant_id` via RPC antes de operações DML
-- **Teste realizado**: Criação de novo serviço funcionando corretamente
-
-#### 📋 **Anchor Comment Adicionado**
-
-```typescript
-// AIDEV-NOTE: Configuração de contexto de tenant obrigatória antes de operações DML
-await supabase.rpc('set_config', {
-  parameter_name: 'app.current_tenant_id',
-  parameter_value: tenantId
-});
-```
-
-### Janeiro 2025: Refatoração Completa da ReconciliationTable
-
-Realizamos uma refatoração completa da `ReconciliationTable.tsx`, extraindo componentes para melhorar a manutenibilidade, legibilidade e seguir os padrões de Clean Code do projeto.
-
-#### 🎯 **Objetivo da Refatoração**
-
-- **Modularização**: Quebrar um componente monolítico de 576 linhas em componentes menores e especializados
-- **Responsabilidade Única**: Cada componente com uma responsabilidade específica
-- **Manutenibilidade**: Facilitar futuras modificações e correções
-- **Padrões do Projeto**: Seguir as diretrizes estabelecidas no Revalya
-
-#### 🔧 **Componentes Extraídos**
-
-1. **TableHeader** (`src/components/reconciliation/parts/TableHeader.tsx`)
-   - **Responsabilidade**: Renderização do cabeçalho da tabela com colunas configuráveis
-   - **Props**: `columns` (array de configurações de coluna)
-   - **Funcionalidades**: Tooltips, ordenação, responsividade
-
-2. **StatusBadge** (`src/components/reconciliation/parts/StatusBadge.tsx`)
-   - **Responsabilidade**: Exibição visual dos status de conciliação
-   - **Props**: `status` (ReconciliationStatus)
-   - **Funcionalidades**: Cores e ícones específicos por status, animações
-
-3. **ValueCell** (`src/components/reconciliation/parts/ValueCell.tsx`)
-   - **Responsabilidade**: Formatação e exibição de valores monetários
-   - **Props**: `value` (number), `className?` (string)
-   - **Funcionalidades**: Formatação BRL, cores condicionais, alinhamento
-
-4. **TableRow** (`src/components/reconciliation/parts/TableRow.tsx`)
-   - **Responsabilidade**: Renderização de uma linha da tabela com todos os dados
-   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`, `isSelected`, `onSelectionChange`
-   - **Funcionalidades**: Seleção, ações, detalhes, responsividade
-
-5. **ActionButtons** (`src/components/reconciliation/parts/ActionButtons.tsx`)
-   - **Responsabilidade**: Menu dropdown com ações disponíveis por movimento
-   - **Props**: `movement`, `onAction`, `onViewAsaasDetails`
-   - **Funcionalidades**: Ações dinâmicas baseadas no status, integração ASAAS
-
-#### ✅ **Benefícios Alcançados**
-
-1. **Código Limpo**:
-   - Componente principal reduzido de 576 para ~400 linhas
-   - Cada componente com responsabilidade única
-   - Funções com máximo de 20 linhas (padrão do projeto)
-
-2. **Manutenibilidade**:
-   - Modificações isoladas em componentes específicos
-   - Testes unitários mais focados
-   - Debugging simplificado
-
-3. **Reutilização**:
-   - Componentes podem ser reutilizados em outras tabelas
-   - StatusBadge e ValueCell aplicáveis em outros contextos
-   - ActionButtons configurável para diferentes entidades
-
-4. **Performance**:
-   - Componentes menores com re-renders otimizados
-   - Memoização mais efetiva
-   - Bundle splitting natural
-
-#### 🛡️ **Segurança Multi-Tenant Mantida**
-
-- **Contexto de Tenant**: Todos os componentes respeitam o tenant ativo
-- **RLS**: Políticas de Row-Level Security preservadas
-- **Validação**: Guards de acesso mantidos em todas as operações
-- **Auditoria**: Logs de ações preservados
-
-#### 🔧 **Detalhes Técnicos**
-
-- **Arquivos Criados**: 5 novos componentes em `src/components/reconciliation/parts/`
-- **Imports Corrigidos**: Ajustes em paths relativos para absolutos
-- **TypeScript**: Interfaces específicas para cada componente
-- **Padrões UI**: Shadcn/UI + Tailwind + Framer Motion mantidos
-
-#### 🐛 **Correções Realizadas**
-
-1. **Import Paths**: Correção de imports relativos para absolutos usando alias `@/`
-2. **TableRow Conflict**: Resolução de conflito entre componente customizado e Shadcn TableRow
-3. **Build Errors**: Correção de erros de compilação e validação TypeScript
-4. **Runtime Errors**: Correção do erro "TableRow is not defined" em linhas vazias
-
-#### 📊 **Validações Realizadas**
-
-- ✅ **TypeScript Check**: `npm run type-check` - sem erros
-- ✅ **Build**: `npm run build` - compilação bem-sucedida  
-- ✅ **Dev Server**: Aplicação rodando sem erros
-- ✅ **Funcionalidade**: Filtros e ações funcionando corretamente
-- ✅ **UI/UX**: Interface responsiva e animações preservadas
-
-#### 📁 **Estrutura Final**
-
-```
-src/components/reconciliation/
-├── ReconciliationTable.tsx          # Componente principal (refatorado)
-├── parts/
-│   ├── TableHeader.tsx              # Cabeçalho da tabela
-│   ├── StatusBadge.tsx              # Badge de status
-│   ├── ValueCell.tsx                # Célula de valores
-│   ├── TableRow.tsx                 # Linha da tabela
-│   └── ActionButtons.tsx            # Botões de ação
-└── types/
-    └── table-parts.ts               # Interfaces dos componentes
-```
-
-#### 🎯 **Próximos Passos**
-
-- Aplicar o mesmo padrão de refatoração em outras tabelas do sistema
-- Criar biblioteca de componentes reutilizáveis
-- Implementar testes unitários para cada componente extraído
-- Documentar padrões de componentização para a equipe
-
-```typescript
-// AIDEV-NOTE: Configuração obrigatória do contexto do tenant antes de operações de inserção
-// Garante que o RLS (Row Level Security) funcione corretamente
-```
-
-### Janeiro 2025: Padronização e Correção do Sistema de Import de Clientes
-
-Implementamos uma padronização completa do sistema de import de clientes, corrigindo problemas críticos de mapeamento de campos e melhorando a experiência do usuário.
-
-#### 🐛 **Problemas Identificados**
-
-1. **Inconsistência de Nomenclatura**:
-   - **Erro**: Campos `cityName` e `city` usados inconsistentemente
-   - **Causa**: Diferentes fontes de dados (CSV, ASAAS API) com estruturas distintas
-   - **Impacto**: Confusão no mapeamento e perda de dados de cidade
-
-2. **Mapeamento Incorreto da API ASAAS**:
-   - **Erro**: Campo `city` retornando ID numérico (15355) em vez do nome da cidade
-   - **Causa**: API ASAAS retorna `city` como ID e `cityName` como nome legível
-   - **Impacto**: Dados de cidade incorretos nos imports do ASAAS
-
-3. **Falta de Logs de Debug**:
-   - **Problema**: Dificuldade para diagnosticar problemas de mapeamento
-   - **Causa**: Ausência de logs detalhados durante o processo de import
-   - **Impacto**: Tempo excessivo para identificar e corrigir problemas
-
-#### ✅ **Soluções Implementadas**
-
-1. **Padronização de Nomenclatura**:
-   - Unificação para usar `city` como campo padrão em todo o sistema
-   - Atualização de `SYSTEM_FIELDS` em `src/types/import.ts`
-   - Mapeamento alternativo incluindo `['cidade', 'municipio', 'cityname', 'city']`
-   - Atualização de traduções em `useNotifications.ts`
-
-2. **Correção do Mapeamento ASAAS**:
-   - Priorização de `cityName` sobre `city` no mapeamento do ASAAS
-   - Alteração em `useImportWizard.ts`: `city: item.cityName || item.city || ''`
-   - Garantia de que o nome da cidade seja usado em vez do ID numérico
-
-3. **Sistema de Debug Avançado**:
-   - Logs detalhados em `ImportModal.tsx` para CSV e ASAAS
-   - Instrumentação de sample de dados e campos detectados
-   - Logs de fallback e resolução de campos em `clientsService.ts`
-
-#### 🔧 **Detalhes Técnicos**
-
-**Arquivos Modificados:**
-- `src/types/import.ts` - Padronização de `SYSTEM_FIELDS`
-- `src/hooks/useImportWizard.ts` - Correção do mapeamento ASAAS
-- `src/components/clients/ImportModal.tsx` - Logs de debug
-- `src/hooks/useNotifications.ts` - Atualização de traduções
-- `src/services/clientsService.ts` - Logs de diagnóstico
-
-**Padrão de Mapeamento:**
-```typescript
-// Para ASAAS API (prioriza cityName)
-city: item.cityName || item.city || ''
-
-// Para CSV/Excel (mapeamento flexível)
-alternativeMap: {
-  city: ['cidade', 'municipio', 'cityname', 'city']
-}
-```
-
-**Sistema de Debug:**
-```typescript
-// Logs automáticos para diagnóstico
-console.log('🔍 Debug - sourceData[0]:', sourceData[0]);
-console.log('🔍 Debug - detectedFields:', detectedFields);
-```
-
-#### 📋 **Anchor Comments Adicionados**
-
-```typescript
-// AIDEV-NOTE: Padronização crítica - usar 'city' como campo unificado
-// Garante consistência entre diferentes fontes de dados (CSV, ASAAS, etc.)
-
-// AIDEV-NOTE: Priorizar cityName do ASAAS sobre city (que é ID numérico)
-// API ASAAS: city=15355 (ID), cityName="São José do Rio Claro" (nome)
-```
-
-#### 🎯 **Resultados Obtidos**
-
-- ✅ **Consistência**: Campo `city` padronizado em todo o sistema
-- ✅ **Correção ASAAS**: Nomes de cidade corretos em vez de IDs
-- ✅ **Debug Avançado**: Logs detalhados para diagnóstico rápido
-- ✅ **Mapeamento Flexível**: Suporte a múltiplas variações de nomes de campos
-- ✅ **Validação**: Type-check e lint passando sem erros
-
-### Janeiro 2025: Integração Completa do Sistema de Produtos em Contratos
-
-Implementamos a integração completa do sistema de produtos nos contratos, permitindo que os usuários adicionem, configurem e gerenciem produtos diretamente no formulário de criação de contratos.
-
-#### 🚀 **Principais Funcionalidades**
-
-1. **Integração ContractProducts em ContractTabs**:
-   - Remoção do placeholder "Em desenvolvimento" na aba de produtos
-   - Integração completa do componente `ContractProducts` no `ContractTabs`
-   - Passagem correta de props `products` entre componentes
-
-2. **Atualização do Hook useContracts**:
-   - Integração do hook `useContractProducts` no componente `ContractProducts`
-   - Alinhamento com o padrão usado em `ContractServices`
-   - Garantia de consistência na arquitetura de hooks
-
-3. **Configuração de Props e Estado**:
-   - Atualização da interface `ContractTabsProps` para incluir `products`
-   - Configuração de valor padrão como array vazio para `products`
-   - Passagem correta de props do `ContractTabs` para `ContractProducts`
-
-#### 🔧 **Detalhes Técnicos**
-
-**Arquivos Modificados:**
-- `src/components/contracts/ContractTabs.tsx` - Integração de produtos e atualização de props
-- `src/components/contracts/ContractProducts.tsx` - Adição do hook `useContractProducts`
-
-**Mudanças Implementadas:**
-
-1. **ContractTabs.tsx**:
-```typescript
-// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
-interface ContractTabsProps {
-  products?: Product[]; // Nova prop adicionada
-}
-
-// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
-<ContractProducts products={products} />
-```
-
-2. **ContractProducts.tsx**:
-```typescript
-// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
-// Garante consistência na arquitetura de hooks entre serviços e produtos
-const contractProducts = useContractProducts();
-```
-
-#### 📋 **Anchor Comments Adicionados**
-
-```typescript
-// AIDEV-NOTE: Adicionada prop products para integração com ContractProducts
-// Permite passagem de dados de produtos do formulário pai para o componente
-
-// AIDEV-NOTE: Integração completa do ContractProducts removendo placeholder
-// Substitui o texto "Em desenvolvimento" por funcionalidade real
-
-// AIDEV-NOTE: Hook para operações de produtos do contrato (similar ao useContractServices)
-// Garante consistência na arquitetura de hooks entre serviços e produtos
-```
-
-#### 🎯 **Resultados Obtidos**
-
-- ✅ **Integração Completa**: Produtos funcionais na criação de contratos
-- ✅ **Consistência**: Padrão arquitetural alinhado com serviços
-- ✅ **Props Corretas**: Passagem adequada de dados entre componentes
-- ✅ **Hooks Integrados**: `useContractProducts` funcionando corretamente
-- ✅ **Testes Validados**: Funcionalidade testada e funcionando no preview
-
-### Janeiro 2025: Sistema de Auto-Login Multi-Tenant Inspirado na Omie
-
-Implementamos um sistema revolucionário de auto-login multi-tenant que permite URLs limpas e acesso direto sem códigos na URL, inspirado na arquitetura da Omie:
-
-#### 🚀 **Principais Funcionalidades**
-
-1. **URLs Limpas e Intuitivas**:
-   - Acesso direto via `/{tenant-slug}/dashboard`
-   - Sem códigos ou tokens visíveis na URL
-   - Deep-linking funcional para qualquer página do tenant
-
-2. **Sistema de Refresh Tokens**:
-   - Refresh tokens de 30 dias armazenados no localStorage
-   - Access tokens de 1 hora renovados automaticamente
-   - Isolamento completo por aba do navegador
-
-3. **Auto-Login Transparente**:
-   - Detecção automática de sessões válidas
-   - Renovação silenciosa de tokens expirados
-   - Redirecionamento inteligente para portal se necessário
-
-4. **Limpeza Automática de Sessões**:
-   - Limpeza automática de sessões expiradas a cada hora
-   - Remoção de sessões antigas (30+ dias sem acesso)
-   - Inicialização automática no carregamento da aplicação
-
-#### 🏗️ **Arquitetura Implementada**
-
-**Componentes Principais:**
-- `TenantSessionManager` - Gerenciador completo de sessões e tokens
-- `useTenantAutoLogin` - Hook para auto-login de tenant
-- Portal integrado - Sistema integrado no portal oficial
-
-**Edge Functions:**
-- `create-tenant-session` - Criação de sessões de tenant
-- `refresh-tenant-token-v2` - Renovação de access tokens
-
-**Banco de Dados:**
-- Tabela `tenant_refresh_sessions` - Armazenamento seguro de sessões
-- Tabela `tenant_sessions_audit` - Auditoria completa de sessões
-- Funções SQL para validação e limpeza automática
-- Row Level Security (RLS) para isolamento de dados
-
-#### 🔒 **Segurança Avançada**
-
-1. **Isolamento por Aba**:
-   - Cada aba mantém seu próprio contexto de tenant
-   - SessionStorage para isolamento completo
-   - Impossibilidade de vazamento de dados entre abas
-
-2. **Validação Multicamada**:
-   - Validação de refresh token no banco
-   - Verificação de expiração em tempo real
-   - Limpeza automática de tokens expirados
-
-3. **Auditoria Completa**:
-   - Logs de todas as operações de sessão (`created`, `refreshed`, `revoked`, `expired`)
-   - Monitoramento de tentativas suspeitas
-   - Rastreamento de acessos por IP e User-Agent
-   - Triggers automáticos para log de eventos
-
-#### 🎯 **Fluxo de Uso**
-
-```
-1. Login inicial → Portal de seleção de tenants
-2. Seleção de tenant → Criação automática de sessão
-3. Nova aba abre → /{tenant-slug} (URL limpa)
-4. Auto-login detecta sessão → Carrega aplicação
-5. Navegação direta funciona → URLs limpas sempre
-6. Limpeza automática → Sessões expiradas removidas
-```
-
-#### 💡 **Vantagens do Sistema**
-
-- ✅ **UX Superior**: URLs limpas como grandes SaaS (Omie, Pipedrive)
-- ✅ **Segurança Robusta**: Tokens com expiração e renovação automática
-- ✅ **Performance**: Carregamento instantâneo com sessões válidas
-- ✅ **Escalabilidade**: Suporte a múltiplos tenants simultâneos
-- ✅ **Manutenibilidade**: Código limpo e bem documentado
-- ✅ **Auditoria**: Log completo de todas as operações de sessão
-- ✅ **Auto-Limpeza**: Gerenciamento automático de sessões expiradas
-
-#### 🔧 **Implementação Técnica**
-
-**TenantSessionManager:**
-- Estrutura localStorage: `revalya_tenant_profiles`
-- Chave composta: `userId::userEmail::tenantSlug`
-- Métodos de criação, validação, renovação e limpeza
-- Isolamento por aba via sessionStorage
-
-**Integração no Portal:**
-- Substituição do botão de teste por integração direta
-- Criação automática de sessão na seleção de tenant
-- Abertura de nova aba com URL limpa
-- Feedback visual via toast notifications
-
-**Sistema de Limpeza:**
-- Execução automática a cada 1 hora
-- Limpeza inicial 5 segundos após inicialização
-- Remoção de sessões expiradas e antigas (30+ dias)
-- Logs detalhados de operações de limpeza
-
-### Setembro 2025: Simplificação da Arquitetura de Roteamento e Autenticação
-
-Implementamos uma simplificação radical na arquitetura de roteamento e autenticação da aplicação:
-
-1. **Fluxo Linear e Previsível**:
-   - Verificação de autenticação em um único lugar
-   - Redirecionamentos declarativos usando `<Navigate>` do React Router
-   - Eliminação de loops infinitos e comportamentos imprevisíveis
-
-2. **Separação Clara de Responsabilidades**:
-   - `AppRouter` gerencia rotas e redirecionamentos básicos
-   - `TenantAutoLoginRouter` gerencia auto-login e rotas de tenant
-   - `AdminRoutes` gerencia rotas administrativas
-   - Sem redundância nas verificações de autenticação
-
-3. **Estrutura Mais Enxuta**:
-   - Menos componentes aninhados
-   - Menos provedores de contexto desnecessários
-   - Menor sobrecarga cognitiva para entender o fluxo
-
-4. **Manutenibilidade Aprimorada**:
-   - Código mais fácil de entender e depurar
-   - Comportamento mais previsível em diferentes cenários
-   - Menos dependências entre componentes
-
-### Setembro 2025: Melhorias no Sistema Multi-Tenant
-
-Implementamos diversas melhorias no sistema de gerenciamento de tenants para aumentar a robustez e segurança:
-
-1. **Verificação Aprimorada de Tenants Ativos**:
-   - Sistema de verificação em cascata (cache → localStorage → banco de dados)
-   - Prevenção de acesso a tenants inativos
-   - Validação dupla em pontos críticos do fluxo
-
-2. **Funções RPC Personalizadas**:
-   - `get_tenant_by_slug_v2` - Validação de acesso e existência do tenant
-   - `check_user_tenant_access_count` - Verificação eficiente de acesso
-   - `get_user_tenants` - Listagem otimizada de tenants do usuário
-
-3. **Sistema de Eventos**:
-   - Gerenciamento avançado de eventos com suporte a múltiplos listeners
-   - Monitoramento de performance de callbacks
-   - Novos eventos para melhor rastreamento do ciclo de vida do tenant
-
-4. **Logs e Diagnósticos**:
-   - Sistema abrangente de logs para facilitar debugging
-   - Métricas de performance em operações críticas
-
-5. **Correção de Duplicação de Tenants na Interface**:
-   - Centralização da lógica de obtenção de tenants em uma única fonte de verdade
-   - Eliminação de duplicações na página de seleção de portal
-   - Resolução de erros de chaves duplicadas nos componentes React
-   - Filtragem rigorosa de tenants inativos antes da exibição
-
-Para documentação detalhada dessas melhorias, consulte os arquivos:
-- [Simplificação da Arquitetura de Roteamento](docs/SIMPLIFICACAO_ROTEAMENTO.md)
-- [Melhorias no Sistema Multi-Tenant](docs/MELHORIAS_SISTEMA_MULTITENANT.md)
-- [Tipagem de Funções RPC do Supabase](docs/TIPAGEM_SUPABASE_RPC.md)
-- [Sistema de Segurança Multi-Tenant](docs/SEGURANCA_MULTITENANT.md)
-- [Solução para Duplicação de Tenants](docs/SOLUCAO_DUPLICACAO_TENANTS.md)
-
-### Setembro 2025: Estabilização pós-login e UX Anti-Flicker
-
-Contexto: após o login, houve relatos de “piscar”/recarregamento leve na página `meus-aplicativos` e, em alguns cenários, a interface alternava rapidamente para “Nenhum aplicativo disponível” antes de exibir os aplicativos. Implementamos um conjunto de melhorias para estabilizar a autenticação, o roteamento e a renderização inicial.
-
-1. Ajustes no Roteador e Autenticação
-   - `src/components/router/AppRouter.tsx`
-     - Sincronização de usuário apenas quando `loading === false` e o `user.id` realmente muda.
-     - Ignora transições temporárias de `user` para `undefined/null` durante a estabilização da sessão (evita resets prematuros do tenant).
-     - Limpa `currentTenant` somente em troca real de usuário (login/logout), não durante a janela de inicialização.
-
-   - `src/contexts/PortalContext.tsx`
-     - Passou a consumir o usuário via `useAuthStore` (Zustand), tornando a detecção de mudança de usuário mais estável (sem necessidade de debounce).
-
-2. UX Anti-Flicker em `meus-aplicativos`
-   - `src/pages/portal-selection.tsx`
-     - Gate de prontidão com `isReady = !supabaseLoading && isInitialized && hasLoaded && !isLoading`.
-     - Debounce visual `stableReady` (≈250ms) para transições suaves.
-     - `showEmptyState` com atraso (≈400ms) antes de exibir “Nenhum aplicativo”, evitando falso negativo.
-     - Fallback `lastNonEmptyPortals`: se já exibimos aplicativos, evitamos alternar para estado vazio enquanto os dados reestabilizam.
-
-3. Store de Tenants com Sinalização de Carregamento e Persistência por Aba
-   - `src/store/tenantStore.ts`
-     - Nova flag `hasLoaded` para indicar dados do portal carregados com sucesso.
-     - Guardas em `fetchPortalData` para evitar chamadas duplicadas quando `isLoading/hasLoaded`.
-     - Não zera listas em respostas transitórias (`!data`): apenas finaliza `isLoading` para evitar alternância visual.
-     - Persistência em `sessionStorage` (por aba) de `availableTenants`, `userRole`, `pendingInvites` e `currentTenant` (anti-flicker em reloads/novas abas).
-     - `onRehydrateStorage` marca `hasLoaded=true` quando dados úteis existem na reidratação.
-
-   - `src/hooks/useZustandTenant.ts`
-     - Lock local e respeito a `isLoading/hasLoaded` para impedir `fetchPortalData` duplicado.
-
-4. Outras melhorias
-   - `src/main.tsx`: desativado `React.StrictMode` no ambiente de desenvolvimento para evitar dupla execução de efeitos (causa comum de “piscar”). Mantido em produção.
-   - `tsconfig.app.json`: adicionados aliases (`@/store/*`, `@/contexts/*`, `@/core/*`) para resolver imports corretamente (requer reinício do Vite/TS Server após alteração).
-   - `vite.config.ts`: aliases já contemplavam `@` e pastas principais.
-
-Impacto
-- Elimina o “flash”/recarregamento após login em `meus-aplicativos` na maioria dos casos.
-- Reduz chamadas duplicadas e resets prematuros do estado.
-- Garante experiência visual estável com skeletons e fallback enquanto dados estabilizam.
-
-Como testar
-1. Faça login e observe que não há alternância para “Nenhum aplicativo disponível” antes de aparecerem os apps.
-2. Recarregue a página: dados do portal devem aparecer sem “piscar”, graças à reidratação do `sessionStorage`.
-3. Deslogar e logar novamente: o fluxo deve continuar estável, sem resets prematuros.
-
-Notas Multi-Tenant
-- A persistência em `sessionStorage` mantém o isolamento por aba, conforme o Manual Multi-Tenant Revalya.
-- O App continua aplicando RLS e filtros explícitos por `tenant_id` em todas as consultas.
-
-## 🔒 Segurança
-
-### Auditoria de Segurança Asaas (Dezembro 2024)
-- ✅ **Vulnerabilidades críticas corrigidas** no fluxo de importação Asaas
-- ✅ **Logs sanitizados** - Dados sensíveis protegidos
-- ✅ **Rate limiting implementado** - Proteção contra abuso da API
-- ✅ **Sistema de auditoria** - Logs estruturados para monitoramento
-
-**Documentos de Segurança:**
-- [`AUDITORIA_SEGURANCA_ASAAS.md`](./AUDITORIA_SEGURANCA_ASAAS.md) - Relatório completo da auditoria
-- [`PLANO_CORRECAO_SEGURANCA_ASAAS.md`](./PLANO_CORRECAO_SEGURANCA_ASAAS.md) - Plano de correções aplicadas
-
-### Práticas de Segurança Implementadas
-- **Multi-tenant isolation**: Isolamento completo entre tenants
-- **Credential protection**: Credenciais nunca expostas em logs
-- **Rate limiting**: Controle de abuso da API (100 req/min por tenant)
-- **Audit logging**: Sistema estruturado de logs de auditoria
-- **Access control**: Validação rigorosa de permissões
-
-## 🔧 Serviços
-
-### Importação de Dados
-- **BulkInsertService**: Inserção otimizada em lote via Edge Functions com fallback direto no Supabase
-  - ✅ **Correção 28/01/2025**: Implementado detecção adequada de falhas e fallback automático
-  - 🔍 **Monitoração**: Logs detalhados indicam método usado (`edge_function` | `direct_supabase`)
-  - 🛡️ **Robustez**: Timeout configurável (30s) e tratamento de erros em múltiplas camadas
-- **ImportService**: Processamento e validação de arquivos CSV/Excel
-
-## Estrutura do Projeto
-
-```
-src/
-├── components/        # Componentes React reutilizáveis
-├── contexts/          # Contextos React (Supabase, Portal, etc)
-├── hooks/             # React hooks personalizados
-├── lib/               # Bibliotecas e utilitários
-│   ├── tenant-simple/ # Sistema de gerenciamento de tenants
-│   └── database.types.ts # Tipos do Supabase gerados
-├── modules/           # Módulos funcionais da aplicação
-└── pages/             # Páginas e rotas da aplicação
-
-supabase/
-├── migrations/        # Migrações SQL para o banco de dados
-└── functions/         # Funções do Supabase Edge Functions
-```
-
-## 🔧 Desenvolvimento
-
-### Scripts Disponíveis
 ```bash
-npm run dev          # Servidor de desenvolvimento
-npm run build        # Build de produção
-npm run lint         # ESLint + Prettier
-npm run type-check   # Verificação TypeScript
-npm run test         # Testes unitários
+npm i supabase@beta --save-dev
 ```
 
-## 🔒 Segurança Multi-Tenant WhatsApp
+When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
 
-### Implementação Recente
-- **Hooks Seguros**: `useSecureWhatsApp.ts` com 5 camadas de segurança
-- **Validação de Acesso**: `useWhatsAppTenantGuard` para controle de acesso
-- **Queries Seguras**: `useSecureWhatsAppQuery` com contexto de tenant obrigatório
-- **Mutations Seguras**: `useSecureWhatsAppMutation` com auditoria automática
-- **Fluxo Corrigido**: `manageInstance` com persistência garantida antes do QR
+```
+NODE_OPTIONS=--no-experimental-fetch yarn add supabase
+```
 
-### Arquitetura de Segurança
-1. **Validação de Acesso**: `useTenantAccessGuard()`
-2. **Consultas Seguras**: `useSecureTenantQuery()`
-3. **Query Keys**: Sempre incluem `tenant_id`
-4. **Validação Dupla**: Client-side + RLS
-5. **Auditoria**: Logs obrigatórios via `logAccess`
+> **Note**
+For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
 
-## Desenvolvedores
+<details>
+  <summary><b>macOS</b></summary>
 
-Equipe de Engenharia Revalya © 2025
+  Available via [Homebrew](https://brew.sh). To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To install the beta release channel:
+  
+  ```sh
+  brew install supabase/tap/supabase-beta
+  brew link --overwrite supabase-beta
+  ```
+  
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Windows</b></summary>
+
+  Available via [Scoop](https://scoop.sh). To install:
+
+  ```powershell
+  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+  scoop install supabase
+  ```
+
+  To upgrade:
+
+  ```powershell
+  scoop update supabase
+  ```
+</details>
+
+<details>
+  <summary><b>Linux</b></summary>
+
+  Available via [Homebrew](https://brew.sh) and Linux packages.
+
+  #### via Homebrew
+
+  To install:
+
+  ```sh
+  brew install supabase/tap/supabase
+  ```
+
+  To upgrade:
+
+  ```sh
+  brew upgrade supabase
+  ```
+
+  #### via Linux packages
+
+  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
+
+  ```sh
+  sudo apk add --allow-untrusted <...>.apk
+  ```
+
+  ```sh
+  sudo dpkg -i <...>.deb
+  ```
+
+  ```sh
+  sudo rpm -i <...>.rpm
+  ```
+
+  ```sh
+  sudo pacman -U <...>.pkg.tar.zst
+  ```
+</details>
+
+<details>
+  <summary><b>Other Platforms</b></summary>
+
+  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
+
+  ```sh
+  go install github.com/supabase/cli@latest
+  ```
+
+  Add a symlink to the binary in `$PATH` for easier access:
+
+  ```sh
+  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
+  ```
+
+  This works on other non-standard Linux distros.
+</details>
+
+<details>
+  <summary><b>Community Maintained Packages</b></summary>
+
+  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
+  To install in your working directory:
+
+  ```bash
+  pkgx install supabase
+  ```
+
+  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
+</details>
+
+### Run the CLI
+
+```bash
+supabase bootstrap
+```
+
+Or using npx:
+
+```bash
+npx supabase bootstrap
+```
+
+The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+
+## Docs
+
+Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+
+## Breaking changes
+
+We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+
+However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+
+## Developing
+
+To run from source:
+
+```sh
+# Go >= 1.22
+go run . help
+```
