@@ -71,23 +71,40 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     ), [movements, selectedMovements, onSelectionChange]
   );
 
-  // AIDEV-NOTE: Handler para ações em lote - CORRIGIDO para aguardar todas as ações
+  // AIDEV-NOTE: Handler para ações em lote - CORRIGIDO para garantir processamento de todos os itens
   const handleBulkAction = useCallback(async (action: ReconciliationAction) => {
     if (selectedMovements.length === 0) return;
     
     try {
+      console.log(`🔄 Iniciando processamento em lote: ${action} para ${selectedMovements.length} itens`);
+      
+      // AIDEV-NOTE: Obter todos os movimentos completos a partir dos IDs
+      const movementsToProcess = selectedMovements
+        .map(movementId => movements.find(m => m.id === movementId))
+        .filter(Boolean) as ImportedMovement[];
+      
+      console.log(`📋 Movimentos a processar: ${movementsToProcess.length}`);
+      
       // AIDEV-NOTE: Criar array de promises para aguardar todas as ações
-      const actionPromises = selectedMovements.map(async (movementId) => {
-        const movement = movements.find(m => m.id === movementId);
-        if (movement && onAction) {
-          // AIDEV-NOTE: Aguardar cada ação individualmente
-          return await onAction(action, movement);
+      const actionPromises = movementsToProcess.map(async (movement, index) => {
+        console.log(`⚙️ Processando item ${index + 1}/${movementsToProcess.length}: ${movement.id}`);
+        if (onAction) {
+          try {
+            // AIDEV-NOTE: Aguardar cada ação individualmente
+            const result = await onAction(movement, action);
+            console.log(`✅ Item ${index + 1} processado com sucesso: ${movement.id}`);
+            return result;
+          } catch (err) {
+            console.error(`❌ Erro ao processar item ${index + 1}: ${movement.id}`, err);
+            throw err; // Propagar erro para ser capturado pelo Promise.all
+          }
         }
         return Promise.resolve();
       });
       
       // AIDEV-NOTE: Aguardar todas as ações serem concluídas
-      await Promise.all(actionPromises);
+      const results = await Promise.all(actionPromises);
+      console.log(`✅ Todos os ${results.length} itens processados com sucesso`);
       
       // AIDEV-NOTE: Limpar seleção APENAS após todas as ações serem concluídas
       if (onSelectionChange) {
@@ -165,6 +182,13 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
             <BulkActionsDropdown
               selectedCount={selectedMovements.length}
               onBulkAction={handleBulkAction}
+              hasChargeId={selectedMovements.some(movementId => {
+                const movement = movements.find(m => m.id === movementId);
+                return movement && (!!movement.chargeId || movement.processed === true);
+              })}
+              selectedMovements={selectedMovements.map(movementId => 
+                movements.find(m => m.id === movementId)
+              ).filter(Boolean)}
             />
           )}
         </div>
