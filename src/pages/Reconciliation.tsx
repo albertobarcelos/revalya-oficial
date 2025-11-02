@@ -10,6 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   ArrowLeft, 
   Download, 
@@ -704,14 +710,33 @@ const ReconciliationPage: React.FC = () => {
 
         <div className="flex items-center space-x-2">
           {selectedMovements.length > 0 && (
-            <Button
-              onClick={handleBulkImportToCharges}
-              disabled={isLoading}
-              className="flex items-center space-x-2"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Importar para Cobranças</span>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <Button
+                      onClick={handleBulkImportToCharges}
+                      disabled={isLoading || selectedMovements.some(id => {
+                        const movement = movements.find(m => m.id === id);
+                        return movement && !!movement.charge_id;
+                      })}
+                      className="flex items-center space-x-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      <span>Importar para Cobranças</span>
+                    </Button>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {selectedMovements.some(id => {
+                    const movement = movements.find(m => m.id === id);
+                    return movement && !!movement.charge_id;
+                  }) 
+                    ? "Um ou mais movimentos selecionados já foram importados para cobrança" 
+                    : "Importar movimentos selecionados para cobranças"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
 
           {filteredMovements.length > 0 && (

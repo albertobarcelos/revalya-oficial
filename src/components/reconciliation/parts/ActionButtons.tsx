@@ -8,6 +8,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Eye, 
   MoreHorizontal, 
@@ -51,7 +52,7 @@ export function ActionButtons({
         label: 'Importar para Cobranças',
         icon: CheckCircle2,
         variant: 'default',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED || !!movement.chargeId
       },
       {
         type: ReconciliationAction.LINK_TO_CONTRACT,
@@ -106,17 +107,41 @@ export function ActionButtons({
         {actionButtons.map((action, index) => {
           const Icon = action.icon;
           return (
-            <DropdownMenuItem
-              key={action.type}
-              onClick={() => onAction(action.type, movement)}
-              disabled={action.disabled}
-              className={`
-                ${action.variant === 'destructive' ? 'text-red-600 focus:text-red-600' : ''}
-              `}
-            >
-              <Icon className="h-4 w-4 mr-2" />
-              {action.label}
-            </DropdownMenuItem>
+            action.type === ReconciliationAction.IMPORT_TO_CHARGE ? (
+              <TooltipProvider key={action.type}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuItem
+                      onClick={() => onAction(movement, action.type)}
+                      disabled={action.disabled}
+                      className={`
+                        ${action.variant === 'destructive' ? 'text-red-600 focus:text-red-600' : ''}
+                      `}
+                    >
+                      <Icon className="h-4 w-4 mr-2" />
+                      {action.label}
+                    </DropdownMenuItem>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {action.disabled ? 
+                      "Esta movimentação já foi importada para cobrança" : 
+                      "Importar esta movimentação para cobranças"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <DropdownMenuItem
+                key={action.type}
+                onClick={() => onAction(movement, action.type)}
+                disabled={action.disabled}
+                className={`
+                  ${action.variant === 'destructive' ? 'text-red-600 focus:text-red-600' : ''}
+                `}
+              >
+                <Icon className="h-4 w-4 mr-2" />
+                {action.label}
+              </DropdownMenuItem>
+            )
           );
         })}
         <DropdownMenuSeparator />

@@ -24,7 +24,8 @@ export interface ReconciliationModalProps {
 export interface ActionModalState {
   isOpen: boolean;
   action: ReconciliationAction | null;
-  movement: ImportedMovement | null;
+  movement: ReconciliationMovement | null;
+  movements?: ReconciliationMovement[]; // Array para processamento em lote
 }
 
 // AIDEV-NOTE: Estado de paginação específico do modal
