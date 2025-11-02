@@ -13,9 +13,8 @@ export interface ContractService {
   total_amount: number;
   is_active: boolean;
   // AIDEV-NOTE: Campos de configuração de vencimento
-  due_date_type?: 'days_after_billing' | 'fixed_day';
-  due_days?: number;
-  due_day?: number;
+  due_type?: 'days_after_billing' | 'fixed_day';
+  due_value?: number;
   due_next_month?: boolean;
   // AIDEV-NOTE: Campo de configuração de cobrança
   generate_billing?: boolean;
@@ -83,9 +82,8 @@ export interface ExtendedContractService extends Omit<ContractService, 'id' | 'c
   is_active: boolean;
   
   // AIDEV-NOTE: Campos de configuração de vencimento
-  due_date_type?: 'days_after_billing' | 'fixed_day';
-  due_days?: number;
-  due_day?: number;
+  due_type?: 'days_after_billing' | 'fixed_day';
+  due_value?: number;
   due_next_month?: boolean;
   // AIDEV-NOTE: Campo de configuração de cobrança
   generate_billing?: boolean;

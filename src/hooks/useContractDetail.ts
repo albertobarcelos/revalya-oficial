@@ -104,14 +104,43 @@ export function useContract(id?: string) {
     };
   }, [id, tenant?.id]);
 
-  // Função para buscar serviços do contrato sob demanda
+  // Função para buscar serviços do contrato sob demanda usando a view detalhada
   const fetchContractServices = async () => {
     if (!id || !tenant?.id) return [];
     
     try {
       const { data, error } = await supabase
-        .from('contract_services')
-        .select('*, service:services(*)')
+        .from('vw_contract_services_detailed')
+        .select(`
+          contract_service_id,
+          contract_id,
+          service_id,
+          quantity,
+          unit_price,
+          discount_percentage,
+          discount_amount,
+          total_amount,
+          tax_rate,
+          tax_amount,
+          billing_type,
+          recurrence_frequency,
+          payment_method,
+          due_type,
+          due_value,
+          due_next_month,
+          no_charge,
+          generate_billing,
+          is_active,
+          created_at,
+          updated_at,
+          tenant_id,
+          service_name,
+          service_description,
+          default_price,
+          cost_price,
+          unit_type,
+          service_tax_rate
+        `)
         .eq('contract_id', id)
         .eq('tenant_id', tenant.id);
         

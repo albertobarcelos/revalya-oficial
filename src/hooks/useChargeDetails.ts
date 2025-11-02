@@ -65,18 +65,6 @@ export function useChargeDetails(chargeId: string | null) {
           contract:contracts(
             id,
             contract_number,
-            contract_services(
-              id,
-              description,
-              quantity,
-              unit_price,
-              is_active,
-              service:services(
-                id,
-                name,
-                description
-              )
-            ),
             contract_products(
               id,
               description,
@@ -109,31 +97,76 @@ export function useChargeDetails(chargeId: string | null) {
         throw new Error('Violação de segurança: Dados não pertencem ao tenant atual');
       }
 
+      // AIDEV-NOTE: Buscar serviços do contrato usando a view vw_contract_services_detailed
+      let contractServices = [];
+      if (data?.contract?.id) {
+        const { data: servicesData, error: servicesError } = await supabase
+          .from('vw_contract_services_detailed')
+          .select(`
+            contract_service_id,
+            service_description,
+            quantity,
+            unit_price,
+            is_active,
+            service_id,
+            service_name
+          `)
+          .eq('tenant_id', tenantId)
+          .eq('contract_id', data.contract.id);
+
+        if (servicesError) {
+          console.error('🚨 [ERROR] useChargeDetails - Erro ao buscar serviços:', servicesError);
+        } else {
+          contractServices = servicesData || [];
+        }
+      }
+
+      // AIDEV-NOTE: Adicionar serviços aos dados do contrato
+      const enrichedData = {
+        ...data,
+        contract: data?.contract ? {
+          ...data.contract,
+          contract_services: contractServices.map(service => ({
+            id: service.contract_service_id,
+            description: service.service_description,
+            quantity: service.quantity,
+            unit_price: service.unit_price,
+            is_active: service.is_active,
+            service: {
+              id: service.service_id,
+              name: service.service_name,
+              description: service.service_description
+            }
+          }))
+        } : null
+      };
+
       // AIDEV-NOTE: Log detalhado dos dados para debug (incluindo empresa)
       console.log('🔍 [DEBUG] useChargeDetails - Dados COMPLETOS carregados:', {
-        id: data?.id,
-        status: data?.status,
-        valor: data?.valor,
-        data_vencimento: data?.data_vencimento,
-        customer_id: data?.customer_id,
+        id: enrichedData?.id,
+        status: enrichedData?.status,
+        valor: enrichedData?.valor,
+        data_vencimento: enrichedData?.data_vencimento,
+        customer_id: enrichedData?.customer_id,
         customer: {
-          id: data?.customer?.id,
-          name: data?.customer?.name,
-          company: data?.customer?.company, // Nome da empresa vem do campo company do customer
-          email: data?.customer?.email,
-          phone: data?.customer?.phone,
-          cpf_cnpj: data?.customer?.cpf_cnpj,
-          address: data?.customer?.address,
-          city: data?.customer?.city,
-          state: data?.customer?.state,
-          postal_code: data?.customer?.postal_code
+          id: enrichedData?.customer?.id,
+          name: enrichedData?.customer?.name,
+          company: enrichedData?.customer?.company, // Nome da empresa vem do campo company do customer
+          email: enrichedData?.customer?.email,
+          phone: enrichedData?.customer?.phone,
+          cpf_cnpj: enrichedData?.customer?.cpf_cnpj,
+          address: enrichedData?.customer?.address,
+          city: enrichedData?.customer?.city,
+          state: enrichedData?.customer?.state,
+          postal_code: enrichedData?.customer?.postal_code
         },
-        tenant_id: data?.tenant_id,
-        created_at: data?.created_at,
-        updated_at: data?.updated_at
+        contract_services_count: contractServices.length,
+        tenant_id: enrichedData?.tenant_id,
+        created_at: enrichedData?.created_at,
+        updated_at: enrichedData?.updated_at
       });
 
-      return data as Cobranca;
+      return enrichedData as Cobranca;
     },
     {
       // Só executa se chargeId existir e tiver acesso

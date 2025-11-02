@@ -146,7 +146,6 @@ export const dashboardService = {
           .from('contracts')
           .select(`
             id, total_amount, billing_type, installments,
-            services:contract_services(total_amount),
             tenant_id
           `)
           .eq('tenant_id', tenantId)

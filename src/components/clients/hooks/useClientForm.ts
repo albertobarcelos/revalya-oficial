@@ -63,14 +63,14 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
         email: customer.email || '',
         phone: customer.phone || '',
         cpfCnpj: customer.cpf_cnpj || '',
+        company: customer.company || '', // AIDEV-NOTE: Campo company adicionado para sincronização correta
         address: customer.address || '',
         neighborhood: customer.neighborhood || '',
         city: customer.city || '',
         state: customer.state || '',
-        zipCode: customer.zip_code || '',
+        postal_code: customer.postal_code || '',
         complement: customer.complement || '',
-        number: customer.number || '',
-        birthDate: customer.birth_date || '',
+        address_number: customer.address_number || '',
         observations: customer.observations || '',
       };
       

@@ -15,6 +15,16 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Decimal from 'decimal.js';
+import { 
+  isRetroactiveContract, 
+  calculateRetroactiveBillingPeriods,
+  logRetroactiveLogicApplication,
+  canApplyRetroactiveLogic,
+  calculateRetroactiveStats,
+  type Contract as RetroactiveContract,
+  type BillingPeriod
+} from '@/utils/retroactiveBillingUtils';
+import { RetroactiveBillingAuditService } from './retroactiveBillingAuditService';
 
 type Contract = Database['public']['Tables']['contracts']['Row'];
 type ContractService = Database['public']['Tables']['contract_services']['Row'];
@@ -73,11 +83,19 @@ export interface BillingProcessingOptions {
  * Serviço de automação de faturamento
  * Responsável por gerar cobranças recorrentes, aplicar regras financeiras e gerenciar vencimentos
  */
-class BillingAutomationService {
+export class BillingAutomationService {
+  private auditService: RetroactiveBillingAuditService
+
+  constructor() {
+    this.auditService = new RetroactiveBillingAuditService()
+  }
+  
   /**
-   * Gera faturamentos automáticos para contratos ativos
+   * AIDEV-NOTE: Processa contratos retroativos aplicando a nova lógica de faturamento
+   * Implementa a lógica documentada em NOVA_LOGICA_FATURAMENTO_RETROATIVO.md
    */
-  async generateRecurringBillings(options: BillingProcessingOptions): Promise<BillingGenerationResult> {
+  async processRetroactiveContract(contract: Contract, options: BillingProcessingOptions): Promise<BillingGenerationResult> {
+    const startTime = Date.now();
     const result: BillingGenerationResult = {
       success: true,
       generated_count: 0,
@@ -86,73 +104,62 @@ class BillingAutomationService {
     };
 
     try {
-      const referenceDate = options.reference_date || new Date();
-      const currentMonth = startOfMonth(referenceDate);
-      const nextMonth = addMonths(currentMonth, 1);
+      // Converter para o formato esperado pelas funções retroativas
+      const retroactiveContract: RetroactiveContract = {
+        id: contract.id,
+        tenant_id: contract.tenant_id,
+        customer_id: contract.customer_id,
+        start_date: contract.start_date,
+        end_date: contract.end_date,
+        billing_day: contract.billing_day || 10,
+        billing_interval: contract.billing_interval || 1,
+        billing_interval_type: contract.billing_interval_type || 'MONTHLY',
+        status: contract.status,
+        created_at: contract.created_at
+      };
 
-      // Buscar contratos ativos que precisam de faturamento
-      // AIDEV-NOTE: Agora consideramos o campo generate_billing para controlar se o contrato deve gerar cobrança
-      let contractsQuery = supabase
-        .from('contracts')
-        .select(`
-          *,
-          customer:customers!inner(
-            id,
-            name,
-            email,
-            document,
-            customer_asaas_id
-          ),
-          contract_services(
-            id,
-            service_id,
-            quantity,
-            unit_price,
-            discount_percentage,
-            tax_percentage,
-            services(
-              id,
-              name,
-              description,
-              category,
-              tax_classification
-            )
-          )
-        `)
-        .eq('tenant_id', options.tenant_id)
-        .eq('status', 'ACTIVE')
-        .eq('auto_billing', true)
-        .eq('generate_billing', true);
-
-      if (options.contract_ids && options.contract_ids.length > 0) {
-        contractsQuery = contractsQuery.in('id', options.contract_ids);
+      // Verificar se é retroativo e pode aplicar a lógica
+      if (!isRetroactiveContract(retroactiveContract)) {
+        await this.auditService.logRetroactiveSkipped(contract.id, 'Contrato não é retroativo');
+        return result; // Não é retroativo, retorna vazio
       }
 
-      const { data: contracts, error: contractsError } = await contractsQuery;
-
-      if (contractsError) {
-        result.success = false;
+      if (!canApplyRetroactiveLogic(retroactiveContract)) {
+        await this.auditService.logRetroactiveSkipped(contract.id, 'Lógica retroativa não pode ser aplicada');
         result.errors.push({
-          contract_id: 'query',
-          error: contractsError.message
+          contract_id: contract.id,
+          error: 'Contrato retroativo detectado, mas não pode aplicar a lógica retroativa'
         });
         return result;
       }
 
-      if (!contracts || contracts.length === 0) {
-        return result;
-      }
+      // Registrar início do processamento
+      await this.auditService.logRetroactiveStart(contract.id, retroactiveContract);
 
-      // Processar cada contrato
-      for (const contract of contracts) {
+      // Calcular períodos retroativos
+      const retroactivePeriods = calculateRetroactiveBillingPeriods(retroactiveContract);
+      
+      // Calcular estatísticas
+      const stats = calculateRetroactiveStats(retroactivePeriods, retroactiveContract);
+      
+      const calculationTime = Date.now() - startTime;
+
+      // Registrar cálculo dos períodos
+      await this.auditService.logRetroactiveCalculation(contract.id, retroactivePeriods, calculationTime);
+      
+      // Log da aplicação da lógica (mantendo log original)
+      await logRetroactiveLogicApplication(retroactiveContract, retroactivePeriods, stats);
+
+      // Gerar faturamentos para cada período retroativo
+      for (const period of retroactivePeriods) {
         try {
-          // Verificar se já existe faturamento para o período
+          // Verificar se já existe faturamento para este período
           if (!options.force_regenerate) {
             const { data: existingBilling } = await supabase
               .from('contract_billings')
               .select('id')
               .eq('contract_id', contract.id)
-              .eq('reference_period', format(currentMonth, 'yyyy-MM'))
+              .eq('reference_period', format(new Date(period.period_start), 'yyyy-MM'))
               .single();
 
             if (existingBilling) {
@@ -160,57 +167,45 @@ class BillingAutomationService {
             }
           }
 
-          // Calcular valores do faturamento
+          // Calcular valores do faturamento para este período
           const calculation = await this.calculateBillingAmounts(
             contract,
             contract.contract_services || [],
-            referenceDate
-          );
-
-          // AIDEV-NOTE: Corrigido - usar billing_type dos serviços do contrato ao invés de payment_terms inexistente
-          // Pegar o billing_type do primeiro serviço do contrato (assumindo que todos têm o mesmo)
-          const contractBillingType = contract.contract_services?.[0]?.billing_type;
-          const paymentTerms = this.mapBillingTypeToPaymentTerms(contractBillingType);
-
-          // Determinar data de vencimento
-          const dueDate = this.calculateDueDate(
-            paymentTerms,
-            contract.due_day || 10,
-            referenceDate
+            new Date(period.bill_date)
           );
 
           // Gerar número do faturamento
           const billingNumber = await this.generateBillingNumber(
             options.tenant_id,
-            referenceDate
+            new Date(period.bill_date)
           );
 
           const billingData = {
             tenant_id: options.tenant_id,
             contract_id: contract.id,
             billing_number: billingNumber,
-            installment_number: 1, // Para faturamento recorrente
+            installment_number: 1,
             total_installments: 1,
-            reference_period: format(currentMonth, 'yyyy-MM'),
-            issue_date: format(referenceDate, 'yyyy-MM-dd'),
-            due_date: format(dueDate, 'yyyy-MM-dd'),
+            reference_period: format(new Date(period.period_start), 'yyyy-MM'),
+            issue_date: format(new Date(period.bill_date), 'yyyy-MM-dd'),
+            due_date: format(new Date(period.bill_date), 'yyyy-MM-dd'),
             gross_amount: calculation.gross_amount,
             discount_amount: calculation.discount_amount,
             tax_amount: calculation.tax_amount,
             net_amount: calculation.net_amount,
             status: 'PENDING' as const,
-            // AIDEV-NOTE: Removido payment_terms pois não existe na estrutura do contrato
-            synchronization_status: 'PENDING' as const
+            synchronization_status: 'PENDING' as const,
+            // Marcar como gerado pela lógica retroativa
+            notes: `Gerado pela lógica retroativa - Período: ${period.period_start} a ${period.period_end}`
           };
 
           if (options.dry_run) {
-            // Modo de teste - não salvar no banco
             result.billings.push({
-              id: 'dry-run-' + contract.id,
+              id: 'dry-run-retroactive-' + contract.id + '-' + period.period_start,
               contract_id: contract.id,
               billing_number: billingNumber,
               net_amount: calculation.net_amount,
-              due_date: format(dueDate, 'yyyy-MM-dd')
+              due_date: format(new Date(period.bill_date), 'yyyy-MM-dd')
             });
             result.generated_count++;
             continue;
@@ -226,7 +221,7 @@ class BillingAutomationService {
           if (billingError) {
             result.errors.push({
               contract_id: contract.id,
-              error: `Erro ao criar faturamento: ${billingError.message}`
+              error: `Erro ao criar faturamento retroativo: ${billingError.message}`
             });
             continue;
           }
@@ -267,7 +262,7 @@ class BillingAutomationService {
             if (itemsError) {
               result.errors.push({
                 contract_id: contract.id,
-                error: `Erro ao criar itens do faturamento: ${itemsError.message}`
+                error: `Erro ao criar itens do faturamento retroativo: ${itemsError.message}`
               });
               continue;
             }
@@ -283,23 +278,294 @@ class BillingAutomationService {
 
           result.generated_count++;
 
+          // Registrar geração de faturamento para o período
+          await this.auditService.logRetroactiveBillingGeneration(
+            contract.id, 
+            period, 
+            { success: true }
+          );
+
+        } catch (error) {
+          const errorMessage = `Erro ao processar período retroativo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+          result.errors.push({
+            contract_id: contract.id,
+            error: errorMessage
+          });
+          
+          // Registrar falha na geração do faturamento para o período
+          await this.auditService.logRetroactiveBillingGeneration(
+            contract.id, 
+            period, 
+            { success: false, error: errorMessage }
+          );
+        }
+      }
+
+    } catch (error) {
+      result.success = false;
+      const errorMessage = `Erro ao processar contrato retroativo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`;
+      result.errors.push({
+        contract_id: contract.id,
+        error: errorMessage
+      });
+      
+      // Registrar falha no processamento
+      await this.auditService.logRetroactiveValidationFailure(contract.id, [errorMessage]);
+    }
+
+    return result;
+  }
+  /**
+   * Gera faturamentos automáticos para contratos ativos
+   */
+  async generateRecurringBillings(options: BillingProcessingOptions): Promise<BillingGenerationResult> {
+    const result: BillingGenerationResult = {
+      success: true,
+      generated_count: 0,
+      errors: [],
+      billings: []
+    };
+
+    try {
+      const referenceDate = options.reference_date || new Date();
+      const currentMonth = startOfMonth(referenceDate);
+      const nextMonth = addMonths(currentMonth, 1);
+
+      // Buscar contratos ativos que precisam de faturamento
+      // AIDEV-NOTE: Agora consideramos o campo generate_billing para controlar se o contrato deve gerar cobrança
+      let contractsQuery = supabase
+        .from('contracts')
+        .select(`
+          *,
+          customer:customers!inner(
+            id,
+            name,
+            email,
+            document,
+            customer_asaas_id
+          )
+        `)
+        .eq('tenant_id', options.tenant_id)
+        .eq('status', 'ACTIVE')
+        .eq('auto_billing', true)
+        .eq('generate_billing', true);
+
+      if (options.contract_ids && options.contract_ids.length > 0) {
+        contractsQuery = contractsQuery.in('id', options.contract_ids);
+      }
+
+      const { data: contracts, error: contractsError } = await contractsQuery;
+
+      if (contractsError) {
+        result.success = false;
+        result.errors.push({
+          contract_id: 'query',
+          error: contractsError.message
+        });
+        return result;
+      }
+
+      if (!contracts || contracts.length === 0) {
+        return result;
+      }
+
+      // Processar cada contrato
+      for (const contract of contracts) {
+        try {
+          // AIDEV-NOTE: Buscar serviços do contrato usando a view otimizada
+          const { data: contractServices, error: servicesError } = await supabase
+            .from('vw_contract_services_detailed')
+            .select('*')
+            .eq('tenant_id', options.tenant_id)
+            .eq('contract_id', contract.id);
+
+          if (servicesError) {
+            result.errors.push({
+              contract_id: contract.id,
+              error: `Erro ao buscar serviços do contrato: ${servicesError.message}`
+            });
+            continue;
+          }
+
+          // Enriquecer o contrato com os serviços
+          const enrichedContract = {
+            ...contract,
+            contract_services: contractServices || []
+          };
+          // AIDEV-NOTE: Verificar se é contrato retroativo e processar com lógica específica
+          if (isRetroactiveContract(enrichedContract as RetroactiveContract)) {
+            // Processar contrato retroativo com lógica específica
+            const retroactiveResult = await this.processRetroactiveContract(
+              enrichedContract as RetroactiveContract,
+              options,
+              referenceDate
+            );
+            
+            if (retroactiveResult.success) {
+              result.generated_billings.push(...retroactiveResult.generated_billings);
+            } else {
+              result.errors.push(...retroactiveResult.errors);
+            }
+            
+            // Continuar para o próximo contrato (retroativo já foi processado)
+            continue;
+          }
+
+          // AIDEV-NOTE: Processamento normal para contratos não retroativos
+          // Verificar se já existe faturamento para o período
+          if (!options.force_regenerate) {
+            const { data: existingBilling } = await supabase
+              .from('contract_billings')
+              .select('id')
+              .eq('contract_id', enrichedContract.id)
+              .eq('reference_period', format(currentMonth, 'yyyy-MM'))
+              .single();
+
+            if (existingBilling) {
+              continue; // Já existe faturamento para este período
+            }
+          }
+
+          // Calcular valores do faturamento
+          const calculation = await this.calculateBillingAmounts(
+            enrichedContract,
+            enrichedContract.contract_services || [],
+            referenceDate
+          );
+
+          // AIDEV-NOTE: Corrigido - usar billing_type dos serviços do contrato ao invés de payment_terms inexistente
+          // Pegar o billing_type do primeiro serviço do contrato (assumindo que todos têm o mesmo)
+          const contractBillingType = enrichedContract.contract_services?.[0]?.billing_type;
+          const paymentTerms = this.mapBillingTypeToPaymentTerms(contractBillingType);
+
+          // Determinar data de vencimento
+          const dueDate = this.calculateDueDate(
+            paymentTerms,
+            enrichedContract.due_day || 10,
+            referenceDate
+          );
+
+          // Gerar número do faturamento
+          const billingNumber = await this.generateBillingNumber(
+            options.tenant_id,
+            referenceDate
+          );
+
+          const billingData = {
+            tenant_id: options.tenant_id,
+            contract_id: enrichedContract.id,
+            billing_number: billingNumber,
+            installment_number: 1, // Para faturamento recorrente
+            total_installments: 1,
+            reference_period: format(currentMonth, 'yyyy-MM'),
+            issue_date: format(referenceDate, 'yyyy-MM-dd'),
+            due_date: format(dueDate, 'yyyy-MM-dd'),
+            gross_amount: calculation.gross_amount,
+            discount_amount: calculation.discount_amount,
+            tax_amount: calculation.tax_amount,
+            net_amount: calculation.net_amount,
+            status: 'PENDING' as const,
+            // AIDEV-NOTE: Removido payment_terms pois não existe na estrutura do contrato
+            synchronization_status: 'PENDING' as const
+          };
+
+          if (options.dry_run) {
+            // Modo de teste - não salvar no banco
+            result.billings.push({
+              id: 'dry-run-' + enrichedContract.id,
+              contract_id: enrichedContract.id,
+              billing_number: billingNumber,
+              net_amount: calculation.net_amount,
+              due_date: format(dueDate, 'yyyy-MM-dd')
+            });
+            result.generated_count++;
+            continue;
+          }
+
+          // Inserir faturamento
+          const { data: billing, error: billingError } = await supabase
+            .from('contract_billings')
+            .insert(billingData)
+            .select('id, billing_number, net_amount, due_date')
+            .single();
+
+          if (billingError) {
+            result.errors.push({
+              contract_id: enrichedContract.id,
+              error: `Erro ao criar faturamento: ${billingError.message}`
+            });
+            continue;
+          }
+
+          // Inserir itens do faturamento
+          const billingItems = (enrichedContract.contract_services || []).map(service => ({
+            billing_id: billing.id,
+            service_id: service.service_id,
+            description: service.services?.name || 'Serviço',
+            quantity: service.quantity,
+            unit_price: service.unit_price,
+            discount_percentage: service.discount_percentage || 0,
+            tax_percentage: service.tax_percentage || 0,
+            gross_amount: new Decimal(service.quantity).mul(service.unit_price).toNumber(),
+            discount_amount: new Decimal(service.quantity)
+              .mul(service.unit_price)
+              .mul(service.discount_percentage || 0)
+              .div(100)
+              .toNumber(),
+            tax_amount: new Decimal(service.quantity)
+              .mul(service.unit_price)
+              .mul(1 - (service.discount_percentage || 0) / 100)
+              .mul(service.tax_percentage || 0)
+              .div(100)
+              .toNumber(),
+            net_amount: new Decimal(service.quantity)
+              .mul(service.unit_price)
+              .mul(1 - (service.discount_percentage || 0) / 100)
+              .mul(1 + (service.tax_percentage || 0) / 100)
+              .toNumber()
+          }));
+
+          if (billingItems.length > 0) {
+            const { error: itemsError } = await supabase
+              .from('contract_billing_items')
+              .insert(billingItems);
+
+            if (itemsError) {
+              result.errors.push({
+                contract_id: enrichedContract.id,
+                error: `Erro ao criar itens do faturamento: ${itemsError.message}`
+              });
+              continue;
+            }
+          }
+
+          result.billings.push({
+            id: billing.id,
+            contract_id: enrichedContract.id,
+            billing_number: billing.billing_number,
+            net_amount: billing.net_amount,
+            due_date: billing.due_date
+          });
+
+          result.generated_count++;
+
           // Integrar automaticamente com gateway se configurado
-          if (options.auto_integrate && contract.auto_integrate_gateway) {
+          if (options.auto_integrate && enrichedContract.auto_integrate_gateway) {
             try {
-              const gatewayCode = contract.preferred_gateway || 'ASAAS';
+              const gatewayCode = enrichedContract.preferred_gateway || 'ASAAS';
               await chargeIntegrationService.createExternalCharge(
                 billing.id,
                 gatewayCode
               );
             } catch (integrationError) {
-              console.warn(`Erro na integração automática para contrato ${contract.id}:`, integrationError);
+              console.warn(`Erro na integração automática para contrato ${enrichedContract.id}:`, integrationError);
               // Não falhar o processo por erro de integração
             }
           }
 
         } catch (error) {
           result.errors.push({
-            contract_id: contract.id,
+            contract_id: enrichedContract.id,
             error: error instanceof Error ? error.message : 'Erro desconhecido'
           });
         }

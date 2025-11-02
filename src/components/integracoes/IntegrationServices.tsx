@@ -640,7 +640,7 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
                   <Input
                     id="apiUrl"
                     value={asaasConfig.environment === 'production' 
-                      ? 'https://api.asaas.com' 
+                      ? 'https://api.asaas.com/v3' 
                       : 'https://sandbox.asaas.com'
                     }
                     disabled

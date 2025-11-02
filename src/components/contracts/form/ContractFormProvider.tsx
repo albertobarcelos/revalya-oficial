@@ -1,9 +1,64 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ContractFormValues, contractFormSchema } from "../schema/ContractFormSchema";
 import { useContractEdit } from "@/hooks/useContractEdit";
+import { useContractCosts } from "@/hooks/useContractCosts";
 import { toast } from "sonner";
+
+// AIDEV-NOTE: Interfaces para tipagem específica
+interface ServiceData {
+  id?: string;
+  service_id?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  unit_price?: number;
+  default_price?: number;
+  discount_percentage?: number;
+  tax_rate?: number;
+  cost_percentage?: number;
+  [key: string]: unknown;
+}
+
+interface ProductData {
+  id?: string;
+  product_id?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  price?: number;
+  unit_price?: number;
+  discount_percentage?: number;
+  tax_rate?: number;
+  [key: string]: unknown;
+}
+
+interface ContractData {
+  id?: string;
+  contract_number?: string;
+  services?: ServiceData[];
+  products?: ProductData[];
+  [key: string]: unknown;
+}
+
+interface TotalValues {
+  subtotal: number;
+  discount: number;
+  tax: number;
+  costs: number;
+  total: number;
+}
+
+// AIDEV-NOTE: Interface para alterações pendentes de serviços
+interface PendingServiceChanges {
+  [serviceId: string]: {
+    originalData: ServiceData;
+    pendingChanges: Partial<ServiceData>;
+    hasChanges: boolean;
+    timestamp: number;
+  };
+}
 
 interface ContractFormContextType {
   form: ReturnType<typeof useForm<ContractFormValues>>;
@@ -14,17 +69,16 @@ interface ContractFormContextType {
   setIsPending: (pending: boolean) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  totalValues: {
-    subtotal: number;
-    discount: number;
-    tax: number;
-    total: number;
-  };
-  setTotalValues: (values: any) => void;
+  totalValues: TotalValues;
+  setTotalValues: (values: TotalValues) => void;
   isViewMode: boolean;
   isEditMode: boolean;
   isLoadingContract: boolean;
-  contractData: any;
+  contractData: ContractData | null;
+  // AIDEV-NOTE: Estado compartilhado para alterações pendentes
+  pendingServiceChanges: PendingServiceChanges;
+  setPendingServiceChanges: (changes: PendingServiceChanges) => void;
+  applyPendingChanges: () => void;
 }
 
 const ContractFormContext = createContext<ContractFormContextType | null>(null);
@@ -48,7 +102,12 @@ interface ContractFormProviderProps {
 }
 
 // Função para calcular totais baseado nos serviços e produtos
-const calculateTotals = (services: any[] = [], products: any[] = [], contractDiscount: number = 0) => {
+const calculateTotals = (
+  services: ServiceData[] = [], 
+  products: ProductData[] = [], 
+  contractDiscount: number = 0,
+  cost_price?: number // AIDEV-NOTE: Custos reais da view vw_contract_services_detailed
+) => {
   // Calcular subtotal de serviços
   const servicesSubtotal = services.reduce((sum, service) => {
     const quantity = service.quantity || 1;
@@ -115,12 +174,33 @@ const calculateTotals = (services: any[] = [], products: any[] = [], contractDis
   }, 0);
 
   const tax = servicesTax + productsTax;
+
+  // AIDEV-NOTE: Usar custos reais da view se disponível, senão calcular por cost_percentage
+  let costs: number;
+  
+  if (cost_price !== undefined) {
+    // ✅ Usar custos reais da view vw_contract_services_detailed
+    costs = cost_price;
+  } else {
+    // ✅ Calcular custos baseado em cost_percentage para contratos novos
+    const servicesCosts = services.reduce((sum, service) => {
+      const quantity = service.quantity || 1;
+      const unitPrice = service.unit_price || service.default_price || 0;
+      const costPercentage = service.cost_percentage || 0;
+      const serviceTotal = quantity * unitPrice;
+      const serviceCost = serviceTotal * (costPercentage / 100);
+      
+      return sum + serviceCost;
+    }, 0);
+    costs = servicesCosts;
+  }
   const total = subtotal - totalDiscount + tax;
 
   return {
     subtotal: Math.round(subtotal * 100) / 100,
     discount: Math.round(totalDiscount * 100) / 100,
     tax: Math.round(tax * 100) / 100,
+    costs: Math.round(costs * 100) / 100,
     total: Math.round(total * 100) / 100
   };
 };
@@ -142,11 +222,19 @@ export function ContractFormProvider({
     subtotal: 0,
     discount: 0,
     tax: 0,
+    costs: 0,
     total: 0,
   });
 
+  // AIDEV-NOTE: Estado para alterações pendentes de serviços
+  const [pendingServiceChanges, setPendingServiceChanges] = useState<PendingServiceChanges>({});
+
   // Hook otimizado para carregamento de dados de edição
   const { data: contractData, isLoading: isLoadingContract, error: contractError, loadContract } = useContractEdit();
+
+  // AIDEV-NOTE: Hook para buscar custos reais de contratos existentes
+  console.log('🔍 [DEBUG] ContractFormProvider - contractId:', contractId);
+  const { totalCosts: contractCosts, isLoading: isLoadingCosts } = useContractCosts(contractId);
 
   // Sempre edição quando houver um contrato selecionado
   const isEditMode = Boolean(contractId);
@@ -172,6 +260,27 @@ export function ContractFormProvider({
       // ... outros valores padrão
     }
   });
+
+  // AIDEV-NOTE: Função para aplicar alterações pendentes ao formulário
+  const applyPendingChanges = React.useCallback(() => {
+    const currentServices = form.getValues('services') || [];
+    const updatedServices = currentServices.map(service => {
+      const serviceId = service.service_id || service.id;
+      const pendingChange = pendingServiceChanges[serviceId];
+      
+      if (pendingChange && pendingChange.hasChanges) {
+        return {
+          ...service,
+          ...pendingChange.pendingChanges
+        };
+      }
+      
+      return service;
+    });
+
+    form.setValue('services', updatedServices);
+    console.log('🔄 Alterações pendentes aplicadas:', Object.keys(pendingServiceChanges).length);
+  }, [form, pendingServiceChanges]);
 
   // 🚀 CARREGAMENTO OTIMIZADO: Carregar dados do contrato quando contractId mudar
   useEffect(() => {
@@ -210,12 +319,56 @@ export function ContractFormProvider({
   const products = form.watch('products');
   const contractDiscount = form.watch('total_discount') || 0;
   
+  // AIDEV-NOTE: Função para calcular custos híbridos (backend + local)
+  const calculateHybridCosts = useCallback((currentServices: any[]) => {
+    if (!contractId || !contractCosts) {
+      // Para contratos novos, usar cost_percentage tradicional
+      return undefined;
+    }
+
+    // Para contratos existentes, combinar custos salvos + custos locais
+    let totalHybridCosts = 0;
+
+    currentServices.forEach(service => {
+      const serviceId = service.service_id || service.id;
+      
+      if (serviceId && typeof serviceId === 'string' && serviceId.length > 10) {
+        // Serviço salvo no backend - usar custo real se disponível
+        // Os custos do backend já estão incluídos em contractCosts
+        // Não precisamos somar novamente aqui
+      } else {
+        // Serviço novo (local) - calcular custo usando cost_percentage
+        const quantity = service.quantity || 1;
+        const unitPrice = service.unit_price || 0;
+        const costPercentage = service.cost_percentage || 0;
+        const serviceTotal = quantity * unitPrice;
+        const serviceCost = serviceTotal * (costPercentage / 100);
+        totalHybridCosts += serviceCost;
+      }
+    });
+
+    // Retornar custos do backend + custos locais
+    return contractCosts + totalHybridCosts;
+  }, [contractId, contractCosts]);
+
   useEffect(() => {
     // Recalcular sempre que houver mudanças nos serviços, produtos ou desconto
     const hasItems = (services && services.length > 0) || (products && products.length > 0);
     
-    // AIDEV-NOTE: Incluir desconto do contrato no cálculo dos totais
-    const newTotals = calculateTotals(services || [], products || [], contractDiscount);
+    // AIDEV-NOTE: Calcular custos híbridos para contratos existentes
+    const hybridCosts = calculateHybridCosts(services || []);
+    
+    console.log('🔍 [DEBUG] Custos híbridos:', {
+      contractId,
+      contractCosts,
+      hybridCosts,
+      servicesCount: services?.length || 0,
+      hasContractId: !!contractId,
+      hasContractCosts: !!contractCosts
+    });
+    
+    // AIDEV-NOTE: Incluir desconto do contrato e custos híbridos no cálculo dos totais
+    const newTotals = calculateTotals(services || [], products || [], contractDiscount, hybridCosts);
     setTotalValues(newTotals);
     
     // AIDEV-NOTE: Atualizar apenas total_amount e total_tax
@@ -224,8 +377,9 @@ export function ContractFormProvider({
     form.setValue('total_tax', newTotals.tax);
     
     const itemsCount = (services?.length || 0) + (products?.length || 0);
-    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos', 'com desconto do contrato:', contractDiscount);
-  }, [services, products, contractDiscount, form]);
+    const costsSource = hybridCosts !== undefined ? 'custos híbridos (backend + local)' : 'cost_percentage';
+    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos', 'com desconto do contrato:', contractDiscount, 'usando', costsSource);
+  }, [services, products, contractDiscount, contractId, contractCosts, form, calculateHybridCosts]);
 
   // Detectar mudanças no formulário
   const handleFormChange = () => {
@@ -259,7 +413,11 @@ export function ContractFormProvider({
     isViewMode,
     isEditMode,
     isLoadingContract,
-    contractData
+    contractData,
+    // AIDEV-NOTE: Novos estados para alterações pendentes
+    pendingServiceChanges,
+    setPendingServiceChanges,
+    applyPendingChanges
   };
 
   return (

@@ -44,9 +44,9 @@ import { useState } from 'react';
 // Seguindo as especificações: Dados Gerais, Estoque, Fiscal (condicional), Observações
 
 interface EditProductDialogProps {
-  product: Product;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  product: Product | null;
+  isOpen: boolean;
+  onClose: () => void;
   onSuccess?: () => void;
 }
 
@@ -64,10 +64,14 @@ const mockTenantConfig: TenantConfig = {
 
 export function EditProductDialog({
   product,
-  open,
-  onOpenChange,
+  isOpen,
+  onClose,
   onSuccess,
 }: EditProductDialogProps) {
+  // AIDEV-NOTE: Verificação de segurança - não renderiza se product for null
+  if (!product) {
+    return null;
+  }
   // AIDEV-NOTE: Hook para buscar categorias da tabela products do tenant
   const { data: categories, isLoading: isLoadingCategories } = useProductCategories();
 
@@ -115,7 +119,7 @@ export function EditProductDialog({
       return data;
     },
     {
-      enabled: open && !!product?.id, // Só executa quando diálogo está aberto e tem ID
+      enabled: isOpen && !!product?.id, // Só executa quando diálogo está aberto e tem ID
       staleTime: 5 * 60 * 1000 // 5 minutos de cache
     }
   );
@@ -143,7 +147,7 @@ export function EditProductDialog({
   // AIDEV-NOTE: Renderização condicional baseada no estado de carregamento
   if (isLoadingProduct) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0">
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -155,7 +159,7 @@ export function EditProductDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="flex items-center gap-2 text-xl">
@@ -268,13 +272,13 @@ export function EditProductDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="category" className="text-sm font-medium">
+                      <Label htmlFor="category_id" className="text-sm font-medium">
                         Categoria
                       </Label>
                       <Select
-                        value={formData.category || ''}
+                        value={formData.category_id || ''}
                         onValueChange={(value) => handleChange({
-                          target: { name: 'category', value }
+                          target: { name: 'category_id', value }
                         } as any)}
                         disabled={isLoadingCategories}
                       >
@@ -287,8 +291,8 @@ export function EditProductDialog({
                         </SelectTrigger>
                         <SelectContent>
                           {categories?.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
                             </SelectItem>
                           ))}
                           {(!categories || categories.length === 0) && !isLoadingCategories && (
@@ -726,7 +730,7 @@ export function EditProductDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={onClose}
                 disabled={isLoading}
               >
                 Cancelar

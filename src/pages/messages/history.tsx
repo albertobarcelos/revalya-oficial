@@ -51,24 +51,7 @@ export default function MessageHistoryPage() {
     }
   }, [hasAccess, currentTenant]);
   
-  // 🚨 GUARD CLAUSE OBRIGATÓRIA
-  if (!hasAccess) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2 text-red-600">
-              <Shield className="h-5 w-5" />
-              <span className="font-medium">Acesso Negado</span>
-            </div>
-            <p className="text-sm text-gray-600 mt-2">{accessError}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // 🔐 HOOK SEGURO OBRIGATÓRIO (CAMADA 2)
+  // 🔐 HOOK SEGURO OBRIGATÓRIO (CAMADA 2) - DEVE VIR ANTES DO EARLY RETURN
   const { data, isLoading } = useSecureTenantQuery(
     ["message-history", currentPage.toString(), pageSize.toString()],
     async (supabase: SupabaseClient, tenantId: string) => {
@@ -85,7 +68,7 @@ export default function MessageHistoryPage() {
         .from('message_history')
         .select('*')
         .eq('tenant_id', tenantId) // 🔑 FILTRO OBRIGATÓRIO POR TENANT
-        .order('sent_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
 
       if (error) {
@@ -112,6 +95,23 @@ export default function MessageHistoryPage() {
       enabled: !!currentTenant?.id // 🔒 SÓ EXECUTA SE TENANT VÁLIDO
     }
   );
+
+  // 🚨 GUARD CLAUSE OBRIGATÓRIA - AGORA APÓS TODOS OS HOOKS
+  if (!hasAccess) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2 text-red-600">
+              <Shield className="h-5 w-5" />
+              <span className="font-medium">Acesso Negado</span>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">{accessError}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const totalPages = Math.ceil((data?.totalCount || 0) / pageSize);
 
@@ -191,7 +191,7 @@ export default function MessageHistoryPage() {
             {data?.messages.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>
-                  {format(new Date(item.sent_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                  {format(new Date(item.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                 </TableCell>
                 <TableCell>{item.customer_name}</TableCell>
                 <TableCell>{item.customer_phone}</TableCell>
@@ -251,7 +251,7 @@ export default function MessageHistoryPage() {
             <div>
               <h4 className="font-medium mb-1">Data de Envio</h4>
               <p>
-                {selectedMessage && format(new Date(selectedMessage.sent_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                {selectedMessage && format(new Date(selectedMessage.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
               </p>
             </div>
             <div>

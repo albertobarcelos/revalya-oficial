@@ -49,7 +49,7 @@ const getResponsiveItemsPerPage = (defaultItems: number): number => {
 // AIDEV-NOTE: Hook personalizado para gerenciar paginação com responsividade
 export function usePagination({
   totalItems,
-  defaultItemsPerPage = 50,
+  defaultItemsPerPage = 10,
   defaultPage = 1,
   enableResponsive = true
 }: UsePaginationProps): UsePaginationReturn {

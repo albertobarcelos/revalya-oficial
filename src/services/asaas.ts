@@ -13,6 +13,14 @@ class AsaasService {
 
   private async request<T>(endpoint: string, options: RequestInit = {}, tenantId?: string): Promise<T> {
     try {
+      // AIDEV-NOTE: Debug temporário para verificar tenant_id
+      console.log('🔍 [DEBUG] AsaasService.request chamado com:', {
+        endpoint,
+        tenantId,
+        hasTenantId: !!tenantId,
+        tenantIdType: typeof tenantId
+      });
+
       // Adicionar timeout para evitar requisições penduradas
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
@@ -36,16 +44,21 @@ class AsaasService {
       // para o tenant 8d2888f1-64a5-445f-84f5-2614d5160251 com credenciais válidas
       // Passando tenant_id no body conforme esperado pela Edge Function
       
+      const requestBody = {
+        path: endpoint, // ✅ Corrigido: usar 'path' em vez de 'endpoint'
+        method: options.method || 'GET',
+        data: options.body ? JSON.parse(options.body as string) : undefined,
+        params: undefined, // ✅ Adicionado campo params esperado pela função Edge
+        tenant_id: tenantId // ✅ Tenant ID verificado via MCP Supabase
+      };
+
+      // AIDEV-NOTE: Debug do body da requisição
+      console.log('🔍 [DEBUG] Body da requisição para Edge Function:', requestBody);
+      
       const response = await fetch(`${this.proxyUrl}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          path: endpoint, // ✅ Corrigido: usar 'path' em vez de 'endpoint'
-          method: options.method || 'GET',
-          data: options.body ? JSON.parse(options.body as string) : undefined,
-          params: undefined, // ✅ Adicionado campo params esperado pela função Edge
-          tenant_id: tenantId // ✅ Tenant ID verificado via MCP Supabase
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       });
       
@@ -54,8 +67,29 @@ class AsaasService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`Erro na resposta do Asaas [${response.status}]:`, errorText);
-        throw new Error(`Asaas API error: ${response.status} - ${response.statusText}`);
+        let errorMessage = `HTTP ${response.status}`;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // Se não conseguir parsear como JSON, usar o texto diretamente
+          errorMessage = errorText || errorMessage;
+        }
+        
+        // AIDEV-NOTE: Log detalhado para debug de problemas de integração
+        console.error('❌ Erro na API Asaas:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorMessage,
+          endpoint,
+          tenantId,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries()),
+          timestamp: new Date().toISOString()
+        });
+        
+        throw new Error(`Asaas API error: ${response.status} - ${errorMessage}`);
       }
 
       const contentType = response.headers.get('content-type');
@@ -65,7 +99,18 @@ class AsaasService {
         throw new Error('Resposta inválida do Asaas');
       }
 
-      return response.json();
+      const data = await response.json();
+      
+      // AIDEV-NOTE: Log de sucesso para monitoramento
+      console.log('✅ Requisição Asaas bem-sucedida:', {
+        endpoint,
+        status: response.status,
+        tenantId,
+        dataSize: JSON.stringify(data).length,
+        timestamp: new Date().toISOString()
+      });
+      
+      return data;
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         console.error('Requisição ao Asaas abortada por timeout');

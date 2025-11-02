@@ -64,31 +64,36 @@ import { supabase } from '@/lib/supabase';
 // Componente de Edição Reutilizável
 import { EditModal } from '@/components/shared/EditModal';
 
-// AIDEV-NOTE: Função para traduzir unidades do inglês para português
+// AIDEV-NOTE: Função para traduzir unidades de medida para português
 const translateUnit = (unit: string): string => {
-  const unitTranslations: Record<string, string> = {
-    'kilometer': 'quilômetro',
-    'km': 'km',
-    'meter': 'metro',
-    'm': 'm',
-    'day': 'dia',
-    'hour': 'hora',
-    'minute': 'minuto',
-    'second': 'segundo',
-    'week': 'semana',
-    'month': 'mês',
-    'year': 'ano',
-    'piece': 'peça',
-    'unit': 'unidade',
-    'service': 'serviço',
-    'project': 'projeto',
-    'consultation': 'consulta',
-    'session': 'sessão',
-    'package': 'pacote',
-    'license': 'licença'
+  const unitMap: Record<string, string> = {
+    'hour': 'Hora',
+    'day': 'Dia',
+    'week': 'Semana',
+    'month': 'Mês',
+    'monthly': 'Mensalidade',
+    'kilometer': 'Quilômetro',
+    'year': 'Ano',
+    'unit': 'Unidade',
+    'piece': 'Peça',
+    'service': 'Serviço',
+    'project': 'Projeto',
+    'package': 'Pacote',
+    'license': 'Licença',
+    'user': 'Usuário',
+    'session': 'Sessão',
+    'consultation': 'Consulta',
+    'visit': 'Visita',
+    'report': 'Relatório',
+    'analysis': 'Análise',
+    'review': 'Revisão',
+    'audit': 'Auditoria',
+    'training': 'Treinamento',
+    'support': 'Suporte',
+    'unique': 'Único'
   };
   
-  return unitTranslations[unit.toLowerCase()] || unit;
+  return unitMap[unit.toLowerCase()] || unit;
 };
 
 /**
@@ -144,7 +149,7 @@ export default function ServicesPage() {
   // AIDEV-NOTE: Hook de paginação com comportamento responsivo
   const pagination = usePagination({
     totalItems: services?.length || 0,
-    defaultItemsPerPage: 50,
+    defaultItemsPerPage: 10,
     enableResponsive: true
   });
 

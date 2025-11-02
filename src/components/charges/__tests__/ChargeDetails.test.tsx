@@ -30,10 +30,17 @@ const mockChargeDetails = {
 const mockMessageHistory = [
   {
     id: 'msg-1',
-    sent_at: '2024-03-19T10:00:00',
-    template_name: 'Cobrança',
-    status: 'delivered',
+    tenant_id: 'tenant-123',
+    charge_id: 'charge-123',
+    template_id: 'template-1',
+    customer_id: 'customer-1',
     message: 'Mensagem de teste',
+    status: 'delivered',
+    error_details: null,
+    metadata: null,
+    created_at: '2024-03-19T10:00:00',
+    updated_at: '2024-03-19T10:00:00',
+    batch_id: null,
   },
 ];
 
