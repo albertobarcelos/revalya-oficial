@@ -46,7 +46,9 @@ export default function Profile() {
         const profileData = {
           ...data,
           email: user.email || data.email,
-        };
+          // company_name é persistido em users.metadata.company_name
+          company_name: (data as any)?.metadata?.company_name ?? null,
+        } as Partial<Profile>;
         console.log("Dados do perfil carregados:", profileData);
         setProfile(profileData);
       } else {
@@ -60,9 +62,11 @@ export default function Profile() {
           user_role: 'USER', // Papel padrão
           active: true,
           preferences: {},
+          // Iniciar metadata como objeto e opcionalmente incluir company_name
+          metadata: { company_name: null },
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        };
+        } as any;
         
         const { error: insertError } = await supabase
           .from('users')

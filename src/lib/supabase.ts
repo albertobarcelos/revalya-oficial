@@ -154,6 +154,32 @@ export function getPublicUrl(bucket: StorageBucket, path: string): string {
 }
 
 /**
+ * Obtém uma URL utilizável para imagens do Storage.
+ * Tenta primeiro gerar uma URL assinada (funciona para buckets privados e públicos),
+ * e faz fallback para a URL pública caso a assinatura falhe.
+ *
+ * Comentário de nível de função: utilitário que padroniza acesso a imagens em buckets privados/públicos.
+ */
+export async function getImageUrl(bucket: StorageBucket, path: string, expiresInSeconds: number = 3600): Promise<string> {
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, expiresInSeconds)
+
+    if (error || !data?.signedUrl) {
+      // Fallback para URL pública
+      const publicUrl = getPublicUrl(bucket, path)
+      return publicUrl
+    }
+    return data.signedUrl
+  } catch {
+    // Fallback final em caso de exceções inesperadas
+    const publicUrl = getPublicUrl(bucket, path)
+    return publicUrl
+  }
+}
+
+/**
  * Gera um nome de arquivo único com timestamp
  */
 export function generateUniqueFileName(originalName: string, userId?: string): string {
