@@ -4,7 +4,7 @@
 // Tecnologias: Shadcn/UI + Tailwind + Motion + React Hook Form + Zod
 // =====================================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -45,6 +45,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Hooks
 import { useContracts } from '@/hooks/useContracts';
+import { supabase } from '@/lib/supabase';
 
 // Icons
 import {
@@ -201,9 +202,119 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
   const { hasAccess, currentTenant } = useTenantAccessGuard();
   const { logAction } = useAuditLogger();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [matchedCustomerId, setMatchedCustomerId] = useState<string | null>(null);
+  const [isResolvingCustomer, setIsResolvingCustomer] = useState(false);
 
-  // AIDEV-NOTE: Hook para buscar contratos reais do tenant
-  const { contracts, isLoading: contractsLoading } = useContracts();
+  // AIDEV-NOTE: Resolver customer_id da movimentação para filtrar contratos
+  useEffect(() => {
+    const resolveCustomer = async () => {
+      if (!currentTenant?.id) return;
+      
+      // AIDEV-NOTE: Para ações em lote, usar dados do primeiro movimento
+      const targetMovement = isBatchProcessing && movements.length > 0 
+        ? movements[0] 
+        : movement;
+      
+      if (!targetMovement) {
+        setMatchedCustomerId(null);
+        return;
+      }
+
+      setIsResolvingCustomer(true);
+      
+      try {
+        // AIDEV-NOTE: 1. Tentar buscar por documento (CPF/CNPJ) - maior prioridade
+        if (targetMovement.customer_document) {
+          const cleanDocument = targetMovement.customer_document.replace(/\D/g, '');
+          
+          const { data: customerByDoc, error: docError } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('tenant_id', currentTenant.id)
+            .eq('cpf_cnpj', cleanDocument)
+            .limit(1)
+            .maybeSingle();
+          
+          if (!docError && customerByDoc) {
+            console.log('✅ [LINK_CONTRACT] Cliente encontrado por documento:', customerByDoc.id);
+            setMatchedCustomerId(customerByDoc.id);
+            setIsResolvingCustomer(false);
+            return;
+          }
+        }
+
+        // AIDEV-NOTE: 2. Tentar buscar por nome (busca aproximada)
+        if (targetMovement.customer_name) {
+          const { data: customerByName, error: nameError } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('tenant_id', currentTenant.id)
+            .ilike('name', `%${targetMovement.customer_name.trim()}%`)
+            .limit(1)
+            .maybeSingle();
+          
+          if (!nameError && customerByName) {
+            console.log('✅ [LINK_CONTRACT] Cliente encontrado por nome:', customerByName.id);
+            setMatchedCustomerId(customerByName.id);
+            setIsResolvingCustomer(false);
+            return;
+          }
+        }
+
+        // AIDEV-NOTE: 3. Tentar buscar por email
+        if (targetMovement.customer_email) {
+          const { data: customerByEmail, error: emailError } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('tenant_id', currentTenant.id)
+            .ilike('email', targetMovement.customer_email.trim())
+            .limit(1)
+            .maybeSingle();
+          
+          if (!emailError && customerByEmail) {
+            console.log('✅ [LINK_CONTRACT] Cliente encontrado por email:', customerByEmail.id);
+            setMatchedCustomerId(customerByEmail.id);
+            setIsResolvingCustomer(false);
+            return;
+          }
+        }
+
+        // AIDEV-NOTE: Nenhum cliente encontrado
+        console.log('⚠️ [LINK_CONTRACT] Nenhum cliente encontrado para a movimentação');
+        setMatchedCustomerId(null);
+      } catch (error) {
+        console.error('❌ [LINK_CONTRACT] Erro ao resolver cliente:', error);
+        setMatchedCustomerId(null);
+      } finally {
+        setIsResolvingCustomer(false);
+      }
+    };
+
+    resolveCustomer();
+  }, [currentTenant?.id, movement, movements, isBatchProcessing]);
+
+  // AIDEV-NOTE: Buscar contratos filtrados por customer_id se encontrado
+  // Se não encontrar cliente, buscar todos os contratos ativos
+  const { contracts: allContracts, isLoading: contractsLoading } = useContracts({
+    customer_id: matchedCustomerId || undefined,
+    status: matchedCustomerId ? undefined : 'active', // Se não tem cliente, mostrar apenas ativos
+    limit: 100 // AIDEV-NOTE: Limite maior para dropdown
+  });
+
+  // AIDEV-NOTE: Filtrar contratos relevantes baseado na movimentação
+  const relevantContracts = useMemo(() => {
+    if (!allContracts || allContracts.length === 0) return [];
+    
+    // Se encontrou cliente, já está filtrado por customer_id
+    if (matchedCustomerId) {
+      return allContracts;
+    }
+    
+    // Se não encontrou cliente, mostrar apenas contratos ativos
+    return allContracts.filter(contract => 
+      contract.status === 'active' || contract.status === 'ACTIVE'
+    );
+  }, [allContracts, matchedCustomerId]);
 
   // =====================================================
   // FORM CONFIGURATIONS
@@ -481,7 +592,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
         </div>
       </motion.div>
   
-      // AIDEV-NOTE: Melhorando a renderização dos detalhes da movimentação individual
+      {/* AIDEV-NOTE: Melhorando a renderização dos detalhes da movimentação individual */}
       {!isBatchProcessing && movement && (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -522,9 +633,18 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
             <div>
               <p className="text-sm font-medium text-muted-foreground">Data</p>
               <p className="text-base">
-                {movement?.data_pagamento
-                  ? new Intl.DateTimeFormat('pt-BR').format(new Date(movement.data_pagamento))
-                  : 'Data inválida'}
+                {(() => {
+                  // AIDEV-NOTE: Tentar múltiplos campos de data e usar normalizeDate para validação
+                  const dateValue = normalizeDate(
+                    movement?.data_pagamento || 
+                    movement?.data_vencimento || 
+                    movement?.payment_date ||
+                    movement?.dueDate
+                  );
+                  return dateValue 
+                    ? new Intl.DateTimeFormat('pt-BR').format(dateValue)
+                    : 'Data não disponível';
+                })()}
               </p>
             </div>
           </div>
@@ -651,17 +771,35 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {/* AIDEV-NOTE: Busca real de contratos do tenant */}
-                  {contractsLoading ? (
-                    <SelectItem value="" disabled>Carregando contratos...</SelectItem>
-                  ) : contracts.length === 0 ? (
-                    <SelectItem value="" disabled>Nenhum contrato encontrado</SelectItem>
+                  {/* AIDEV-NOTE: Busca real de contratos do tenant filtrados por cliente da movimentação */}
+                  {isResolvingCustomer || contractsLoading ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      Carregando contratos...
+                    </div>
+                  ) : relevantContracts.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      {matchedCustomerId 
+                        ? 'Nenhum contrato encontrado para este cliente' 
+                        : 'Nenhum contrato ativo encontrado'}
+                    </div>
                   ) : (
-                    contracts.map((contract) => (
-                      <SelectItem key={contract.id} value={contract.id}>
-                        {contract.contract_number} - {contract.customers?.name || 'Cliente não informado'}
-                      </SelectItem>
-                    ))
+                    <>
+                      {matchedCustomerId && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground border-b">
+                          Contratos do cliente da movimentação
+                        </div>
+                      )}
+                      {!matchedCustomerId && (
+                        <div className="px-2 py-1.5 text-xs text-amber-600 border-b bg-amber-50">
+                          ⚠️ Cliente não identificado - mostrando todos os contratos ativos
+                        </div>
+                      )}
+                      {relevantContracts.map((contract) => (
+                        <SelectItem key={contract.id} value={contract.id}>
+                          {contract.contract_number} - {contract.customers?.name || 'Cliente não informado'}
+                        </SelectItem>
+                      ))}
+                    </>
                   )}
                 </SelectContent>
               </Select>

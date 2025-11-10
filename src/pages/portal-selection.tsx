@@ -436,12 +436,12 @@ export default function PortalSelectionPage() {
               Bem-vindo, <span className="text-accent-foreground animate-pulse">preparando acesso...</span>
             </h1>
             
-            <p className="text-muted-foreground flex items-center justify-center gap-2">
+            <div className="text-muted-foreground flex items-center justify-center gap-2">
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce [animation-delay:-0.3s]"></div>
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce [animation-delay:-0.15s]"></div>
               <div className="h-2 w-2 bg-accent rounded-full animate-bounce"></div>
               <span className="ml-2">Carregando seus portais...</span>
-            </p>
+            </div>
           </div>
 
           {/* Tabs de navegação */}

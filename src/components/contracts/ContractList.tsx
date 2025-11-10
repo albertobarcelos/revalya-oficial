@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useContracts } from "@/hooks/useContracts";
 import { useCustomers } from "@/hooks/useCustomers";
 import { toast } from "@/hooks/use-toast";
@@ -36,6 +37,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
   const [contractToDelete, setContractToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  const queryClient = useQueryClient();
   const { customers } = useCustomers();
   
   const { 
@@ -53,23 +55,39 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     search: searchTerm || undefined, // Passar searchTerm como filtro para o backend
   });
 
-  // Validar e sincronizar a página atual com os dados retornados
+  // AIDEV-NOTE: Validação de página apenas quando pagination muda E não está carregando
+  // CRÍTICO: Não corrigir página durante loading para evitar resetar página 2 para 1
   React.useEffect(() => {
-    if (pagination) {
-      // Se a página atual for maior que o total de páginas e houver páginas, vá para a última página válida
-      if (currentPage > pagination.totalPages && pagination.totalPages > 0) {
-        setCurrentPage(pagination.totalPages);
-      }
-      // Se a página atual for 0 ou negativa, vá para a página 1
-      else if (currentPage < 1) {
-        setCurrentPage(1);
-      }
-      // Se não houver páginas mas a página atual for > 1, resete para 1
-      else if (pagination.totalPages === 0 && currentPage > 1) {
-        setCurrentPage(1);
-      }
+    // AIDEV-NOTE: Não validar durante loading - aguardar dados chegarem
+    if (isLoading) {
+      return;
     }
-  }, [pagination, currentPage]);
+
+    if (pagination && pagination.totalPages > 0) {
+      // Apenas corrigir se a página atual for inválida E não estiver carregando
+      if (currentPage > pagination.totalPages) {
+        setCurrentPage(pagination.totalPages);
+      } else if (currentPage < 1) {
+        setCurrentPage(1);
+      }
+    } else if (pagination && pagination.totalPages === 0 && currentPage > 1) {
+      // Se não houver páginas mas estiver em página > 1, resetar
+      setCurrentPage(1);
+    }
+    // Removido currentPage das dependências para evitar loops
+  }, [pagination, isLoading]);
+
+  // AIDEV-NOTE: Invalidar cache quando página muda para garantir que nova query seja executada
+  // Com staleTime: 0 e query key mudando, isso garante que dados sejam atualizados imediatamente
+  React.useEffect(() => {
+    if (currentPage > 0) {
+      // Invalidar queries de contratos para forçar refetch com nova página
+      queryClient.invalidateQueries({ 
+        queryKey: ['contracts'],
+        exact: false 
+      });
+    }
+  }, [currentPage, queryClient]);
 
   // Força refresh quando o componente é montado
   // REMOVIDO: O useSecureTenantQuery já gerencia o ciclo de vida da query automaticamente
@@ -359,7 +377,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex items-center justify-between border-t p-4 flex-shrink-0">
+        <CardFooter className="flex items-center justify-between border-t px-6 py-4 flex-shrink-0 bg-muted/30">
           <PaginationControls
             currentPage={currentPage}
             totalItems={pagination?.total || 0}

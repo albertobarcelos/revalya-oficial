@@ -195,8 +195,9 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
         reconciliationStatus: mapReconciliationStatus(item.status_conciliacao || 'PENDENTE'), // AIDEV-NOTE: Valor padrão em MAIÚSCULO
         customerName: item.customer_name || '',
         customerDocument: item.customer_document || '',
-        hasContract: !!item.contracts,
-        contractId: item.contracts?.id || null,
+        // AIDEV-NOTE: hasContract deve ser baseado em contrato_id, não no join (mais confiável)
+        hasContract: !!item.contrato_id || !!item.contracts,
+        contractId: item.contrato_id || item.contracts?.id || null,
         contractNumber: item.contracts?.contract_number || null,
         createdAt: item.created_at,
         updatedAt: item.updated_at,

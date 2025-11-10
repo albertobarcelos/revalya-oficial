@@ -46,41 +46,66 @@ export function ActionButtons({
   
   // AIDEV-NOTE: Função para gerar botões de ação baseado no movimento
   const getActionButtons = (movement: any): ActionButton[] => {
+    // AIDEV-NOTE: Verificar se já tem contrato vinculado
+    // Prioridade: contrato_id (campo direto) > hasContract (campo computado) > contractId (alias)
+    const hasContractLinked = !!(
+      movement.contrato_id || 
+      movement.contractId || 
+      movement.hasContract ||
+      (movement.contracts && movement.contracts.id)
+    );
+    
+    // AIDEV-NOTE: Debug log para verificar valores (sempre logar para debug)
+    console.log('🔍 [ACTION_BUTTONS] Verificando movimento:', {
+      movementId: movement.id,
+      contrato_id: movement.contrato_id,
+      contractId: movement.contractId,
+      hasContract: movement.hasContract,
+      contracts: movement.contracts,
+      reconciliationStatus: movement.reconciliationStatus,
+      hasContractLinked
+    });
+    
     const actions: ActionButton[] = [
       {
         type: ReconciliationAction.IMPORT_TO_CHARGE,
         label: 'Importar para Cobranças',
         icon: CheckCircle2,
         variant: 'default',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED || !!movement.chargeId
+        // AIDEV-NOTE: Bloquear apenas se já foi importado (chargeId) - NÃO bloquear por status RECONCILED
+        disabled: !!movement.chargeId
       },
       {
         type: ReconciliationAction.LINK_TO_CONTRACT,
         label: 'Vincular a Contrato',
         icon: Link,
         variant: 'secondary',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+        // AIDEV-NOTE: Bloquear APENAS quando já tem contrato vinculado (independente do status)
+        disabled: hasContractLinked
       },
       {
         type: ReconciliationAction.CREATE_STANDALONE,
         label: 'Criar Cobrança Avulsa',
         icon: Plus,
         variant: 'outline',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+        // AIDEV-NOTE: Não bloquear por contrato vinculado ou status RECONCILED
+        disabled: false
       },
       {
         type: ReconciliationAction.COMPLEMENT_EXISTING,
         label: 'Complementar Existente',
         icon: RefreshCw,
         variant: 'outline',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED || !movement.chargeId
+        // AIDEV-NOTE: Bloquear apenas se não tiver chargeId - NÃO bloquear por status RECONCILED
+        disabled: !movement.chargeId
       },
       {
         type: ReconciliationAction.REGISTER_CUSTOMER,
         label: 'Cadastrar Cliente',
         icon: UserPlus,
         variant: 'outline',
-        disabled: movement.reconciliationStatus === ReconciliationStatus.RECONCILED
+        // AIDEV-NOTE: Não bloquear por contrato vinculado ou status RECONCILED
+        disabled: false
       },
       {
         type: ReconciliationAction.DELETE_IMPORTED,

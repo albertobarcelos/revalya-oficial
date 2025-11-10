@@ -82,7 +82,16 @@ export default function Contracts() {
   const previousTenantIdRef = React.useRef<string | null>(null);
   
   // Hook para atualizar a lista de contratos após operações - SEMPRE chamado
-  const { refetch: forceRefreshContracts } = useContracts({});
+  // AIDEV-NOTE: Usar queryClient.invalidateQueries em vez de useContracts({}) para evitar queries desnecessárias
+  // const { refetch: forceRefreshContracts } = useContracts({});
+  
+  // Função para forçar refresh usando invalidação de queries
+  const forceRefreshContracts = React.useCallback(async () => {
+    await queryClient.invalidateQueries({ 
+      queryKey: ['contracts'],
+      exact: false 
+    });
+  }, [queryClient]);
 
   // 🧹 LIMPEZA INTELIGENTE DO CACHE APENAS QUANDO NECESSÁRIO
   // AIDEV-NOTE: Otimizado para evitar loops - apenas limpa se o tenant mudou de fato

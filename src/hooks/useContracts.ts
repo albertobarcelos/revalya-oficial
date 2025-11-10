@@ -123,8 +123,19 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
   const queryClient = useQueryClient()
 
   // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT E PAGINAÇÃO
+  // AIDEV-NOTE: Query key separada por parâmetros para garantir que mudanças de página sejam detectadas
+  // Isso evita problemas de cache e garante que a query seja refeita quando a página muda
+  const queryKey = [
+    'contracts', 
+    currentTenant?.id, 
+    filters.page || 1, 
+    filters.limit || 10, 
+    filters.status || 'ALL',
+    filters.search || ''
+  ];
+  
   const query = useSecureTenantQuery(
-    ['contracts', currentTenant?.id, JSON.stringify(filters)],
+    queryKey,
     async (supabase, tenantId) => {
       throttledAudit('contracts_query', `Buscando contratos para tenant: ${tenantId}`, undefined, 30000); // 30s throttle
       throttledAudit('contracts_current_tenant', `CurrentTenant na query: ${currentTenant?.name} (${currentTenant?.id})`, undefined, 30000); // 30s throttle
@@ -150,6 +161,11 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
         .from('contracts')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO
+
+      // 🔍 APLICAR FILTRO DE CUSTOMER_ID SE EXISTIR
+      if (filters.customer_id) {
+        countQuery = countQuery.eq('customer_id', filters.customer_id);
+      }
 
       // 🔍 APLICAR FILTRO DE BUSCA SE EXISTIR
       if (search) {
@@ -196,7 +212,19 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
             phone
           )
         `)
-        .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
+        .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO
+
+      // 🔍 APLICAR FILTRO DE CUSTOMER_ID SE EXISTIR
+      if (filters.customer_id) {
+        contractsQuery = contractsQuery.eq('customer_id', filters.customer_id);
+      }
+
+      // 🔍 APLICAR FILTRO DE STATUS SE EXISTIR
+      if (filters.status && filters.status !== 'ALL') {
+        contractsQuery = contractsQuery.eq('status', filters.status);
+      }
+
+      contractsQuery = contractsQuery
         .range(offset, offset + limit - 1) // 📄 APLICAR LIMIT E OFFSET
         .order('created_at', { ascending: false }); // 📅 ORDENAR POR DATA DE CRIAÇÃO
 
@@ -236,7 +264,14 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
           hasNext: page < totalPages,
           hasPrev: page > 1
         }
-      }
+      };
+    },
+    {
+      // AIDEV-NOTE: Configurações específicas para paginação
+      // staleTime: 0 garante que mudanças de página sempre refazem a query
+      // Isso resolve o problema de cache retornando dados da página anterior
+      staleTime: 0,
+      refetchOnWindowFocus: false,
     }
   )
 

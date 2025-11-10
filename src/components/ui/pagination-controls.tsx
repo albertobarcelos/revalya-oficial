@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -178,21 +179,21 @@ export function PaginationControls({
   }
 
   return (
-    <div className={`flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 ${className}`}>
+    <div className={`flex flex-col gap-4 md:flex-row md:items-center md:justify-between ${className}`}>
       {/* Status e seletor de itens por página */}
       {(showStatusText || showItemsPerPageSelector) && (
-        <div className={`flex flex-col space-y-2 md:flex-row md:items-center md:space-y-0 md:space-x-4 ${statusClassName}`}>
+        <div className={`flex flex-col gap-3 md:flex-row md:items-center md:gap-4 ${statusClassName}`}>
           {showStatusText && (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground font-medium">
               {getStatusText()}
             </p>
           )}
           
           {showItemsPerPageSelector && (
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">{itemsPerPageLabel}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">{itemsPerPageLabel}</span>
               <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                <SelectTrigger className="w-20">
+                <SelectTrigger className="w-[70px] h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,42 +211,48 @@ export function PaginationControls({
       
       {/* Controles de navegação */}
       {(showNavigationButtons || showNumberedPagination) && totalPages > 1 && (
-        <div className={`flex items-center space-x-2 ${controlsClassName}`}>
+        <div className={`flex items-center gap-2 ${controlsClassName}`}>
           {showNavigationButtons && (
             <>
               <Button
                 variant="outline"
-                size="sm"
+                size="default"
                 onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
                 disabled={currentPage <= 1}
+                className="min-w-[100px] gap-2"
               >
+                <ChevronLeft className="h-4 w-4" />
                 {previousLabel}
               </Button>
               
               {!showNumberedPagination && (
-                <span className="text-sm text-gray-600">
-                  {pageLabel} {currentPage} de {totalPages}
-                </span>
+                <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-muted/50">
+                  <span className="text-sm font-medium text-foreground">
+                    {pageLabel} <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
+                  </span>
+                </div>
               )}
               
               <Button
                 variant="outline"
-                size="sm"
+                size="default"
                 onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
                 disabled={currentPage >= totalPages}
+                className="min-w-[100px] gap-2"
               >
                 {nextLabel}
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </>
           )}
           
           {showNumberedPagination && (
             <Pagination>
-              <PaginationContent>
+              <PaginationContent className="gap-1">
                 <PaginationItem>
                   <PaginationPrevious 
                     onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
                 
@@ -254,7 +261,7 @@ export function PaginationControls({
                 <PaginationItem>
                   <PaginationNext 
                     onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
               </PaginationContent>
