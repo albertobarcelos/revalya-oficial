@@ -68,12 +68,7 @@ export function ActionButtons({
     
     const actions: ActionButton[] = [
       {
-        type: ReconciliationAction.IMPORT_TO_CHARGE,
-        label: 'Importar para Cobranças',
-        icon: CheckCircle2,
-        variant: 'default',
-        // AIDEV-NOTE: Bloquear apenas se já foi importado (chargeId) - NÃO bloquear por status RECONCILED
-        disabled: !!movement.chargeId
+        // AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente
       },
       {
         type: ReconciliationAction.LINK_TO_CONTRACT,
@@ -132,7 +127,7 @@ export function ActionButtons({
         {actionButtons.map((action, index) => {
           const Icon = action.icon;
           return (
-            action.type === ReconciliationAction.IMPORT_TO_CHARGE ? (
+            false ? ( // AIDEV-NOTE: IMPORT_TO_CHARGE removido
               <TooltipProvider key={action.type}>
                 <Tooltip>
                   <TooltipTrigger asChild>

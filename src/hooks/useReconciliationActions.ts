@@ -15,7 +15,7 @@ import {
   ReconciliationMovement,
   INITIAL_ACTION_MODAL_STATE 
 } from '@/components/reconciliation/types/ReconciliationModalTypes';
-import { reconciliationImportService, ImportToChargesResult } from '@/services/reconciliationImportService';
+// AIDEV-NOTE: reconciliationImportService removido - não é mais necessário
 
 // AIDEV-NOTE: Interface para props do hook de ações
 export interface UseReconciliationActionsProps {
@@ -70,9 +70,14 @@ export const useReconciliationActions = ({
         queryKey: ['reconciliation', currentTenant.id]
       });
 
-      // AIDEV-NOTE: Invalidar queries relacionadas
+      // AIDEV-NOTE: Invalidar queries de charges do ASAAS
       await queryClient.invalidateQueries({
-        queryKey: ['conciliation_staging', currentTenant.id]
+        queryKey: ['reconciliation-data', 'charges-asaas', currentTenant.id]
+      });
+      
+      // AIDEV-NOTE: Invalidar queries de charges também
+      await queryClient.invalidateQueries({
+        queryKey: ['charges', currentTenant.id]
       });
 
       // AIDEV-NOTE: Chamar callback de invalidação se fornecido
@@ -308,16 +313,24 @@ export const useReconciliationActions = ({
 
       switch (action) {
         case ReconciliationAction.RECONCILE:
-          updateData = { status_conciliacao: 'CONCILIADO' }; // AIDEV-NOTE: Status em MAIÚSCULO
-          successMessage = 'Movimento conciliado com sucesso';
-          break;
+          // AIDEV-NOTE: Para charges, conciliação significa ter contrato vinculado
+          // Se já tem contrato, não precisa fazer nada
+          if (!movement.contractId) {
+            throw new Error('É necessário vincular um contrato para conciliar');
+          }
+          successMessage = 'Charge já está conciliada (tem contrato vinculado)';
+          return; // AIDEV-NOTE: Não precisa atualizar nada
         case ReconciliationAction.MARK_DIVERGENT:
-          updateData = { status_conciliacao: 'DIVERGENTE' }; // AIDEV-NOTE: Status em MAIÚSCULO
-          successMessage = 'Movimento marcado como divergente';
+          // AIDEV-NOTE: Para charges, não temos status de divergência
+          // Podemos usar descrição ou metadata para marcar
+          updateData = { 
+            descricao: `${movement.description || ''} [DIVERGENTE]`.trim()
+          };
+          successMessage = 'Charge marcada como divergente';
           break;
         case ReconciliationAction.CANCEL:
-          updateData = { status_conciliacao: 'CANCELADO' }; // AIDEV-NOTE: Status em MAIÚSCULO
-          successMessage = 'Movimento cancelado';
+          updateData = { status: 'CANCELLED' }; // AIDEV-NOTE: Status em MAIÚSCULAS
+          successMessage = 'Charge cancelada';
           break;
         case ReconciliationAction.LINK_TO_CONTRACT:
           // AIDEV-NOTE: Para vincular contrato, usar dados do formulário
@@ -325,46 +338,23 @@ export const useReconciliationActions = ({
             throw new Error('ID do contrato é obrigatório para vinculação');
           }
           updateData = { 
-            contrato_id: formData.contractId, // AIDEV-NOTE: Corrigido para contrato_id (nome correto da coluna)
-            status_conciliacao: 'CONCILIADO' // AIDEV-NOTE: Status em MAIÚSCULO
+            contract_id: formData.contractId // AIDEV-NOTE: Nome correto da coluna em charges
           };
-          successMessage = 'Movimento vinculado ao contrato com sucesso';
+          successMessage = 'Charge vinculada ao contrato com sucesso';
           break;
-        case ReconciliationAction.IMPORT_TO_CHARGE:
-          // AIDEV-NOTE: Para importar para charges, usar o serviço de importação
-          try {
-            const result = await handleBulkImportToCharges([movement.id]);
-            
-            if (result.success && result.imported_count > 0) {
-              successMessage = 'Movimento importado para cobranças com sucesso';
-              // AIDEV-NOTE: Fechar modal após sucesso
-              setActionModal(INITIAL_ACTION_MODAL_STATE);
-              
-              // AIDEV-NOTE: Invalidar cache e refresh
-              await invalidateReconciliationCache();
-              if (onRefreshData) {
-                await onRefreshData();
-              }
-              
-              return; // AIDEV-NOTE: Sair da função pois já foi processado
-            } else {
-              throw new Error('Falha na importação para cobranças');
-            }
-          } catch (importError: any) {
-            throw new Error(`Erro na importação: ${importError.message}`);
-          }
+        // AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente
         default:
           throw new Error(`Ação não reconhecida: ${action}`);
       }
 
-      // AIDEV-NOTE: Atualizar no banco de dados - usando tabela correta
+      // AIDEV-NOTE: Atualizar charge diretamente (movement.id é o charge_id)
       const { error } = await supabase
-        .from('conciliation_staging')
+        .from('charges')
         .update({
           ...updateData,
           updated_at: new Date().toISOString()
         })
-        .eq('id', movement.id)
+        .eq('id', movement.id) // movement.id é o charge_id
         .eq('tenant_id', currentTenant.id); // AIDEV-NOTE: Segurança adicional
 
       if (error) {
@@ -420,113 +410,18 @@ export const useReconciliationActions = ({
     logSecurityEvent('action_modal_closed');
   }, [logSecurityEvent]);
 
-  // AIDEV-NOTE: Função para importação em lote para charges
-  const handleBulkImportToCharges = useCallback(async (movementIds: string[]): Promise<ImportToChargesResult> => {
-    if (!currentTenant?.id) {
-      throw new Error('Tenant não identificado');
-    }
-
-    if (movementIds.length === 0) {
-      throw new Error('Nenhuma movimentação selecionada');
-    }
-
-    // AIDEV-NOTE: Validar contexto de tenant antes de prosseguir
-    const isValidContext = await validateTenantContext();
-    if (!isValidContext) {
-      await logSecurityEvent('invalid_tenant_context_bulk_import', {
-        tenant_id: currentTenant.id,
-        movement_count: movementIds.length
-      });
-      throw new Error('Contexto de tenant inválido');
-    }
-
-    setIsImportingToCharges(true);
-
-    try {
-      // AIDEV-NOTE: Log de início da importação
-      await logAction('bulk_import_to_charges_started', {
-        tenant_id: currentTenant.id,
-        movement_count: movementIds.length,
-        movement_ids: movementIds,
-        timestamp: new Date().toISOString()
-      });
-
-      // AIDEV-NOTE: Executar importação usando o serviço
-      const result = await reconciliationImportService.importToCharges(
-        movementIds,
-        currentTenant.id
-      );
-
-      // AIDEV-NOTE: Log de resultado da importação
-      await logAction('bulk_import_to_charges_completed', {
-        tenant_id: currentTenant.id,
-        result: result,
-        timestamp: new Date().toISOString()
-      });
-
-      // AIDEV-NOTE: Mostrar toast de sucesso/erro baseado no resultado
-      if (result.success) {
-        const successMessage = `✅ Importação concluída: ${result.imported_count} cobranças criadas`;
-        const warningMessage = result.skipped_count > 0 ? `, ${result.skipped_count} ignoradas` : '';
-        const errorMessage = result.error_count > 0 ? `, ${result.error_count} com erro` : '';
-        
-        toast({
-          title: "Importação para Cobranças",
-          description: `${successMessage}${warningMessage}${errorMessage}`,
-          variant: result.error_count > 0 ? "destructive" : "default",
-        });
-      } else {
-        toast({
-          title: "❌ Falha na Importação",
-          description: "Não foi possível importar as movimentações. Verifique os logs.",
-          variant: "destructive",
-        });
-      }
-
-      // AIDEV-NOTE: Invalidar cache para atualizar dados
-      await invalidateReconciliationCache();
-      
-      // AIDEV-NOTE: Invalidar cache de charges também
-      await queryClient.invalidateQueries({
-        queryKey: ['charges', currentTenant.id]
-      });
-      
-      // AIDEV-NOTE: Chamar refresh se fornecido
-      if (onRefreshData) {
-        await onRefreshData();
-      }
-
-      return result;
-
-    } catch (error: any) {
-      console.error('❌ Erro na importação em lote:', error);
-      
-      await logAction('bulk_import_to_charges_error', {
-        tenant_id: currentTenant.id,
-        movement_count: movementIds.length,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
-
-      toast({
-        title: "❌ Erro na Importação",
-        description: error.message || "Não foi possível importar as movimentações.",
-        variant: "destructive",
-      });
-
-      throw error;
-    } finally {
-      setIsImportingToCharges(false);
-    }
-  }, [currentTenant, validateTenantContext, logSecurityEvent, logAction, toast, reconciliationImportService, invalidateReconciliationCache, queryClient, onRefreshData]);
+  // AIDEV-NOTE: Função removida - charges já são criadas diretamente, não há mais necessidade de importação
 
   return {
     actionModal,
     isExporting,
-    isImportingToCharges,
+    isImportingToCharges: false, // AIDEV-NOTE: Sempre false, função removida
     handleRefresh,
     handleExport,
-    handleBulkImportToCharges,
+    handleBulkImportToCharges: async () => {
+      // AIDEV-NOTE: Função removida - charges já são criadas diretamente
+      throw new Error('Importação não é mais necessária - charges são criadas automaticamente');
+    },
     handleReconciliationAction,
     handleActionModalConfirm,
     closeActionModal

@@ -73,8 +73,9 @@ export function ChargesDashboard() {
 
   // AIDEV-NOTE: Validação dupla de segurança - verificar se todos os dados pertencem ao tenant correto
   useEffect(() => {
-    if (chargesData?.charges && currentTenant?.id && hasAccess) {
-      const invalidCharges = chargesData.charges.filter(charge => charge.tenant_id !== currentTenant.id);
+    // AIDEV-NOTE: chargesData já é o array de charges (não um objeto com propriedade charges)
+    if (chargesData && Array.isArray(chargesData) && currentTenant?.id && hasAccess) {
+      const invalidCharges = chargesData.filter(charge => charge.tenant_id !== currentTenant.id);
       if (invalidCharges.length > 0) {
         console.error('🚨 [SECURITY VIOLATION] Cobranças não pertencem ao tenant atual:', {
           currentTenantId: currentTenant.id,
@@ -88,7 +89,7 @@ export function ChargesDashboard() {
         refetch();
       }
     }
-  }, [chargesData?.charges, currentTenant?.id, hasAccess, toast, refetch]);
+  }, [chargesData, currentTenant?.id, hasAccess, toast, refetch]);
 
   // AIDEV-NOTE: Estados para filtros de data dos cards específicos
   const [paidFilter, setPaidFilter] = useState(() => {

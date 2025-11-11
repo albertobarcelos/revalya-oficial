@@ -2,7 +2,7 @@ import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } f
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/ui/use-toast'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { getCurrentUser } from '@/utils/supabaseAuthManager'
 
 // Tipos para cobranças
@@ -17,7 +17,6 @@ export interface Charge {
   data_vencimento: string
   data_pagamento?: string
   descricao?: string
-  link_pagamento?: string
   asaas_id?: string
   metadata?: any
   created_at: string
@@ -66,14 +65,45 @@ export function useCharges(params: UseChargesParams = {}) {
   const queryClient = useQueryClient()
   const [isExporting, setIsExporting] = useState(false)
 
+  // AIDEV-NOTE: Memoizar parâmetros da query para evitar re-execuções desnecessárias
+  // Isso garante que a query só seja re-executada quando os parâmetros realmente mudarem
+  const memoizedParams = useMemo(() => {
+    return {
+      page: params.page ?? 1,
+      limit: params.limit ?? 1000,
+      status: params.status,
+      search: params.search,
+      type: params.type,
+      customerId: params.customerId,
+      contractId: params.contractId,
+      startDate: params.startDate,
+      endDate: params.endDate
+    }
+  }, [
+    params.page,
+    params.limit,
+    params.status,
+    params.search,
+    params.type,
+    params.customerId,
+    params.contractId,
+    params.startDate,
+    params.endDate
+  ])
+
+  // AIDEV-NOTE: Memoizar query key para evitar recriação desnecessária
+  const queryKey = useMemo(() => {
+    return ['charges', currentTenant?.id, JSON.stringify(memoizedParams)]
+  }, [currentTenant?.id, memoizedParams])
+
   // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT
   const query = useSecureTenantQuery(
-    ['charges', currentTenant?.id, JSON.stringify(params)],
+    queryKey,
     async (supabase, tenantId) => {
       console.log(`🔍 [CHARGES DEBUG] Iniciando busca de cobranças`);
       console.log(`🔍 [CHARGES DEBUG] TenantId recebido: ${tenantId}`);
       console.log(`🔍 [CHARGES DEBUG] CurrentTenant: ${currentTenant?.name} (${currentTenant?.id})`);
-      console.log(`🔍 [CHARGES DEBUG] Parâmetros da query:`, params);
+      console.log(`🔍 [CHARGES DEBUG] Parâmetros da query:`, memoizedParams);
       console.log(`🔍 [CHARGES DEBUG] HasAccess: ${hasAccess}`);
       console.log(`🔍 [CHARGES DEBUG] AccessError:`, accessError);
       
@@ -87,6 +117,7 @@ export function useCharges(params: UseChargesParams = {}) {
         throw new Error('Violação crítica de segurança: Tenant ID inconsistente');
       }
       
+      // AIDEV-NOTE: Usando LEFT JOIN (customers) ao invés de INNER JOIN (!inner) para não excluir charges sem customer válido
       let query = supabase
         .from('charges')
         .select(`
@@ -97,7 +128,6 @@ export function useCharges(params: UseChargesParams = {}) {
           data_vencimento,
           data_pagamento,
           descricao,
-          link_pagamento,
           asaas_id,
           metadata,
           created_at,
@@ -105,7 +135,7 @@ export function useCharges(params: UseChargesParams = {}) {
           customer_id,
           contract_id,
           tenant_id,
-          customers!inner(
+          customers(
             id,
             name,
             company,
@@ -120,81 +150,175 @@ export function useCharges(params: UseChargesParams = {}) {
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
 
-      // Aplicar filtros adicionais
-      if (params.status) {
-        query = query.eq('status', params.status)
+      // Aplicar filtros adicionais usando memoizedParams
+      if (memoizedParams.status) {
+        query = query.eq('status', memoizedParams.status)
       }
-      if (params.type) {
-        query = query.eq('tipo', params.type)
+      if (memoizedParams.type) {
+        query = query.eq('tipo', memoizedParams.type)
       }
-      if (params.customerId) {
-        query = query.eq('customer_id', params.customerId)
+      if (memoizedParams.customerId) {
+        query = query.eq('customer_id', memoizedParams.customerId)
       }
-      if (params.contractId) {
-        query = query.eq('contract_id', params.contractId)
+      if (memoizedParams.contractId) {
+        query = query.eq('contract_id', memoizedParams.contractId)
       }
-      if (params.startDate) {
-        query = query.gte('data_vencimento', params.startDate)
+      if (memoizedParams.startDate) {
+        query = query.gte('data_vencimento', memoizedParams.startDate)
       }
-      if (params.endDate) {
-        query = query.lte('data_vencimento', params.endDate)
+      if (memoizedParams.endDate) {
+        query = query.lte('data_vencimento', memoizedParams.endDate)
       }
-      if (params.search) {
+      if (memoizedParams.search) {
         // AIDEV-NOTE: Busca expandida para incluir dados do cliente (nome, empresa, CPF/CNPJ)
-        // Corrigindo sintaxe PostgREST - valores devem estar entre aspas
-        const searchTerm = params.search.replace(/'/g, "''"); // Escape de aspas simples
-        query = query.or(`descricao.ilike."%${searchTerm}%",asaas_id.ilike."%${searchTerm}%",customers.name.ilike."%${searchTerm}%",customers.company.ilike."%${searchTerm}%",customers.cpf_cnpj.ilike."%${searchTerm}%"`)
+        // PostgREST não suporta busca direta em campos relacionados, então precisamos:
+        // 1. Buscar customers que correspondem ao termo
+        // 2. Filtrar charges por esses customer_ids OU por campos diretos da charge
+        
+        const searchTerm = memoizedParams.search.trim();
+        const cleanedSearch = searchTerm.replace(/\D/g, ''); // Remove não-numéricos para busca de CPF/CNPJ
+        
+        // AIDEV-NOTE: Buscar customers que correspondem ao termo de busca
+        // AIDEV-NOTE: Para CPF/CNPJ, busca por início (starts with) se for numérico
+        const customerSearchConditions: string[] = [
+          `name.ilike.%${searchTerm}%`,
+          `company.ilike.%${searchTerm}%`
+        ];
+        
+        // AIDEV-NOTE: Se o termo de busca contém números, buscar também por CPF/CNPJ
+        if (cleanedSearch && cleanedSearch.length >= 3) {
+          // Busca por início do CPF/CNPJ (ex: "113" encontra "11320253000169")
+          customerSearchConditions.push(`cpf_cnpj.ilike.%${cleanedSearch}%`);
+        } else if (searchTerm.length >= 2) {
+          // Se não tem números suficientes, busca pelo termo original também
+          customerSearchConditions.push(`cpf_cnpj.ilike.%${searchTerm}%`);
+        }
+        
+        const { data: matchingCustomers, error: customersError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .or(customerSearchConditions.join(','));
+        
+        const customerIds: string[] = matchingCustomers?.map((c: any) => c.id) || [];
+        
+        // AIDEV-NOTE: Construir filtro OR para charges:
+        // - Campos diretos da charge (descricao, asaas_id)
+        // - customer_id IN (lista de customers encontrados)
+        const orConditions: string[] = [
+          `descricao.ilike.%${searchTerm}%`,
+          `asaas_id.ilike.%${searchTerm}%`
+        ];
+        
+        if (customerIds.length > 0) {
+          // AIDEV-NOTE: Adicionar filtro para customer_id IN (lista de IDs)
+          // PostgREST usa sintaxe: customer_id.in.(id1,id2,id3)
+          orConditions.push(`customer_id.in.(${customerIds.join(',')})`);
+        }
+        
+        // AIDEV-NOTE: Aplicar filtro OR apenas se houver condições
+        if (orConditions.length > 0) {
+          query = query.or(orConditions.join(','));
+        }
+        
+        console.log(`🔍 [CHARGES DEBUG] Busca por "${searchTerm}": ${customerIds.length} customers encontrados`);
       }
 
       // Paginação
-      if (params.page && params.limit) {
-        const from = (params.page - 1) * params.limit
-        const to = from + params.limit - 1
+      if (memoizedParams.page && memoizedParams.limit) {
+        const from = (memoizedParams.page - 1) * memoizedParams.limit
+        const to = from + memoizedParams.limit - 1
         query = query.range(from, to)
       }
 
       console.log(`🔍 [CHARGES DEBUG] Executando query no Supabase...`);
+      console.log(`🔍 [CHARGES DEBUG] Query params:`, JSON.stringify(memoizedParams, null, 2));
       
       // Query para obter o count total (sem paginação)
       // AIDEV-NOTE: Incluindo join com customers para permitir busca por dados do cliente
+      // AIDEV-NOTE: Usando LEFT JOIN (customers) ao invés de INNER JOIN para não excluir charges sem customer válido
       let countQuery = supabase
         .from('charges')
-        .select('id, customers!inner(name, company, cpf_cnpj)', { count: 'exact', head: true })
+        .select('id, customers(name, company, cpf_cnpj)', { count: 'exact', head: true })
         .eq('tenant_id', tenantId)
       
-      // Aplicar os mesmos filtros para o count
-      if (params.status) {
-        countQuery = countQuery.eq('status', params.status)
+      // Aplicar os mesmos filtros para o count usando memoizedParams
+      if (memoizedParams.status) {
+        countQuery = countQuery.eq('status', memoizedParams.status)
       }
-      if (params.type) {
-        countQuery = countQuery.eq('tipo', params.type)
+      if (memoizedParams.type) {
+        countQuery = countQuery.eq('tipo', memoizedParams.type)
       }
-      if (params.customerId) {
-        countQuery = countQuery.eq('customer_id', params.customerId)
+      if (memoizedParams.customerId) {
+        countQuery = countQuery.eq('customer_id', memoizedParams.customerId)
       }
-      if (params.contractId) {
-        countQuery = countQuery.eq('contract_id', params.contractId)
+      if (memoizedParams.contractId) {
+        countQuery = countQuery.eq('contract_id', memoizedParams.contractId)
       }
-      if (params.startDate) {
-        countQuery = countQuery.gte('data_vencimento', params.startDate)
+      if (memoizedParams.startDate) {
+        countQuery = countQuery.gte('data_vencimento', memoizedParams.startDate)
       }
-      if (params.endDate) {
-        countQuery = countQuery.lte('data_vencimento', params.endDate)
+      if (memoizedParams.endDate) {
+        countQuery = countQuery.lte('data_vencimento', memoizedParams.endDate)
       }
-      if (params.search) {
-        // AIDEV-NOTE: Busca expandida para incluir dados do cliente na contagem também
-        // Corrigindo sintaxe PostgREST - valores devem estar entre aspas
-        const searchTerm = params.search.replace(/'/g, "''"); // Escape de aspas simples
-        countQuery = countQuery.or(`descricao.ilike."%${searchTerm}%",asaas_id.ilike."%${searchTerm}%",customers.name.ilike."%${searchTerm}%",customers.company.ilike."%${searchTerm}%",customers.cpf_cnpj.ilike."%${searchTerm}%"`)
+      if (memoizedParams.search) {
+        // AIDEV-NOTE: Aplicar mesma lógica de busca para o count
+        const searchTerm = memoizedParams.search.trim();
+        const cleanedSearch = searchTerm.replace(/\D/g, '');
+        
+        // AIDEV-NOTE: Mesma lógica de busca de customers para o count
+        const customerSearchConditions: string[] = [
+          `name.ilike.%${searchTerm}%`,
+          `company.ilike.%${searchTerm}%`
+        ];
+        
+        if (cleanedSearch && cleanedSearch.length >= 3) {
+          customerSearchConditions.push(`cpf_cnpj.ilike.%${cleanedSearch}%`);
+        } else if (searchTerm.length >= 2) {
+          customerSearchConditions.push(`cpf_cnpj.ilike.%${searchTerm}%`);
+        }
+        
+        // Buscar customers que correspondem (reutilizar a busca anterior se possível)
+        const { data: matchingCustomers } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .or(customerSearchConditions.join(','));
+        
+        const customerIds: string[] = matchingCustomers?.map((c: any) => c.id) || [];
+        
+        const orConditions: string[] = [
+          `descricao.ilike.%${searchTerm}%`,
+          `asaas_id.ilike.%${searchTerm}%`
+        ];
+        
+        if (customerIds.length > 0) {
+          // PostgREST usa sintaxe: customer_id.in.(id1,id2,id3)
+          orConditions.push(`customer_id.in.(${customerIds.join(',')})`);
+        }
+        
+        // AIDEV-NOTE: Aplicar filtro OR apenas se houver condições
+        if (orConditions.length > 0) {
+          countQuery = countQuery.or(orConditions.join(','));
+        }
       }
       
       // Executar ambas as queries
+      // AIDEV-NOTE: Ordenar por data_vencimento DESC e depois por created_at DESC
+      // Isso mostra primeiro as charges mais recentes e com vencimento mais próximo
       const [{ data, error }, { count, error: countError }] = await Promise.all([
-        query.order('created_at', { ascending: false }),
+        query.order('data_vencimento', { ascending: false }).order('created_at', { ascending: false }),
         countQuery
       ])
 
-      console.log(`🔍 [CHARGES DEBUG] Resultado da query:`, { data: data?.length, total: count, error, countError });
+      console.log(`🔍 [CHARGES DEBUG] Resultado da query:`, { 
+        dataLength: data?.length, 
+        total: count, 
+        hasError: !!error, 
+        hasCountError: !!countError,
+        errorMessage: error?.message,
+        countErrorMessage: countError?.message
+      });
       
       if (error || countError) {
         const errorToLog = error || countError;
@@ -203,14 +327,46 @@ export function useCharges(params: UseChargesParams = {}) {
           message: errorToLog.message,
           details: errorToLog.details,
           hint: errorToLog.hint,
-          code: errorToLog.code
+          code: errorToLog.code,
+          tenantId: tenantId,
+          params: JSON.stringify(memoizedParams, null, 2)
         });
+        
+        // AIDEV-NOTE: Se o erro for relacionado a customers, tentar query sem join para debug
+        if (errorToLog.message?.includes('customers') || errorToLog.hint?.includes('customers')) {
+          console.warn('⚠️ [CHARGES DEBUG] Erro relacionado a customers detectado. Verificando se há charges sem customer válido...');
+        }
+        
         throw errorToLog
       }
 
       console.log(`✅ [CHARGES DEBUG] Cobranças encontradas: ${data?.length || 0}`);
       if (data && data.length > 0) {
-        console.log(`🔍 [CHARGES DEBUG] Primeiras cobranças:`, data.slice(0, 3));
+        // AIDEV-NOTE: Debug detalhado da primeira cobrança para verificar estrutura dos dados
+        const firstCharge = data[0];
+        // AIDEV-NOTE: Normalizar customers e contracts que podem vir como arrays
+        const firstCustomers = Array.isArray(firstCharge.customers) 
+          ? (firstCharge.customers.length > 0 ? firstCharge.customers[0] : null)
+          : firstCharge.customers
+        const firstContracts = Array.isArray(firstCharge.contracts)
+          ? (firstCharge.contracts.length > 0 ? firstCharge.contracts[0] : null)
+          : firstCharge.contracts
+        
+        console.log(`🔍 [CHARGES DEBUG] Primeira cobrança completa:`, JSON.stringify(firstCharge, null, 2));
+        console.log(`🔍 [CHARGES DEBUG] Estrutura da primeira cobrança:`, {
+          id: firstCharge.id,
+          valor: firstCharge.valor,
+          customer_id: firstCharge.customer_id,
+          contract_id: firstCharge.contract_id,
+          hasCustomers: !!firstCustomers,
+          customersData: firstCustomers,
+          customersName: firstCustomers?.name,
+          customersCompany: firstCustomers?.company,
+          customersCpfCnpj: firstCustomers?.cpf_cnpj,
+          hasContracts: !!firstContracts,
+          contractsData: firstContracts,
+          contractsNumber: firstContracts?.contract_number
+        });
       } else {
         console.log(`⚠️ [CHARGES DEBUG] Nenhuma cobrança encontrada para o tenant ${tenantId}`);
       }
@@ -262,18 +418,37 @@ export function useCharges(params: UseChargesParams = {}) {
       }
 
       // AIDEV-NOTE: Enriquecer dados com serviços dos contratos
-      const enrichedData = data?.map(charge => ({
-        ...charge,
-        contracts: charge.contracts ? {
-          ...charge.contracts,
-          services: contractServicesMap[charge.contract_id!] || []
-        } : null
-      }))
+      // AIDEV-NOTE: Normalizar customers e contracts que podem vir como arrays do Supabase
+      const enrichedData = data?.map(charge => {
+        // Normalizar customers (pode ser array ou objeto)
+        const customers = Array.isArray(charge.customers) 
+          ? (charge.customers.length > 0 ? charge.customers[0] : null)
+          : charge.customers
+        
+        // Normalizar contracts (pode ser array ou objeto)
+        const contracts = Array.isArray(charge.contracts)
+          ? (charge.contracts.length > 0 ? charge.contracts[0] : null)
+          : charge.contracts
+        
+        return {
+          ...charge,
+          customers: customers || undefined,
+          contracts: contracts ? {
+            ...contracts,
+            services: contractServicesMap[charge.contract_id!] || []
+          } : null
+        }
+      })
 
       return {
         data: enrichedData as Charge[],
         total: count || 0
       }
+    },
+    {
+      // AIDEV-NOTE: Configurações otimizadas para evitar queries duplicadas
+      staleTime: 30 * 1000, // 30 segundos - dados considerados frescos por mais tempo
+      refetchOnWindowFocus: false, // Não refazer query ao focar na janela
     }
   )
 
@@ -517,7 +692,7 @@ export function useCharges(params: UseChargesParams = {}) {
           descricao,
           asaas_id,
           created_at,
-          customers!inner(name, company, email),
+          customers(name, company, email),
           contracts(contract_number)
         `)
         .eq('tenant_id', currentTenant.id) // 🛡️ FILTRO OBRIGATÓRIO
@@ -535,8 +710,11 @@ export function useCharges(params: UseChargesParams = {}) {
       // Converter para CSV
       const csvHeaders = 'ID,Status,Valor,Tipo,Vencimento,Pagamento,Descrição,Asaas ID,Cliente,Contrato,Criado em\n'
       const csvRows = data?.map(charge => {
-        const customerName = charge.customers?.name || charge.customers?.company || 'N/A'
-        const contractNumber = charge.contracts?.contract_number || 'N/A'
+        // AIDEV-NOTE: customers e contracts podem ser arrays do Supabase, tratar como objeto único
+        const customers = Array.isArray(charge.customers) ? charge.customers[0] : charge.customers
+        const contracts = Array.isArray(charge.contracts) ? charge.contracts[0] : charge.contracts
+        const customerName = customers?.name || customers?.company || 'N/A'
+        const contractNumber = contracts?.contract_number || 'N/A'
         return [
           charge.id,
           charge.status,

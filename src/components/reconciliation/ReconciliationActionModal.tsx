@@ -149,7 +149,8 @@ const markDivergentSchema = z.object({
 });
 
 // AIDEV-NOTE: Schema para importação de cobranças
-const importToChargeSchema = z.object({
+// AIDEV-NOTE: importToChargeSchema removido - não é mais necessário
+const importToChargeSchemaRemoved = z.object({
   due_date: z.date(),
   description: z.string().min(1, 'Descrição é obrigatória')
 });
@@ -162,7 +163,7 @@ type LinkToContractForm = z.infer<typeof linkToContractSchema>;
 type CreateStandaloneForm = z.infer<typeof createStandaloneSchema>;
 type RegisterCustomerForm = z.infer<typeof registerCustomerSchema>;
 type MarkDivergentForm = z.infer<typeof markDivergentSchema>;
-type ImportToChargeFormData = z.infer<typeof importToChargeSchema>;
+// AIDEV-NOTE: ImportToChargeFormData removido - não é mais necessário
 
 // =====================================================
 // INTERFACE DO COMPONENTE
@@ -176,7 +177,7 @@ interface ReconciliationActionModalProps {
   action: ReconciliationAction | null;
   onActionComplete: (movement: ImportedMovement, action: ReconciliationAction, data: any) => Promise<void>;
   // AIDEV-NOTE: Adicionando função para importação em lote de cobranças
-  onBulkImportToCharges?: (movementIds: string[]) => Promise<void>;
+  // AIDEV-NOTE: onBulkImportToCharges removido - charges já são criadas diretamente
 }
 
 // =====================================================
@@ -190,7 +191,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
   movements = [],
   action,
   onActionComplete,
-  onBulkImportToCharges
+  // AIDEV-NOTE: onBulkImportToCharges removido
 }) => {
   // Determinar se estamos em modo de processamento em lote
   // AIDEV-NOTE: Corrigido para considerar qualquer array com pelo menos um item como processamento em lote
@@ -405,7 +406,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
           // Log da ação
           await logAction('USER_ACTION', {
             action: `reconciliation_${action.toLowerCase()}`,
-            resource: 'conciliation_staging',
+            resource: 'charges', // AIDEV-NOTE: Atualizado - agora trabalhamos com charges diretamente
             resourceId: mov.id,
             details: {
               movementId: mov.id,
@@ -1144,7 +1145,7 @@ const ReconciliationActionModal: React.FC<ReconciliationActionModalProps> = ({
           <Separator />
           
           <div className="p-6 max-h-[80vh] overflow-y-auto">
-            {action === ReconciliationAction.IMPORT_TO_CHARGE && renderImportToChargeForm()}
+            {/* AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente */}
             {action === ReconciliationAction.LINK_TO_CONTRACT && renderLinkToContractForm()}
             {action === ReconciliationAction.CREATE_STANDALONE && renderCreateStandaloneForm()}
             {action === ReconciliationAction.REGISTER_CUSTOMER && renderRegisterCustomerForm()}
@@ -1255,108 +1256,4 @@ const BatchItemsPreview: React.FC<{ movements: Movement[] }> = ({ movements }) =
   );
 };
 
-const renderImportToChargeForm = () => {
-  const form = useForm<ImportToChargeFormData>({
-    resolver: zodResolver(importToChargeSchema),
-    defaultValues: {
-      due_date: new Date(),
-      description: ''
-    }
-  });
-
-  const onSubmit = async (data: ImportToChargeFormData) => {
-    try {
-      setIsSubmitting(true);
-      
-      if (isBatchProcessing && onBulkImportToCharges) {
-        // AIDEV-NOTE: Usar função de importação em lote para múltiplos itens
-        const movementIds = movements.map(mov => mov.id);
-        await onBulkImportToCharges(movementIds);
-        
-        toast({
-          title: "Importação concluída",
-          description: `${movements.length} movimentações foram processadas para importação.`,
-          variant: "default"
-        });
-      } else if (movement) {
-        // AIDEV-NOTE: Processar item único usando onActionComplete
-        await onActionComplete(movement, action!, {
-          due_date: data.due_date,
-          description: data.description
-        });
-        
-        toast({
-          title: "Importação concluída",
-          description: "Movimentação importada com sucesso.",
-          variant: "default"
-        });
-      }
-      
-      onClose();
-    } catch (error) {
-      console.error('Erro na importação:', error);
-      toast({
-        title: "Erro na importação",
-        description: "Ocorreu um erro ao processar a importação.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {isBatchProcessing && <BatchItemsPreview movements={movements} />}
-
-        <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="due_date"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data de Vencimento</FormLabel>
-                <FormControl>
-                  <Input
-                    type="date"
-                    value={field.value ? field.value.toISOString().split('T')[0] : ''}
-                    onChange={(e) => field.onChange(new Date(e.target.value))}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Descrição da cobrança..."
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isBatchProcessing ? `Importar ${movements.length} itens` : 'Importar'}
-          </Button>
-        </DialogFooter>
-      </form>
-    </Form>
-  );
-};
+// AIDEV-NOTE: renderImportToChargeForm removido - charges já são criadas diretamente

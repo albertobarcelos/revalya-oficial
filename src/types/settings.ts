@@ -48,7 +48,6 @@ export const AVAILABLE_TAGS = {
   COBRANCA_VALOR: '{cobranca.valor}',
   COBRANCA_VENCIMENTO: '{cobranca.vencimento}',
   COBRANCA_DESCRICAO: '{cobranca.descricao}',
-  COBRANCA_LINK_PAGAMENTO: '{cobranca.linkPagamento}',
   COBRANCA_CODIGO_BARRAS: '{cobranca.codigoBarras}',
   COBRANCA_PIX: '{cobranca.pix}',
   DIAS_ATE_VENCIMENTO: '{dias.ateVencimento}',

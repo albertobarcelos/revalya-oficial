@@ -100,12 +100,13 @@ export function BulkActionsDropdown({
             <TooltipTrigger asChild>
               <div className="w-full">
                 <DropdownMenuItem 
-                  onClick={() => !hasAnyChargeId && onBulkAction(ReconciliationAction.IMPORT_TO_CHARGE, selectedMovements)}
-                  className={`flex items-center gap-2 w-full ${hasAnyChargeId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={hasAnyChargeId}
+                  // AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente
+                  onClick={() => {}}
+                  className="flex items-center gap-2 w-full opacity-50 cursor-not-allowed"
+                  disabled={true}
                 >
                   <FileText className="h-4 w-4" />
-                  Importar para Cobranças
+                  Importar para Cobranças (Removido)
                   <span className="ml-auto text-xs text-muted-foreground">
                     ({selectedCount})
                   </span>

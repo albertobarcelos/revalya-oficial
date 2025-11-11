@@ -45,7 +45,6 @@ export const processMessageTags = (message: string, data: {
     valor: number; 
     data_vencimento: string; 
     descricao?: string; 
-    link_pagamento?: string; 
     codigo_barras?: string; 
     // codigo_pix?: string; // Column doesn't exist in database 
   }; 
@@ -103,7 +102,6 @@ export const processMessageTags = (message: string, data: {
   processedMessage = processedMessage.replace(/{cobranca\.valor}/g, formattedValue);
   processedMessage = processedMessage.replace(/{cobranca\.vencimento}/g, formattedDueDate || new Date().toLocaleDateString('pt-BR'));
   processedMessage = processedMessage.replace(/{cobranca\.descricao}/g, data.charge?.descricao || 'Descrição da cobrança');
-  processedMessage = processedMessage.replace(/{cobranca\.linkPagamento}/g, data.charge?.link_pagamento || 'https://exemplo.com/pagamento');
   processedMessage = processedMessage.replace(/{cobranca\.codigoBarras}/g, data.charge?.codigo_barras || '00000000000000000000000000000000000000000000');
   
   // AIDEV-NOTE: Tags de PIX (comentado pois coluna não existe no banco)

@@ -102,7 +102,6 @@ export function BulkMessageDialog({
           valor,
           data_vencimento,
           descricao,
-          link_pagamento,
           tenant_id,
           customers (
             id,
@@ -218,7 +217,6 @@ export function BulkMessageDialog({
               valor: chargeData.valor,
               data_vencimento: dueDate,
               descricao: chargeData.descricao,
-              link_pagamento: chargeData.link_pagamento,
               codigo_barras: chargeData.codigo_barras
             }
           };
@@ -262,7 +260,6 @@ export function BulkMessageDialog({
             valor: 150.00,
             data_vencimento: '2024-01-15',
             descricao: 'Serviço de exemplo',
-            link_pagamento: 'https://exemplo.com/pagamento',
             codigo_barras: '00000000000000000000000000000000000000000000'
           }
         });
@@ -285,7 +282,6 @@ export function BulkMessageDialog({
     { id: "{cobranca.vencimento}", name: "Data de Vencimento", color: "#f97316" },
     { id: "{cobranca.descricao}", name: "Descrição", color: "#84cc16" },
     { id: "{cobranca.status}", name: "Status", color: "#ec4899" },
-    { id: "{cobranca.link_pagamento}", name: "Link de Pagamento", color: "#6366f1" },
   ];
 
   useEffect(() => {
