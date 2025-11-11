@@ -131,13 +131,37 @@ async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: st
 }
 
 // AIDEV-NOTE: Função auxiliar para buscar ou criar customer
+// CRÍTICO: Se tiver asaasCustomerId mas não tiver customerData, SEMPRE buscar na API antes de criar
 async function findOrCreateCustomer(
   tenantId: string,
   asaasCustomerId: string | null,
-  customerData: any
+  customerData: any,
+  apiKey?: string,
+  apiUrl?: string
 ): Promise<string | null> {
   if (!asaasCustomerId && !customerData) {
     console.warn("⚠️ Não é possível criar customer sem asaasCustomerId ou customerData");
+    return null;
+  }
+
+  // AIDEV-NOTE: CRÍTICO - Se tiver asaasCustomerId mas não tiver customerData, BUSCAR na API
+  // NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId válido
+  if (asaasCustomerId && !customerData && apiKey && apiUrl) {
+    console.log(`🔍 Buscando dados do customer ${asaasCustomerId} na API ASAAS (obrigatório antes de criar)`);
+    try {
+      customerData = await fetchAsaasCustomer(asaasCustomerId, apiKey, apiUrl);
+      if (customerData) {
+        console.log(`✅ Dados do customer obtidos da API: ${customerData.name || 'N/A'}`);
+      } else {
+        console.error(`❌ ERRO CRÍTICO: Não foi possível obter dados do customer ${asaasCustomerId} da API ASAAS`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ ERRO ao buscar customer ${asaasCustomerId} na API:`, error);
+      return null;
+    }
+  } else if (asaasCustomerId && !customerData) {
+    console.error(`❌ ERRO CRÍTICO: Tem asaasCustomerId (${asaasCustomerId}) mas não tem customerData nem credenciais da API`);
     return null;
   }
 
@@ -179,12 +203,26 @@ async function findOrCreateCustomer(
   }
 
   // AIDEV-NOTE: Criar novo customer
+  // CRÍTICO: NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId
+  if (asaasCustomerId && !customerData) {
+    console.error(`❌ ERRO CRÍTICO: Tentando criar customer com asaasCustomerId (${asaasCustomerId}) mas sem customerData`);
+    return null;
+  }
+
+  // AIDEV-NOTE: Só criar como "Cliente não identificado" se realmente não tiver como obter dados
+  const customerName = customerData?.name || (asaasCustomerId ? null : "Cliente não identificado");
+  
+  if (!customerName && asaasCustomerId) {
+    console.error(`❌ ERRO CRÍTICO: Não é possível criar customer sem nome quando há asaasCustomerId (${asaasCustomerId})`);
+    return null;
+  }
+
   const { data: newCustomer, error: createError } = await supabase
     .from("customers")
     .insert({
       tenant_id: tenantId,
       customer_asaas_id: asaasCustomerId,
-      name: customerData?.name || "Cliente não identificado",
+      name: customerName,
       email: customerData?.email || null,
       phone: customerData?.phone || customerData?.mobilePhone || null,
       cpf_cnpj: customerData?.cpfCnpj || null,
@@ -197,7 +235,7 @@ async function findOrCreateCustomer(
     return null;
   }
 
-  console.log(`✅ Customer criado: ${newCustomer.id}`);
+  console.log(`✅ Customer criado: ${newCustomer.id} (nome: ${customerName})`);
   return newCustomer.id;
 }
 
@@ -639,7 +677,13 @@ async function handlePostRequest(req: Request, tenantId: string) {
 
   // AIDEV-NOTE: Buscar ou criar customer
   const asaasCustomerId = customerId || (typeof payment.customer === 'string' ? payment.customer : payment.customer?.id) || null;
-  const customerUuid = await findOrCreateCustomer(tenantId, asaasCustomerId, customerData);
+  const customerUuid = await findOrCreateCustomer(
+    tenantId, 
+    asaasCustomerId, 
+    customerData,
+    integrationData.config?.api_key,
+    integrationData.config?.api_url
+  );
 
   if (!customerUuid) {
     console.error("❌ Não foi possível criar ou encontrar customer");
@@ -778,6 +822,83 @@ async function handlePostRequest(req: Request, tenantId: string) {
   
   if (pixKey) {
     chargeData.pix_key = pixKey;
+  }
+
+  // AIDEV-NOTE: Verificar se o pagamento foi deletado no ASAAS
+  // O campo deleted pode vir no payload ou no payment object
+  const isDeleted = payment.deleted === true || payload.payment?.deleted === true;
+  
+  // AIDEV-NOTE: Verificar se o evento é de deletação
+  const isDeleteEvent = eventType === 'PAYMENT_DELETED' || 
+                        eventType === 'payment.deleted' || 
+                        eventType === 'DELETED' ||
+                        eventType?.toLowerCase().includes('delete');
+
+  if (isDeleted || isDeleteEvent) {
+    console.log(`🗑️ Evento de deletação detectado para payment ${asaasId} - deletando charge do banco`);
+    
+    // AIDEV-NOTE: Buscar charge existente
+    const { data: existingCharge } = await supabase
+      .from("charges")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("asaas_id", asaasId)
+      .maybeSingle();
+
+    if (existingCharge) {
+      // AIDEV-NOTE: Deletar charge do banco
+      const { error: deleteError } = await supabase
+        .from("charges")
+        .delete()
+        .eq("id", existingCharge.id)
+        .eq("tenant_id", tenantId);
+
+      if (deleteError) {
+        console.error("❌ Erro ao deletar charge:", deleteError);
+        return new Response(JSON.stringify({
+          error: "Erro ao deletar charge",
+          details: deleteError.message
+        }), {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        });
+      }
+
+      console.log(`✅ Charge ${existingCharge.id} deletada com sucesso (webhook de deletação)`);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Charge deletada com sucesso",
+        eventType,
+        eventId,
+        deleted: true
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    } else {
+      console.log(`ℹ️ Charge não encontrada no banco para asaas_id ${asaasId} - já foi deletada ou não existe`);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Charge não encontrada (já deletada ou não existe)",
+        eventType,
+        eventId,
+        deleted: false
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
   }
 
   // AIDEV-NOTE: Upsert charge usando asaas_id como chave única por tenant

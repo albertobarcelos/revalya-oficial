@@ -64,13 +64,39 @@ async function fetchAsaasCustomer(
 }
 
 // AIDEV-NOTE: Buscar ou criar customer com dados completos do ASAAS
+// CRÍTICO: Se tiver asaasCustomerId mas não tiver customerData, SEMPRE buscar na API antes de criar
 async function findOrCreateCustomer(
   tenantId: string,
   asaasCustomerId: string | null,
-  customerData: any
+  customerData: any,
+  apiKey?: string,
+  apiUrl?: string
 ): Promise<string | null> {
   if (!asaasCustomerId && !customerData) {
     console.warn("⚠️ Não é possível criar customer sem asaasCustomerId ou customerData");
+    return null;
+  }
+
+  // AIDEV-NOTE: CRÍTICO - Se tiver asaasCustomerId mas não tiver customerData, BUSCAR na API
+  // NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId válido
+  if (asaasCustomerId && !customerData && apiKey && apiUrl) {
+    console.log(`🔍 Buscando dados do customer ${asaasCustomerId} na API ASAAS (obrigatório antes de criar)`);
+    try {
+      customerData = await fetchAsaasCustomer(asaasCustomerId, apiKey, apiUrl);
+      if (customerData) {
+        console.log(`✅ Dados do customer obtidos da API: ${customerData.name || 'N/A'}`);
+      } else {
+        console.error(`❌ ERRO CRÍTICO: Não foi possível obter dados do customer ${asaasCustomerId} da API ASAAS`);
+        // AIDEV-NOTE: Não criar como "Cliente não identificado" - retornar null para forçar tratamento
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ ERRO ao buscar customer ${asaasCustomerId} na API:`, error);
+      return null;
+    }
+  } else if (asaasCustomerId && !customerData) {
+    // AIDEV-NOTE: Tem asaasCustomerId mas não tem credenciais da API - não criar sem dados
+    console.error(`❌ ERRO CRÍTICO: Tem asaasCustomerId (${asaasCustomerId}) mas não tem customerData nem credenciais da API`);
     return null;
   }
 
@@ -90,6 +116,21 @@ async function findOrCreateCustomer(
         existingCustomer.name === 'Cliente não identificado' ||
         !existingCustomer.company ||
         !existingCustomer.cpf_cnpj;
+      
+      // AIDEV-NOTE: CRÍTICO - Se precisa atualizar mas não tem customerData, BUSCAR na API
+      if (needsUpdate && !customerData && apiKey && apiUrl) {
+        console.log(`🔍 Customer ${existingCustomer.id} precisa atualização mas não tem dados - buscando na API`);
+        try {
+          customerData = await fetchAsaasCustomer(asaasCustomerId, apiKey, apiUrl);
+          if (customerData) {
+            console.log(`✅ Dados do customer obtidos da API para atualização: ${customerData.name || 'N/A'}`);
+          } else {
+            console.error(`❌ Não foi possível obter dados do customer ${asaasCustomerId} da API para atualização`);
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao buscar customer ${asaasCustomerId} na API para atualização:`, error);
+        }
+      }
       
       if (needsUpdate && customerData) {
         console.log(`🔄 Atualizando dados incompletos do customer ${existingCustomer.id}`);
@@ -112,11 +153,16 @@ async function findOrCreateCustomer(
         }
         
         if (Object.keys(updateData).length > 0) {
-          await supabase
+          const { error: updateError } = await supabase
             .from("customers")
             .update(updateData)
             .eq("id", existingCustomer.id);
-          console.log(`✅ Customer ${existingCustomer.id} atualizado com dados completos`);
+          
+          if (updateError) {
+            console.error(`❌ Erro ao atualizar customer ${existingCustomer.id}:`, updateError);
+          } else {
+            console.log(`✅ Customer ${existingCustomer.id} atualizado com dados completos (nome: ${updateData.name || existingCustomer.name})`);
+          }
         }
       }
       
@@ -148,12 +194,28 @@ async function findOrCreateCustomer(
   }
 
   // AIDEV-NOTE: Criar novo customer
+  // CRÍTICO: NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId
+  // Se não tiver customerData aqui, significa que não conseguiu buscar na API - não criar
+  if (asaasCustomerId && !customerData) {
+    console.error(`❌ ERRO CRÍTICO: Tentando criar customer com asaasCustomerId (${asaasCustomerId}) mas sem customerData`);
+    return null;
+  }
+
+  // AIDEV-NOTE: Só criar como "Cliente não identificado" se realmente não tiver como obter dados
+  // (sem asaasCustomerId e sem customerData.name)
+  const customerName = customerData?.name || (asaasCustomerId ? null : "Cliente não identificado");
+  
+  if (!customerName && asaasCustomerId) {
+    console.error(`❌ ERRO CRÍTICO: Não é possível criar customer sem nome quando há asaasCustomerId (${asaasCustomerId})`);
+    return null;
+  }
+
   const { data: newCustomer, error: createError } = await supabase
     .from("customers")
     .insert({
       tenant_id: tenantId,
       customer_asaas_id: asaasCustomerId,
-      name: customerData?.name || "Cliente não identificado",
+      name: customerName,
       email: customerData?.email || null,
       phone: customerData?.phone || customerData?.mobilePhone || null,
       cpf_cnpj: customerData?.cpfCnpj || null,
@@ -167,7 +229,7 @@ async function findOrCreateCustomer(
     return null;
   }
 
-  console.log(`✅ Customer criado: ${newCustomer.id}`);
+  console.log(`✅ Customer criado: ${newCustomer.id} (nome: ${customerName})`);
   return newCustomer.id;
 }
 
@@ -375,7 +437,23 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     };
   }
 
+  // AIDEV-NOTE: Contar charges pendentes (não atualizadas na última hora)
+  // Isso é o que realmente precisa ser processado
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { count: pendingCharges, error: pendingCountError } = await supabase
+    .from('charges')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .not('asaas_id', 'is', null)
+    .eq('origem', 'ASAAS')
+    .lt('updated_at', oneHourAgo);
+
+  if (pendingCountError) {
+    console.error(`❌ Erro ao contar charges pendentes:`, pendingCountError);
+  }
+
   console.log(`📊 Total de charges do ASAAS: ${totalCharges || 0}`);
+  console.log(`📊 Charges pendentes (não atualizadas na última hora): ${pendingCharges || 0}`);
 
   // AIDEV-NOTE: Processar em lotes com paginação
   // AIDEV-NOTE: Limitar a 100 charges por execução para evitar timeout
@@ -387,18 +465,26 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
   let totalUpdated = 0;
   let totalSkipped = 0;
   let totalErrors = 0;
+  let totalDeleted = 0; // AIDEV-NOTE: Contador de charges deletadas
   let totalChecked = 0;
 
   // AIDEV-NOTE: Processar charges em lotes (limitado para evitar timeout)
+  // AIDEV-NOTE: CRÍTICO - Processar apenas charges que não foram verificadas recentemente
+  // Isso garante que sempre processa charges diferentes a cada execução
+  // Processa charges com updated_at mais antigo que 1 hora atrás
+  // AIDEV-NOTE: oneHourAgo já foi declarado acima, reutilizando
+  
   while (totalChecked < MAX_CHARGES_PER_RUN) {
     // AIDEV-NOTE: Buscar lote de charges
-    // AIDEV-NOTE: Excluir charges que já foram marcadas como deletadas no ASAAS (metadata.asaas_deleted = true)
+    // AIDEV-NOTE: CRÍTICO - Filtrar apenas charges que não foram atualizadas recentemente
+    // Isso garante que sempre processa charges diferentes a cada execução
     let chargesQuery = supabase
       .from('charges')
       .select('id, asaas_id, customer_id, contract_id, status, data_pagamento, updated_at, external_customer_id, barcode, pix_key, external_invoice_number, invoice_url, pdf_url, net_value, metadata')
       .eq('tenant_id', tenantId)
       .not('asaas_id', 'is', null)
-      .eq('origem', 'ASAAS');
+      .eq('origem', 'ASAAS')
+      .lt('updated_at', oneHourAgo); // AIDEV-NOTE: Apenas charges não atualizadas na última hora
     
     // AIDEV-NOTE: Excluir charges que já foram marcadas como deletadas no ASAAS
     // Usando uma query que filtra por metadata não contendo asaas_deleted: true
@@ -447,22 +533,25 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
         const { data: paymentData, notFound } = await fetchPaymentFromAsaas(charge.asaas_id, api_key, api_url);
         
         if (!paymentData) {
-          // AIDEV-NOTE: Se o pagamento não foi encontrado (404), marcar como não sincronizável
+          // AIDEV-NOTE: Se o pagamento não foi encontrado (404), deletar do banco
           if (notFound) {
-            console.warn(`⚠️ Pagamento ${charge.asaas_id} não encontrado no ASAAS - marcando como não sincronizável`);
-            // AIDEV-NOTE: Atualizar updated_at para não tentar sincronizar novamente nas próximas execuções
-            // Mas manter a charge no banco para histórico
-            await supabase
+            console.log(`🗑️ Pagamento ${charge.asaas_id} não encontrado no ASAAS (404) - deletando do banco`);
+            
+            // AIDEV-NOTE: Deletar charge do banco quando não existe mais no ASAAS
+            const { error: deleteError } = await supabase
               .from('charges')
-              .update({ 
-                updated_at: new Date().toISOString(),
-                // AIDEV-NOTE: Podemos adicionar um campo metadata para indicar que foi deletado no ASAAS
-                metadata: { ...(charge.metadata || {}), asaas_deleted: true, asaas_not_found_at: new Date().toISOString() }
-              })
+              .delete()
               .eq('id', charge.id)
               .eq('tenant_id', tenantId);
             
-            totalSkipped++;
+            if (deleteError) {
+              console.error(`❌ Erro ao deletar charge ${charge.id}:`, deleteError);
+              totalErrors++;
+            } else {
+              console.log(`✅ Charge ${charge.id} deletada com sucesso (não existe mais no ASAAS)`);
+              totalDeleted++;
+            }
+            
             continue;
           }
           
@@ -472,31 +561,79 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
           continue;
         }
 
+        // AIDEV-NOTE: Verificar se o pagamento foi deletado no ASAAS (campo deleted = true)
+        if (paymentData.deleted === true) {
+          console.log(`🗑️ Pagamento ${charge.asaas_id} foi deletado no ASAAS (deleted = true) - deletando do banco`);
+          
+          // AIDEV-NOTE: Deletar charge do banco quando foi deletada no ASAAS
+          const { error: deleteError } = await supabase
+            .from('charges')
+            .delete()
+            .eq('id', charge.id)
+            .eq('tenant_id', tenantId);
+          
+          if (deleteError) {
+            console.error(`❌ Erro ao deletar charge ${charge.id}:`, deleteError);
+            totalErrors++;
+          } else {
+            console.log(`✅ Charge ${charge.id} deletada com sucesso (deletada no ASAAS)`);
+            totalDeleted++;
+          }
+          
+          continue;
+        }
+
         // AIDEV-NOTE: Verificar se há divergências
         const hasDivergence = hasDivergences(charge, paymentData);
         
-        if (!hasDivergence) {
-          // AIDEV-NOTE: Charge está sincronizada, mas ainda verificar customer
-          // Verificar se precisa atualizar/criar customer mesmo sem divergências na charge
-          const asaasCustomerId = paymentData.customer || charge.external_customer_id;
+        // AIDEV-NOTE: Sempre verificar e atualizar customer, mesmo sem divergências na charge
+        // Isso garante que customers "Cliente não identificado" sejam atualizados quando houver dados
+        const asaasCustomerId = paymentData.customer || charge.external_customer_id;
+        let customerNeedsUpdate = false;
+        
+        if (asaasCustomerId) {
+          // AIDEV-NOTE: Verificar se o customer atual é "Cliente não identificado"
+          if (charge.customer_id) {
+            const { data: currentCustomer } = await supabase
+              .from('customers')
+              .select('name, customer_asaas_id')
+              .eq('id', charge.customer_id)
+              .maybeSingle();
+            
+            if (currentCustomer && (currentCustomer.name === 'Cliente não identificado' || !currentCustomer.customer_asaas_id)) {
+              customerNeedsUpdate = true;
+              console.log(`🔄 Customer ${charge.customer_id} precisa ser atualizado (nome: "${currentCustomer.name}")`);
+            }
+          } else {
+            customerNeedsUpdate = true;
+            console.log(`🔄 Charge ${charge.id} não tem customer_id, buscando/criando customer`);
+          }
           
-          if (!charge.customer_id && asaasCustomerId) {
-            // AIDEV-NOTE: Charge não tem customer, buscar/criar
+          if (customerNeedsUpdate) {
+            // AIDEV-NOTE: Buscar dados do customer na API ASAAS
             let customerData: any = null;
             
             if (asaasCustomerId) {
               customerData = await fetchAsaasCustomer(asaasCustomerId, api_key, api_url);
+              
+              if (customerData) {
+                console.log(`✅ Dados do customer obtidos: ${customerData.name || 'N/A'}`);
+              } else {
+                console.warn(`⚠️ Não foi possível obter dados do customer ${asaasCustomerId}`);
+              }
             }
             
             if (customerData || asaasCustomerId) {
               const foundOrCreatedCustomerId = await findOrCreateCustomer(
                 tenantId,
                 asaasCustomerId,
-                customerData
+                customerData,
+                api_key,
+                api_url
               );
               
               if (foundOrCreatedCustomerId) {
-                // AIDEV-NOTE: Atualizar charge apenas com customer_id
+                // AIDEV-NOTE: Atualizar charge com customer_id e external_customer_id
                 await supabase
                   .from('charges')
                   .update({ 
@@ -508,10 +645,21 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
                   .eq('tenant_id', tenantId);
                 
                 totalUpdated++;
-                console.log(`🔗 Customer ${foundOrCreatedCustomerId} vinculado à charge ${charge.id}`);
+                console.log(`🔗 Customer ${foundOrCreatedCustomerId} vinculado/atualizado na charge ${charge.id}`);
               }
             }
           }
+        }
+        
+        if (!hasDivergence && !customerNeedsUpdate) {
+          // AIDEV-NOTE: Charge está sincronizada e customer está OK
+          // AIDEV-NOTE: CRÍTICO - Atualizar updated_at mesmo quando pulada para não reprocessar
+          // Isso garante que a charge não será processada novamente nas próximas execuções
+          await supabase
+            .from('charges')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', charge.id)
+            .eq('tenant_id', tenantId);
           
           totalSkipped++;
           continue;
@@ -522,34 +670,54 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
 
         // AIDEV-NOTE: Verificar e atualizar/criar customer se necessário
         let customerId = charge.customer_id;
-        const asaasCustomerId = paymentData.customer || charge.external_customer_id;
+        const asaasCustomerIdForDivergence = paymentData.customer || charge.external_customer_id;
         
         // AIDEV-NOTE: Se não tem customer_id ou tem customer mas precisa atualizar dados
-        if (!customerId || asaasCustomerId) {
-          // AIDEV-NOTE: Buscar dados do customer na API ASAAS se necessário
-          let customerData: any = null;
+        if (!customerId || asaasCustomerIdForDivergence) {
+          // AIDEV-NOTE: Verificar se o customer atual é "Cliente não identificado"
+          let needsCustomerUpdate = !customerId;
           
-          if (asaasCustomerId) {
-            customerData = await fetchAsaasCustomer(asaasCustomerId, api_key, api_url);
+          if (customerId && asaasCustomerIdForDivergence) {
+            const { data: currentCustomer } = await supabase
+              .from('customers')
+              .select('name, customer_asaas_id')
+              .eq('id', customerId)
+              .maybeSingle();
             
-            if (customerData) {
-              console.log(`✅ Dados do customer obtidos: ${customerData.name || 'N/A'}`);
-            } else {
-              console.warn(`⚠️ Não foi possível obter dados do customer ${asaasCustomerId}`);
+            if (currentCustomer && (currentCustomer.name === 'Cliente não identificado' || !currentCustomer.customer_asaas_id)) {
+              needsCustomerUpdate = true;
+              console.log(`🔄 Customer ${customerId} precisa ser atualizado (nome: "${currentCustomer.name}")`);
             }
           }
           
-          // AIDEV-NOTE: Buscar ou criar customer com dados completos
-          if (customerData || asaasCustomerId) {
-            const foundOrCreatedCustomerId = await findOrCreateCustomer(
-              tenantId,
-              asaasCustomerId,
-              customerData
-            );
+          if (needsCustomerUpdate) {
+            // AIDEV-NOTE: Buscar dados do customer na API ASAAS se necessário
+            let customerData: any = null;
             
-            if (foundOrCreatedCustomerId && !customerId) {
-              customerId = foundOrCreatedCustomerId;
-              console.log(`🔗 Customer ${customerId} vinculado à charge ${charge.id}`);
+            if (asaasCustomerIdForDivergence) {
+              customerData = await fetchAsaasCustomer(asaasCustomerIdForDivergence, api_key, api_url);
+              
+              if (customerData) {
+                console.log(`✅ Dados do customer obtidos: ${customerData.name || 'N/A'}`);
+              } else {
+                console.warn(`⚠️ Não foi possível obter dados do customer ${asaasCustomerIdForDivergence}`);
+              }
+            }
+            
+            // AIDEV-NOTE: Buscar ou criar customer com dados completos
+            if (customerData || asaasCustomerIdForDivergence) {
+              const foundOrCreatedCustomerId = await findOrCreateCustomer(
+                tenantId,
+                asaasCustomerIdForDivergence,
+                customerData,
+                api_key,
+                api_url
+              );
+              
+              if (foundOrCreatedCustomerId) {
+                customerId = foundOrCreatedCustomerId;
+                console.log(`🔗 Customer ${customerId} vinculado/atualizado na charge ${charge.id}`);
+              }
             }
           }
         }
@@ -663,7 +831,11 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
         totalProcessed++;
 
       } catch (error) {
-        console.error(`❌ Erro ao processar charge ${charge.id}:`, error);
+        console.error(`❌ Erro ao processar charge ${charge.id} (asaas_id: ${charge.asaas_id}):`, error);
+        if (error instanceof Error) {
+          console.error(`❌ Mensagem de erro: ${error.message}`);
+          console.error(`❌ Stack trace: ${error.stack?.substring(0, 500)}`);
+        }
         totalErrors++;
         totalProcessed++;
       }
@@ -687,10 +859,12 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
-  const remainingCharges = (totalCharges || 0) - totalChecked;
+  // AIDEV-NOTE: Calcular charges restantes baseado nas pendentes, não no total
+  // Isso mostra quantas realmente precisam ser processadas
+  const remainingCharges = Math.max(0, (pendingCharges || 0) - totalChecked);
   
   console.log(`✅ Sincronização concluída para tenant ${tenantId}`);
-  console.log(`📊 Resumo: ${totalChecked} verificadas, ${totalUpdated} atualizadas, ${totalSkipped} sem divergências, ${totalErrors} erros`);
+  console.log(`📊 Resumo: ${totalChecked} verificadas, ${totalUpdated} atualizadas, ${totalDeleted} deletadas, ${totalSkipped} sem divergências, ${totalErrors} erros`);
   if (remainingCharges > 0) {
     console.log(`⏭️  ${remainingCharges} charges restantes serão processadas nas próximas execuções`);
   }
@@ -699,6 +873,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     success: true,
     tenant_id: tenantId,
     total_charges: totalCharges || 0,
+    total_deleted: totalDeleted,
     total_checked: totalChecked,
     processed: totalProcessed,
     updated: totalUpdated,

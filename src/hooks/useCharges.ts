@@ -171,58 +171,110 @@ export function useCharges(params: UseChargesParams = {}) {
       }
       if (memoizedParams.search) {
         // AIDEV-NOTE: Busca expandida para incluir dados do cliente (nome, empresa, CPF/CNPJ)
-        // PostgREST não suporta busca direta em campos relacionados, então precisamos:
-        // 1. Buscar customers que correspondem ao termo
-        // 2. Filtrar charges por esses customer_ids OU por campos diretos da charge
+        // PostgREST não suporta conversão de tipo (bigint -> text) para busca em CPF/CNPJ
+        // Por isso, sempre usamos a função RPC quando há busca por texto
+        // A função RPC faz a conversão corretamente e busca em todos os campos
         
         const searchTerm = memoizedParams.search.trim();
-        const cleanedSearch = searchTerm.replace(/\D/g, ''); // Remove não-numéricos para busca de CPF/CNPJ
         
-        // AIDEV-NOTE: Buscar customers que correspondem ao termo de busca
-        // AIDEV-NOTE: Para CPF/CNPJ, busca por início (starts with) se for numérico
-        const customerSearchConditions: string[] = [
-          `name.ilike.%${searchTerm}%`,
-          `company.ilike.%${searchTerm}%`
-        ];
+        // AIDEV-NOTE: Sempre usar função RPC para busca com texto
+        // Isso garante busca correta em CPF/CNPJ (bigint) e evita problemas de URL longa
+        console.log(`🔍 [CHARGES DEBUG] Busca por "${searchTerm}": Usando função RPC para busca eficiente (inclui CPF/CNPJ)`);
         
-        // AIDEV-NOTE: Se o termo de busca contém números, buscar também por CPF/CNPJ
-        if (cleanedSearch && cleanedSearch.length >= 3) {
-          // Busca por início do CPF/CNPJ (ex: "113" encontra "11320253000169")
-          customerSearchConditions.push(`cpf_cnpj.ilike.%${cleanedSearch}%`);
-        } else if (searchTerm.length >= 2) {
-          // Se não tem números suficientes, busca pelo termo original também
-          customerSearchConditions.push(`cpf_cnpj.ilike.%${searchTerm}%`);
+        // AIDEV-NOTE: Configurar contexto de tenant antes de chamar RPC
+        await supabase.rpc('set_tenant_context_simple', {
+          p_tenant_id: tenantId
+        });
+        
+        // AIDEV-NOTE: Usar função RPC para busca eficiente (sempre quando há busca por texto)
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('search_charges', {
+          p_tenant_id: tenantId,
+          p_search_term: searchTerm,
+          p_status: memoizedParams.status,
+          p_type: memoizedParams.type,
+          p_customer_id: memoizedParams.customerId || null,
+          p_contract_id: memoizedParams.contractId || null,
+          p_start_date: memoizedParams.startDate || null,
+          p_end_date: memoizedParams.endDate || null,
+          p_page: memoizedParams.page || 1,
+          p_limit: memoizedParams.limit || 10
+        });
+        
+        if (rpcError) {
+          console.error(`❌ [CHARGES ERROR] Erro na função RPC search_charges:`, rpcError);
+          throw rpcError;
         }
         
-        const { data: matchingCustomers, error: customersError } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .or(customerSearchConditions.join(','));
+        // AIDEV-NOTE: Processar resultado da RPC
+        const rpcData = rpcResult?.data || [];
+        const rpcTotal = rpcResult?.total || 0;
         
-        const customerIds: string[] = matchingCustomers?.map((c: any) => c.id) || [];
+        // AIDEV-NOTE: Buscar serviços dos contratos (se necessário)
+        const contractIds = rpcData && rpcData.length > 0
+          ? [...new Set(rpcData.filter((charge: any) => charge.contract_id).map((charge: any) => charge.contract_id))]
+          : [];
+        let contractServicesMap: Record<string, any[]> = {};
         
-        // AIDEV-NOTE: Construir filtro OR para charges:
-        // - Campos diretos da charge (descricao, asaas_id)
-        // - customer_id IN (lista de customers encontrados)
-        const orConditions: string[] = [
-          `descricao.ilike.%${searchTerm}%`,
-          `asaas_id.ilike.%${searchTerm}%`
-        ];
-        
-        if (customerIds.length > 0) {
-          // AIDEV-NOTE: Adicionar filtro para customer_id IN (lista de IDs)
-          // PostgREST usa sintaxe: customer_id.in.(id1,id2,id3)
-          orConditions.push(`customer_id.in.(${customerIds.join(',')})`);
+        if (contractIds.length > 0) {
+          const { data: servicesData, error: servicesError } = await supabase
+            .from('vw_contract_services_detailed')
+            .select(`
+              contract_id,
+              contract_service_id,
+              service_description,
+              service_id,
+              service_name
+            `)
+            .eq('tenant_id', tenantId)
+            .in('contract_id', contractIds);
+          
+          if (servicesError) {
+            console.error('🚨 [ERROR] useCharges - Erro ao buscar serviços na RPC:', servicesError);
+          } else {
+            contractServicesMap = (servicesData || []).reduce((acc: Record<string, any[]>, service: any) => {
+              if (!acc[service.contract_id]) {
+                acc[service.contract_id] = [];
+              }
+              acc[service.contract_id].push({
+                id: service.contract_service_id,
+                description: service.service_description,
+                service: {
+                  id: service.service_id,
+                  name: service.service_name,
+                  description: service.service_description
+                }
+              });
+              return acc;
+            }, {} as Record<string, any[]>);
+          }
         }
         
-        // AIDEV-NOTE: Aplicar filtro OR apenas se houver condições
-        if (orConditions.length > 0) {
-          query = query.or(orConditions.join(','));
-        }
+        // AIDEV-NOTE: Converter dados da RPC para formato esperado (igual ao processamento normal)
+        const enrichedData = rpcData.map((charge: any) => {
+          const customers = charge.customers || null;
+          const contracts = charge.contracts || null;
+          
+          return {
+            ...charge,
+            customers: customers || undefined,
+            contracts: contracts ? {
+              ...contracts,
+              services: contractServicesMap[charge.contract_id!] || []
+            } : null
+          };
+        });
         
-        console.log(`🔍 [CHARGES DEBUG] Busca por "${searchTerm}": ${customerIds.length} customers encontrados`);
+        return {
+          data: enrichedData,
+          total: rpcTotal,
+          hasError: false,
+          hasCountError: false,
+          errorMessage: undefined,
+          countErrorMessage: undefined
+        };
       }
+      
+      // AIDEV-NOTE: Se não há busca por texto, continuar com busca normal
 
       // Paginação
       if (memoizedParams.page && memoizedParams.limit) {

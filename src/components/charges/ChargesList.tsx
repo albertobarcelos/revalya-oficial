@@ -475,6 +475,7 @@ export function ChargesList() {
                 <TableHead>N° Contrato</TableHead>
                 <TableHead>Valor</TableHead>
                 <TableHead>Vencimento</TableHead>
+                <TableHead>Pagamento</TableHead>
                 <TableHead>Parcelas</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
@@ -557,14 +558,16 @@ export function ChargesList() {
                   </TableCell>
                   <TableCell>
                     {charge.data_vencimento ? (
-                      <div className="flex flex-col">
-                        <span>{formatDate(charge.data_vencimento)}</span>
-                        {charge.data_pagamento && (
-                          <span className="text-xs text-green-600">
-                            Pago: {formatDate(charge.data_pagamento)}
-                          </span>
-                        )}
-                      </div>
+                      formatDate(charge.data_vencimento)
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {charge.data_pagamento ? (
+                      <span className="text-green-600 font-medium">
+                        {formatDate(charge.data_pagamento)}
+                      </span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
