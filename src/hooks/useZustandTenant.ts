@@ -132,44 +132,44 @@ export function useZustandTenant() {
       // Verificar se ainda está em processo de switch (evitar race condition)
       if (isSwitchingRef.current) {
         throttledAutoSelect('auto_select_switching', '[AUTO-SELECT] Switch em progresso, aguardando...');
-        return;
-      }
-      
-      // Se há um slug na URL e dados carregados, mas o tenant atual não corresponde
-      if (urlSlug && hasLoaded && availableTenants.length > 0) {
+      return;
+    }
+    
+    // Se há um slug na URL e dados carregados, mas o tenant atual não corresponde
+    if (urlSlug && hasLoaded && availableTenants.length > 0) {
         throttledAutoSelect('auto_select_check', `[AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
-        
-        if (!currentTenant || currentTenant.slug !== urlSlug) {
+      
+      if (!currentTenant || currentTenant.slug !== urlSlug) {
           throttledAutoSelect('auto_select_switch', `[AUTO-SELECT] Tentando trocar para tenant com slug: ${urlSlug}`);
-          
-          const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
-          if (targetTenant) {
+        
+        const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
+        if (targetTenant) {
             throttledAutoSelect('auto_select_success', `[AUTO-SELECT] Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
             isSwitchingRef.current = true;
-            previousUrlSlugRef.current = urlSlug;
-            previousTenantSlugRef.current = targetTenant.slug;
+          previousUrlSlugRef.current = urlSlug;
+          previousTenantSlugRef.current = targetTenant.slug;
             
-            switchTenant(targetTenant.id);
+          switchTenant(targetTenant.id);
             
             // Resetar flag após um pequeno delay
             setTimeout(() => {
               isSwitchingRef.current = false;
             }, 300);
-          } else {
-            console.error(`🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
-            previousUrlSlugRef.current = urlSlug;
-            previousTenantSlugRef.current = null;
-          }
         } else {
-          throttledAutoSelect('auto_select_correct', `[AUTO-SELECT] Tenant já está correto: ${currentTenant.name} (${currentTenant.slug})`);
+          console.error(`🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
           previousUrlSlugRef.current = urlSlug;
-          previousTenantSlugRef.current = currentTenant.slug;
+          previousTenantSlugRef.current = null;
         }
       } else {
-        // Atualizar referências mesmo quando não há ação
+          throttledAutoSelect('auto_select_correct', `[AUTO-SELECT] Tenant já está correto: ${currentTenant.name} (${currentTenant.slug})`);
         previousUrlSlugRef.current = urlSlug;
-        previousTenantSlugRef.current = currentTenant?.slug || null;
+        previousTenantSlugRef.current = currentTenant.slug;
       }
+    } else {
+      // Atualizar referências mesmo quando não há ação
+      previousUrlSlugRef.current = urlSlug;
+      previousTenantSlugRef.current = currentTenant?.slug || null;
+    }
     }, 200);
   }, [hasLoaded, availableTenants, currentTenant, switchTenant]);
   

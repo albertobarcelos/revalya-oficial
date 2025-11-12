@@ -39,17 +39,40 @@ async function getAsaasCredentials(tenantId: string, environment: string = 'prod
   
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
   
-  const { data, error } = await supabase
+  // AIDEV-NOTE: Buscar integração - tentar primeiro sem filtro de environment
+  // Se não encontrar, tenta com environment (para compatibilidade)
+  let { data, error } = await supabase
     .from('tenant_integrations')
-    .select('credentials, config, is_active')
+    .select('config, is_active, environment')
     .eq('tenant_id', tenantId)
     .eq('integration_type', 'asaas')
-    .eq('environment', environment)
     .eq('is_active', true)
-    .single()
+    .maybeSingle()
   
+  // AIDEV-NOTE: Se não encontrou sem filtro de environment, tentar com filtro
   if (error || !data) {
-    console.error('Erro ao buscar credenciais do Asaas:', error)
+    console.log(`Tentando buscar integração com environment=${environment}`)
+    const result = await supabase
+      .from('tenant_integrations')
+      .select('config, is_active, environment')
+      .eq('tenant_id', tenantId)
+      .eq('integration_type', 'asaas')
+      .eq('environment', environment)
+      .eq('is_active', true)
+      .maybeSingle()
+    
+    if (result.error || !result.data) {
+      console.error('Erro ao buscar credenciais do Asaas:', error || result.error)
+      console.error('Tenant ID:', tenantId, 'Environment:', environment)
+      return null
+    }
+    
+    data = result.data
+    error = result.error
+  }
+  
+  if (!data) {
+    console.error('Integração não encontrada para tenant:', tenantId)
     return null
   }
   
@@ -57,9 +80,14 @@ async function getAsaasCredentials(tenantId: string, environment: string = 'prod
   // Estrutura: { api_key, api_url, environment, instance_name }
   const config = data.config || {}
   
+  if (!config.api_key) {
+    console.error('API key não encontrada no config para tenant:', tenantId)
+    return null
+  }
+  
   return {
-    apiKey: config.api_key || data.credentials?.api_key,
-    apiUrl: config.api_url || data.credentials?.api_url || 'https://api.asaas.com/v3',
+    apiKey: config.api_key,
+    apiUrl: config.api_url || 'https://api.asaas.com/v3',
     isActive: data.is_active
   }
 }
@@ -120,9 +148,17 @@ serve(async (req) => {
     })
     
     // AIDEV-NOTE: Usar URL da integração ou padrão
+    // AIDEV-NOTE: O path pode já conter query string (ex: /customers?offset=0&limit=20)
     let url = credentials.apiUrl
-    url += path.startsWith('/') ? path : `/${path}`
+    const cleanPath = path.startsWith('/') ? path : `/${path}`
 
+    // AIDEV-NOTE: Se o path já contém query string, usar diretamente
+    if (cleanPath.includes('?')) {
+      url += cleanPath
+    } else {
+      url += cleanPath
+      
+      // AIDEV-NOTE: Adicionar params se não houver query string no path
     if (params) {
       const searchParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
@@ -133,6 +169,7 @@ serve(async (req) => {
       const queryString = searchParams.toString()
       if (queryString) {
         url += `?${queryString}`
+        }
       }
     }
 

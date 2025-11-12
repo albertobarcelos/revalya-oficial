@@ -45,8 +45,10 @@ export const processMessageTags = (message: string, data: {
     valor: number; 
     data_vencimento: string; 
     descricao?: string; 
-    codigo_barras?: string; 
-    // codigo_pix?: string; // Column doesn't exist in database 
+    codigo_barras?: string;
+    pix_key?: string;        // AIDEV-NOTE: Chave PIX copia e cola
+    invoice_url?: string;   // AIDEV-NOTE: URL da fatura do Asaas
+    pdf_url?: string;        // AIDEV-NOTE: URL do PDF do boleto
   }; 
 }) => {
   if (!message) return '';
@@ -104,8 +106,20 @@ export const processMessageTags = (message: string, data: {
   processedMessage = processedMessage.replace(/{cobranca\.descricao}/g, data.charge?.descricao || 'Descrição da cobrança');
   processedMessage = processedMessage.replace(/{cobranca\.codigoBarras}/g, data.charge?.codigo_barras || '00000000000000000000000000000000000000000000');
   
-  // AIDEV-NOTE: Tags de PIX (comentado pois coluna não existe no banco)
-  // processedMessage = processedMessage.replace(/{cobranca\.pix}/g, data.charge?.codigo_pix || '');
+  // AIDEV-NOTE: Tag PIX copia e cola - usa pix_key diretamente
+  processedMessage = processedMessage.replace(/{cobranca\.pix_copia_cola}/g, data.charge?.pix_key || 'Chave PIX não disponível');
+  // AIDEV-NOTE: Manter compatibilidade com tag antiga {cobranca.pix}
+  processedMessage = processedMessage.replace(/{cobranca\.pix}/g, data.charge?.pix_key || 'Chave PIX não disponível');
+  
+  // AIDEV-NOTE: Tag link principal - usa invoice_url
+  const cobrancaLink = data.charge?.invoice_url || 'Link não disponível';
+  processedMessage = processedMessage.replace(/{cobranca\.link}/g, cobrancaLink);
+  // AIDEV-NOTE: Manter compatibilidade com tag antiga {cobranca.link_pix}
+  processedMessage = processedMessage.replace(/{cobranca\.link_pix}/g, cobrancaLink);
+  
+  // AIDEV-NOTE: Tag link boleto - usa pdf_url
+  const linkBoleto = data.charge?.pdf_url || 'Link do boleto não disponível';
+  processedMessage = processedMessage.replace(/{cobranca\.link_boleto}/g, linkBoleto);
   
   // AIDEV-NOTE: Tags da empresa
   processedMessage = processedMessage.replace(/{empresa\.nome}/g, data.customer?.company || 'Empresa Exemplo');

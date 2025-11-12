@@ -33,3 +33,4 @@ END $$;
 -- ou script que busque dados do customer na API do ASAAS para cada registro sem dados
 -- Isso será feito em uma migration futura se necessário
 
+

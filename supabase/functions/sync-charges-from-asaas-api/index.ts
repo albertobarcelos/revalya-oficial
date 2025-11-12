@@ -33,6 +33,22 @@ function mapAsaasStatusToChargeStatus(status: string): string {
   return statusMap[status] || "PENDING";
 }
 
+// AIDEV-NOTE: Mapeamento de payment method para tipo
+function mapPaymentMethodToTipo(billingType: string | null | undefined): string {
+  if (!billingType) return "BOLETO";
+  
+  const typeMap: Record<string, string> = {
+    "PIX": "PIX",
+    "BOLETO": "BOLETO",
+    "BANK_SLIP": "BOLETO",
+    "CREDIT_CARD": "CREDIT_CARD",
+    "CASH": "CASH",
+    "TRANSFER": "PIX"
+  };
+  
+  return typeMap[billingType.toUpperCase()] || "BOLETO";
+}
+
 // AIDEV-NOTE: Buscar dados do cliente na API ASAAS
 async function fetchAsaasCustomer(
   customerId: string,
@@ -452,7 +468,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     console.error(`❌ Erro ao contar charges pendentes:`, pendingCountError);
   }
 
-  console.log(`📊 Total de charges do ASAAS: ${totalCharges || 0}`);
+  console.log(`📊 Total de charges do ASAAS no banco: ${totalCharges || 0}`);
   console.log(`📊 Charges pendentes (não atualizadas na última hora): ${pendingCharges || 0}`);
 
   // AIDEV-NOTE: Processar em lotes com paginação
@@ -467,6 +483,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
   let totalErrors = 0;
   let totalDeleted = 0; // AIDEV-NOTE: Contador de charges deletadas
   let totalChecked = 0;
+  let totalImported = 0; // AIDEV-NOTE: Contador de novas charges importadas
 
   // AIDEV-NOTE: Processar charges em lotes (limitado para evitar timeout)
   // AIDEV-NOTE: CRÍTICO - Processar apenas charges que não foram verificadas recentemente
@@ -500,7 +517,189 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     }
 
     if (!charges || charges.length === 0) {
-      // AIDEV-NOTE: Não há mais charges para processar
+      // AIDEV-NOTE: Não há mais charges no banco para sincronizar
+      // Agora vamos buscar novas charges do Asaas que ainda não foram importadas
+      console.log(`📥 Não há mais charges no banco para sincronizar. Buscando novas charges do Asaas...`);
+      
+      // AIDEV-NOTE: Buscar novas charges do Asaas que não estão no banco
+      // Limitar a 100 novas charges por execução para não sobrecarregar
+      const NEW_CHARGES_LIMIT = 100;
+      const asaasOffset = Math.floor(totalImported / 100) * 100; // Paginação do Asaas
+      
+      try {
+        const baseUrl = api_url.endsWith('/v3') ? api_url.replace(/\/v3$/, '') : api_url.replace(/\/$/, '');
+        const paymentsUrl = `${baseUrl}/v3/payments?limit=100&offset=${asaasOffset}`;
+        
+        console.log(`🔍 Buscando charges do Asaas: ${paymentsUrl}`);
+        
+        const asaasResponse = await fetch(paymentsUrl, {
+          method: 'GET',
+          headers: {
+            'access_token': api_key,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!asaasResponse.ok) {
+          console.error(`❌ Erro ao buscar charges do Asaas: ${asaasResponse.status}`);
+          break;
+        }
+        
+        const asaasData = await asaasResponse.json();
+        const payments = asaasData.data || [];
+        
+        if (payments.length === 0) {
+          console.log(`✅ Não há mais charges no Asaas para importar`);
+          break;
+        }
+        
+        console.log(`📥 Encontradas ${payments.length} charges no Asaas. Verificando quais já estão no banco...`);
+        
+        // AIDEV-NOTE: Verificar quais charges já existem no banco
+        const asaasIds = payments.map((p: any) => p.id);
+        const { data: existingCharges } = await supabase
+          .from('charges')
+          .select('asaas_id')
+          .eq('tenant_id', tenantId)
+          .in('asaas_id', asaasIds);
+        
+        const existingAsaasIds = new Set(existingCharges?.map((c: any) => c.asaas_id) || []);
+        const newPayments = payments.filter((p: any) => !existingAsaasIds.has(p.id));
+        
+        console.log(`📊 ${newPayments.length} novas charges encontradas (de ${payments.length} verificadas)`);
+        
+        // AIDEV-NOTE: Importar novas charges (limitado para não sobrecarregar)
+        for (let i = 0; i < Math.min(newPayments.length, NEW_CHARGES_LIMIT - totalImported); i++) {
+          const payment = newPayments[i];
+          
+          try {
+            // AIDEV-NOTE: Buscar customer se necessário
+            let customerData = null;
+            if (payment.customer) {
+              customerData = await fetchAsaasCustomer(payment.customer, api_key, api_url);
+            }
+            
+            // AIDEV-NOTE: Buscar ou criar customer
+            const customerId = await findOrCreateCustomer(
+              tenantId,
+              payment.customer,
+              customerData,
+              api_key,
+              api_url
+            );
+            
+            // AIDEV-NOTE: Buscar dados adicionais
+            let barcode: string | null = null;
+            let pixKey: string | null = null;
+            
+            if (payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+              barcode = await fetchPaymentBarcode(payment.id, api_key, api_url);
+            }
+            
+            if (payment.billingType === 'PIX' || payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+              pixKey = await fetchPaymentPixKey(payment.id, api_key, api_url);
+            }
+            
+            // AIDEV-NOTE: Buscar contrato se necessário
+            let contractId: string | null = null;
+            if (customerId) {
+              contractId = await findContractByCustomerId(tenantId, customerId);
+            }
+            
+            // AIDEV-NOTE: Criar nova charge
+            const mappedStatus = mapAsaasStatusToChargeStatus(payment.status);
+            const paymentMethod = mapPaymentMethodToTipo(payment.billingType);
+            
+            const newCharge: any = {
+              tenant_id: tenantId,
+              asaas_id: payment.id,
+              origem: 'ASAAS',
+              status: mappedStatus,
+              tipo: paymentMethod,
+              valor: payment.value,
+              data_vencimento: payment.dueDate,
+              data_pagamento: payment.paymentDate || null,
+              customer_id: customerId,
+              contract_id: contractId,
+              external_customer_id: payment.customer,
+              descricao: payment.description || payment.externalReference || '',
+              barcode: barcode,
+              pix_key: pixKey,
+              external_invoice_number: payment.invoiceNumber || null,
+              invoice_url: payment.invoiceUrl || null,
+              pdf_url: payment.bankSlipUrl || null,
+              net_value: payment.netValue || null,
+              metadata: {
+                billing_type: payment.billingType,
+                installment_count: payment.installmentCount || null,
+                installment_value: payment.installmentValue || null
+              }
+            };
+            
+            // AIDEV-NOTE: Adicionar campos de juros e multa se disponíveis
+            if (payment.interest?.value !== undefined && payment.interest.value !== null) {
+              newCharge.interest_rate = payment.interest.value;
+            }
+            
+            if (payment.fine?.value !== undefined && payment.fine.value !== null) {
+              newCharge.fine_rate = payment.fine.value;
+            }
+            
+            if (payment.discount?.value !== undefined && payment.discount.value !== null) {
+              newCharge.discount_value = payment.discount.value;
+            }
+            
+            // AIDEV-NOTE: Inserir nova charge
+            const { error: insertError } = await supabase
+              .from('charges')
+              .insert(newCharge);
+            
+            if (insertError) {
+              console.error(`❌ Erro ao importar charge ${payment.id}:`, insertError);
+              totalErrors++;
+            } else {
+              console.log(`✅ Nova charge importada: ${payment.id} (valor: ${payment.value})`);
+              totalImported++;
+              totalProcessed++;
+            }
+            
+            totalChecked++;
+            
+            // AIDEV-NOTE: Limite de novas charges por execução
+            if (totalImported >= NEW_CHARGES_LIMIT) {
+              console.log(`⚠️ Limite de ${NEW_CHARGES_LIMIT} novas charges por execução atingido`);
+              break;
+            }
+            
+          } catch (error) {
+            console.error(`❌ Erro ao importar charge ${payment.id}:`, error);
+            totalErrors++;
+            totalChecked++;
+          }
+        }
+        
+        // AIDEV-NOTE: Se não encontrou novas charges, parar
+        if (newPayments.length === 0) {
+          console.log(`✅ Todas as charges do Asaas já estão no banco`);
+          break;
+        }
+        
+        // AIDEV-NOTE: Continuar processando se ainda há espaço
+        if (totalChecked >= MAX_CHARGES_PER_RUN) {
+          break;
+        }
+        
+      } catch (error) {
+        console.error(`❌ Erro ao buscar novas charges do Asaas:`, error);
+        totalErrors++;
+        break;
+      }
+      
+      // AIDEV-NOTE: Se importou novas charges, continuar o loop para processar mais
+      if (totalImported > 0) {
+        continue;
+      }
+      
       break;
     }
 
@@ -864,7 +1063,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
   const remainingCharges = Math.max(0, (pendingCharges || 0) - totalChecked);
   
   console.log(`✅ Sincronização concluída para tenant ${tenantId}`);
-  console.log(`📊 Resumo: ${totalChecked} verificadas, ${totalUpdated} atualizadas, ${totalDeleted} deletadas, ${totalSkipped} sem divergências, ${totalErrors} erros`);
+  console.log(`📊 Resumo: ${totalChecked} verificadas, ${totalUpdated} atualizadas, ${totalImported} importadas, ${totalDeleted} deletadas, ${totalSkipped} sem divergências, ${totalErrors} erros`);
   if (remainingCharges > 0) {
     console.log(`⏭️  ${remainingCharges} charges restantes serão processadas nas próximas execuções`);
   }
@@ -877,6 +1076,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
     total_checked: totalChecked,
     processed: totalProcessed,
     updated: totalUpdated,
+    imported: totalImported,
     skipped: totalSkipped,
     errors: totalErrors,
     remaining_charges: remainingCharges,

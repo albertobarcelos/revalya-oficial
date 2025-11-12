@@ -47,6 +47,9 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_INTER_BATCH_DELAY_MS = 1000;
+// AIDEV-NOTE: Delay mínimo entre mensagens individuais para evitar spam (500ms = ~2 msg/seg)
+// WhatsApp permite até 80 msg/seg, mas para evitar detecção de spam, recomendamos ~1-2 msg/seg
+const DEFAULT_MIN_MESSAGE_DELAY_MS = 500;
 const MAX_RETRIES = 3;
 /** =========================
  *  Auditoria / Logs
@@ -219,6 +222,10 @@ class EvolutionApi {
           number: opts.number,
           requestId: opts.requestId
         });
+        // AIDEV-NOTE: Usar delay mínimo para evitar spam (Evolution API aceita delay em milissegundos)
+        // Delay de 500ms garante ~2 mensagens por segundo, bem abaixo do limite do WhatsApp
+        const messageDelay = opts.delay ?? DEFAULT_MIN_MESSAGE_DELAY_MS;
+        
         const { res, data } = await fetchJsonWithTimeout(url, {
           method: "POST",
           headers: {
@@ -231,11 +238,36 @@ class EvolutionApi {
             number: opts.number,
             text: opts.text,
             linkPreview: opts.linkPreview ?? false,
-            delay: opts.delay ?? 0
+            delay: messageDelay // AIDEV-NOTE: Delay mínimo para evitar detecção de spam
           })
         }, DEFAULT_TIMEOUT_MS);
-        const ok = res.ok && (data?.key?.id || data?.messageId || data?.id);
-        if (ok) {
+        
+        // AIDEV-NOTE: Verificar se a resposta contém dados válidos
+        if (!data) {
+          lastError = `Resposta vazia da Evolution API (HTTP ${res.status})`;
+          Audit.error(lastError, {
+            where: "sendText",
+            status: res.status,
+            attempt,
+            requestId: opts.requestId
+          });
+          if (res.status >= 400 && res.status < 500) {
+            return {
+              ok: false,
+              error: lastError
+            };
+          }
+          if (attempt < MAX_RETRIES) await new Promise((r)=>setTimeout(r, Math.pow(2, attempt) * 1000));
+          continue;
+        }
+        
+        // AIDEV-NOTE: Verificar primeiro se a resposta é de sucesso (status 2xx e tem messageId)
+        // A Evolution API retorna status 201 com data.key.id em caso de sucesso
+        const hasMessageId = data?.key?.id || data?.messageId || data?.id;
+        const isSuccessStatus = res.status >= 200 && res.status < 300;
+        
+        if (isSuccessStatus && hasMessageId) {
+          // AIDEV-NOTE: Resposta de sucesso - processar normalmente
           const messageId = data?.key?.id || data?.messageId || data?.id;
           Audit.opDone({
             where: "sendText",
@@ -249,12 +281,62 @@ class EvolutionApi {
             messageId: String(messageId)
           };
         }
-        lastError = data?.message || `HTTP ${res.status}: ${res.statusText}`;
-        Audit.error(lastError, {
+        
+        // AIDEV-NOTE: Verificar se há erro na resposta da API (apenas se não for sucesso)
+        if (data.error || (data.message && !isSuccessStatus)) {
+          const errorMsg = data.error || data.message || `Erro da Evolution API: ${JSON.stringify(data)}`;
+          const errorStr = Array.isArray(errorMsg) ? errorMsg.join(", ") : String(errorMsg);
+          
+          // AIDEV-NOTE: Mapear erros específicos relacionados a QR Code desconectado
+          let mappedError = errorStr;
+          const errorLower = errorStr.toLowerCase();
+          
+          if (errorLower.includes('qrcode') || 
+              errorLower.includes('qr code') || 
+              errorLower.includes('disconnected') || 
+              errorLower.includes('desconectado') ||
+              errorLower.includes('not connected') ||
+              errorLower.includes('connection') ||
+              errorLower.includes('instance') && errorLower.includes('not found') ||
+              errorLower.includes('cannot read properties') && errorLower.includes('id')) {
+            mappedError = 'WHATSAPP_DISCONNECTED: WhatsApp desconectado. Conecte o WhatsApp e tente novamente.';
+          } else if (errorLower.includes('unauthorized') || errorLower.includes('401')) {
+            mappedError = 'WHATSAPP_AUTH_ERROR: Erro de autenticação. Verifique a configuração do WhatsApp.';
+          } else if (errorLower.includes('timeout') || errorLower.includes('timed out')) {
+            mappedError = 'WHATSAPP_TIMEOUT: Timeout ao enviar mensagem. Tente novamente.';
+          }
+          
+          lastError = mappedError;
+          Audit.error(lastError, {
+            where: "sendText",
+            status: res.status,
+            attempt,
+            data,
+            requestId: opts.requestId
+          });
+          if (res.status >= 400 && res.status < 500) {
+            return {
+              ok: false,
+              error: lastError
+            };
+          }
+          if (attempt < MAX_RETRIES) await new Promise((r)=>setTimeout(r, Math.pow(2, attempt) * 1000));
+          continue;
+        }
+        
+        // AIDEV-NOTE: Se chegou aqui, é uma resposta inesperada ou erro
+        lastError = data?.error || data?.message || `HTTP ${res.status}: ${res.statusText}`;
+        
+        // AIDEV-NOTE: Serializar erro corretamente para evitar [object Object]
+        const errorMessage = typeof lastError === 'object' 
+          ? JSON.stringify(lastError) 
+          : String(lastError);
+        
+        Audit.error(errorMessage, {
           where: "sendText",
           status: res.status,
           attempt,
-          data,
+          data: typeof data === 'object' ? JSON.stringify(data) : data,
           requestId: opts.requestId
         });
         if (res.status >= 400 && res.status < 500) return {
@@ -286,10 +368,10 @@ class BulkService {
   async fetchChargesAndCustomers(chargeIds, tenantId) {
     const [chargesResult, customersResult] = await Promise.all([
       this.supabase.from("charges").select(`
-          id, customer_id, valor, data_vencimento, status, tipo, descricao,
-           customers!inner(id, name, phone, email)
-        `).in("id", chargeIds).eq("tenant_id", tenantId),
-      this.supabase.from("customers").select("id, name, phone, email").eq("tenant_id", tenantId)
+        id, tenant_id, customer_id, valor, data_vencimento, descricao, status, tipo, pix_key, invoice_url, pdf_url, barcode,
+        customers!inner(id, name, phone, celular_whatsapp, email, company, cpf_cnpj)
+      `).in("id", chargeIds).eq("tenant_id", tenantId),
+      this.supabase.from("customers").select("id, name, phone, celular_whatsapp, email, company, cpf_cnpj").eq("tenant_id", tenantId)
     ]);
     if (chargesResult.error) throw new Error(`Erro ao buscar cobranças: ${chargesResult.error.message}`);
     if (customersResult.error) throw new Error(`Erro ao buscar clientes: ${customersResult.error.message}`);
@@ -325,6 +407,20 @@ class BulkService {
         });
         return;
       }
+      
+      // AIDEV-NOTE: Serializar erro corretamente se for um objeto
+      let errorDetails: string | null = null;
+      if (payload.error) {
+        if (typeof payload.error === 'string') {
+          errorDetails = payload.error;
+        } else if (payload.error instanceof Error) {
+          errorDetails = payload.error.message;
+        } else if (typeof payload.error === 'object') {
+          errorDetails = JSON.stringify(payload.error);
+        } else {
+          errorDetails = String(payload.error);
+        }
+      }
 
       const insertData = {
         tenant_id: payload.tenantId,
@@ -333,7 +429,7 @@ class BulkService {
         customer_id: payload.customerId,
         message: payload.message,
         status: payload.success ? 'sent' : 'failed',
-        error_details: payload.error || null,
+        error_details: errorDetails, // AIDEV-NOTE: Usar errorDetails serializado
         metadata: {
           phone: payload.phone,
           message_id: payload.messageId,
@@ -346,16 +442,28 @@ class BulkService {
       const { error } = await this.supabase.from("message_history").insert(insertData);
       
       if (error) {
-        Audit.error(error, {
+        // AIDEV-NOTE: Serializar erro do Supabase corretamente
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        
+        Audit.error(new Error(errorMessage), {
           where: "logMessage",
           requestId: payload.requestId,
-          insertData
+          insertData,
+          supabaseError: error
         });
       }
     } catch (err) {
-      Audit.error(err, {
+      // AIDEV-NOTE: Serializar erro do catch corretamente
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      
+      Audit.error(new Error(errorMessage), {
         where: "logMessage",
-        requestId: payload.requestId
+        requestId: payload.requestId,
+        originalError: err
       });
     }
   }
@@ -364,7 +472,8 @@ class BulkService {
     const nome = customer?.name || "Cliente";
     const empresa = customer?.company || "";
     const cpfCnpj = customer?.cpf_cnpj || "";
-    const telefone = customer?.phone || "";
+    // AIDEV-NOTE: Prioridade: celular_whatsapp primeiro, depois phone como fallback
+    const telefone = customer?.celular_whatsapp?.trim() || customer?.phone?.trim() || "";
     const email = customer?.email || "";
     
     const valorNum = Number(charge?.valor ?? 0);
@@ -376,6 +485,45 @@ class BulkService {
     const vencimento = charge?.data_vencimento ? new Date(charge.data_vencimento).toLocaleDateString("pt-BR") : "";
     const descricao = charge?.descricao || "";
     const status = charge?.status || "";
+    
+    // AIDEV-NOTE: Tag código de barras - usa barcode
+    const codigoBarras = charge?.barcode || 'Código de barras não disponível';
+    
+    // AIDEV-NOTE: Tag PIX copia e cola - usa pix_key diretamente
+    const pixCopiaCola = charge?.pix_key || 'Chave PIX não disponível';
+    
+    // AIDEV-NOTE: Tag link principal - usa invoice_url
+    const cobrancaLink = charge?.invoice_url || 'Link não disponível';
+    
+    // AIDEV-NOTE: Tag link boleto - usa pdf_url
+    const linkBoleto = charge?.pdf_url || 'Link do boleto não disponível';
+    
+    // AIDEV-NOTE: Calcular dias até/após vencimento
+    let diasAteVencimento = 0;
+    let diasAposVencimento = 0;
+    
+    if (charge?.data_vencimento) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // Parse da data de vencimento (formato YYYY-MM-DD)
+        const dueDateParts = charge.data_vencimento.split('-').map(Number);
+        const dueDate = new Date(dueDateParts[0], dueDateParts[1] - 1, dueDateParts[2]);
+        dueDate.setHours(0, 0, 0, 0);
+        
+        const diffTime = dueDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 0) {
+          diasAteVencimento = diffDays;
+        } else if (diffDays < 0) {
+          diasAposVencimento = Math.abs(diffDays);
+        }
+      } catch (err) {
+        console.error('Erro ao calcular dias até/após vencimento:', err);
+      }
+    }
     
     // AIDEV-NOTE: Suporte para tags do frontend ({cliente.nome}, {cobranca.valor}, etc.)
     let message = tpl
@@ -390,6 +538,16 @@ class BulkService {
       .replace(/\{cobranca\.vencimento\}/g, vencimento)
       .replace(/\{cobranca\.descricao\}/g, descricao)
       .replace(/\{cobranca\.status\}/g, status)
+      .replace(/\{cobranca\.codigoBarras\}/g, codigoBarras)
+      // AIDEV-NOTE: Tags de pagamento
+      .replace(/\{cobranca\.pix_copia_cola\}/g, pixCopiaCola)
+      .replace(/\{cobranca\.pix\}/g, pixCopiaCola) // Compatibilidade com tag antiga
+      .replace(/\{cobranca\.link\}/g, cobrancaLink)
+      .replace(/\{cobranca\.link_pix\}/g, cobrancaLink) // Compatibilidade com tag antiga
+      .replace(/\{cobranca\.link_boleto\}/g, linkBoleto)
+      // AIDEV-NOTE: Tags de dias
+      .replace(/\{dias\.ateVencimento\}/g, diasAteVencimento.toString())
+      .replace(/\{dias\.aposVencimento\}/g, diasAposVencimento.toString())
       // Manter compatibilidade com tags antigas ({{nome}}, {{valor}}, etc.)
       .replace(/\{\{nome\}\}/g, nome)
       .replace(/\{\{valor\}\}/g, valor)
@@ -427,9 +585,23 @@ class BulkService {
       details: []
     };
     const BATCH = Math.max(1, Math.min(Number(batchSize ?? DEFAULT_BATCH_SIZE), 100));
-    const CONC = Math.max(1, Math.min(Number(concurrency ?? DEFAULT_CONCURRENCY), 10));
+    // AIDEV-NOTE: Se há apenas 1 charge, usar concorrência 1 para evitar processamento duplicado
+    const CONC = charges.length === 1 ? 1 : Math.max(1, Math.min(Number(concurrency ?? DEFAULT_CONCURRENCY), 10));
     const INTER_DELAY = DEFAULT_INTER_BATCH_DELAY_MS;
-    const THROTTLE = Math.max(0, Number(throttleMs ?? 0));
+    // AIDEV-NOTE: Throttle mínimo obrigatório para evitar spam (500ms entre mensagens = ~2 msg/seg)
+    // Se não especificado via header, usar delay mínimo padrão
+    const THROTTLE = Math.max(DEFAULT_MIN_MESSAGE_DELAY_MS, Number(throttleMs ?? DEFAULT_MIN_MESSAGE_DELAY_MS));
+    
+    // AIDEV-NOTE: Set para rastrear charges já processadas (proteção contra race condition)
+    const processedCharges = new Set<string>();
+    
+    // AIDEV-NOTE: Contador global para garantir delay mínimo entre mensagens mesmo com workers concorrentes
+    // Usado como objeto para permitir mutação entre workers
+    const lastMessageSentAt = { value: 0 };
+    
+    // AIDEV-NOTE: Semáforo simples para garantir que apenas uma mensagem seja enviada por vez dentro do intervalo
+    let sendingLock = false;
+    
     for(let i = 0; i < charges.length; i += BATCH){
       const batch = charges.slice(i, i + BATCH);
       const queue = [
@@ -439,53 +611,96 @@ class BulkService {
         while(queue.length){
           const charge = queue.shift();
           if (!charge) break;
+          
+          // AIDEV-NOTE: Verificar se charge já foi processada (proteção contra race condition)
+          if (processedCharges.has(charge.id)) {
+            console.log(`⚠️ Charge ${charge.id} já foi processada, pulando...`);
+            continue;
+          }
+          
+          // AIDEV-NOTE: Marcar charge como processada ANTES de processar
+          processedCharges.add(charge.id);
           try {
             const customer = customersById.get(charge.customer_id);
             if (!customer) throw new Error(`Cliente não encontrado (charge ${charge.id})`);
-            if (!customer.phone?.trim()) throw new Error("Cliente sem telefone cadastrado");
+            
+            // AIDEV-NOTE: Prioridade: celular_whatsapp primeiro, depois phone como fallback
+            const customerPhone = (customer as any).celular_whatsapp?.trim() || (customer as any).phone?.trim() || '';
+            if (!customerPhone) throw new Error("Cliente sem telefone cadastrado");
+            
             const msg = (customMessage?.trim() || this.renderMessage(templateContent, customer, charge)).trim();
-            const normalizedPhone = normalizeToE164(customer.phone, countryCode || DEFAULT_COUNTRY_CODE);
-            let sendResult = {
+            const normalizedPhone = normalizeToE164(customerPhone, countryCode || DEFAULT_COUNTRY_CODE);
+            
+            // AIDEV-NOTE: Garantir delay mínimo entre mensagens para evitar spam
+            // Usa semáforo para garantir que apenas uma mensagem seja enviada por vez dentro do intervalo
+            while (sendingLock) {
+              await new Promise((r)=>setTimeout(r, 10)); // Aguardar 10ms e verificar novamente
+            }
+            
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastMessageSentAt.value;
+            if (timeSinceLastMessage < THROTTLE) {
+              const waitTime = THROTTLE - timeSinceLastMessage;
+              console.log(`⏱️ Aguardando ${waitTime}ms antes de enviar próxima mensagem (anti-spam)`);
+              await new Promise((r)=>setTimeout(r, waitTime));
+            }
+            
+            // AIDEV-NOTE: Adquirir lock antes de enviar
+            sendingLock = true;
+            lastMessageSentAt.value = Date.now();
+            
+            let sendResult: { ok: boolean; messageId?: string; error?: string } = {
               ok: true,
               messageId: "DRY_RUN",
               error: undefined
             };
             if (!dryRun) {
+              // AIDEV-NOTE: Passar delay mínimo para Evolution API (0 porque já aplicamos delay antes)
               sendResult = await EvolutionApi.sendText({
                 baseUrl: evoCfg.apiBaseUrl,
                 apiKey: evoCfg.apiKey,
                 instance: evoCfg.instanceName,
                 number: normalizedPhone,
                 text: msg,
+                delay: 0, // AIDEV-NOTE: Delay já aplicado antes, não precisa duplicar
                 requestId
               });
             }
-            await this.logMessage({
-              tenantId,
-              customerId: customer.id,
-              chargeId: charge.id,
-              templateId: templateId || null,
-              message: msg,
-              phone: normalizedPhone,
-              success: sendResult.ok,
-              messageId: sendResult.messageId,
-              error: sendResult.error,
-              requestId,
-              dryRun: !!dryRun
-            });
-            const row = {
-              chargeId: charge.id,
-              customerId: customer.id,
-              phone: normalizedPhone,
-              success: sendResult.ok,
-              messageId: sendResult.messageId,
-              error: sendResult.error
-            };
-            results.details.push(row);
-            if (sendResult.ok) results.success++;
-            else results.failed++;
-            if (THROTTLE) await new Promise((r)=>setTimeout(r, THROTTLE));
+            
+            // AIDEV-NOTE: Liberar lock após envio (garantido pelo finally)
+            try {
+              await this.logMessage({
+                tenantId,
+                customerId: (customer as any).id,
+                chargeId: (charge as any).id,
+                templateId: templateId || null,
+                message: msg,
+                phone: normalizedPhone,
+                success: sendResult.ok,
+                messageId: sendResult.messageId || undefined,
+                error: sendResult.error || undefined,
+                requestId,
+                dryRun: !!dryRun
+              });
+              const row = {
+                chargeId: (charge as any).id,
+                customerId: (customer as any).id,
+                phone: normalizedPhone,
+                success: sendResult.ok,
+                messageId: sendResult.messageId || undefined,
+                error: sendResult.error || undefined
+              };
+              (results.details as any[]).push(row);
+              if (sendResult.ok) results.success++;
+              else results.failed++;
+            } finally {
+              // AIDEV-NOTE: Sempre liberar lock, mesmo em caso de erro
+              sendingLock = false;
+            }
           } catch (err) {
+            // AIDEV-NOTE: Garantir que lock seja liberado em caso de erro
+            sendingLock = false;
+            
             const msg = err instanceof Error ? err.message : String(err);
             Audit.error(err, {
               where: "BulkService.run",
@@ -493,15 +708,14 @@ class BulkService {
               chargeId: charge?.id,
               customerId: charge?.customer_id
             });
-            results.details.push({
-              chargeId: charge?.id ?? null,
-              customerId: charge?.customer_id ?? null,
+            (results.details as any[]).push({
+              chargeId: (charge as any)?.id ?? null,
+              customerId: (charge as any)?.customer_id ?? null,
               phone: "",
               success: false,
               error: msg
             });
             results.failed++;
-            if (THROTTLE) await new Promise((r)=>setTimeout(r, THROTTLE));
           }
         }
       });
