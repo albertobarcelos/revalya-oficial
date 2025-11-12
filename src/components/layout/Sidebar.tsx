@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { supabase } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,13 +71,15 @@ export default function Sidebar() {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed));
   }, [isCollapsed]);
 
-  // Função para obter a URL pública da imagem
+  /**
+   * Resolve a URL de exibição do avatar a partir da chave salva em users.avatar_url.
+   * Comentário de nível de função: usa URL assinada para compatibilidade com bucket privado
+   * e faz fallback para URL pública. Corrige o bucket para STORAGE_BUCKETS.AVATARS.
+   */
   const getAvatarUrl = async (path: string) => {
     try {
-      const { data: { publicUrl } } = supabase.storage
-        .from('imagens')
-        .getPublicUrl(path);
-      setAvatarUrl(publicUrl);
+      const url = await getImageUrl(STORAGE_BUCKETS.AVATARS, path, 3600);
+      setAvatarUrl(url);
     } catch (error) {
       logError('Erro ao obter URL da imagem', 'Sidebar', error);
     }

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+// UI: Tooltip para ícones discretos de status nos cards
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   CalendarDays, 
   DollarSign, 
@@ -62,6 +64,11 @@ interface KanbanCardProps {
   showCheckbox?: boolean;
 }
 
+/**
+ * KanbanCard
+ * Card de contrato dentro do Kanban.
+ * Ajustado para um design clean: fundo branco, bordas discretas, menos sombra e sem gradientes.
+ */
 function KanbanCard({ 
   contract, 
   isDragging, 
@@ -109,67 +116,62 @@ function KanbanCard({
     }
   }, [onSelectionChange, contract.id]);
   
-  // AIDEV-NOTE: Definir estilos baseados na coluna para design moderno
+  // AIDEV-NOTE: Mapeamento de acentos de cor por coluna (detalhe sutil para identificação visual)
+  // Usamos cores suaves apenas como uma pequena barra lateral no card para indicar a coluna a que pertence
+  const getAccentClasses = (col?: string) => {
+    switch (col) {
+      case 'faturar-hoje':
+        return {
+          bar: 'bg-blue-400',
+          badge: 'bg-blue-50 text-blue-700 border-blue-200'
+        };
+      case 'pendente':
+        return {
+          bar: 'bg-amber-400',
+          badge: 'bg-amber-50 text-amber-700 border-amber-200'
+        };
+      case 'faturados':
+        return {
+          bar: 'bg-emerald-400',
+          badge: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        };
+      case 'renovar':
+        return {
+          bar: 'bg-violet-400',
+          badge: 'bg-violet-50 text-violet-700 border-violet-200'
+        };
+      default:
+        return {
+          bar: 'bg-gray-200',
+          badge: 'bg-gray-100 text-gray-700 border-gray-200'
+        };
+    }
+  };
+
+  // AIDEV-NOTE: Estilos minimalistas para o card
   const getCardStyles = () => {
-    if (isFaturarHoje) {
-      return {
-        gradient: 'from-emerald-50 via-green-50 to-emerald-50',
-        border: 'border-emerald-200 hover:border-emerald-300',
-        accent: 'bg-emerald-500',
-        textPrimary: 'text-emerald-900',
-        textSecondary: 'text-emerald-700'
-      };
-    }
-    if (isPending) {
-      return {
-        gradient: 'from-orange-50 via-amber-50 to-orange-50',
-        border: 'border-orange-200 hover:border-orange-300',
-        accent: 'bg-orange-500',
-        textPrimary: 'text-orange-900',
-        textSecondary: 'text-orange-700'
-      };
-    }
-    if (isFaturados) {
-      return {
-        gradient: 'from-blue-50 via-indigo-50 to-blue-50',
-        border: 'border-blue-200 hover:border-blue-300',
-        accent: 'bg-blue-500',
-        textPrimary: 'text-blue-900',
-        textSecondary: 'text-blue-700'
-      };
-    }
-    if (isRenovar) {
-      return {
-        gradient: 'from-purple-50 via-violet-50 to-purple-50',
-        border: 'border-purple-200 hover:border-purple-300',
-        accent: 'bg-purple-500',
-        textPrimary: 'text-purple-900',
-        textSecondary: 'text-purple-700'
-      };
-    }
     return {
-      gradient: 'from-gray-50 via-slate-50 to-gray-50',
       border: 'border-gray-200 hover:border-gray-300',
-      accent: 'bg-gray-500',
       textPrimary: 'text-gray-900',
-      textSecondary: 'text-gray-700'
+      textSecondary: 'text-gray-700',
+      badgeNeutral: 'bg-gray-100 text-gray-700 border-gray-200'
     };
   };
   
   const styles = getCardStyles();
+  const accents = getAccentClasses(columnId);
   
   return (
     <Card className={cn(
-      "group relative overflow-hidden transition-all duration-300 ease-out",
-      "hover:shadow-lg hover:shadow-black/5 hover:-translate-y-1",
-      "bg-gradient-to-br", styles.gradient,
+      "group relative overflow-hidden transition-all duration-200 ease-out",
+      "hover:shadow-sm",
+      "bg-white",
       styles.border,
-      isDragging && "opacity-60 rotate-2 scale-105 shadow-xl",
-      isSelected && "ring-2 ring-primary ring-offset-2 border-primary shadow-lg scale-[1.02]"
+      isDragging && "opacity-60",
+      isSelected && "ring-1 ring-primary ring-offset-1 border-primary"
     )}>
-      {/* Accent bar */}
-      <div className={cn("absolute top-0 left-0 w-full h-1", styles.accent)} />
-      
+      {/* Barra sutil de acento de cor indicando a coluna (2px) */}
+      <div className={cn("absolute left-0 top-0 h-full w-[2px]", accents.bar)} aria-hidden="true" />
       <CardContent className="p-4">
         <div className="space-y-3">
           {/* Checkbox de seleção */}
@@ -186,7 +188,7 @@ function KanbanCard({
                 htmlFor={`select-${contract.contract_id}`} 
                 className="text-xs text-gray-600 cursor-pointer font-medium"
               >
-                Selecionar para faturar
+                Faturar
               </label>
             </div>
           )}
@@ -201,26 +203,42 @@ function KanbanCard({
             {...(dragHandleProps || {})}
           >
             <div className="flex items-center space-x-2">
-              <span className={cn("font-bold text-sm", styles.textPrimary)}>
+              <span className={cn("font-semibold text-xs", styles.textPrimary)}>
                 {contract.contract_id ? `#${contract.contract_id.slice(-8)}` : 'N/A'}
               </span>
             </div>
-            <Badge 
-              variant="secondary"
-              className={cn(
-                "text-xs font-medium px-2 py-1 rounded-full",
-                isFaturarHoje && "bg-emerald-100 text-emerald-800 border-emerald-200",
-                isPending && "bg-orange-100 text-orange-800 border-orange-200",
-                isFaturados && "bg-blue-100 text-blue-800 border-blue-200",
-                isRenovar && "bg-purple-100 text-purple-800 border-purple-200"
-              )}
-            >
-              {isFaturarHoje && <Clock className="w-3 h-3 mr-1" />}
-              {isPending && <AlertCircle className="w-3 h-3 mr-1" />}
-              {isFaturados && <CheckCircle2 className="w-3 h-3 mr-1" />}
-              {isRenovar && <RotateCcw className="w-3 h-3 mr-1" />}
-              {contract.status}
-            </Badge>
+            {/* Badge de status — agora discreto, somente ícone com tooltip */}
+            {/*
+             * Função: renderização de status do card em formato compacto.
+             * Objetivo: reduzir ruído visual usando apenas ícones com cores suaves.
+             * Acessibilidade: tooltip com descrição do status ao passar o mouse.
+             */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge 
+                    variant="secondary"
+                    className={cn(
+                      "p-1.5 rounded-full border",
+                      accents.badge
+                    )}
+                    title={contract.status}
+                    aria-label={`Status: ${contract.status}`}
+                  >
+                    {isFaturarHoje && <Clock className="w-3 h-3" />}
+                    {isPending && <AlertCircle className="w-3 h-3" />}
+                    {isFaturados && <CheckCircle2 className="w-3 h-3" />}
+                    {isRenovar && <RotateCcw className="w-3 h-3" />}
+                    {!isFaturarHoje && !isPending && !isFaturados && !isRenovar && (
+                      <Inbox className="w-3 h-3" />
+                    )}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {contract.status}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
           {/* Cliente */}
@@ -234,7 +252,7 @@ function KanbanCard({
           <div className="flex items-center justify-between pt-2">
             <div className="flex items-center space-x-1">
               <DollarSign className={cn("w-4 h-4", styles.textPrimary)} />
-              <span className={cn("text-lg font-bold", styles.textPrimary)}>
+              <span className={cn("text-base font-semibold", styles.textPrimary)}>
                 R$ {(contract.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -246,7 +264,7 @@ function KanbanCard({
             variant="ghost"
             className={cn(
               "w-full mt-3 font-medium transition-all duration-200",
-              "hover:bg-white/80 hover:shadow-sm",
+              "hover:bg-gray-50",
               styles.textPrimary
             )}
             disabled={isClicking}
@@ -286,6 +304,11 @@ interface KanbanColumnProps {
   showCheckboxes?: boolean;
 }
 
+/**
+ * KanbanColumn
+ * Responsável por renderizar uma coluna do Kanban.
+ * Refatorado para um visual mais clean: cabeçalho branco, bordas sutis e sem gradientes.
+ */
 function KanbanColumn({ 
   title, 
   contracts, 
@@ -299,100 +322,90 @@ function KanbanColumn({
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: columnId });
   
-  // AIDEV-NOTE: Definir estilos baseados no tipo de coluna para design moderno
+  // AIDEV-NOTE: Estilos minimalistas para cada coluna (cores neutras e consistentes)
   const getColumnStyles = () => {
-    switch (columnId) {
+    return {
+      headerBg: 'bg-white',
+      borderColor: 'border-gray-200',
+      bgColor: 'bg-transparent',
+      iconColor: 'text-gray-600',
+      titleColor: 'text-gray-900',
+      badgeStyle: 'bg-gray-100 text-gray-700 border-gray-200'
+    };
+  };
+
+  // AIDEV-NOTE: Mapeamento de acentos de cor por coluna para o cabeçalho
+  // Aplica a mesma ideia do card: uma barra vertical sutil (2px) e tons suaves no badge
+  const getAccentClasses = (col?: string) => {
+    switch (col) {
       case 'faturar-hoje':
         return {
-          headerGradient: 'from-emerald-500 to-green-600',
-          headerBg: 'bg-gradient-to-r from-emerald-500 to-green-600',
-          borderColor: 'border-emerald-200',
-          bgColor: 'bg-emerald-50/30',
-          iconColor: 'text-white',
-          titleColor: 'text-white',
-          badgeStyle: 'bg-white/20 text-white border-white/30'
+          bar: 'bg-blue-400',
+          badge: 'bg-blue-50 text-blue-700 border-blue-200',
+          iconBg: 'bg-blue-50'
         };
       case 'pendente':
         return {
-          headerGradient: 'from-orange-500 to-amber-600',
-          headerBg: 'bg-gradient-to-r from-orange-500 to-amber-600',
-          borderColor: 'border-orange-200',
-          bgColor: 'bg-orange-50/30',
-          iconColor: 'text-white',
-          titleColor: 'text-white',
-          badgeStyle: 'bg-white/20 text-white border-white/30'
+          bar: 'bg-amber-400',
+          badge: 'bg-amber-50 text-amber-700 border-amber-200',
+          iconBg: 'bg-amber-50'
         };
       case 'faturados':
         return {
-          headerGradient: 'from-blue-500 to-indigo-600',
-          headerBg: 'bg-gradient-to-r from-blue-500 to-indigo-600',
-          borderColor: 'border-blue-200',
-          bgColor: 'bg-blue-50/30',
-          iconColor: 'text-white',
-          titleColor: 'text-white',
-          badgeStyle: 'bg-white/20 text-white border-white/30'
+          bar: 'bg-emerald-400',
+          badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          iconBg: 'bg-emerald-50'
         };
       case 'renovar':
         return {
-          headerGradient: 'from-purple-500 to-violet-600',
-          headerBg: 'bg-gradient-to-r from-purple-500 to-violet-600',
-          borderColor: 'border-purple-200',
-          bgColor: 'bg-purple-50/30',
-          iconColor: 'text-white',
-          titleColor: 'text-white',
-          badgeStyle: 'bg-white/20 text-white border-white/30'
+          bar: 'bg-violet-400',
+          badge: 'bg-violet-50 text-violet-700 border-violet-200',
+          iconBg: 'bg-violet-50'
         };
       default:
         return {
-          headerGradient: 'from-gray-500 to-slate-600',
-          headerBg: 'bg-gradient-to-r from-gray-500 to-slate-600',
-          borderColor: 'border-gray-200',
-          bgColor: 'bg-gray-50/30',
-          iconColor: 'text-white',
-          titleColor: 'text-white',
-          badgeStyle: 'bg-white/20 text-white border-white/30'
+          bar: 'bg-gray-200',
+          badge: 'bg-gray-100 text-gray-700 border-gray-200',
+          iconBg: 'bg-gray-50'
         };
     }
   };
   
   const styles = getColumnStyles();
+  const accents = getAccentClasses(columnId);
   
   return (
     <div className={cn(
       "flex flex-col h-full rounded-xl overflow-hidden min-h-[500px]",
-      "border-2 transition-all duration-300",
-      "hover:shadow-lg hover:shadow-black/5",
+      "border transition-all duration-200",
+      "hover:shadow-sm",
       styles.borderColor,
       styles.bgColor,
-      isOver && "ring-2 ring-blue-500/20 bg-blue-50/50"
+      isOver && "ring-1 ring-blue-600/20 bg-blue-50/30"
     )}>
-      {/* Header moderno com gradiente */}
-      <div className={cn(
-        "relative overflow-hidden",
-        styles.headerBg
-      )}>
-        {/* Efeito de brilho sutil */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-        
-        <div className="relative flex items-center justify-between p-4">
+      {/* Header clean com acento sutil de cor por coluna */}
+      <div className={cn("relative overflow-hidden", styles.headerBg)}>
+        {/* Barra sutil de acento de cor indicando a coluna (2px) */}
+        <div className={cn("absolute left-0 top-0 h-full w-[2px]", accents.bar)} aria-hidden="true" />
+        <div className="relative flex items-center justify-between p-3 border-b border-gray-100">
           <div className="flex items-center space-x-3">
-            <div className={cn("p-2 rounded-lg bg-white/20 backdrop-blur-sm", styles.iconColor)}>
-              {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+            <div className={cn("p-2 rounded-md", accents.iconBg, styles.iconColor)}>
+              {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4" })}
             </div>
             <div>
-              <h3 className={cn("font-bold text-lg tracking-tight", styles.titleColor)}>
+              <h3 className={cn("font-semibold text-sm tracking-tight", styles.titleColor)}>
                 {title}
               </h3>
-              <p className="text-white/80 text-xs font-medium">
+              <p className="text-xs text-muted-foreground">
                 {contracts.length} {contracts.length === 1 ? 'contrato' : 'contratos'}
               </p>
             </div>
           </div>
           <Badge 
             className={cn(
-              "font-bold text-sm px-3 py-1 rounded-full",
-              "backdrop-blur-sm border",
-              styles.badgeStyle
+              "font-medium text-xs px-2 py-0.5 rounded-full",
+              "border",
+              accents.badge
             )}
           >
             {contracts.length}
@@ -404,7 +417,7 @@ function KanbanColumn({
       <div 
         ref={setNodeRef}
         className={cn(
-          "flex-1 p-4 space-y-4 overflow-y-auto",
+          "flex-1 p-3 space-y-3 overflow-y-auto",
           "scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent",
           "hover:scrollbar-thumb-gray-400"
         )}
@@ -443,6 +456,13 @@ function KanbanColumn({
   );
 }
 
+/**
+ * AIDEV-NOTE: FaturamentoKanban
+ * Página principal do Kanban de Faturamento. Nesta revisão removemos o título
+ * "Kanban de Faturamento" do topo e integramos o botão "Selecionar para Faturar"
+ * diretamente no componente de filtros (KanbanFilters), resultando em um header
+ * mais clean e compacto.
+ */
 export default function FaturamentoKanban() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const { kanbanData, isLoading, error, refreshData, updateContractStatus } = useBillingKanban();
@@ -980,15 +1000,11 @@ export default function FaturamentoKanban() {
     );
   }
 
-  // Mostrar loading
+  // Mostrar loading (sem título de página para manter layout clean)
   if (isLoading) {
     return (
-      <Layout title="Kanban de Faturamento">
+      <Layout>
         <div className="p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Kanban de Faturamento</h1>
-            <p className="text-gray-600">Gerencie o fluxo de faturamento dos seus contratos</p>
-          </div>
           <div className="flex items-center justify-center h-64">
             <div className="flex items-center space-x-2">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -1000,15 +1016,11 @@ export default function FaturamentoKanban() {
     );
   }
 
-  // Mostrar erro
+  // Mostrar erro (sem título de página)
   if (error) {
     return (
-      <Layout title="Kanban de Faturamento">
+      <Layout>
         <div className="p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Kanban de Faturamento</h1>
-            <p className="text-gray-600">Gerencie o fluxo de faturamento dos seus contratos</p>
-          </div>
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -1029,52 +1041,19 @@ export default function FaturamentoKanban() {
   }
 
   return (
-    <Layout title="Kanban de Faturamento">
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+    <Layout>
+      <div className="min-h-screen bg-gray-50">
         <div className="p-6">
-          <div className="mb-8">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl shadow-black/5 p-6 mb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-                    <TrendingUp className="h-8 w-8 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                      Kanban de Faturamento
-                    </h1>
-                    <p className="text-gray-600 font-medium mt-1">
-                      Gerencie o fluxo de faturamento dos seus contratos com eficiência
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Button 
-                    variant="outline" 
-                    onClick={toggleSelectionMode}
-                    disabled={isLoading}
-                    className={cn(
-                      "flex items-center space-x-2 font-medium transition-all duration-200",
-                      "hover:shadow-md hover:scale-105 border-2",
-                      showCheckboxes 
-                        ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" 
-                        : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                    )}
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    <span>{showCheckboxes ? 'Cancelar Seleção' : 'Selecionar para Faturar'}</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
-            
-            {/* Filtros */}
+          <div className="mb-6">
+            {/* Filtros com botão integrado */}
             <KanbanFilters
               filters={filters}
               onFilterChange={updateFilter}
               onClearFilters={clearFilters}
               hasActiveFilters={hasActiveFilters}
+              onToggleSelectionMode={toggleSelectionMode}
+              isSelectionMode={showCheckboxes}
+              isLoading={isLoading}
             />
           
             {/* Botão de faturamento - aparece quando há contratos selecionados */}
@@ -1084,12 +1063,7 @@ export default function FaturamentoKanban() {
                   onClick={handleBilling}
                   disabled={isBilling}
                   size="lg"
-                  className={cn(
-                    "flex items-center space-x-2 font-bold transition-all duration-200",
-                    "bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700",
-                    "shadow-lg hover:shadow-xl hover:scale-105 border-0",
-                    "text-white px-8 py-3 rounded-xl"
-                  )}
+                  className="flex items-center space-x-2"
                 >
                   {isBilling ? (
                     <>

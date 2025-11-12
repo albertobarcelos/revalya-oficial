@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, X, Calendar, DollarSign, User, FileText } from 'lucide-react';
+import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,6 +23,10 @@ interface KanbanFiltersProps {
   onFilterChange: (filters: KanbanFilters) => void;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
+  // AIDEV-NOTE: Novas props para integrar ação de seleção de faturamento no mesmo componente
+  onToggleSelectionMode?: () => void;
+  isSelectionMode?: boolean;
+  isLoading?: boolean;
 }
 
 /**
@@ -30,11 +34,21 @@ interface KanbanFiltersProps {
  * Permite filtrar por cliente, valor, período e status
  * Inclui busca textual e filtros avançados
  */
+/**
+ * AIDEV-NOTE: KanbanFilters
+ * Componente de filtros para o Kanban de Faturamento. Nesta versão, integramos
+ * o botão de "Selecionar para Faturar" ao mesmo header dos filtros para um layout
+ * mais clean, conforme solicitado. Mantém busca, filtros avançados e indicador
+ * de filtros ativos.
+ */
 export function KanbanFilters({
   filters,
   onFilterChange,
   onClearFilters,
-  hasActiveFilters
+  hasActiveFilters,
+  onToggleSelectionMode,
+  isSelectionMode = false,
+  isLoading = false
 }: KanbanFiltersProps) {
   
   // AIDEV-NOTE: Estado local para controlar expansão dos filtros
@@ -53,7 +67,7 @@ export function KanbanFilters({
   }).length;
 
   return (
-    <Card className="mb-6 border-2 border-blue-100 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 shadow-lg">
+    <Card className="mb-6 border border-gray-200 bg-white shadow-sm">
       <CardContent className="p-4">
         {/* AIDEV-NOTE: Barra superior com busca e toggle de filtros - Responsiva */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 mb-4">
@@ -63,7 +77,7 @@ export function KanbanFilters({
               placeholder="Buscar por cliente, contrato ou valor..."
               value={filters.search}
               onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
-              className="pl-10 border-2 border-blue-200 focus:border-blue-400 bg-white/80 backdrop-blur-sm"
+              className="pl-10 border border-gray-300 focus:border-blue-500 bg-white"
             />
           </div>
           
@@ -72,7 +86,7 @@ export function KanbanFilters({
               variant="outline"
               onClick={toggleExpanded}
               className={cn(
-                "flex items-center space-x-2 border-2 transition-all duration-200 flex-1 sm:flex-none justify-center",
+                "flex items-center space-x-2 border transition-all duration-200 flex-1 sm:flex-none justify-center",
                 isExpanded 
                   ? "border-blue-300 bg-blue-100 text-blue-700" 
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
@@ -97,6 +111,19 @@ export function KanbanFilters({
               >
                 <X className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Limpar</span>
+              </Button>
+            )}
+
+            {/* AIDEV-NOTE: Botão integrado de seleção para faturar */}
+            {onToggleSelectionMode && (
+              <Button
+                variant="outline"
+                onClick={onToggleSelectionMode}
+                disabled={isLoading}
+                className="flex items-center space-x-2"
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>{isSelectionMode ? 'Cancelar Seleção' : 'Faturar'}</span>
               </Button>
             )}
           </div>
@@ -141,7 +168,7 @@ export function KanbanFilters({
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 pt-4 border-t border-blue-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 pt-4 border-t border-gray-200">
                 {/* AIDEV-NOTE: Filtro por status */}
                 <div className="space-y-2">
                   <label className="flex items-center text-sm font-medium text-gray-700">
@@ -152,7 +179,7 @@ export function KanbanFilters({
                   value={filters.status}
                   onValueChange={(value) => onFilterChange({ ...filters, status: value })}
                 >
-                  <SelectTrigger className="border-2 border-gray-200 focus:border-blue-400">
+                  <SelectTrigger className="border border-gray-300 focus:border-blue-500">
                     <SelectValue placeholder="Todos os status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -176,7 +203,7 @@ export function KanbanFilters({
                     placeholder="Valor mínimo"
                     value={filters.minValue || ''}
                     onChange={(e) => onFilterChange({ ...filters, minValue: e.target.value })}
-                    className="border-2 border-gray-200 focus:border-blue-400 bg-white/80"
+                    className="border border-gray-300 focus:border-blue-500 bg-white"
                   />
                 </div>
 
@@ -191,7 +218,7 @@ export function KanbanFilters({
                     placeholder="Valor máximo"
                     value={filters.maxValue || ''}
                     onChange={(e) => onFilterChange({ ...filters, maxValue: e.target.value })}
-                    className="border-2 border-gray-200 focus:border-blue-400 bg-white/80"
+                    className="border border-gray-300 focus:border-blue-500 bg-white"
                   />
                 </div>
 
@@ -205,7 +232,7 @@ export function KanbanFilters({
                     value={filters.dateRange}
                     onValueChange={(value) => onFilterChange({ ...filters, dateRange: value })}
                   >
-                    <SelectTrigger className="border-2 border-gray-200 bg-white/80">
+                    <SelectTrigger className="border border-gray-300 bg-white focus:border-blue-500">
                       <SelectValue placeholder="Todos os períodos" />
                     </SelectTrigger>
                     <SelectContent>

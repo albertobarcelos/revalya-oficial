@@ -70,6 +70,13 @@ export function ProfileForm({ profile, onSave, isLoading }: ProfileFormProps) {
     });
   }, [profile, form]);
 
+  /**
+   * handleSubmit
+   * Função responsável por persistir alterações do perfil do usuário.
+   * - Atualiza os campos primários (name, phone, updated_at) na tabela public.users
+   * - Persiste company_name dentro do campo JSONB users.metadata.company_name
+   * Observação: a coluna company_name não existe em public.users, por isso usamos metadata.
+   */
   const handleSubmit = async (data: ProfileFormValues) => {
     try {
       logDebug("Atualizando perfil", "ProfileForm", data);
@@ -77,12 +84,26 @@ export function ProfileForm({ profile, onSave, isLoading }: ProfileFormProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não encontrado");
 
+      // Buscar metadata atual para preservar outras chaves
+      const { data: currentProfile, error: fetchError } = await supabase
+        .from('users')
+        .select('metadata')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newMetadata = {
+        ...(currentProfile?.metadata || {}),
+        company_name: data.company_name ?? null,
+      };
+
       const { error } = await supabase
         .from('users')
         .update({
           name: data.name,
           phone: data.phone,
-          company_name: data.company_name,
+          metadata: newMetadata,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);

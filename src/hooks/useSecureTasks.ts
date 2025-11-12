@@ -26,8 +26,11 @@ export interface SecureTask {
   status: 'pending' | 'in_progress' | 'completed';
   priority: 'low' | 'medium' | 'high';
   due_date?: string;
-  assigned_to?: string;
-  customer_id?: string;
+  // Campos relacionados ao cliente e responsável
+  assigned_to?: string; // opcional; responsável (auth.users.id)
+  customer_id?: string; // antigo (mapeado para client_id)
+  client_id?: string;   // novo na tabela
+  client_name?: string; // novo na tabela
   charge_id?: string;
   created_at: string;
   updated_at: string;
@@ -36,13 +39,16 @@ export interface SecureTask {
 // AIDEV-NOTE: Parâmetros para criação/atualização de tarefa
 // Atualizada para refletir campos obrigatórios da tabela tasks
 interface TaskData {
-  title: string;                    // 🛡️ OBRIGATÓRIO na tabela
+  title?: string;                   // 🔄 Opcional para updates; obrigatório para criação
   description?: string;             // ✅ Opcional na tabela
-  status?: 'pending' | 'in_progress' | 'completed'; // ✅ Opcional (default: pending)
-  priority?: 'low' | 'medium' | 'high';             // ✅ Opcional (default: medium)
+  status?: 'pending' | 'in_progress' | 'completed'; // ✅ Opcional (default: pending na criação)
+  priority?: 'low' | 'medium' | 'high';             // ✅ Opcional (default: medium na criação)
   due_date?: string;                // ✅ Opcional na tabela
-  assigned_to?: string;             // ✅ Opcional na tabela
-  customer_id?: string;             // ✅ Opcional na tabela
+  // Compatibilidade antiga: customer_id/assigned_to não existem na tabela atual
+  assigned_to?: string;             // ✅ Opcional na tabela (FK auth.users.id)
+  customer_id?: string;             // ✅ Opcional (será mapeado para client_id)
+  client_id?: string;               // ✅ Opcional na tabela real
+  client_name?: string;             // ✅ Opcional na tabela real
   charge_id?: string;               // ✅ Opcional na tabela
 }
 
@@ -52,6 +58,7 @@ interface SecureTaskFilters {
   priority?: 'low' | 'medium' | 'high';
   assigned_to?: string;
   customer_id?: string;
+  client_id?: string;
   charge_id?: string;
   search?: string;
   limit?: number;
@@ -61,9 +68,14 @@ interface SecureTaskFilters {
 // AIDEV-NOTE: Função para sanitizar dados da tarefa, evitando referências circulares
 // Remove propriedades extras que não pertencem à tabela tasks
 // Inclui validação robusta para campos obrigatórios
-function sanitizeTaskData(taskData: TaskData): TaskData {
-  // 🔍 DEBUG LOG - Verificar dados recebidos
-  console.log('🔍 [DEBUG] sanitizeTaskData - Dados recebidos:', {
+/**
+ * Função de sanitização para CRIAÇÃO de tarefa.
+ * - Garante que o título esteja presente e válido.
+ * - Aplica defaults de status e prioridade.
+ */
+function sanitizeNewTaskData(taskData: TaskData): Required<TaskData> {
+  // 🔍 DEBUG LOG - Verificar dados recebidos (criação)
+  console.log('🔍 [DEBUG] sanitizeNewTaskData - Dados recebidos:', {
     taskData,
     title: taskData?.title,
     titleType: typeof taskData?.title,
@@ -72,9 +84,9 @@ function sanitizeTaskData(taskData: TaskData): TaskData {
     trimmedLength: taskData?.title?.trim()?.length
   });
 
-  // 🛡️ VALIDAÇÃO DE CAMPOS OBRIGATÓRIOS
+  // 🛡️ VALIDAÇÃO DE CAMPO OBRIGATÓRIO
   if (!taskData.title || taskData.title.trim() === '') {
-    console.error('🚨 [DEBUG] Campo title inválido:', {
+    console.error('🚨 [DEBUG] Campo title inválido (criação):', {
       title: taskData.title,
       titleType: typeof taskData.title,
       trimmed: taskData.title?.trim(),
@@ -83,20 +95,47 @@ function sanitizeTaskData(taskData: TaskData): TaskData {
     throw new Error('Campo "title" é obrigatório e não pode estar vazio');
   }
 
-  const sanitizedData = {
+  const sanitizedData: Required<TaskData> = {
     title: taskData.title.trim(),
     description: taskData.description?.trim() || null,
     status: taskData.status || 'pending',
     priority: taskData.priority || 'medium',
     due_date: taskData.due_date || null,
-    assigned_to: taskData.assigned_to?.trim() || null,
+    assigned_to: taskData.assigned_to || null,
     customer_id: taskData.customer_id || null,
+    client_id: taskData.client_id || taskData.customer_id || null,
+    client_name: taskData.client_name?.trim() || null,
     charge_id: taskData.charge_id || null
   };
 
-  // 🔍 DEBUG LOG - Verificar dados sanitizados
-  console.log('✅ [DEBUG] sanitizeTaskData - Dados sanitizados:', sanitizedData);
+  // 🔍 DEBUG LOG - Verificar dados sanitizados (criação)
+  console.log('✅ [DEBUG] sanitizeNewTaskData - Dados sanitizados:', sanitizedData);
 
+  return sanitizedData;
+}
+
+/**
+ * Função de sanitização para ATUALIZAÇÃO parcial de tarefa.
+ * - Não exige título; só normaliza campos presentes.
+ * - Não aplica defaults (evita sobrescrever sem intenção).
+ */
+function sanitizeUpdateTaskData(taskData: TaskData): TaskData {
+  console.log('🔍 [DEBUG] sanitizeUpdateTaskData - Dados recebidos:', taskData);
+
+  const sanitizedData: TaskData = {
+    title: typeof taskData.title === 'string' ? taskData.title.trim() : undefined,
+    description: typeof taskData.description === 'string' ? taskData.description.trim() : undefined,
+    status: taskData.status,
+    priority: taskData.priority,
+    due_date: taskData.due_date ?? undefined,
+    assigned_to: taskData.assigned_to,
+    customer_id: taskData.customer_id,
+    client_id: taskData.client_id ?? taskData.customer_id,
+    client_name: typeof taskData.client_name === 'string' ? taskData.client_name.trim() : undefined,
+    charge_id: taskData.charge_id
+  };
+
+  console.log('✅ [DEBUG] sanitizeUpdateTaskData - Dados sanitizados:', sanitizedData);
   return sanitizedData;
 }
 
@@ -122,6 +161,7 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
     priority,
     assigned_to,
     customer_id,
+    client_id,
     charge_id,
     search,
     limit = 50,
@@ -141,6 +181,7 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
       priority,
       assigned_to,
       customer_id,
+      client_id,
       charge_id,
       search,
       limit,
@@ -157,7 +198,7 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
         .from('tasks')
         .select(`
           *,
-          customer:customers(
+          client:customers(
             id,
             name,
             cpf_cnpj,
@@ -187,7 +228,12 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
       }
 
       if (customer_id) {
-        query = query.eq('customer_id', customer_id);
+        // Compatibilidade: mapear customer_id antigo para client_id da tabela
+        query = query.eq('client_id', customer_id);
+      }
+
+      if (client_id) {
+        query = query.eq('client_id', client_id);
       }
 
       if (charge_id) {
@@ -239,7 +285,7 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
       }
 
       // 🔧 SANITIZAR DADOS PARA EVITAR REFERÊNCIAS CIRCULARES
-      const sanitizedData = sanitizeTaskData(taskData);
+      const sanitizedData = sanitizeNewTaskData(taskData);
 
       const { data, error } = await supabase
         .from('tasks')
@@ -249,9 +295,11 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
           status: sanitizedData.status,
           priority: sanitizedData.priority,
           due_date: sanitizedData.due_date,
-          assigned_to: sanitizedData.assigned_to,
-          customer_id: sanitizedData.customer_id,
+          // Mapeamento para a tabela real
+          client_id: sanitizedData.client_id,
+          client_name: sanitizedData.client_name,
           charge_id: sanitizedData.charge_id,
+          assigned_to: sanitizedData.assigned_to,
           tenant_id: tenantId, // 🛡️ INSERIR TENANT_ID OBRIGATÓRIO
         })
         .select()
@@ -304,21 +352,25 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
       }
 
       // 🔧 SANITIZAR DADOS PARA EVITAR REFERÊNCIAS CIRCULARES
-      const sanitizedData = sanitizeTaskData(taskData);
+      const sanitizedData = sanitizeUpdateTaskData(taskData);
+
+      // Montar objeto de update apenas com campos presentes para evitar sobrescrever indevidamente
+      const updatePayload: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      if (sanitizedData.title !== undefined) updatePayload.title = sanitizedData.title;
+      if (sanitizedData.description !== undefined) updatePayload.description = sanitizedData.description ?? null;
+      if (sanitizedData.status !== undefined) updatePayload.status = sanitizedData.status;
+      if (sanitizedData.priority !== undefined) updatePayload.priority = sanitizedData.priority;
+      if (sanitizedData.due_date !== undefined) updatePayload.due_date = sanitizedData.due_date ?? null;
+      if (sanitizedData.client_id !== undefined) updatePayload.client_id = sanitizedData.client_id ?? null;
+      if (sanitizedData.client_name !== undefined) updatePayload.client_name = sanitizedData.client_name ?? null;
+      if (sanitizedData.charge_id !== undefined) updatePayload.charge_id = sanitizedData.charge_id ?? null;
+      if (sanitizedData.assigned_to !== undefined) updatePayload.assigned_to = sanitizedData.assigned_to ?? null;
 
       const { data, error } = await supabase
         .from('tasks')
-        .update({
-          title: sanitizedData.title,
-          description: sanitizedData.description,
-          status: sanitizedData.status,
-          priority: sanitizedData.priority,
-          due_date: sanitizedData.due_date,
-          assigned_to: sanitizedData.assigned_to,
-          customer_id: sanitizedData.customer_id,
-          charge_id: sanitizedData.charge_id,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', id)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO DUPLO DE SEGURANÇA
         .select()
@@ -481,144 +533,3 @@ export function useSecureTasks(filters: SecureTaskFilters = {}) {
     isDeleting: deleteTaskMutation.isPending
   };
 }
-
-/**
- * AIDEV-NOTE: Função para verificar e garantir que a sessão está ativa
- * Resolve o problema de auth.uid() retornando null apesar do frontend estar autenticado
- */
-async function ensureActiveSession(): Promise<boolean> {
-  try {
-    // Verificar sessão atual
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    if (error) {
-      console.error('[useSecureTasks] Erro ao verificar sessão:', error);
-      return false;
-    }
-    
-    if (!session) {
-      console.warn('[useSecureTasks] Nenhuma sessão ativa encontrada');
-      return false;
-    }
-    
-    // Verificar se o token está válido fazendo uma consulta simples
-    const { data: authTest, error: authError } = await supabase
-      .from('tenant_users')
-      .select('user_id')
-      .eq('user_id', session.user.id)
-      .limit(1);
-    
-    if (authError) {
-      console.error('[useSecureTasks] Erro na verificação de autenticação:', authError);
-      
-      // Se o erro for de autenticação, tentar refresh do token
-      if (authError.code === 'PGRST301' || authError.message?.includes('JWT')) {
-        console.log('[useSecureTasks] Tentando refresh do token...');
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        
-        if (refreshError) {
-          console.error('[useSecureTasks] Erro no refresh do token:', refreshError);
-          return false;
-        }
-        
-        console.log('[useSecureTasks] Token refreshed com sucesso');
-        return refreshData.session !== null;
-      }
-      
-      return false;
-    }
-    
-    console.log('[useSecureTasks] Sessão verificada e ativa');
-    return true;
-  } catch (error) {
-    console.error('[useSecureTasks] Erro inesperado na verificação de sessão:', error);
-    return false;
-  }
-}
-
-  // Mutation para criar nova tarefa
-  const createTaskMutation = useSecureTenantMutation({
-    mutationFn: async (newTask: Omit<TaskData, 'id' | 'created_at' | 'updated_at'>) => {
-      // AIDEV-NOTE: Verificação obrigatória de acesso antes de qualquer operação
-      if (!hasAccess) {
-        throw new Error('Acesso negado: usuário não tem permissão para criar tarefas');
-      }
-
-      // AIDEV-NOTE: Verificar e garantir sessão ativa antes da operação crítica
-      const sessionActive = await ensureActiveSession();
-      if (!sessionActive) {
-        throw new Error('Sessão inválida ou expirada. Faça login novamente.');
-      }
-
-      // AIDEV-NOTE: Sanitizar dados antes da inserção
-      const sanitizedTask = sanitizeTaskData(newTask);
-      
-      // AIDEV-NOTE: Inserir tenant_id obrigatoriamente
-      const taskWithTenant = {
-        ...sanitizedTask,
-        tenant_id: tenantId,
-      };
-
-      // AIDEV-NOTE: Configurar contexto de tenant antes da operação
-      await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId 
-      });
-
-      // AIDEV-NOTE: Log de debug para rastrear o estado da sessão
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('[useSecureTasks] Estado da sessão antes da inserção:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        tenantId,
-        timestamp: new Date().toISOString()
-      });
-
-      // Inserir nova tarefa
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert(taskWithTenant)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('[useSecureTasks] Erro ao criar tarefa:', error);
-        throw error;
-      }
-
-      // AIDEV-NOTE: Validação dupla - garantir que a tarefa criada pertence ao tenant correto
-      if (data.tenant_id !== tenantId) {
-        console.error('[useSecureTasks] ERRO DE SEGURANÇA: Tarefa criada com tenant_id incorreto', {
-          expected: tenantId,
-          actual: data.tenant_id
-        });
-        throw new Error('Erro de segurança: tenant_id incorreto');
-      }
-
-      // AIDEV-NOTE: Log de auditoria obrigatório
-      console.log('[useSecureTasks] Tarefa criada com sucesso:', {
-        taskId: data.id,
-        tenantId: data.tenant_id,
-        userId: session?.user?.id,
-        timestamp: new Date().toISOString()
-      });
-
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success('Tarefa criada com sucesso!');
-      console.log('[useSecureTasks] Tarefa criada:', data);
-    },
-    onError: (error) => {
-      console.error('[useSecureTasks] Erro ao criar tarefa:', error);
-      
-      // AIDEV-NOTE: Tratamento específico para erro de RLS
-      if (error.code === '42501') {
-        toast.error('Erro de permissão: Verifique se você está logado e tem acesso ao tenant correto.');
-      } else if (error.message?.includes('Sessão inválida')) {
-        toast.error('Sessão expirada. Redirecionando para login...');
-        // Aqui você pode adicionar lógica para redirecionar para login
-      } else {
-        toast.error('Erro ao criar tarefa. Tente novamente.');
-      }
-    },
-  });
