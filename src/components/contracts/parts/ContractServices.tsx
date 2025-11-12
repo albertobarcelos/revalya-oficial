@@ -36,6 +36,7 @@ interface SelectedService {
   name: string;
   description?: string;
   unit_price: number; // Mudança de 'price' para 'unit_price'
+  cost_price?: number; // AIDEV-NOTE: Preço de custo do serviço
   default_price?: number; // Campo de compatibilidade
   quantity: number;
   total: number;
@@ -187,6 +188,12 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // AIDEV-NOTE: Flag para controlar sincronização automática durante edição
   const [isEditingDueDateData, setIsEditingDueDateData] = React.useState(false);
+  
+  // Estado local para controlar o valor de entrada do campo Valor Unitário
+  const [unitPriceInput, setUnitPriceInput] = React.useState<string>('');
+  
+  // Estado local para controlar o valor de entrada do campo Custo Unitário
+  const [costPriceInput, setCostPriceInput] = React.useState<string>('');
   
   // AIDEV-NOTE: Estados para edição em massa - usando interface tipada
   const [bulkEditData, setBulkEditData] = React.useState<BulkEditData>({
@@ -993,35 +1000,62 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                         type="text"
                         inputMode="decimal"
                         value={(() => {
+                          // Se há um valor no estado local de input, usa ele (durante digitação)
+                          if (unitPriceInput !== '') {
+                            return unitPriceInput;
+                          }
+                          // Caso contrário, usa o valor do serviço
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
                           const value = currentService?.unit_price ?? currentService?.default_price ?? '';
                           return value === 0 ? '' : value.toString();
                         })()}
                         onChange={(e) => {
                           const inputValue = e.target.value;
-                          // AIDEV-NOTE: Permite números, vírgula, ponto e espaços para melhor UX
-                          // Remove caracteres inválidos mas preserva vírgulas e pontos para formatação
-                          const sanitizedValue = inputValue.replace(/[^0-9.,\s]/g, '');
                           
-                          // AIDEV-NOTE: Converte vírgula para ponto para parseFloat, mas preserva a entrada do usuário
-                          let numericValue = 0;
-                          if (sanitizedValue.trim() !== '') {
-                            // Trata vírgula como separador decimal brasileiro
-                            const normalizedValue = sanitizedValue.replace(/\s/g, '').replace(',', '.');
-                            numericValue = parseFloat(normalizedValue);
+                          // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
+                          const allowedCharsRegex = /^[0-9.,]*$/;
+                          
+                          // Se o valor contém apenas caracteres permitidos, aceita a entrada
+                          if (allowedCharsRegex.test(inputValue)) {
+                            // Atualiza o estado local para preservar a formatação durante digitação
+                            setUnitPriceInput(inputValue);
+                            
+                            // Converte para número apenas para cálculos internos
+                            let numericValue = 0;
+                            if (inputValue.trim() !== '') {
+                              // Normaliza: substitui vírgula por ponto, remove pontos extras
+                              const normalizedValue = inputValue
+                                .replace(',', '.')
+                                .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
+                              
+                              const parsed = parseFloat(normalizedValue);
+                              numericValue = isNaN(parsed) ? 0 : parsed;
+                            }
+                            
+                            // Atualiza o serviço com o valor numérico
+                            setSelectedServices(prev => 
+                              prev.map(service => 
+                                service.id === editingServiceId 
+                                  ? { 
+                                      ...service, 
+                                      unit_price: numericValue,
+                                      total: numericValue * (service.quantity || 1)
+                                    }
+                                  : service
+                              )
+                            );
                           }
-                          
-                          setSelectedServices(prev => 
-                            prev.map(service => 
-                              service.id === editingServiceId 
-                                ? { 
-                                    ...service, 
-                                    unit_price: isNaN(numericValue) ? 0 : numericValue,
-                                    total: (isNaN(numericValue) ? 0 : numericValue) * (service.quantity || 1)
-                                  }
-                                : service
-                            )
-                          );
+                          // Se contém caracteres inválidos, ignora a entrada
+                        }}
+                        onBlur={() => {
+                          // Quando o usuário sai do campo, limpa o estado local
+                          setUnitPriceInput('');
+                        }}
+                        onFocus={() => {
+                          // Quando o usuário entra no campo, inicializa o estado local
+                          const currentService = selectedServices.find(s => s.id === editingServiceId);
+                          const value = currentService?.unit_price ?? currentService?.default_price ?? '';
+                          setUnitPriceInput(value === 0 ? '' : value.toString());
                         }}
                         placeholder="Ex: 1500,00 ou 1500.00"
                       />
@@ -1030,41 +1064,115 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       </p>
                     </div>
                     
-                    {/* Campo de Quantidade */}
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity" className="text-sm font-medium">Quantidade</Label>
-                      <Input 
-                        id="quantity"
-                        type="text"
-                        inputMode="numeric"
-                        value={(() => {
-                          const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          const value = currentService?.quantity ?? '';
-                          return value === 0 ? '' : value.toString();
-                        })()}
-                        onChange={(e) => {
-                          const inputValue = e.target.value;
-                          // Permite apenas números inteiros
-                          const sanitizedValue = inputValue.replace(/[^0-9]/g, '');
-                          const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);
-                          
-                          setSelectedServices(prev => 
-                            prev.map(service => 
-                              service.id === editingServiceId 
-                                ? { 
-                                    ...service, 
-                                    quantity: isNaN(newValue) ? 1 : Math.max(1, newValue),
-                                    total: (service.unit_price || service.default_price || 0) * (isNaN(newValue) ? 1 : Math.max(1, newValue))
-                                  }
-                                : service
-                            )
-                          );
-                        }}
-                        placeholder="Ex: 2"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Quantidade de unidades do serviço
-                      </p>
+                    {/* Campos de Quantidade e Custo Unitário lado a lado */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Campo de Quantidade */}
+                      <div className="space-y-2">
+                        <Label htmlFor="quantity" className="text-sm font-medium">Quantidade</Label>
+                        <Input 
+                          id="quantity"
+                          type="text"
+                          inputMode="numeric"
+                          value={(() => {
+                            const currentService = selectedServices.find(s => s.id === editingServiceId);
+                            const value = currentService?.quantity ?? '';
+                            return value === 0 ? '' : value.toString();
+                          })()}
+                          onChange={(e) => {
+                            const inputValue = e.target.value;
+                            // Permite apenas números inteiros
+                            const sanitizedValue = inputValue.replace(/[^0-9]/g, '');
+                            const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);
+                            
+                            setSelectedServices(prev => 
+                              prev.map(service => 
+                                service.id === editingServiceId 
+                                  ? { 
+                                      ...service, 
+                                      quantity: isNaN(newValue) ? 1 : Math.max(1, newValue),
+                                      total: (service.unit_price || service.default_price || 0) * (isNaN(newValue) ? 1 : Math.max(1, newValue))
+                                    }
+                                  : service
+                              )
+                            );
+                          }}
+                          placeholder="Ex: 2"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Quantidade de unidades do serviço
+                        </p>
+                      </div>
+
+                      {/* Campo de Preço de Custo */}
+                      <div className="space-y-2">
+                        <Label htmlFor="costPrice" className="text-sm font-medium">Custo Unitário</Label>
+                        <Input 
+                          id="costPrice"
+                          type="text"
+                          inputMode="decimal"
+                          value={(() => {
+                            // Se há um valor no estado local de input, usa ele (durante digitação)
+                            if (costPriceInput !== '') {
+                              return costPriceInput;
+                            }
+                            // Caso contrário, usa o valor do serviço
+                            const currentService = selectedServices.find(s => s.id === editingServiceId);
+                            const value = currentService?.cost_price ?? '';
+                            return value === 0 ? '' : value.toString();
+                          })()}
+                          onChange={(e) => {
+                            const inputValue = e.target.value;
+                            
+                            // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
+                            const allowedCharsRegex = /^[0-9.,]*$/;
+                            
+                            // Se o valor contém apenas caracteres permitidos, aceita a entrada
+                            if (allowedCharsRegex.test(inputValue)) {
+                              // Atualiza o estado local para preservar a formatação durante digitação
+                              setCostPriceInput(inputValue);
+                              
+                              // Converte para número apenas para cálculos internos
+                              let numericValue = 0;
+                              if (inputValue.trim() !== '') {
+                                // Normaliza: substitui vírgula por ponto, remove pontos extras
+                                const normalizedValue = inputValue
+                                  .replace(',', '.')
+                                  .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
+                                
+                                const parsed = parseFloat(normalizedValue);
+                                numericValue = isNaN(parsed) ? 0 : parsed;
+                              }
+                              
+                              // Atualiza o serviço com o valor numérico
+                              setSelectedServices(prev => 
+                                prev.map(service => 
+                                  service.id === editingServiceId 
+                                    ? { 
+                                        ...service, 
+                                        cost_price: numericValue
+                                      }
+                                    : service
+                                )
+                              );
+                            }
+                            // Se contém caracteres inválidos, ignora a entrada
+                          }}
+                          onBlur={() => {
+                            // Quando o usuário sai do campo, limpa o estado local
+                            setCostPriceInput('');
+                          }}
+                          onFocus={() => {
+                            // Quando o usuário entra no campo, inicializa o estado local
+                            const currentService = selectedServices.find(s => s.id === editingServiceId);
+                            const value = currentService?.cost_price ?? '';
+                            setCostPriceInput(value === 0 ? '' : value.toString());
+                          }}
+                          placeholder="Ex: 800,00 ou 800.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Custo interno do serviço (opcional)
+                        </p>
+                      </div>
                     </div>
                   </div>
                   

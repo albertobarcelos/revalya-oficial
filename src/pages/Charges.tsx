@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/Header";
@@ -28,17 +28,28 @@ export default function Charges() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isReconciliationModalOpen, setIsReconciliationModalOpen] = useState(false);
   
-  // 🔍 LOGS DE AUDITORIA OBRIGATÓRIOS
+  // AIDEV-NOTE: Refs para evitar operações duplicadas
+  const previousTenantIdRef = useRef<string | null>(null);
+  const previousActiveTabRef = useRef<string | null>(null);
+  
+  // 🔍 LOGS DE AUDITORIA OBRIGATÓRIOS - OTIMIZADO
   useEffect(() => {
-    if (currentTenant) {
+    // AIDEV-NOTE: Só logar quando realmente houver mudança
+    if (currentTenant && (
+      previousTenantIdRef.current !== currentTenant.id ||
+      previousActiveTabRef.current !== activeTab
+    )) {
       console.log(`🏢 [AUDIT] Acessando página de cobranças - Tenant: ${currentTenant.name} (${currentTenant.id})`);
       console.log(`📊 [AUDIT] Aba ativa: ${activeTab}`);
+      previousTenantIdRef.current = currentTenant.id;
+      previousActiveTabRef.current = activeTab;
     }
   }, [currentTenant, activeTab]);
   
-  // 🧹 LIMPEZA DE CACHE AO TROCAR TENANT
+  // 🧹 LIMPEZA DE CACHE AO TROCAR TENANT - OTIMIZADO
   useEffect(() => {
-    if (currentTenant?.id) {
+    // AIDEV-NOTE: Só limpar cache quando tenant realmente mudar
+    if (currentTenant?.id && previousTenantIdRef.current !== currentTenant.id) {
       console.log(`🧹 [AUDIT] Limpando cache de cobranças para tenant: ${currentTenant.name}`);
       
       // Limpar cache específico de cobranças
@@ -58,16 +69,26 @@ export default function Charges() {
         queryKey: ['financial-metrics'],
         exact: false 
       });
+      
+      // Atualizar referência após limpeza
+      previousTenantIdRef.current = currentTenant.id;
     }
   }, [currentTenant?.id, queryClient]);
   
-  // 🔒 VALIDAÇÃO CRÍTICA: Verificar correspondência entre tenant_id e slug da URL
+  // 🔒 VALIDAÇÃO CRÍTICA: Verificar correspondência entre tenant_id e slug da URL - OTIMIZADO
+  const previousSlugRef = useRef<string | null>(null);
   useEffect(() => {
-    if (currentTenant && slug && currentTenant.slug !== slug) {
+    // AIDEV-NOTE: Só validar quando houver mudança real
+    if (currentTenant && slug && currentTenant.slug !== slug && previousSlugRef.current !== slug) {
       console.error(`🚨 [SECURITY] Mismatch detectado! Tenant slug: ${currentTenant.slug}, URL slug: ${slug}`);
       console.error(`🚨 [SECURITY] Redirecionando para tenant correto...`);
+      previousSlugRef.current = slug;
       navigate(`/app/${currentTenant.slug}/cobrancas`, { replace: true });
       return;
+    }
+    // Atualizar referência mesmo quando não há ação
+    if (slug) {
+      previousSlugRef.current = slug;
     }
   }, [currentTenant, slug, navigate]);
   

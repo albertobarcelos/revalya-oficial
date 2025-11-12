@@ -101,7 +101,7 @@ export function TableRow({
         </div>
       </TableCell>
       
-      {/* AIDEV-NOTE: Coluna Observações - exibe observacao da tabela conciliation_staging */}
+      {/* AIDEV-NOTE: Coluna Observações - exibe descricao da charge */}
       <TableCell className="font-mono text-sm py-1 sm:py-2 text-left max-w-[200px]">
         {movement.observacao ? (
           <span 

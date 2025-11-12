@@ -102,8 +102,11 @@ export function BulkMessageDialog({
           valor,
           data_vencimento,
           descricao,
-          link_pagamento,
           tenant_id,
+          pix_key,
+          invoice_url,
+          pdf_url,
+          barcode,
           customers (
             id,
             name,
@@ -218,8 +221,11 @@ export function BulkMessageDialog({
               valor: chargeData.valor,
               data_vencimento: dueDate,
               descricao: chargeData.descricao,
-              link_pagamento: chargeData.link_pagamento,
-              codigo_barras: chargeData.codigo_barras
+              codigo_barras: chargeData.barcode,
+              // AIDEV-NOTE: Campos para links de pagamento
+              pix_key: chargeData.pix_key,
+              invoice_url: chargeData.invoice_url,
+              pdf_url: chargeData.pdf_url
             }
           };
           
@@ -259,10 +265,12 @@ export function BulkMessageDialog({
             company: 'Empresa Exemplo Ltda'
           },
           charge: {
+            pix_key: '00020101021226800014br.gov.bcb.pix2558pix.asaas.com/qr/cobv/...',
+            invoice_url: 'https://www.asaas.com/i/exemplo123',
+            pdf_url: 'https://www.asaas.com/b/pdf/exemplo123',
             valor: 150.00,
             data_vencimento: '2024-01-15',
             descricao: 'Serviço de exemplo',
-            link_pagamento: 'https://exemplo.com/pagamento',
             codigo_barras: '00000000000000000000000000000000000000000000'
           }
         });
@@ -285,7 +293,9 @@ export function BulkMessageDialog({
     { id: "{cobranca.vencimento}", name: "Data de Vencimento", color: "#f97316" },
     { id: "{cobranca.descricao}", name: "Descrição", color: "#84cc16" },
     { id: "{cobranca.status}", name: "Status", color: "#ec4899" },
-    { id: "{cobranca.link_pagamento}", name: "Link de Pagamento", color: "#6366f1" },
+    { id: "{cobranca.pix_copia_cola}", name: "PIX Copia e Cola", color: "#10b981" },
+    { id: "{cobranca.link}", name: "Link Pagamento", color: "#3b82f6" },
+    { id: "{cobranca.link_boleto}", name: "Link Boleto", color: "#8b5cf6" },
   ];
 
   useEffect(() => {
@@ -421,26 +431,44 @@ export function BulkMessageDialog({
       console.error('❌ [BULK-MESSAGE-DIALOG] Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
       
       // AIDEV-NOTE: Feedback específico baseado no tipo de erro
-      let title = "Erro ao enviar mensagem";
-      let description = "Não foi possível enviar a mensagem. Tente novamente.";
+      let title = "Erro ao enviar mensagens";
+      let description = "Não foi possível enviar as mensagens. Tente novamente.";
+      let isWhatsAppDisconnected = false;
       
       if (error instanceof Error) {
-        if (error.message.includes('Token de autenticação')) {
+        const errorMsg = error.message.toLowerCase();
+        
+        // AIDEV-NOTE: Detectar erros de WhatsApp desconectado
+        if (errorMsg.includes('whatsapp_disconnected') || 
+            errorMsg.includes('whatsapp desconectado') ||
+            errorMsg.includes('qrcode') ||
+            errorMsg.includes('qr code') ||
+            errorMsg.includes('desconectado') ||
+            errorMsg.includes('not connected') ||
+            errorMsg.includes('cannot read properties') && errorMsg.includes('id')) {
+          title = "WhatsApp Desconectado";
+          description = "O WhatsApp está desconectado. Por favor, conecte o WhatsApp nas configurações e tente novamente. Nenhuma mensagem foi enviada.";
+          isWhatsAppDisconnected = true;
+        } else if (errorMsg.includes('whatsapp_auth_error')) {
+          title = "Erro de Autenticação";
+          description = "Erro de autenticação do WhatsApp. Verifique as configurações nas Integrações.";
+          isWhatsAppDisconnected = true;
+        } else if (errorMsg.includes('token de autenticação')) {
           title = "Sessão expirada";
           description = "Sua sessão expirou. Faça login novamente.";
-        } else if (error.message.includes('Acesso negado') || error.message.includes('permissões insuficientes')) {
+        } else if (errorMsg.includes('acesso negado') || errorMsg.includes('permissões insuficientes')) {
           title = "Acesso negado";
           description = "Você não tem permissão para enviar mensagens. Contate o administrador.";
-        } else if (error.message.includes('Dados da requisição inválidos')) {
+        } else if (errorMsg.includes('dados da requisição inválidos')) {
           title = "Dados inválidos";
           description = "Verifique se todas as cobranças e o template estão corretos.";
-        } else if (error.message.includes('Erro interno do servidor')) {
+        } else if (errorMsg.includes('erro interno do servidor')) {
           title = "Erro de configuração";
           description = "Problema na configuração do sistema. Contate o suporte técnico.";
-        } else if (error.message.includes('Serviço temporariamente indisponível')) {
+        } else if (errorMsg.includes('serviço temporariamente indisponível')) {
           title = "Serviço indisponível";
           description = "O serviço está temporariamente indisponível. Tente novamente em alguns minutos.";
-        } else if (error.message.includes('Falha após todas as tentativas')) {
+        } else if (errorMsg.includes('falha após todas as tentativas')) {
           title = "Falha persistente";
           description = "Múltiplas tentativas falharam. Verifique sua conexão e tente novamente.";
         } else {
@@ -453,7 +481,11 @@ export function BulkMessageDialog({
         title,
         description,
         variant: "destructive",
+        duration: isWhatsAppDisconnected ? 10000 : 5000, // AIDEV-NOTE: Mostrar por mais tempo se for erro de WhatsApp desconectado
       });
+      
+      // AIDEV-NOTE: NÃO fechar o modal em caso de erro para evitar falsa impressão de sucesso
+      // O modal permanece aberto para o usuário ver o erro e tentar novamente
     } finally {
       console.log('🏁 [BULK-MESSAGE-DIALOG] Finalizando handleSendMessage');
       setIsSubmitting(false);

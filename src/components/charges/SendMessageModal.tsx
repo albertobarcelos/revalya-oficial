@@ -43,6 +43,9 @@ const availableTags = [
   { label: "Status", value: "{cobranca.status}" },
   { label: "Telefone", value: "{cliente.telefone}" },
   { label: "Email", value: "{cliente.email}" },
+  { label: "PIX Copia e Cola", value: "{cobranca.pix_copia_cola}" },
+  { label: "Link Pagamento", value: "{cobranca.link}" },
+  { label: "Link Boleto", value: "{cobranca.link_boleto}" },
 ];
 
 export function SendMessageModal({
@@ -111,6 +114,12 @@ export function SendMessageModal({
       preview = preview.replace(/{cobranca\.status}/g, 'Pendente');
       preview = preview.replace(/{cliente\.telefone}/g, '(11) 99999-9999');
       preview = preview.replace(/{cliente\.email}/g, 'cliente@email.com');
+      // AIDEV-NOTE: Tags de pagamento (valores de exemplo)
+      preview = preview.replace(/{cobranca\.pix_copia_cola}/g, '00020101021226800014br.gov.bcb.pix2558pix.asaas.com/qr/cobv/...');
+      preview = preview.replace(/{cobranca\.pix}/g, '00020101021226800014br.gov.bcb.pix2558pix.asaas.com/qr/cobv/...');
+      preview = preview.replace(/{cobranca\.link}/g, 'https://www.asaas.com/i/exemplo123');
+      preview = preview.replace(/{cobranca\.link_pix}/g, 'https://www.asaas.com/i/exemplo123');
+      preview = preview.replace(/{cobranca\.link_boleto}/g, 'https://www.asaas.com/b/pdf/exemplo123');
       
       setPreviewMessage(preview);
     } catch (error) {
@@ -210,18 +219,36 @@ export function SendMessageModal({
       // AIDEV-NOTE: Feedback específico baseado no tipo de erro
       let title = "Erro ao enviar mensagem";
       let description = "Não foi possível enviar a mensagem. Tente novamente.";
+      let isWhatsAppDisconnected = false;
       
       if (error instanceof Error) {
-        if (error.message.includes('Token de autenticação')) {
+        const errorMsg = error.message.toLowerCase();
+        
+        // AIDEV-NOTE: Detectar erros de WhatsApp desconectado
+        if (errorMsg.includes('whatsapp_disconnected') || 
+            errorMsg.includes('whatsapp desconectado') ||
+            errorMsg.includes('qrcode') ||
+            errorMsg.includes('qr code') ||
+            errorMsg.includes('desconectado') ||
+            errorMsg.includes('not connected') ||
+            errorMsg.includes('cannot read properties') && errorMsg.includes('id')) {
+          title = "WhatsApp Desconectado";
+          description = "O WhatsApp está desconectado. Por favor, conecte o WhatsApp nas configurações e tente novamente. As mensagens não foram enviadas.";
+          isWhatsAppDisconnected = true;
+        } else if (errorMsg.includes('whatsapp_auth_error')) {
+          title = "Erro de Autenticação";
+          description = "Erro de autenticação do WhatsApp. Verifique as configurações nas Integrações.";
+          isWhatsAppDisconnected = true;
+        } else if (errorMsg.includes('token de autenticação')) {
           title = "Sessão expirada";
           description = "Sua sessão expirou. Faça login novamente.";
-        } else if (error.message.includes('Acesso negado') || error.message.includes('permissões insuficientes')) {
+        } else if (errorMsg.includes('acesso negado') || errorMsg.includes('permissões insuficientes')) {
           title = "Acesso negado";
           description = "Você não tem permissão para enviar mensagens.";
-        } else if (error.message.includes('telefone')) {
+        } else if (errorMsg.includes('telefone')) {
           title = "Telefone inválido";
           description = "O cliente não possui um número de telefone válido.";
-        } else if (error.message.includes('Evolution API')) {
+        } else if (errorMsg.includes('evolution api')) {
           title = "Erro de integração";
           description = "Problema na integração com WhatsApp. Verifique as configurações.";
         }
@@ -231,7 +258,11 @@ export function SendMessageModal({
         title,
         description,
         variant: "destructive",
+        duration: isWhatsAppDisconnected ? 10000 : 5000, // AIDEV-NOTE: Mostrar por mais tempo se for erro de WhatsApp desconectado
       });
+      
+      // AIDEV-NOTE: NÃO fechar o modal em caso de erro para evitar falsa impressão de sucesso
+      // O modal permanece aberto para o usuário ver o erro e tentar novamente
     } finally {
       setIsSubmitting(false);
     }

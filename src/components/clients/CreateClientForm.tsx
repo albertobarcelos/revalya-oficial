@@ -50,10 +50,13 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
     }
     
     // AIDEV-NOTE: Mapeando campos do formulário para a estrutura do banco
+    // Limpa o CNPJ removendo formatação antes de enviar para o banco
+    const cleanCpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
+    
     const customerData = {
       ...formData,
       // AIDEV-NOTE: Mapear cpfCnpj para cpf_cnpj (campo correto do banco)
-      cpf_cnpj: formData.cpfCnpj,
+      cpf_cnpj: cleanCpfCnpj ? Number(cleanCpfCnpj) : undefined,
       // AIDEV-NOTE: Mapear addressNumber para address_number (campo correto do banco)
       address_number: formData.addressNumber,
       // AIDEV-NOTE: Remover campos em camelCase para evitar conflitos
@@ -65,22 +68,27 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
       const data = await createCustomer(customerData);
       console.log('Cliente criado com sucesso no formulário:', data);
       
-      // AIDEV-NOTE: Armazena ID do cliente para mostrar status CNPJ
+      // AIDEV-NOTE: Armazena ID do cliente para mostrar status CNPJ e exibir sucesso apenas quando houver ID
       if (data?.id) {
         setCreatedCustomerId(data.id);
-      }
-      
-      toast({
-        title: 'Cliente criado',
-        description: 'O cliente foi criado com sucesso. Se for CNPJ, os dados serão preenchidos automaticamente.',
-      });
-      
-      // AIDEV-NOTE: Chama onSuccess imediatamente para fechar modal
-      if (onSuccess && data?.id) {
-        // Usar setTimeout para garantir que o toast seja exibido antes do fechamento
-        setTimeout(() => {
-          onSuccess(data.id);
-        }, 100);
+        toast({
+          title: 'Cliente criado',
+          description: 'O cliente foi criado com sucesso. Se for CNPJ, os dados serão preenchidos automaticamente.',
+        });
+        
+        // AIDEV-NOTE: Chama onSuccess imediatamente para fechar modal
+        if (onSuccess) {
+          // Usar setTimeout para garantir que o toast seja exibido antes do fechamento
+          setTimeout(() => {
+            onSuccess(data.id);
+          }, 100);
+        }
+      } else {
+        toast({
+          title: 'Falha ao criar cliente',
+          description: 'Não foi possível obter o ID do cliente criado. Tente novamente.',
+          variant: 'destructive',
+        });
       }
       
       // AIDEV-NOTE: Limpa o formulário após sucesso para evitar interferência no fechamento do modal

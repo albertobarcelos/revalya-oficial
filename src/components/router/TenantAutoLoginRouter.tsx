@@ -5,7 +5,7 @@
  * sem necessidade de códigos na URL, usando refresh tokens armazenados.
  */
 
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { useParams, Routes, Route, Navigate } from 'react-router-dom';
 import { useTenantAutoLogin } from '@/hooks/useTenantAutoLogin';
 import { useTenantStore } from '@/store/tenantStore';
@@ -53,11 +53,19 @@ export function TenantAutoLoginRouter() {
   const { isValidating, hasValidSession, tenantData } = useTenantAutoLogin(slug);
   const { setCurrentTenant, currentTenant } = useTenantStore();
 
-  // AIDEV-NOTE: Sincronizar tenantData do auto-login com o tenantStore
+  // AIDEV-NOTE: Sincronizar tenantData do auto-login com o tenantStore - OTIMIZADO PARA EVITAR LOOPS
   // Isso garante que os componentes internos tenham acesso ao tenant atual
+  const previousTenantIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (tenantData && (!currentTenant || currentTenant.id !== tenantData.id)) {
+    // Evitar sincronização desnecessária
+    if (!tenantData || tenantData.id === previousTenantIdRef.current) {
+      return;
+    }
+    
+    // Só sincronizar se realmente mudou
+    if (!currentTenant || currentTenant.id !== tenantData.id) {
       console.log('🔄 [TenantAutoLoginRouter] Sincronizando tenant com store:', tenantData);
+      previousTenantIdRef.current = tenantData.id;
       setCurrentTenant({
         id: tenantData.id,
         slug: tenantData.slug,
@@ -66,8 +74,11 @@ export function TenantAutoLoginRouter() {
         created_at: new Date().toISOString(), // Placeholder
         updated_at: new Date().toISOString()  // Placeholder
       });
+    } else {
+      // Atualizar referência mesmo quando não há mudança
+      previousTenantIdRef.current = tenantData.id;
     }
-  }, [tenantData, currentTenant, setCurrentTenant]);
+  }, [tenantData?.id, currentTenant?.id, setCurrentTenant]); // OTIMIZADO: Usar apenas IDs para comparação
 
   // Ainda validando sessão
   if (isValidating) {

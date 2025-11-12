@@ -7,7 +7,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useZustandTenant } from '@/hooks/useZustandTenant';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { throttledDebug, throttledTenantGuard } from '@/utils/logThrottle';
@@ -32,8 +32,14 @@ export function useSecureTenantQuery<T>(
   // AIDEV-NOTE: Instância do SecurityMiddleware para configurar contexto de tenant
   const securityMiddleware = new SecurityMiddleware({ supabaseClient: supabase });
   
-  // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido
+  // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido e ativo
   const isValidTenant = currentTenant?.id && currentTenant?.active;
+  
+  // AIDEV-NOTE: Simplificar - remover delay desnecessário que estava causando problemas
+  // O tenant já está validado pelo useTenantAccessGuard, não precisa de delay adicional
+  const isQueryEnabled = useMemo(() => {
+    return isValidTenant && (options?.enabled !== false);
+  }, [isValidTenant, options?.enabled]);
   
   // AIDEV-NOTE: Debug log otimizado com throttling mais agressivo (60s) para reduzir spam
   // Só loga em desenvolvimento e com throttling de 60 segundos
@@ -42,8 +48,8 @@ export function useSecureTenantQuery<T>(
       tenantId: currentTenant?.id,
       tenantName: currentTenant?.name,
       isValidTenant,
+      isQueryEnabled,
       queryKeyLength: queryKey.length,
-      enabled: isValidTenant && (options?.enabled !== false)
     });
   }
   
@@ -79,8 +85,8 @@ export function useSecureTenantQuery<T>(
       }
     },
     
-    // 🔒 SÓ EXECUTA SE TENANT VÁLIDO
-    enabled: isValidTenant && (options?.enabled !== false),
+    // 🔒 SÓ EXECUTA SE TENANT VÁLIDO E PRONTO
+    enabled: isQueryEnabled,
     
     staleTime: options?.staleTime || 10 * 60 * 1000, // 10 minutos
     gcTime: 15 * 60 * 1000, // 15 minutos (substitui cacheTime)

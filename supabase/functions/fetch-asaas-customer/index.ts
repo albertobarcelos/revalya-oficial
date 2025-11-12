@@ -15,7 +15,8 @@ const supabase = createClient(
 );
 
 // AIDEV-NOTE: Edge Function para buscar dados completos do cliente ASAAS
-// Utilizada pelo trigger da tabela conciliation_staging para popular colunas customer_*
+// NOTA: Anteriormente usada por triggers da tabela conciliation_staging
+// A tabela conciliation_staging foi migrada para charges, mas ainda existe para rollback
 
 interface AsaasCustomer {
   id: string;
@@ -132,7 +133,9 @@ serve(async (req) => {
       )
     }
 
-    // AIDEV-NOTE: Mapear dados do ASAAS para as colunas da tabela conciliation_staging
+    // AIDEV-NOTE: Mapear dados do ASAAS para estrutura de customer
+    // NOTA: Esta função ainda pode ser usada por triggers ou outras funcionalidades
+    // A tabela conciliation_staging foi migrada para charges, mas ainda existe para rollback
     const mappedData = {
       customer_name: customerData.name,
       customer_company: customerData.company,
@@ -150,7 +153,7 @@ serve(async (req) => {
       customer_country: customerData.country || 'Brasil'
     }
 
-    console.log('Dados mapeados para conciliation_staging:', mappedData)
+    console.log('Dados mapeados do customer ASAAS:', mappedData)
 
     return new Response(
       JSON.stringify({ 

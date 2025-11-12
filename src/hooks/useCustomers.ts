@@ -63,21 +63,20 @@ export function useCustomers(params?: UseCustomersParams) {
         .eq('tenant_id', tenantId)
 
       // Aplicar filtros de busca se fornecidos
-      // AIDEV-NOTE: Separando condições de busca para evitar erro de sintaxe PostgREST
       if (filters.search) {
-        // AIDEV-NOTE: Busca em campos de texto usando sintaxe PostgREST válida
-        query = query.or(
-          `name.ilike.%${filters.search}%,company.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
-        );
-        
-        // AIDEV-NOTE: Busca adicional no campo cpf_cnpj convertendo para string
-        // Usando eq para busca exata em números (CNPJ/CPF sem formatação)
-        const numericSearch = filters.search.replace(/\D/g, ''); // Remove caracteres não numéricos
-        if (numericSearch) {
-          query = query.or(`cpf_cnpj.eq.${numericSearch}`);
+        const cleanedSearch = filters.search.replace(/\D/g, '');
+        const orParts = [
+          `name.ilike.%${filters.search}%`,
+          `company.ilike.%${filters.search}%`,
+          `email.ilike.%${filters.search}%`
+        ];
+
+        if (cleanedSearch) {
+          orParts.push(`cpf_cnpj.eq.${cleanedSearch}`);
         }
-        
-        console.log(`🔍 [DEBUG] Aplicando busca por: "${filters.search}" nos campos: name, company, email + busca numérica: "${numericSearch}"`);
+
+        query = query.or(orParts.join(','));
+        console.log(`🔍 [DEBUG] Aplicando busca por: "${filters.search}" nos campos: name, company, email, cpf_cnpj (busca exata em cpf_cnpj)`);
       }
 
       // AIDEV-NOTE: Implementação de paginação dinâmica no servidor
@@ -145,11 +144,25 @@ export function useCustomers(params?: UseCustomersParams) {
           throw new Error(`Email ${customerData.email} já está cadastrado neste tenant`);
         }
       }
+
+      // 🔧 SANITIZAÇÃO: Garantir que cpf_cnpj seja salvo sem formatação e como número
+      // Isso evita erros de "invalid input syntax for type bigint" quando o valor vem formatado.
+      let sanitizedCpfCnpj: number | undefined = undefined;
+      if (customerData.cpf_cnpj !== undefined && customerData.cpf_cnpj !== null) {
+        if (typeof customerData.cpf_cnpj === 'string') {
+          const onlyDigits = customerData.cpf_cnpj.replace(/\D/g, '');
+          sanitizedCpfCnpj = onlyDigits ? Number(onlyDigits) : undefined;
+        } else if (typeof customerData.cpf_cnpj === 'number') {
+          sanitizedCpfCnpj = customerData.cpf_cnpj;
+        }
+      }
       
       const { data, error } = await supabase
         .from('customers')
         .insert({
+          // AIDEV-NOTE: Espalhar dados do cliente, mas sobrescrever cpf_cnpj com valor sanitizado
           ...customerData,
+          cpf_cnpj: sanitizedCpfCnpj,
           tenant_id: tenantId // 🛡️ SEMPRE INCLUIR TENANT_ID
         })
         .select()

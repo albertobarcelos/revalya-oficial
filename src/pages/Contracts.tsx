@@ -55,6 +55,15 @@ export default function Contracts() {
   
   // 🛡️ PROTEÇÃO CRÍTICA CONTRA VAZAMENTO DE DADOS ENTRE TENANTS
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+  const [initialLoad, setInitialLoad] = useState(true);
+  
+  // AIDEV-NOTE: Delay inicial para evitar renderização prematura
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoad(false);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ✅ TODOS OS HOOKS DEVEM SER DECLARADOS ANTES DOS EARLY RETURNS
   // AIDEV-NOTE: Movendo todos os hooks para antes dos guard clauses para evitar "Rendered fewer hooks than expected"
@@ -69,25 +78,60 @@ export default function Contracts() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   
+  // Ref para rastrear mudanças de tenant e otimizar limpeza de cache
+  const previousTenantIdRef = React.useRef<string | null>(null);
+  
   // Hook para atualizar a lista de contratos após operações - SEMPRE chamado
-  const { refetch: forceRefreshContracts } = useContracts({});
+  // AIDEV-NOTE: Usar queryClient.invalidateQueries em vez de useContracts({}) para evitar queries desnecessárias
+  // const { refetch: forceRefreshContracts } = useContracts({});
+  
+  // Função para forçar refresh usando invalidação de queries
+  const forceRefreshContracts = React.useCallback(async () => {
+    await queryClient.invalidateQueries({ 
+      queryKey: ['contracts'],
+      exact: false 
+    });
+  }, [queryClient]);
 
-  // 🚨 FORÇA LIMPEZA COMPLETA DO CACHE AO TROCAR TENANT
-  // AIDEV-NOTE: Otimizado para evitar re-renders excessivos - removido queryClient das dependências
+  // 🧹 LIMPEZA INTELIGENTE DO CACHE APENAS QUANDO NECESSÁRIO
+  // AIDEV-NOTE: Otimizado para evitar loops - apenas limpa se o tenant mudou de fato
+  // AIDEV-NOTE: Adicionado invalidação granular por tipo de contrato
   React.useEffect(() => {
     if (currentTenant?.id) {
       console.log(`🧹 [CACHE] Limpando cache para tenant: ${currentTenant.name} (${currentTenant.id})`);
-      // Invalidar TODAS as queries de contratos
-      queryClient.invalidateQueries({ queryKey: ['contracts'] });
-      // Remover dados em cache que possam estar contaminados
-      queryClient.removeQueries({ queryKey: ['contracts'] });
+      
+      // Invalidar cache de forma mais granular e eficiente
+      const contractQueries = [
+        ['contracts', 'list', currentTenant.id],
+        ['contracts', 'active', currentTenant.id],
+        ['contracts', 'pending', currentTenant.id],
+        ['contracts', 'metrics', currentTenant.id]
+      ];
+      
+      // Invalidar queries específicas em vez de todas as queries de contratos
+      contractQueries.forEach(queryKey => {
+        queryClient.invalidateQueries({ queryKey });
+      });
+      
+      // Remover dados em cache que possam estar contaminados (apenas se mudou de tenant)
+      if (currentTenant.id !== previousTenantIdRef.current) {
+        queryClient.removeQueries({ 
+          queryKey: ['contracts'], 
+          exact: false 
+        });
+        previousTenantIdRef.current = currentTenant.id;
+      }
     }
-  }, [currentTenant?.id]); // AIDEV-NOTE: Removido queryClient para evitar re-renders desnecessários
+  }, [currentTenant?.id, queryClient]); // Adicionado queryClient para garantir consistência
 
   // 🔍 AUDIT LOG: Página renderizada com sucesso - APENAS UMA VEZ por sessão
+  // AIDEV-NOTE: Consolidado com debounce para evitar múltiplos logs
   React.useEffect(() => {
     if (currentTenant?.id) {
-      console.log(`✅ [AUDIT] Página Contratos renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
+      const timer = setTimeout(() => {
+        console.log(`✅ [AUDIT] Página Contratos renderizada para tenant: ${currentTenant?.name} (${currentTenant?.id})`);
+      }, 150); // Debounce de 150ms
+      return () => clearTimeout(timer);
     }
   }, [currentTenant?.id]); // Executa apenas quando o tenant muda
 
@@ -244,6 +288,7 @@ export default function Contracts() {
   // AIDEV-NOTE: Movidos para depois dos hooks para evitar erro "Rendered fewer hooks than expected"
   
   // 🚨 VALIDAÇÃO CRÍTICA: Verificar se o tenant corresponde ao slug da URL
+  // AIDEV-NOTE: Adicionado report de segurança para tentativas de acesso não autorizado
   if (currentTenant && currentTenant.slug !== slug) {
     console.error(`🚨 [SECURITY BREACH] Tenant slug não corresponde à URL!`, {
       currentTenantSlug: currentTenant.slug,
@@ -252,6 +297,22 @@ export default function Contracts() {
       currentTenantId: currentTenant.id
     });
     
+    // Reportar tentativa de acesso não autorizado (não bloqueante para não afetar UX)
+    if (supabase) {
+      supabase.from('security_logs').insert({
+        event_type: 'TENANT_MISMATCH_ATTEMPT',
+        tenant_id: currentTenant.id,
+        details: {
+          expected_slug: currentTenant.slug,
+          attempted_slug: slug,
+          timestamp: new Date().toISOString(),
+          user_agent: navigator.userAgent?.substring(0, 200)
+        }
+      }).catch(error => {
+        console.warn('Erro ao registrar log de segurança:', error);
+      });
+    }
+    
     // Forçar redirecionamento para o portal
     console.log(`🔄 [REDIRECT] Redirecionando para portal devido a incompatibilidade de tenant`);
     window.location.href = `/meus-aplicativos`;
@@ -259,11 +320,28 @@ export default function Contracts() {
   }
 
   // 🚨 GUARD CLAUSE CRÍTICO - IMPEDE RENDERIZAÇÃO SEM ACESSO VÁLIDO
-  if (!hasAccess) {
+  if (!hasAccess || initialLoad) {
     // AIDEV-NOTE: Log condicional apenas quando há erro de acesso
-    if (accessError) {
+    if (accessError && !initialLoad) {
       console.log(`🚨 [DEBUG] Acesso negado - hasAccess: ${hasAccess}, accessError: ${accessError}`);
     }
+    
+    // AIDEV-NOTE: Se o erro for "Tenant não definido" ou estiver no carregamento inicial, aguardar
+    if (accessError === 'Tenant não definido' || initialLoad) {
+      return (
+        <Layout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">
+                {initialLoad ? 'Inicializando...' : 'Carregando informações do tenant...'}
+              </p>
+            </div>
+          </div>
+        </Layout>
+      );
+    }
+    
     return (
       <Layout>
         <ContractFormSkeletonSimple />

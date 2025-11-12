@@ -8,7 +8,7 @@ import type { Database } from '@/types/supabase';
 
 interface ReconciliationAction {
   type: 'vincular_contrato' | 'criar_avulsa' | 'complementar';
-  stagingIds: string[];
+  chargeIds: string[]; // AIDEV-NOTE: Agora são charge IDs, não staging IDs
   contratoId?: string;
   cobrancaId?: string;
   observacao?: string;
@@ -31,10 +31,10 @@ export default async function handler(
     }
 
     const { tenantId } = authResult;
-    const { type, stagingIds, contratoId, cobrancaId, observacao, valorAjuste }: ReconciliationAction = req.body;
+    const { type, chargeIds, contratoId, cobrancaId, observacao, valorAjuste }: ReconciliationAction = req.body;
 
     // Validações básicas
-    if (!type || !stagingIds || stagingIds.length === 0) {
+    if (!type || !chargeIds || chargeIds.length === 0) {
       return res.status(400).json({ 
         error: 'Tipo de ação e IDs são obrigatórios' 
       });
@@ -55,51 +55,47 @@ export default async function handler(
       }
     );
 
-    // Iniciar transação
-    const { data: stagingRecords, error: fetchError } = await supabase
-      .from('conciliation_staging')
+    // AIDEV-NOTE: Buscar charges diretamente
+    const { data: charges, error: fetchError } = await supabase
+      .from('charges')
       .select(`
         id,
-        origem,
-        id_externo,
-        valor_cobranca,
-        valor_pago,
-        status_externo,
-        status_conciliacao,
-        contrato_id,
-        cobranca_id,
-        juros_multa_diferenca,
+        asaas_id,
+        valor,
+        status,
+        contract_id,
         data_vencimento,
         data_pagamento,
-        observacao
+        descricao,
+        customer_id
       `)
-      .in('id', stagingIds)
-      .eq('tenant_id', tenantId);
+      .in('id', chargeIds)
+      .eq('tenant_id', tenantId)
+      .not('asaas_id', 'is', null); // Apenas charges do ASAAS
 
     if (fetchError) {
-      console.error('Erro ao buscar registros:', fetchError);
-      return res.status(500).json({ error: 'Erro ao buscar registros' });
+      console.error('Erro ao buscar charges:', fetchError);
+      return res.status(500).json({ error: 'Erro ao buscar charges' });
     }
 
-    if (!stagingRecords || stagingRecords.length === 0) {
-      return res.status(404).json({ error: 'Registros não encontrados' });
+    if (!charges || charges.length === 0) {
+      return res.status(404).json({ error: 'Charges não encontradas' });
     }
 
-    // Verificar se todos os registros estão não conciliados
-    const alreadyConciliated = stagingRecords.filter(
-      record => record.status_conciliacao === 'CONCILIADO' // AIDEV-NOTE: Comparação em MAIÚSCULO
+    // AIDEV-NOTE: Verificar se todas as charges já têm contrato vinculado
+    const alreadyLinked = charges.filter(
+      charge => charge.contract_id !== null
     );
 
-    if (alreadyConciliated.length > 0) {
+    if (alreadyLinked.length > 0 && type === 'vincular_contrato') {
       return res.status(400).json({ 
-        error: 'Alguns registros já foram conciliados',
-        conciliatedIds: alreadyConciliated.map(r => r.id)
+        error: 'Algumas charges já têm contrato vinculado',
+        linkedIds: alreadyLinked.map(c => c.id)
       });
     }
 
-    const updateData: any = {
-      status_conciliacao: 'CONCILIADO', // AIDEV-NOTE: Status em MAIÚSCULO
-      observacao: observacao || null,
+    // AIDEV-NOTE: Preparar dados de atualização para charges
+    let updateData: any = {
       updated_at: new Date().toISOString()
     };
 
@@ -111,26 +107,35 @@ export default async function handler(
             error: 'ID do contrato é obrigatório para vinculação' 
           });
         }
-        updateData.contrato_id = contratoId;
+        updateData.contract_id = contratoId;
+        if (observacao) {
+          updateData.descricao = `${charges[0]?.descricao || ''} ${observacao}`.trim();
+        }
         break;
 
       case 'criar_avulsa':
-        // Para criar avulsa, vamos criar uma nova cobrança
-        const totalValue = stagingRecords.reduce((sum, record) => 
-          sum + (record.valor_pago || 0), 0
+        // AIDEV-NOTE: Para criar avulsa, somar valores das charges selecionadas
+        const totalValue = charges.reduce((sum, charge) => 
+          sum + (charge.valor || 0), 0
         );
+
+        // AIDEV-NOTE: Buscar customer_id da primeira charge
+        const customerId = charges[0]?.customer_id;
+        if (!customerId) {
+          return res.status(400).json({ error: 'Customer ID não encontrado' });
+        }
 
         const { data: newCharge, error: chargeError } = await supabase
           .from('charges')
           .insert({
             tenant_id: tenantId,
-            amount: totalValue,
-            description: `Cobrança avulsa - Conciliação ${new Date().toLocaleDateString()}`,
-            status: 'paid',
-            due_date: new Date().toISOString().split('T')[0],
-            payment_date: stagingRecords[0]?.data_pagamento || new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            customer_id: customerId,
+            valor: totalValue,
+            descricao: observacao || `Cobrança avulsa - Conciliação ${new Date().toLocaleDateString()}`,
+            status: 'RECEIVED',
+            tipo: 'CASH',
+            data_vencimento: new Date().toISOString().split('T')[0],
+            data_pagamento: charges[0]?.data_pagamento || new Date().toISOString(),
           })
           .select()
           .single();
@@ -140,8 +145,17 @@ export default async function handler(
           return res.status(500).json({ error: 'Erro ao criar cobrança avulsa' });
         }
 
-        updateData.cobranca_id = newCharge.id;
-        break;
+        // AIDEV-NOTE: Não precisamos atualizar as charges originais para criar avulsa
+        return res.status(200).json({
+          success: true,
+          message: 'Cobrança avulsa criada com sucesso',
+          data: newCharge,
+          action: {
+            type,
+            recordsProcessed: chargeIds.length,
+            newChargeId: newCharge.id
+          }
+        });
 
       case 'complementar':
         if (!cobrancaId) {
@@ -149,14 +163,13 @@ export default async function handler(
             error: 'ID da cobrança é obrigatório para complemento' 
           });
         }
-        updateData.cobranca_id = cobrancaId;
         
-        // Atualizar valor da cobrança existente se necessário
-        if (valorAjuste) {
+        // AIDEV-NOTE: Atualizar valor da cobrança existente se necessário
+        if (valorAjuste !== undefined) {
           const { error: updateChargeError } = await supabase
             .from('charges')
             .update({ 
-              amount: valorAjuste,
+              valor: valorAjuste,
               updated_at: new Date().toISOString()
             })
             .eq('id', cobrancaId)
@@ -167,17 +180,22 @@ export default async function handler(
             return res.status(500).json({ error: 'Erro ao atualizar cobrança' });
           }
         }
+        
+        // AIDEV-NOTE: Atualizar descrição das charges selecionadas para referenciar a cobrança complementada
+        if (observacao) {
+          updateData.descricao = `${charges[0]?.descricao || ''} [Complemento: ${cobrancaId}] ${observacao}`.trim();
+        }
         break;
 
       default:
         return res.status(400).json({ error: 'Tipo de ação inválido' });
     }
 
-    // Atualizar registros de staging
-    const { data: updatedRecords, error: updateError } = await supabase
-      .from('conciliation_staging')
+    // AIDEV-NOTE: Atualizar charges diretamente
+    const { data: updatedCharges, error: updateError } = await supabase
+      .from('charges')
       .update(updateData)
-      .in('id', stagingIds)
+      .in('id', chargeIds)
       .eq('tenant_id', tenantId)
       .select();
 
@@ -189,7 +207,7 @@ export default async function handler(
     // Log da ação para auditoria
     console.log(`Ação de conciliação executada:`, {
       type,
-      stagingIds,
+      chargeIds,
       contratoId,
       cobrancaId,
       tenantId,
@@ -199,10 +217,10 @@ export default async function handler(
     return res.status(200).json({
       success: true,
       message: 'Ação de conciliação executada com sucesso',
-      data: updatedRecords,
+      data: updatedCharges,
       action: {
         type,
-        recordsProcessed: stagingIds.length,
+        recordsProcessed: chargeIds.length,
         contratoId,
         cobrancaId
       }

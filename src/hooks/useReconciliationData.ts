@@ -121,7 +121,7 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
 
   // AIDEV-NOTE: Query principal com cache otimizado e segurança multi-tenant
   const reconciliationQuery = useSecureTenantQuery(
-    ['reconciliation-data'],
+    ['reconciliation-data', 'charges-asaas'], // AIDEV-NOTE: Atualizar cache key
     async (supabase, tenantId) => {
       console.log('🔄 Carregando movimentações de conciliação...');
       
@@ -130,23 +130,25 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
         p_tenant_id: tenantId 
       });
       
-      // AIDEV-NOTE: Query com joins otimizados para performance
+      // AIDEV-NOTE: Query charges do ASAAS (apenas charges com asaas_id)
       const { data: rawData, error } = await supabase
-        .from('conciliation_staging')
+        .from('charges')
         .select(`
           *,
+          customers!inner(
+            id,
+            name,
+            cpf_cnpj,
+            customer_asaas_id
+          ),
           contracts!left(
             id,
             contract_number,
-            customer_id,
-            customers!left(
-              id,
-              name,
-              cpf_cnpj
-            )
+            customer_id
           )
         `)
         .eq('tenant_id', tenantId)
+        .not('asaas_id', 'is', null) // Apenas charges do ASAAS
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -156,60 +158,61 @@ export const useReconciliationData = (isOpen: boolean): UseReconciliationDataRet
 
       console.log('✅ Movimentações carregadas:', rawData?.length || 0);
 
-      // AIDEV-NOTE: Mapear dados para estrutura esperada pelo componente
+      // AIDEV-NOTE: Mapear dados de charges para estrutura esperada pelo componente
       const mappedMovements: ImportedMovement[] = (rawData || []).map(item => ({
         id: item.id,
         tenant_id: item.tenant_id,
-        origem: item.origem as ReconciliationSource,
-        id_externo: item.id_externo,
-        valor_cobranca: item.valor_cobranca,
-        valor_pago: parseFloat(item.valor_pago) || 0,
-        status_externo: item.status_externo,
-        status_conciliacao: mapReconciliationStatus(item.status_conciliacao || 'PENDENTE'), // AIDEV-NOTE: Valor padrão em MAIÚSCULO
-        contrato_id: item.contrato_id,
-        cobranca_id: item.cobranca_id,
-        charge_id: item.charge_id,
-        imported_at: item.imported_at,
-        juros_multa_diferenca: parseFloat(item.juros_multa_diferenca) || 0,
-        valor_original: item.valor_original,
-        valor_liquido: item.valor_liquido,
-        valor_juros: item.valor_juros,
-        valor_multa: item.valor_multa,
-        valor_desconto: item.valor_desconto,
+        origem: 'ASAAS' as ReconciliationSource, // Charges do ASAAS sempre têm origem ASAAS
+        id_externo: item.asaas_id || item.id, // Usar asaas_id como id_externo
+        valor_cobranca: item.valor || 0,
+        valor_pago: item.data_pagamento ? item.valor : 0, // Se tem data_pagamento, considera pago
+        status_externo: item.status || 'PENDING',
+        status_conciliacao: item.contract_id ? 'RECONCILED' : 'PENDING', // Se tem contrato vinculado, está conciliado
+        contrato_id: item.contract_id,
+        cobranca_id: item.id, // Charge ID é o próprio ID
+        charge_id: item.id,
+        imported_at: item.created_at,
+        juros_multa_diferenca: 0, // Não temos esses dados em charges
+        valor_original: item.valor,
+        valor_liquido: item.valor,
+        valor_juros: 0,
+        valor_multa: 0,
+        valor_desconto: 0,
         data_vencimento: item.data_vencimento,
         data_pagamento: item.data_pagamento,
-        data_vencimento_original: item.data_vencimento_original,
-        data_pagamento_cliente: item.data_pagamento_cliente,
-        data_credito: item.data_credito,
-        data_confirmacao: item.data_confirmacao,
-        observacao: item.observacao,
-        external_reference: item.external_reference,
+        data_vencimento_original: item.data_vencimento,
+        data_pagamento_cliente: item.data_pagamento,
+        data_credito: null,
+        data_confirmacao: item.data_pagamento,
+        observacao: item.descricao || '',
+        external_reference: null, // Não temos em charges diretamente
         // AIDEV-NOTE: Campos de compatibilidade para componentes existentes
-        externalId: item.id_externo,
-        amount: parseFloat(item.valor_pago) || 0,
+        externalId: item.asaas_id || item.id,
+        amount: item.valor || 0,
         dueDate: item.data_vencimento,
         paymentDate: item.data_pagamento,
-        description: item.observacao || '',
-        source: item.origem as ReconciliationSource,
-        paymentStatus: mapPaymentStatus(item.status_externo),
-        reconciliationStatus: mapReconciliationStatus(item.status_conciliacao || 'PENDENTE'), // AIDEV-NOTE: Valor padrão em MAIÚSCULO
-        customerName: item.customer_name || '',
-        customerDocument: item.customer_document || '',
-        hasContract: !!item.contracts,
-        contractId: item.contracts?.id || null,
+        description: item.descricao || '',
+        source: 'ASAAS' as ReconciliationSource,
+        paymentStatus: mapPaymentStatus(item.status || 'PENDING'),
+        reconciliationStatus: item.contract_id ? 'RECONCILED' : 'PENDING',
+        customerName: item.customers?.name || '',
+        customerDocument: item.customers?.cpf_cnpj || '',
+        // AIDEV-NOTE: hasContract baseado em contract_id
+        hasContract: !!item.contract_id || !!item.contracts,
+        contractId: item.contract_id || item.contracts?.id || null,
         contractNumber: item.contracts?.contract_number || null,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
         // AIDEV-NOTE: Campos críticos para exibição das colunas de valor
-        chargeAmount: item.valor_cobranca ? parseFloat(item.valor_cobranca) : undefined,
-        paidAmount: parseFloat(item.valor_pago) || 0,
+        chargeAmount: item.valor,
+        paidAmount: item.data_pagamento ? item.valor : 0,
         // AIDEV-NOTE: Campos adicionais para compatibilidade
-        customer_name: item.customer_name,
-        customer_document: item.customer_document,
-        installment_number: item.installment_number,
-        total_installments: item.total_installments,
+        customer_name: item.customers?.name,
+        customer_document: item.customers?.cpf_cnpj,
+        installment_number: null,
+        total_installments: null,
         // AIDEV-NOTE: Campo payment_method para exibição do tipo de cobrança
-        payment_method: item.payment_method
+        payment_method: item.tipo || 'BOLETO'
       }));
       
       // AIDEV-NOTE: Calcular indicadores

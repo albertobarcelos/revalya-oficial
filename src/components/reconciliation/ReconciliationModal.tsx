@@ -149,7 +149,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     handleExport,
     handleReconciliationAction,
     handleActionModalConfirm,
-    handleBulkImportToCharges,
+    // AIDEV-NOTE: handleBulkImportToCharges removido - charges já são criadas diretamente
     closeActionModal
   } = useReconciliationActions({
     currentTenant,
@@ -342,7 +342,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
            // AIDEV-NOTE: Usando a função do hook customizado com parâmetros corretos
            await handleActionModalConfirm(movement, action, data);
          }}
-         onBulkImportToCharges={handleBulkImportToCharges}
+         // AIDEV-NOTE: onBulkImportToCharges removido - charges já são criadas diretamente
        />
     </AnimatePresence>
   );

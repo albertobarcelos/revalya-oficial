@@ -80,7 +80,12 @@ const App = () => {
                     <SkeletonProvider>
                       <PrimeReactProvider>
                         <PortalProvider>
-                          <BrowserRouter>
+                          <BrowserRouter
+                            future={{
+                              v7_startTransition: true,
+                              v7_relativeSplatPath: true,
+                            }}
+                          >
                             <AppRecoveryComponent />
                             <ConnectionStatusIndicator 
                               status={{ 

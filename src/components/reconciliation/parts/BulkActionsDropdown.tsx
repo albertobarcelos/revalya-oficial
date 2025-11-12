@@ -54,6 +54,31 @@ export function BulkActionsDropdown({
     (movement && (!!movement.chargeId || movement.processed === true))
   ));
   
+  // AIDEV-NOTE: Verificar se algum movimento já tem contrato vinculado
+  const hasAnyContractLinked = selectedMovements && selectedMovements.length > 0 && selectedMovements.some(movement => {
+    if (!movement) return false;
+    // Verificar múltiplos campos possíveis para contrato vinculado
+    const hasContract = !!(
+      movement.contrato_id || 
+      movement.contractId || 
+      movement.hasContract ||
+      (movement.contracts && movement.contracts.id)
+    );
+    
+    // AIDEV-NOTE: Debug log para verificar valores
+    if (hasContract) {
+      console.log('🔗 [BULK_ACTIONS] Contrato vinculado detectado:', {
+        movementId: movement.id,
+        contrato_id: movement.contrato_id,
+        contractId: movement.contractId,
+        hasContract: movement.hasContract,
+        contracts: movement.contracts
+      });
+    }
+    
+    return hasContract;
+  });
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -75,12 +100,13 @@ export function BulkActionsDropdown({
             <TooltipTrigger asChild>
               <div className="w-full">
                 <DropdownMenuItem 
-                  onClick={() => !hasAnyChargeId && onBulkAction(ReconciliationAction.IMPORT_TO_CHARGE, selectedMovements)}
-                  className={`flex items-center gap-2 w-full ${hasAnyChargeId ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={hasAnyChargeId}
+                  // AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente
+                  onClick={() => {}}
+                  className="flex items-center gap-2 w-full opacity-50 cursor-not-allowed"
+                  disabled={true}
                 >
                   <FileText className="h-4 w-4" />
-                  Importar para Cobranças
+                  Importar para Cobranças (Removido)
                   <span className="ml-auto text-xs text-muted-foreground">
                     ({selectedCount})
                   </span>
@@ -98,16 +124,34 @@ export function BulkActionsDropdown({
           </Tooltip>
         </TooltipProvider>
         
-        <DropdownMenuItem 
-          onClick={() => onBulkAction(ReconciliationAction.LINK_TO_CONTRACT)}
-          className="flex items-center gap-2"
-        >
-          <Link className="h-4 w-4" />
-          Vincular a Contratos
-          <span className="ml-auto text-xs text-muted-foreground">
-            ({selectedCount})
-          </span>
-        </DropdownMenuItem>
+        {/* AIDEV-NOTE: Vincular a Contratos - bloqueado se algum movimento já tem contrato */}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="w-full">
+                <DropdownMenuItem 
+                  onClick={() => !hasAnyContractLinked && onBulkAction(ReconciliationAction.LINK_TO_CONTRACT)}
+                  className={`flex items-center gap-2 w-full ${hasAnyContractLinked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={hasAnyContractLinked}
+                >
+                  <Link className="h-4 w-4" />
+                  Vincular a Contratos
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    ({selectedCount})
+                  </span>
+                </DropdownMenuItem>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent 
+              side="right" 
+              className="z-50 bg-secondary text-secondary-foreground"
+            >
+              {hasAnyContractLinked 
+                ? "Uma ou mais movimentações já estão vinculadas a contratos" 
+                : "Vincular movimentações selecionadas a contratos"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         
         <DropdownMenuSeparator />
         
