@@ -29,10 +29,29 @@ interface GroupedCharges {
   [key: string]: Cobranca[];
 }
 
+// AIDEV-NOTE: Hook para detectar telas menores que 1600px - mostra 5 dias ao invés de 7
+// Notebooks e telas médias mostram 5 dias, apenas monitores grandes (1600px+) mostram 7 dias
+function useIsSmallScreen() {
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsSmallScreen(window.innerWidth < 1600); // Apenas telas muito grandes mostram 7 dias
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  return isSmallScreen;
+}
+
 // AIDEV-NOTE: Componente principal do calendário semanal refatorado
 export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const { currentTenant } = useCurrentTenant();
   const { toast } = useToast();
+  const isSmallScreen = useIsSmallScreen();
   
   // Estados principais
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -174,29 +193,29 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const groupedCharges = groupChargesByDay(filteredCharges);
 
   return (
-    <div className="space-y-4 max-w-full overflow-hidden">
+    <div className="space-y-3 sm:space-y-4 max-w-full overflow-hidden">
       {/* Header */}
       <motion.div 
-        className="flex items-center justify-between flex-wrap gap-4"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="space-y-1 flex-1 min-w-0">
-          <h2 className="text-xl font-semibold">Calendário de Recebimentos Semanais</h2>
+        <div className="space-y-1 flex-1 min-w-0 w-full sm:w-auto">
+          <h2 className="text-lg sm:text-xl font-semibold">Calendário de Recebimentos Semanais</h2>
           <AnimatePresence mode="wait">
             <motion.div 
               key={`${format(weekStart, 'yyyy-MM-dd')}`}
-              className="flex items-center space-x-4 flex-wrap"
+              className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="text-lg font-medium text-primary capitalize">
+              <div className="text-base sm:text-lg font-medium text-primary capitalize">
                 📅 {format(weekStart, 'MMMM yyyy', { locale: ptBR })}
               </div>
-              <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+              <div className="text-xs sm:text-sm text-muted-foreground bg-muted/50 px-2 sm:px-3 py-1 rounded-full">
                 Semana {getWeek(weekStart)} • {format(weekStart, 'dd/MM', { locale: ptBR })} - {format(weekEnd, 'dd/MM', { locale: ptBR })}
               </div>
             </motion.div>
@@ -204,50 +223,57 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
         </div>
         
         <motion.div 
-          className="flex items-center space-x-2 flex-wrap gap-2"
+          className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <div className="flex space-x-2 flex-wrap gap-2">
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-                <Filter className="h-4 w-4 mr-1" />Filtros
-              </Button>
-            </motion.div>
-            
-            <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-              <PopoverTrigger asChild>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button variant="outline" size="sm">
-                    <Calendar className="h-4 w-4 mr-1" />Selecionar Semana
-                  </Button>
-                </motion.div>
-              </PopoverTrigger>
-              <PopoverContent className="p-0 w-auto">
-                <CalendarComponent
-                  mode="single"
-                  selected={currentDate}
-                  onSelect={(date) => {
-                    if (date) {
-                      goToSpecificWeek(date);
-                      setDatePickerOpen(false);
-                    }
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button variant="outline" size="sm" onClick={goToCurrentWeek}>🏠 Hoje</Button>
-            </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button variant="outline" size="sm" onClick={() => setShowMetrics(!showMetrics)}>
-                <TrendingUp className="h-4 w-4 mr-1" />Métricas
-              </Button>
-            </motion.div>
-          </div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="text-xs sm:text-sm">
+              <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+              <span className="hidden sm:inline">Filtros</span>
+              <span className="sm:hidden">Filtro</span>
+            </Button>
+          </motion.div>
+          
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+            <PopoverTrigger asChild>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <span className="hidden sm:inline">Selecionar Semana</span>
+                  <span className="sm:hidden">Semana</span>
+                </Button>
+              </motion.div>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-auto">
+              <CalendarComponent
+                mode="single"
+                selected={currentDate}
+                onSelect={(date) => {
+                  if (date) {
+                    goToSpecificWeek(date);
+                    setDatePickerOpen(false);
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button variant="outline" size="sm" onClick={goToCurrentWeek} className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">🏠 Hoje</span>
+              <span className="sm:hidden">🏠</span>
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button variant="outline" size="sm" onClick={() => setShowMetrics(!showMetrics)} className="text-xs sm:text-sm">
+              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+              <span className="hidden sm:inline">Métricas</span>
+              <span className="sm:hidden">Mét.</span>
+            </Button>
+          </motion.div>
         </motion.div>
       </motion.div>
 
@@ -283,7 +309,7 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
       >
-        <div className="relative w-full px-4 sm:px-8 lg:px-16 py-6 mb-4 border rounded-xl bg-gradient-to-br from-background/80 to-background/40 shadow-lg backdrop-blur-sm overflow-hidden">
+        <div className="relative w-full px-2 sm:px-4 md:px-6 lg:px-8 xl:px-12 py-4 sm:py-6 mb-4 border rounded-xl bg-gradient-to-br from-background/80 to-background/40 shadow-lg backdrop-blur-sm overflow-hidden">
           <AnimatePresence>
             {isLoading && (
               <motion.div 
@@ -294,13 +320,13 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
                 transition={{ duration: 0.3 }}
               >
                 <motion.div 
-                  className="flex items-center space-x-3 bg-white/90 px-6 py-3 rounded-full shadow-lg"
+                  className="flex items-center space-x-3 bg-white/90 px-4 sm:px-6 py-2 sm:py-3 rounded-full shadow-lg"
                   initial={{ scale: 0.8, y: 20 }}
                   animate={{ scale: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
                 >
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <span className="text-sm font-medium">Carregando dados...</span>
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-primary" />
+                  <span className="text-xs sm:text-sm font-medium">Carregando dados...</span>
                 </motion.div>
               </motion.div>
             )}
@@ -309,13 +335,24 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
           <AnimatePresence mode="wait">
             <motion.div 
               key={`week-${format(weekStart, 'yyyy-MM-dd')}`}
-              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4"
+              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${
+                isSmallScreen ? 'lg:grid-cols-5' : 'lg:grid-cols-7'
+              } gap-2 sm:gap-3 md:gap-4`}
               initial={{ opacity: 0, x: isChangingWeek ? 50 : 0 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
             >
-            {eachDayOfInterval({ start: weekStart, end: weekEnd }).map((day) => {
+            {eachDayOfInterval({ start: weekStart, end: weekEnd })
+              .filter((day) => {
+                // AIDEV-NOTE: Em telas menores, mostrar apenas segunda a sexta (dias úteis)
+                if (isSmallScreen) {
+                  const dayOfWeek = day.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
+                  return dayOfWeek >= 1 && dayOfWeek <= 5; // Segunda (1) a Sexta (5)
+                }
+                return true; // Em telas maiores, mostrar todos os 7 dias
+              })
+              .map((day) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const charges = groupedCharges[dayStr] || [];
               
@@ -366,34 +403,34 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
              </motion.div>
            </AnimatePresence>
           
-          {/* Navegação */}
+          {/* Navegação - Responsiva */}
           <motion.div
-            className="absolute left-2 top-1/2 transform -translate-y-1/2 z-30"
+            className="absolute left-1 sm:left-2 top-1/2 transform -translate-y-1/2 z-30"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
             <Button 
               variant="default" 
               size="icon" 
-              className="h-12 w-12 rounded-full shadow-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary border-2 border-white/20"
+              className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full shadow-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary border-2 border-white/20"
               onClick={() => navigateWeek('prev')}
             >
-              <ChevronLeft className="h-6 w-6" />
+              <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
             </Button>
           </motion.div>
           
           <motion.div
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 z-30"
+            className="absolute right-1 sm:right-2 top-1/2 transform -translate-y-1/2 z-30"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
           >
             <Button 
               variant="default" 
               size="icon" 
-              className="h-12 w-12 rounded-full shadow-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary border-2 border-white/20"
+              className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full shadow-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary border-2 border-white/20"
               onClick={() => navigateWeek('next')}
             >
-              <ChevronRight className="h-6 w-6" />
+              <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" />
             </Button>
           </motion.div>
         </div>

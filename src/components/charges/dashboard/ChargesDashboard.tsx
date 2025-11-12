@@ -274,8 +274,8 @@ export function ChargesDashboard() {
         </div>
 
         {/* Calendário semanal - MOVIDO PARA BAIXO com container limitado */}
-        <div className="bg-white rounded-lg border shadow-sm">
-          <div className="p-4">
+        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+          <div className="p-2 sm:p-3 md:p-4">
             <WeeklyCalendar 
               initialCharges={chargesData || []} 
               tenantId={currentTenant?.id || ''}
