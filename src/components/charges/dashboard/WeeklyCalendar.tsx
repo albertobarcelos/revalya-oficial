@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isToday, getWeek, getYear, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, addDays, subDays, isToday, getWeek, getYear, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -29,14 +29,16 @@ interface GroupedCharges {
   [key: string]: Cobranca[];
 }
 
-// AIDEV-NOTE: Hook para detectar telas menores que 1600px - mostra 5 dias ao invés de 7
-// Notebooks e telas médias mostram 5 dias, apenas monitores grandes (1600px+) mostram 7 dias
+// AIDEV-NOTE: Hook para detectar telas menores que 1600px - ajusta grid para responsividade
+// Notebooks e telas médias: grid com 5 colunas (7 dias aparecem, últimos 2 quebram linha)
+// Monitores grandes (1600px+): grid com 7 colunas (todos os 7 dias em uma linha)
+// Todos os 7 dias são sempre exibidos, apenas o layout se adapta
 function useIsSmallScreen() {
   const [isSmallScreen, setIsSmallScreen] = useState(false);
 
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsSmallScreen(window.innerWidth < 1600); // Apenas telas muito grandes mostram 7 dias
+      setIsSmallScreen(window.innerWidth < 1600);
     };
 
     checkScreenSize();
@@ -57,6 +59,8 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 0 }));
   const [weekEnd, setWeekEnd] = useState(endOfWeek(new Date(), { weekStartsOn: 0 }));
+  // AIDEV-NOTE: Estado para rastrear o primeiro dia visível em modo de 5 dias (telas menores)
+  const [firstVisibleDay, setFirstVisibleDay] = useState<Date | null>(null);
   const [charges, setCharges] = useState<Cobranca[]>([]);
   const [filteredCharges, setFilteredCharges] = useState<Cobranca[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -150,19 +154,34 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
     }
   }, [tenantId, weekStart, weekEnd, loadPreviousWeekData]);
 
-  // AIDEV-NOTE: Navegação entre semanas
+  // AIDEV-NOTE: Navegação entre semanas/blocos de dias
   const navigateWeek = (direction: 'next' | 'prev') => {
     setIsChangingWeek(true);
     
     setTimeout(() => {
-      const newWeekStart = direction === 'next' 
-        ? addWeeks(weekStart, 1) 
-        : subWeeks(weekStart, 1);
-      const newWeekEnd = endOfWeek(newWeekStart, { weekStartsOn: 0 });
-      
-      setWeekStart(newWeekStart);
-      setWeekEnd(newWeekEnd);
-      setCurrentDate(newWeekStart);
+      if (isSmallScreen) {
+        // AIDEV-NOTE: Em telas menores, navegar por blocos de 5 dias consecutivos
+        // Usar firstVisibleDay se existir, senão usar weekStart
+        const currentFirstDay = firstVisibleDay || weekStart;
+        const daysToAdd = direction === 'next' ? 5 : -5;
+        const newFirstDay = addDays(currentFirstDay, daysToAdd);
+        const newLastDay = addDays(newFirstDay, 4); // 5 dias total (0 a 4 = 5 dias)
+        
+        setFirstVisibleDay(newFirstDay);
+        setWeekStart(newFirstDay);
+        setWeekEnd(newLastDay);
+        setCurrentDate(newFirstDay);
+      } else {
+        // AIDEV-NOTE: Em telas maiores, navegar por semanas completas
+        const newWeekStart = direction === 'next' 
+          ? addWeeks(weekStart, 1) 
+          : subWeeks(weekStart, 1);
+        const newWeekEnd = endOfWeek(newWeekStart, { weekStartsOn: 0 });
+        
+        setWeekStart(newWeekStart);
+        setWeekEnd(newWeekEnd);
+        setCurrentDate(newWeekStart);
+      }
       
       setTimeout(() => setIsChangingWeek(false), 50);
     }, 150);
@@ -170,16 +189,79 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
 
   const goToCurrentWeek = () => {
     const today = new Date();
-    setWeekStart(startOfWeek(today, { weekStartsOn: 0 }));
-    setWeekEnd(endOfWeek(today, { weekStartsOn: 0 }));
+    if (isSmallScreen) {
+      // AIDEV-NOTE: Em telas menores, encontrar a segunda-feira da semana atual ou o dia atual se for dia útil
+      const dayOfWeek = today.getDay();
+      let firstDay: Date;
+      
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        // Se for dia útil, mostrar a semana começando na segunda-feira anterior ou atual
+        firstDay = dayOfWeek === 1 ? today : subDays(today, dayOfWeek - 1);
+      } else {
+        // Se for fim de semana, mostrar a próxima segunda-feira
+        firstDay = addDays(today, dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
+      }
+      
+      setFirstVisibleDay(firstDay);
+      setWeekStart(firstDay);
+      setWeekEnd(addDays(firstDay, 4));
+    } else {
+      setWeekStart(startOfWeek(today, { weekStartsOn: 0 }));
+      setWeekEnd(endOfWeek(today, { weekStartsOn: 0 }));
+    }
     setCurrentDate(today);
   };
 
   const goToSpecificWeek = (date: Date) => {
-    setWeekStart(startOfWeek(date, { weekStartsOn: 0 }));
-    setWeekEnd(endOfWeek(date, { weekStartsOn: 0 }));
+    if (isSmallScreen) {
+      // AIDEV-NOTE: Em telas menores, encontrar o primeiro dia útil (segunda-feira) próximo à data selecionada
+      const dayOfWeek = date.getDay();
+      let firstDay: Date;
+      
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        firstDay = dayOfWeek === 1 ? date : subDays(date, dayOfWeek - 1);
+      } else {
+        firstDay = addDays(date, dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
+      }
+      
+      setFirstVisibleDay(firstDay);
+      setWeekStart(firstDay);
+      setWeekEnd(addDays(firstDay, 4));
+    } else {
+      setWeekStart(startOfWeek(date, { weekStartsOn: 0 }));
+      setWeekEnd(endOfWeek(date, { weekStartsOn: 0 }));
+    }
     setCurrentDate(date);
   };
+
+  // AIDEV-NOTE: Inicializar firstVisibleDay quando em modo de tela pequena
+  useEffect(() => {
+    if (isSmallScreen && !firstVisibleDay) {
+      // AIDEV-NOTE: Em telas menores, mostrar 5 dias consecutivos começando na segunda-feira da semana atual
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      let firstDay: Date;
+      
+      // Sempre começar na segunda-feira da semana atual
+      if (dayOfWeek === 0) {
+        // Se for domingo, voltar 6 dias para segunda-feira
+        firstDay = subDays(today, 6);
+      } else {
+        // Voltar para a segunda-feira da semana atual
+        firstDay = subDays(today, dayOfWeek - 1);
+      }
+      
+      setFirstVisibleDay(firstDay);
+      setWeekStart(firstDay);
+      setWeekEnd(addDays(firstDay, 4)); // 5 dias: segunda a sexta
+    } else if (!isSmallScreen && firstVisibleDay) {
+      // AIDEV-NOTE: Ao mudar para tela grande, voltar para navegação por semana
+      const today = new Date();
+      setWeekStart(startOfWeek(today, { weekStartsOn: 0 }));
+      setWeekEnd(endOfWeek(today, { weekStartsOn: 0 }));
+      setFirstVisibleDay(null);
+    }
+  }, [isSmallScreen, firstVisibleDay]);
 
   // AIDEV-NOTE: Efeitos para carregamento de dados
   useEffect(() => {
@@ -332,27 +414,18 @@ export function WeeklyCalendar({ tenantId }: WeeklyCalendarProps) {
             )}
           </AnimatePresence>
           
-          <AnimatePresence mode="wait">
-            <motion.div 
-              key={`week-${format(weekStart, 'yyyy-MM-dd')}`}
-              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${
-                isSmallScreen ? 'lg:grid-cols-5' : 'lg:grid-cols-7'
-              } gap-2 sm:gap-3 md:gap-4`}
-              initial={{ opacity: 0, x: isChangingWeek ? 50 : 0 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -50 }}
-              transition={{ duration: 0.4, ease: "easeInOut" }}
-            >
-            {eachDayOfInterval({ start: weekStart, end: weekEnd })
-              .filter((day) => {
-                // AIDEV-NOTE: Em telas menores, mostrar apenas segunda a sexta (dias úteis)
-                if (isSmallScreen) {
-                  const dayOfWeek = day.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
-                  return dayOfWeek >= 1 && dayOfWeek <= 5; // Segunda (1) a Sexta (5)
-                }
-                return true; // Em telas maiores, mostrar todos os 7 dias
-              })
-              .map((day) => {
+           <AnimatePresence mode="wait">
+             <motion.div 
+               key={`week-${format(weekStart, 'yyyy-MM-dd')}`}
+               className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${
+                 isSmallScreen ? 'lg:grid-cols-5' : 'lg:grid-cols-7'
+               } gap-2 sm:gap-3 md:gap-4`}
+               initial={{ opacity: 0, x: isChangingWeek ? 50 : 0 }}
+               animate={{ opacity: 1, x: 0 }}
+               exit={{ opacity: 0, x: -50 }}
+               transition={{ duration: 0.4, ease: "easeInOut" }}
+             >
+             {eachDayOfInterval({ start: weekStart, end: weekEnd }).map((day) => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const charges = groupedCharges[dayStr] || [];
               
