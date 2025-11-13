@@ -1,5 +1,6 @@
 import { useCharges } from "@/hooks/useCharges";
 import { useToast } from "@/components/ui/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
 import { supabase } from "@/lib/supabase";
 import { edgeFunctionService } from "@/services/edgeFunctionService";
@@ -11,6 +12,7 @@ import type { Cobranca } from "@/types/database";
  */
 export function useChargeActions() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { updateCharge, isUpdating, cancelCharge, isCancelling } = useCharges();
   const { user, currentTenant } = useTenantAccessGuard();
 
@@ -224,6 +226,36 @@ export function useChargeActions() {
         
         // AIDEV-NOTE: Log de auditoria para rastreabilidade
         console.log(`📋 [AUDIT] Mensagem enviada - Charge: ${chargeId}, Tenant: ${currentTenant.id}, User: ${user.id}, Template: ${templateId || 'custom'}`);
+        
+        // AIDEV-NOTE: Invalidar cache de contagem de mensagens após envio bem-sucedido
+        console.log('🔄 Invalidando cache de contagem de mensagens...');
+        
+        // Invalidar todas as queries de message-counts
+        await queryClient.invalidateQueries({
+          queryKey: ['message-counts'],
+          exact: false,
+        });
+
+        // Invalidar histórico de mensagens por cobrança
+        await queryClient.invalidateQueries({
+          queryKey: ['message-history-by-charge', chargeId],
+          exact: false,
+        });
+
+        // Invalidar histórico geral de mensagens
+        await queryClient.invalidateQueries({
+          queryKey: ['message-history'],
+          exact: false,
+        });
+
+        // AIDEV-NOTE: Forçar refetch imediato das queries de message-counts
+        // Isso garante que os dados sejam atualizados mesmo com staleTime
+        await queryClient.refetchQueries({
+          queryKey: ['message-counts'],
+          exact: false,
+        });
+
+        console.log('✅ Cache invalidado e refetch executado com sucesso');
       } else {
         const errorMsg = result.results?.[0]?.message || 'Erro desconhecido no envio';
         toast({

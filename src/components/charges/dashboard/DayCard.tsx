@@ -117,7 +117,7 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
         const colorClass = typeColors[type.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
         
         return (
-          <Badge key={type} className={`${colorClass} text-xs`}>
+          <Badge key={type} className={`${colorClass} text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5`}>
             {formattedType} ({count})
           </Badge>
         );
@@ -130,23 +130,23 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
 
   return (
     <Card 
-      className={`group cursor-pointer transition-all duration-300 hover:scale-102 hover:shadow-xl ${
+      className={`group cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl ${
         isToday ? 'ring-2 ring-blue-500 bg-gradient-to-br from-blue-50 to-white' : 'hover:bg-gradient-to-br hover:from-gray-50 hover:to-white'
-      } ${hasCharges ? 'border-l-4 border-l-blue-500' : ''}`}
+      } ${hasCharges ? 'border-l-2 sm:border-l-4 border-l-blue-500' : ''}`}
       onClick={() => onDayClick(dayData.date, dayData.charges)}
     >
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-2 sm:p-3 md:p-4 space-y-2 sm:space-y-3">
         {/* Cabeçalho do dia */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 group-hover:transform group-hover:translate-y-[-2px] transition-transform">
-              <Calendar className="h-4 w-4 text-gray-500 group-hover:text-blue-500 transition-colors" />
+          <div className="flex items-center gap-1 sm:gap-2 group-hover:transform group-hover:translate-y-[-2px] transition-transform">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500 group-hover:text-blue-500 transition-colors" />
               <div>
-                <p className="font-semibold text-sm capitalize group-hover:text-blue-600 transition-colors">{dayName}</p>
-                <p className="text-lg font-bold group-hover:text-blue-700 transition-colors">{dayNumber}</p>
+                <p className="font-semibold text-xs sm:text-sm capitalize group-hover:text-blue-600 transition-colors">{dayName}</p>
+                <p className="text-base sm:text-lg font-bold group-hover:text-blue-700 transition-colors">{dayNumber}</p>
               </div>
             </div>
           {isToday && (
-            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs px-1.5 sm:px-2 py-0.5">
               Hoje
             </Badge>
           )}
@@ -155,30 +155,30 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
         {hasCharges ? (
           <>
             {/* Valor total */}
-            <div className="space-y-1">
-              <p className="text-sm text-gray-600">Valor Total</p>
-              <p className="text-xl font-bold text-green-600 group-hover:text-green-700 group-hover:scale-105 transition-all">
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className="text-xs sm:text-sm text-gray-600">Valor Total</p>
+              <p className="text-base sm:text-lg md:text-xl font-bold text-green-600 group-hover:text-green-700 group-hover:scale-105 transition-all break-words">
                 {formatCurrency(dayData.totalValue)}
               </p>
             </div>
 
             {/* Métricas */}
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex items-center gap-1 group-hover:text-blue-600 transition-colors">
-                <Users className="h-3 w-3 text-gray-500 group-hover:text-blue-500 transition-colors" />
-                <span className="group-hover:font-medium transition-all">{dayData.uniqueClients} clientes</span>
+            <div className="grid grid-cols-2 gap-1 sm:gap-2 text-xs sm:text-sm">
+              <div className="flex items-center gap-0.5 sm:gap-1 group-hover:text-blue-600 transition-colors">
+                <Users className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-500 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                <span className="group-hover:font-medium transition-all truncate">{dayData.uniqueClients} {dayData.uniqueClients === 1 ? 'cliente' : 'clientes'}</span>
               </div>
-              <div className="flex items-center gap-1 group-hover:text-blue-600 transition-colors">
-                <TrendingUp className="h-3 w-3 text-gray-500 group-hover:text-blue-500 transition-colors" />
-                <span className="group-hover:font-medium transition-all">{dayData.receivedPercentage.toFixed(0)}% recebido</span>
+              <div className="flex items-center gap-0.5 sm:gap-1 group-hover:text-blue-600 transition-colors">
+                <TrendingUp className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gray-500 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                <span className="group-hover:font-medium transition-all truncate">{dayData.receivedPercentage.toFixed(0)}%</span>
               </div>
             </div>
 
             {/* Barra de progresso */}
-            <div className="space-y-1">
-              <div className="w-full bg-gray-200 rounded-full h-2 group-hover:bg-gray-300 transition-colors">
+            <div className="space-y-0.5 sm:space-y-1">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2 group-hover:bg-gray-300 transition-colors">
                 <div 
-                  className={`h-2 rounded-full transition-all duration-500 transform group-hover:scale-x-105 origin-left ${
+                  className={`h-1.5 sm:h-2 rounded-full transition-all duration-500 transform group-hover:scale-x-105 origin-left ${
                     getProgressColor(dayData.receivedPercentage)
                   }`}
                   style={{ width: `${Math.min(dayData.receivedPercentage, 100)}%` }}
@@ -187,7 +187,7 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
             </div>
 
             {/* Status e tipos */}
-            <div className="space-y-2 group-hover:transform group-hover:translate-y-[-1px] transition-transform">
+            <div className="space-y-1 sm:space-y-2 group-hover:transform group-hover:translate-y-[-1px] transition-transform">
               <div className="group-hover:transform group-hover:scale-105 transition-transform origin-left">
                 {getStatusBadge(dayData.charges)}
               </div>
@@ -197,9 +197,9 @@ export function DayCard({ dayData, onDayClick, isToday }: DayCardProps) {
             </div>
           </>
         ) : (
-          <div className="text-center py-6 group-hover:transform group-hover:scale-105 transition-transform">
-            <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2 group-hover:text-gray-400 transition-colors animate-pulse" />
-            <p className="text-sm text-gray-500 group-hover:text-gray-600 transition-colors">Nenhuma cobrança</p>
+          <div className="text-center py-4 sm:py-6 group-hover:transform group-hover:scale-105 transition-transform">
+            <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-gray-300 mx-auto mb-1 sm:mb-2 group-hover:text-gray-400 transition-colors animate-pulse" />
+            <p className="text-xs sm:text-sm text-gray-500 group-hover:text-gray-600 transition-colors">Nenhuma cobrança</p>
           </div>
         )}
       </CardContent>
