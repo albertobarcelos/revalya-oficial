@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Bell, FileText, Building2, CreditCard, Search, Smartphone, Receipt, MessageSquare } from 'lucide-react';
+import { formatPhone } from '@/lib/validation-utils';
 import type { Cobranca } from '@/types/database';
 import { findRelatedOverdueCharges } from '@/utils/chargeGrouping';
 import { useMessageCount } from '@/hooks/useMessageCount';
@@ -125,6 +126,32 @@ const getPaymentIcon = (tipo: string | null | undefined) => {
     default:
       return <CreditCard className="h-3 w-3 text-gray-400" />;
   }
+};
+
+const WhatsappIcon = (props: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    {...props}
+  >
+    <path d="M17.472 12.382c-.297-.148-1.758-.867-2.032-.967-.274-.099-.474-.148-.673.149-.198.297-.771.967-.945 1.166-.173.198-.347.223-.644.074-.297-.148-1.257-.463-2.392-1.475-.885-.79-1.48-1.763-1.653-2.06-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.148-.174.198-.297.297-.495.099-.198.05-.372-.025-.521-.074-.149-.673-1.62-.923-2.223-.242-.58-.487-.502-.673-.512-.173-.009-.372-.011-.571-.011-.198 0-.521.074-.795.372-.274.297-1.045 1.02-1.045 2.479s1.07 2.877 1.219 3.074c.148.198 2.106 3.22 5.105 4.515.714.308 1.27.491 1.705.628.716.228 1.366.196 1.88.119.573-.085 1.758-.719 2.006-1.414.248-.695.248-1.29.173-1.414-.074-.124-.272-.198-.57-.347z"/>
+    <path d="M20.52 3.48A10.49 10.49 0 0 0 12 0C5.373 0 0 5.373 0 12c0 2.113.553 4.121 1.602 5.906L.664 24l6.21-1.637A11.947 11.947 0 0 0 12 24c6.627 0 12-5.373 12-12 0-2.809-1.091-5.451-3.083-7.52zM12 22a9.94 9.94 0 0 1-5.12-1.42l-.367-.217-3.63.957.971-3.53-.24-.372C2.984 15.7 2.5 13.9 2.5 12 2.5 6.753 6.753 2.5 12 2.5S21.5 6.753 21.5 12 17.247 21.5 12 21.5z"/>
+  </svg>
+);
+
+const buildWhatsappLink = (phone?: string | null) => {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const withCountry = digits.startsWith('55') ? digits : `55${digits}`;
+  return `https://wa.me/${withCountry}`;
+};
+
+const formatPhoneDisplay = (phone?: string | null) => {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const local = digits.startsWith('55') ? digits.slice(2) : digits;
+  return formatPhone(local);
 };
 
 // AIDEV-NOTE: Componente separado para lista de cobranças do grupo selecionado
@@ -283,6 +310,8 @@ export function ChargeGroupList({
               const relatedGroup = relatedOverdueGroups.find(
                 g => g.customerId === charge.customer_id
               );
+              const mainPhone = charge.customers?.celular_whatsapp || charge.customers?.phone;
+              const mainWaLink = buildWhatsappLink(mainPhone);
               
               return (
                 <div key={charge.id} className="space-y-2">
@@ -309,6 +338,19 @@ export function ChargeGroupList({
                             {charge.customers?.company && charge.customers?.name && (
                               <Building2 className="h-3 w-3 text-gray-400 flex-shrink-0" />
                             )}
+                            {mainWaLink && (
+                              <a
+                                href={mainWaLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Abrir WhatsApp"
+                                title="Abrir WhatsApp"
+                                className="text-green-600 hover:text-green-700"
+                              >
+                                <WhatsappIcon className="h-4 w-4" />
+                              </a>
+                            )}
                             {hasRelatedOverdue && (
                               <Badge variant="destructive" className="text-xs">
                                 {relatedGroup?.overdueCharges.length} vencida(s)
@@ -330,11 +372,17 @@ export function ChargeGroupList({
 
                       {/* AIDEV-NOTE: Informações do documento */}
                       <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center space-x-4">
+                        <div className="flex flex-col space-y-1">
                           {charge.customers?.cpf_cnpj && (
                             <div className="flex items-center space-x-1 text-gray-600">
                               <FileText className="h-3 w-3" />
                               <span>{formatDocument(charge.customers.cpf_cnpj)}</span>
+                            </div>
+                          )}
+                          {formatPhoneDisplay(mainPhone) && (
+                            <div className="flex items-center space-x-1 text-gray-600">
+                              <Smartphone className="h-3 w-3" />
+                              <span>{formatPhoneDisplay(mainPhone)}</span>
                             </div>
                           )}
                         </div>
@@ -431,6 +479,23 @@ export function ChargeGroupList({
                                   {overdueCharge.customers?.company && overdueCharge.customers?.name && (
                                     <Building2 className="h-3 w-3 text-red-400 flex-shrink-0" />
                                   )}
+                                  {(() => {
+                                    const phone = overdueCharge.customers?.celular_whatsapp || overdueCharge.customers?.phone;
+                                    const wa = buildWhatsappLink(phone);
+                                    return wa ? (
+                                      <a
+                                        href={wa}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        aria-label="Abrir WhatsApp"
+                                        title="Abrir WhatsApp"
+                                        className="text-green-700 hover:text-green-800"
+                                      >
+                                        <WhatsappIcon className="h-4 w-4" />
+                                      </a>
+                                    ) : null;
+                                  })()}
                                   <Badge variant="destructive" className="text-xs">
                                     Vencida
                                   </Badge>
@@ -450,13 +515,23 @@ export function ChargeGroupList({
 
                             {/* AIDEV-NOTE: Informações do documento */}
                             <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center space-x-4">
+                              <div className="flex flex-col space-y-1">
                                 {overdueCharge.customers?.cpf_cnpj && (
                                   <div className="flex items-center space-x-1 text-red-600">
                                     <FileText className="h-3 w-3" />
                                     <span>{formatDocument(overdueCharge.customers.cpf_cnpj)}</span>
                                   </div>
                                 )}
+                                {(() => {
+                                  const phone = overdueCharge.customers?.celular_whatsapp || overdueCharge.customers?.phone;
+                                  const formatted = formatPhoneDisplay(phone);
+                                  return formatted ? (
+                                    <div className="flex items-center space-x-1 text-red-600">
+                                      <Smartphone className="h-3 w-3" />
+                                      <span>{formatted}</span>
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                               
                               <div className="flex items-center space-x-3">

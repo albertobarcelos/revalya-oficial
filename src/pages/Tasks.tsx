@@ -39,6 +39,7 @@ import { clientsService } from "@/services/clientsService";
 import { useSecureTasks, type SecureTask } from '@/hooks/useSecureTasks'; // AIDEV-NOTE: Hook seguro multi-tenant
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hook de validação de acesso multi-tenant
 import { supabase } from '@/lib/supabase'; // AIDEV-NOTE: Apenas para RPC functions específicas
+import TaskAttachments from '@/components/tasks/TaskAttachments'
 
 // AIDEV-NOTE: Tipo Task movido para hook useTasks para consistência multi-tenant
 // Hook useTasks implementa filtros automáticos por tenant_id em todas as operações
@@ -455,6 +456,16 @@ export default function Tasks() {
     setIsNewTaskDialogOpen(true);
   };
 
+  useEffect(() => {
+    if (isEditMode && newTaskClientId && !newTaskClient && currentTenant?.id) {
+      clientsService.getClientById(newTaskClientId, currentTenant.id).then(client => {
+        if (client) {
+          setNewTaskClient(client.name || '');
+        }
+      });
+    }
+  }, [isEditMode, newTaskClientId, newTaskClient, currentTenant?.id]);
+
   // AIDEV-NOTE: ✅ FUNÇÃO CORRIGIDA - Usa apenas hooks seguros multi-tenant
   // createTask e updateTask do hook garantem isolamento automático por tenant_id
   const createNewTaskFromForm = async () => {
@@ -556,7 +567,7 @@ export default function Tasks() {
                 Nova Tarefa
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{isEditMode ? "Editar Tarefa" : "Adicionar Nova Tarefa"}</DialogTitle>
                 <DialogDescription>
@@ -594,6 +605,7 @@ export default function Tasks() {
                     }}
                     placeholder="Selecione um cliente"
                     inModal={true}
+                    initialOptions={newTaskClientId ? [{ value: newTaskClientId, label: newTaskClient || 'Cliente sem nome' }] : []}
                   />
                 </div>
                 <div className="space-y-2">
@@ -640,6 +652,11 @@ export default function Tasks() {
                     />
                   </div>
                 </div>
+                {isEditMode && taskToEdit && (
+                  <div className="space-y-2">
+                    <TaskAttachments taskId={taskToEdit} />
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={resetNewTaskForm}>Cancelar</Button>
