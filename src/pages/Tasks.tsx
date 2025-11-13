@@ -440,10 +440,10 @@ export default function Tasks() {
   const startTaskEditing = (task: SecureTask) => {
     // Preencher o formulário com os dados da tarefa
     setNewTaskTitle(task.title);
-    setNewTaskClient(task.clientName || '');
-    setNewTaskClientId(task.clientId || '');
+    setNewTaskClient(task.client_name || '');
+    setNewTaskClientId(task.client_id || '');
     setNewTaskPriority(task.priority);
-    setNewTaskDueDate(task.dueDate || '');
+    setNewTaskDueDate(task.due_date || '');
     setNewTaskDescription(task.description || '');
     setNewTaskAssignedTo(task.assigned_to || '');
     
@@ -493,7 +493,7 @@ export default function Tasks() {
       
       if (isEditMode && taskToEdit) {
         // ✅ USAR HOOK SEGURO - Todas as 5 camadas de segurança aplicadas automaticamente
-        await updateTask(taskToEdit, taskData);
+        await updateTask({ id: taskToEdit, ...taskData });
         
         console.log(`✅ [AUDIT] Tarefa ${taskToEdit} atualizada via hook seguro - Tenant: ${currentTenant.name}`);
       } else {
@@ -703,8 +703,8 @@ export default function Tasks() {
                         if (priorityDiff !== 0) return priorityDiff;
                         
                         // Se mesma prioridade, ordenar por data de vencimento (mais próximo primeiro)
-                        if (a.dueDate && b.dueDate) {
-                          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                        if (a.due_date && b.due_date) {
+                          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
                         }
                         
                         // Se não tiver data de vencimento, ordenar por data de criação (mais recente primeiro)
@@ -731,7 +731,7 @@ export default function Tasks() {
                               <div className="flex items-start justify-between w-full">
                                 <h4 className="font-medium truncate max-w-[70%]">{task.title}</h4>
                                 <div className="flex items-center flex-wrap gap-1 mt-1">
-                                  {task.chargeId && (
+                                  {task.charge_id && (
                                     <>
                                       <Button
                                         size="sm"
@@ -739,8 +739,8 @@ export default function Tasks() {
                                         className="h-6 px-2 text-xs flex-shrink-0"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          if (task.chargeId && chargesData?.data) {
-                                            const charge = chargesData.data.find(c => c.id === task.chargeId);
+                                          if (task.charge_id && chargesData?.data) {
+                                            const charge = chargesData.data.find(c => c.id === task.charge_id);
                                             if (charge) {
                                               handleViewCharge(charge);
                                             }
@@ -757,7 +757,7 @@ export default function Tasks() {
                                         className="h-6 px-2 text-xs flex-shrink-0"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          sendManualReminder(task.chargeId!);
+                                          sendManualReminder(task.charge_id!);
                                         }}
                                       >
                                         <Bell className="h-3 w-3 mr-1" />
@@ -801,21 +801,21 @@ export default function Tasks() {
                               )}
                               
                               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
-                                {task.clientName && (
+                                {task.client_name && (
                                   <span className="text-xs text-muted-foreground flex items-center">
                                     <span className="inline-block w-2 h-2 bg-muted-foreground/50 rounded-full mr-1"></span>
-                                    {task.clientName}
+                                    {task.client_name}
                                   </span>
                                 )}
                                 
-                                {task.dueDate && (
+                                {task.due_date && (
                                   <span className={`text-xs flex items-center ${
-                                    isBefore(parseISO(task.dueDate), new Date()) 
+                                    isBefore(parseISO(task.due_date), new Date()) 
                                       ? 'text-danger' 
                                       : 'text-muted-foreground'
                                   }`}>
                                     <span className="inline-block w-2 h-2 bg-gray-300 rounded-full mr-1"></span>
-                                    Vencimento: {format(parseISO(task.dueDate), 'dd/MM/yyyy')}
+                                    Vencimento: {format(parseISO(task.due_date), 'dd/MM/yyyy')}
                                   </span>
                                 )}
                                 {/* Responsável pela tarefa (multi-tenant) */}
