@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { format, startOfWeek, endOfWeek, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ interface GroupedCharges {
 export function ChargesDashboard() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard(); // AIDEV-NOTE: Hook seguro para validação multi-tenant
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // AIDEV-NOTE: Validação crítica de segurança - bloquear acesso se não autorizado
   useEffect(() => {
@@ -227,6 +229,37 @@ export function ChargesDashboard() {
       
       console.log('✅ [CHARGES-DASHBOARD] Resultado do messageService:', result);
 
+      // AIDEV-NOTE: Invalidar cache de contagem de mensagens após envio bem-sucedido
+      // Isso garante que o ícone de contagem seja atualizado imediatamente
+      console.log('🔄 [CHARGES-DASHBOARD] Invalidando cache de contagem de mensagens...');
+      
+      // Invalidar todas as queries de message-counts que podem incluir os chargeIds enviados
+      await queryClient.invalidateQueries({
+        queryKey: ['message-counts'],
+        exact: false, // Invalidar todas as queries que começam com 'message-counts'
+      });
+
+      // Invalidar também o histórico de mensagens por cobrança
+      await queryClient.invalidateQueries({
+        queryKey: ['message-history-by-charge'],
+        exact: false,
+      });
+
+      // Invalidar histórico geral de mensagens
+      await queryClient.invalidateQueries({
+        queryKey: ['message-history'],
+        exact: false,
+      });
+
+      // AIDEV-NOTE: Forçar refetch imediato das queries de message-counts
+      // Isso garante que os dados sejam atualizados mesmo com staleTime
+      await queryClient.refetchQueries({
+        queryKey: ['message-counts'],
+        exact: false,
+      });
+
+      console.log('✅ [CHARGES-DASHBOARD] Cache invalidado e refetch executado com sucesso');
+
       // Limpar seleção após o envio
       setSelectedCharges([]);
       setIsMessageDialogOpen(false);
@@ -294,6 +327,7 @@ export function ChargesDashboard() {
         groupedCharges={groupedCharges}
         selectedCharges={selectedCharges}
         overdueFilter={overdueFilter}
+        allCharges={chargesData} // AIDEV-NOTE: Passar todas as cobranças para detectar relacionadas
         onClose={() => setSelectedGroup(null)}
         onChargeSelect={handleChargeSelect}
         onSelectAll={handleSelectAll}

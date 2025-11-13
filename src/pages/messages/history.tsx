@@ -52,21 +52,50 @@ export default function MessageHistoryPage() {
   }, [hasAccess, currentTenant]);
   
   // 🔐 HOOK SEGURO OBRIGATÓRIO (CAMADA 2) - DEVE VIR ANTES DO EARLY RETURN
-  const { data, isLoading } = useSecureTenantQuery(
-    ["message-history", currentPage.toString(), pageSize.toString()],
+  const { data, isLoading, refetch } = useSecureTenantQuery(
+    // AIDEV-NOTE: Query key deve incluir tenant_id para evitar problemas de cache
+    ["message-history", currentTenant?.id, currentPage.toString(), pageSize.toString()],
     async (supabase: SupabaseClient, tenantId: string) => {
       console.log(`🔍 [SECURITY] Buscando mensagens para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Query corrigida para fazer JOIN com customers e usar campos corretos da tabela
+      // Campos reais: message (não message_content), error_details (não error_message)
+      // Status: 'SENT' ou 'FAILED' (em MAIÚSCULAS conforme constraint)
+      
       // Busca o total de registros
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from('message_history')
         .select('*', { count: 'exact', head: true })
         .eq('tenant_id', tenantId); // 🔑 FILTRO OBRIGATÓRIO POR TENANT
 
-      // Busca os registros da página atual
+      if (countError) {
+        console.error(`🚨 [SECURITY] Erro ao contar mensagens:`, countError);
+        throw countError;
+      }
+
+      // Busca os registros da página atual com JOIN em customers
       const { data: messages, error } = await supabase
         .from('message_history')
-        .select('*')
+        .select(`
+          id,
+          tenant_id,
+          charge_id,
+          template_id,
+          customer_id,
+          message,
+          status,
+          error_details,
+          metadata,
+          created_at,
+          updated_at,
+          batch_id,
+          customers (
+            id,
+            name,
+            phone,
+            celular_whatsapp
+          )
+        `)
         .eq('tenant_id', tenantId) // 🔑 FILTRO OBRIGATÓRIO POR TENANT
         .order('created_at', { ascending: false })
         .range((currentPage - 1) * pageSize, currentPage * pageSize - 1);
@@ -86,8 +115,32 @@ export default function MessageHistoryPage() {
         console.log(`✅ [SECURITY] ${messages.length} mensagens validadas para tenant ${tenantId}`);
       }
 
+      // AIDEV-NOTE: Mapear dados para formato esperado pela interface
+      const mappedMessages = (messages || []).map((msg: any) => {
+        // Extrair customer_name e customer_phone de customers ou metadata
+        const customerName = (msg.customers as any)?.name || msg.metadata?.customer_name || 'Cliente não encontrado';
+        const customerPhone = (msg.customers as any)?.celular_whatsapp || 
+                             (msg.customers as any)?.phone || 
+                             msg.metadata?.customer_phone || 
+                             msg.metadata?.phone || 
+                             'N/A';
+        
+        return {
+          ...msg,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          // Mapear campos para compatibilidade
+          message_content: msg.message || '',
+          error_message: msg.error_details || null,
+          // Mapear status: 'SENT' -> 'success', 'FAILED' -> 'error' (valores em MAIÚSCULAS conforme constraint)
+          status: msg.status === 'SENT' ? 'success' : (msg.status === 'FAILED' ? 'error' : msg.status)
+        };
+      });
+
+      console.log(`✅ [QUERY] Retornando ${mappedMessages.length} mensagens mapeadas`);
+
       return {
-        messages: messages as MessageHistory[],
+        messages: mappedMessages as any[],
         totalCount: count || 0,
       };
     },

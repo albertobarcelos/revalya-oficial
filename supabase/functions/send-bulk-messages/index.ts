@@ -422,16 +422,22 @@ class BulkService {
         }
       }
 
+      // AIDEV-NOTE: Status deve ser em MAIÚSCULAS conforme constraint da tabela
+      // Valores permitidos: 'SENT', 'DELIVERED', 'READ', 'FAILED'
+      const statusValue = payload.success ? 'SENT' : 'FAILED';
+      
       const insertData = {
         tenant_id: payload.tenantId,
         charge_id: payload.chargeId,
         template_id: payload.templateId || null, // NULL quando não há template específico
         customer_id: payload.customerId,
         message: payload.message,
-        status: payload.success ? 'sent' : 'failed',
+        status: statusValue, // AIDEV-NOTE: Usar valores em MAIÚSCULAS conforme constraint
         error_details: errorDetails, // AIDEV-NOTE: Usar errorDetails serializado
         metadata: {
           phone: payload.phone,
+          customer_name: payload.customerName || null, // AIDEV-NOTE: Nome do cliente para facilitar consultas
+          customer_phone: payload.customerPhone || payload.phone || null, // AIDEV-NOTE: Telefone original do cliente
           message_id: payload.messageId,
           request_id: payload.requestId,
           dry_run: payload.dryRun || false,
@@ -439,7 +445,7 @@ class BulkService {
         }
       };
 
-      const { error } = await this.supabase.from("message_history").insert(insertData);
+      const { error, data: insertedData } = await this.supabase.from("message_history").insert(insertData).select();
       
       if (error) {
         // AIDEV-NOTE: Serializar erro do Supabase corretamente
@@ -452,6 +458,15 @@ class BulkService {
           requestId: payload.requestId,
           insertData,
           supabaseError: error
+        });
+      } else {
+        // AIDEV-NOTE: Log de sucesso para debug
+        Audit.opDone({
+          where: "logMessage",
+          requestId: payload.requestId,
+          chargeId: payload.chargeId,
+          customerId: payload.customerId,
+          insertedId: insertedData?.[0]?.id
         });
       }
     } catch (err) {
@@ -669,6 +684,7 @@ class BulkService {
             
             // AIDEV-NOTE: Liberar lock após envio (garantido pelo finally)
             try {
+              // AIDEV-NOTE: Incluir informações do customer no logMessage para facilitar consultas
               await this.logMessage({
                 tenantId,
                 customerId: (customer as any).id,
@@ -676,6 +692,8 @@ class BulkService {
                 templateId: templateId || null,
                 message: msg,
                 phone: normalizedPhone,
+                customerName: (customer as any).name || null,
+                customerPhone: customerPhone, // Telefone original antes da normalização
                 success: sendResult.ok,
                 messageId: sendResult.messageId || undefined,
                 error: sendResult.error || undefined,
