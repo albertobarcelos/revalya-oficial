@@ -144,11 +144,29 @@ export const useTenantStore = create<TenantState>((set, get) => ({
       // Verificar se o cache é válido (não expirou e é do mesmo usuário)
       if (data.userId === userId && (now - data.timestamp) < CACHE_DURATION) {
         console.log('📦 [CACHE] Carregando dados do cache local');
+        
+        // AIDEV-NOTE: Auto-seleção de tenant ao carregar do cache também
+        let selectedTenant: Tenant | null = null;
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+        const slugMatch = currentPath.match(/^\/([^\/]+)/);
+        const urlSlug = slugMatch ? slugMatch[1] : null;
+        const nonTenantRoutes = ['login', 'portal', 'meus-aplicativos', 'admin', 'api', 'auth', 'app'];
+        
+        if (urlSlug && !nonTenantRoutes.includes(urlSlug) && data.tenants.length > 0) {
+          const targetTenant = data.tenants.find((t: Tenant) => t.slug === urlSlug && t.active);
+          if (targetTenant) {
+            selectedTenant = targetTenant;
+            console.log(`✅ [CACHE] Auto-selecionando tenant da URL: ${targetTenant.name} (${targetTenant.slug})`);
+          }
+        }
+        
+        // AIDEV-NOTE: IMPORTANTE - Setar hasLoaded: true para evitar chamadas duplicadas
         set({
           availableTenants: data.tenants,
           pendingInvites: data.invites,
           userRole: data.userRole,
-          hasLoaded: true,
+          currentTenant: selectedTenant,
+          hasLoaded: true, // CRÍTICO: Marcar como carregado
           isLoading: false,
           error: null
         });
@@ -191,28 +209,44 @@ export const useTenantStore = create<TenantState>((set, get) => ({
   },
 
   fetchPortalData: async (supabase: SupabaseClient) => {
-    const { isLoading, loadFromCache, saveToCache } = get();
-    if (isLoading) return;
+    const { isLoading, hasLoaded, loadFromCache, saveToCache } = get();
+    
+    // AIDEV-NOTE: Lock mais robusto - verificar isLoading E hasLoaded
+    if (isLoading) {
+      console.log('🔍 [DEBUG] fetchPortalData já em progresso, ignorando chamada duplicada');
+      return;
+    }
+    
+    // AIDEV-NOTE: Se já carregou com sucesso, não recarregar
+    if (hasLoaded) {
+      console.log('🔍 [DEBUG] fetchPortalData já foi executado com sucesso, ignorando chamada duplicada');
+      return;
+    }
     
     console.log('🔍 [DEBUG] fetchPortalData iniciado');
     
     try {
+      // AIDEV-NOTE: Setar isLoading ANTES de qualquer operação assíncrona
+      set({ isLoading: true, error: null });
+      
       // Obter role do usuário dos metadados
       const { data: { user } } = await supabase.auth.getUser();
       console.log('🔍 [DEBUG] Usuário obtido:', user?.id);
       const userId = user?.id;
       
       if (!userId) {
+        set({ isLoading: false, hasLoaded: false, error: 'Usuário não autenticado' });
         throw new Error('Usuário não autenticado');
       }
       
       // Tentar carregar do cache primeiro
       if (loadFromCache(userId)) {
+        // AIDEV-NOTE: Se carregou do cache, marcar como carregado mas não como loading
+        set({ isLoading: false });
         return; // Dados carregados do cache
       }
       
-      // Se não há cache válido, buscar do servidor
-      set({ isLoading: true, error: null });
+      // Se não há cache válido, buscar do servidor (isLoading já está true)
       
       // AIDEV-NOTE: Buscar user_role da tabela public.users em vez de user_metadata
       // Isso corrige o problema onde admin aparecia como service_role
@@ -294,10 +328,30 @@ export const useTenantStore = create<TenantState>((set, get) => ({
 
       console.log('🔍 [DEBUG] Tenants processados:', tenants);
       
-      // 🚨 CORREÇÃO: NÃO definir currentTenant automaticamente
-      // Deixar que o sistema de auto-seleção baseado na URL faça isso
-      const currentTenant = null;
-      console.log('🔍 [DEBUG] Não definindo currentTenant automaticamente - aguardando auto-seleção por URL');
+      // AIDEV-NOTE: Auto-seleção inteligente de tenant baseada na URL
+      // Tenta selecionar o tenant correspondente ao slug da URL atual
+      let selectedTenant: Tenant | null = null;
+      
+      // Obter slug da URL atual
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const slugMatch = currentPath.match(/^\/([^\/]+)/);
+      const urlSlug = slugMatch ? slugMatch[1] : null;
+      
+      // Lista de rotas que NÃO são tenants (ignorar auto-seleção)
+      const nonTenantRoutes = ['login', 'portal', 'meus-aplicativos', 'admin', 'api', 'auth', 'app'];
+      
+      // Se há um slug válido na URL e não é uma rota não-tenant, tentar selecionar
+      if (urlSlug && !nonTenantRoutes.includes(urlSlug) && tenants.length > 0) {
+        const targetTenant = tenants.find(t => t.slug === urlSlug && t.active);
+        if (targetTenant) {
+          selectedTenant = targetTenant;
+          console.log(`✅ [DEBUG] Auto-selecionando tenant da URL: ${targetTenant.name} (${targetTenant.slug})`);
+        } else {
+          console.log(`⚠️ [DEBUG] Tenant com slug '${urlSlug}' não encontrado ou inativo na lista de tenants disponíveis`);
+        }
+      } else if (!urlSlug || nonTenantRoutes.includes(urlSlug)) {
+        console.log(`🔍 [DEBUG] URL não contém slug de tenant válido ou é rota não-tenant: ${urlSlug}`);
+      }
 
       // Salvar no cache antes de atualizar o estado
       saveToCache(userId, { tenants, invites: pendingInvites, userRole });
@@ -306,7 +360,7 @@ export const useTenantStore = create<TenantState>((set, get) => ({
         availableTenants: tenants,
         pendingInvites,
         userRole,
-        currentTenant,
+        currentTenant: selectedTenant,
         hasLoaded: true,
         isLoading: false,
         error: null

@@ -36,17 +36,57 @@ function mapPaymentStatusToExternal(status: string): string {
   return statusMap[status] || "pending"; // Default para pending se não encontrar
 }
 
+// AIDEV-NOTE: Mapeamento de status ASAAS para status (charges)
+// Status ASAAS pode vir em diferentes formatos, status (charges) usa MAIÚSCULAS conforme constraint
+function mapExternalStatusToChargeStatus(statusExterno: string): string {
+  if (!statusExterno) return "PENDING"; // Default seguro
+  
+  const statusLower = statusExterno.toLowerCase();
+  const statusMap: Record<string, string> = {
+    "pending": "PENDING",
+    "received": "RECEIVED",
+    "overdue": "OVERDUE",
+    "confirmed": "CONFIRMED",
+    "refunded": "REFUNDED",
+    "created": "PENDING",        // Default para PENDING
+    "deleted": "PENDING",        // Default para PENDING
+    "checkout_viewed": "PENDING", // Default para PENDING
+    "anticipaded": "RECEIVED"    // Mantém o typo do constraint do banco
+  };
+  
+  return statusMap[statusLower] || "PENDING"; // Default para PENDING se não encontrar
+}
+
 // AIDEV-NOTE: Função para buscar dados do cliente na API ASAAS
 async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: string) {
   try {
-    console.log(`🔍 Buscando cliente ${customerId} na API ASAAS...`);
+    // AIDEV-NOTE: Validar parâmetros antes de fazer a requisição
+    if (!customerId || !apiKey || !apiUrl) {
+      console.error(`❌ Parâmetros inválidos para buscar customer:`, {
+        customerId: customerId ? `${customerId.substring(0, 10)}...` : 'null',
+        hasApiKey: !!apiKey,
+        hasApiUrl: !!apiUrl
+      });
+      return null;
+    }
+
+    // AIDEV-NOTE: Limpar customerId (remover espaços, etc)
+    const cleanCustomerId = customerId.trim();
+    if (!cleanCustomerId) {
+      console.error(`❌ customerId vazio após limpeza`);
+      return null;
+    }
+
+    console.log(`🔍 Buscando cliente ${cleanCustomerId} na API ASAAS...`);
     console.log(`🔧 URL da API: ${apiUrl}`);
-    console.log(`🔑 API Key original: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 10)}`);
     
-    // AIDEV-NOTE: Usar a API key completa incluindo o prefixo '$' conforme documentação ASAAS
-    console.log(`🔑 API Key completa: ${apiKey.substring(0, 10)}...${apiKey.substring(apiKey.length - 10)}`);
+    // AIDEV-NOTE: Construir URL corretamente (remover /v3 duplicado se apiUrl já tiver)
+    const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
+    const customerUrl = `${baseUrl}/v3/customers/${cleanCustomerId}`;
     
-    const response = await fetch(`${apiUrl}/v3/customers/${customerId}`, {
+    console.log(`🌐 URL completa: ${customerUrl}`);
+    
+    const response = await fetch(customerUrl, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -59,16 +99,280 @@ async function fetchAsaasCustomer(customerId: string, apiKey: string, apiUrl: st
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ Erro ao buscar cliente: ${response.status} - ${response.statusText}`);
-      console.error(`📄 Detalhes do erro: ${errorText}`);
+      console.error(`📄 Detalhes do erro: ${errorText.substring(0, 500)}`);
+      
+      // AIDEV-NOTE: Se for 404, o customer não existe (não é erro crítico)
+      if (response.status === 404) {
+        console.warn(`⚠️ Customer ${cleanCustomerId} não encontrado na API ASAAS`);
+      }
+      
       return null;
     }
 
     const customerData = await response.json();
-    console.log(`✅ Cliente encontrado: ${customerData.name || 'N/A'}`);
+    
+    // AIDEV-NOTE: Validar se os dados retornados são válidos
+    if (!customerData || typeof customerData !== 'object') {
+      console.error(`❌ Resposta inválida da API:`, typeof customerData);
+      return null;
+    }
+    
+    console.log(`✅ Cliente encontrado: ${customerData.name || 'N/A'} (${customerData.email || 'sem email'})`);
     
     return customerData;
   } catch (error) {
     console.error('❌ Erro ao buscar cliente na API ASAAS:', error);
+    if (error instanceof Error) {
+      console.error(`📄 Mensagem de erro: ${error.message}`);
+      console.error(`📄 Stack: ${error.stack?.substring(0, 500)}`);
+    }
+    return null;
+  }
+}
+
+// AIDEV-NOTE: Função auxiliar para buscar ou criar customer
+// CRÍTICO: Se tiver asaasCustomerId mas não tiver customerData, SEMPRE buscar na API antes de criar
+async function findOrCreateCustomer(
+  tenantId: string,
+  asaasCustomerId: string | null,
+  customerData: any,
+  apiKey?: string,
+  apiUrl?: string
+): Promise<string | null> {
+  if (!asaasCustomerId && !customerData) {
+    console.warn("⚠️ Não é possível criar customer sem asaasCustomerId ou customerData");
+    return null;
+  }
+
+  // AIDEV-NOTE: CRÍTICO - Se tiver asaasCustomerId mas não tiver customerData, BUSCAR na API
+  // NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId válido
+  if (asaasCustomerId && !customerData && apiKey && apiUrl) {
+    console.log(`🔍 Buscando dados do customer ${asaasCustomerId} na API ASAAS (obrigatório antes de criar)`);
+    try {
+      customerData = await fetchAsaasCustomer(asaasCustomerId, apiKey, apiUrl);
+      if (customerData) {
+        console.log(`✅ Dados do customer obtidos da API: ${customerData.name || 'N/A'}`);
+      } else {
+        console.error(`❌ ERRO CRÍTICO: Não foi possível obter dados do customer ${asaasCustomerId} da API ASAAS`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ ERRO ao buscar customer ${asaasCustomerId} na API:`, error);
+      return null;
+    }
+  } else if (asaasCustomerId && !customerData) {
+    console.error(`❌ ERRO CRÍTICO: Tem asaasCustomerId (${asaasCustomerId}) mas não tem customerData nem credenciais da API`);
+    return null;
+  }
+
+  // AIDEV-NOTE: Primeiro tentar buscar por customer_asaas_id
+  if (asaasCustomerId) {
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("customer_asaas_id", asaasCustomerId)
+      .maybeSingle();
+
+    if (existingCustomer) {
+      console.log(`✅ Customer encontrado por asaas_id: ${existingCustomer.id}`);
+      return existingCustomer.id;
+    }
+  }
+
+  // AIDEV-NOTE: Tentar buscar por documento se disponível
+  if (customerData?.cpfCnpj) {
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("cpf_cnpj", customerData.cpfCnpj)
+      .maybeSingle();
+
+    if (existingCustomer) {
+      // AIDEV-NOTE: Atualizar customer_asaas_id se não tiver
+      if (asaasCustomerId) {
+        await supabase
+          .from("customers")
+          .update({ customer_asaas_id: asaasCustomerId })
+          .eq("id", existingCustomer.id);
+      }
+      console.log(`✅ Customer encontrado por documento: ${existingCustomer.id}`);
+      return existingCustomer.id;
+    }
+  }
+
+  // AIDEV-NOTE: Criar novo customer
+  // CRÍTICO: NUNCA criar como "Cliente não identificado" se tiver asaasCustomerId
+  if (asaasCustomerId && !customerData) {
+    console.error(`❌ ERRO CRÍTICO: Tentando criar customer com asaasCustomerId (${asaasCustomerId}) mas sem customerData`);
+    return null;
+  }
+
+  // AIDEV-NOTE: Só criar como "Cliente não identificado" se realmente não tiver como obter dados
+  const customerName = customerData?.name || (asaasCustomerId ? null : "Cliente não identificado");
+  
+  if (!customerName && asaasCustomerId) {
+    console.error(`❌ ERRO CRÍTICO: Não é possível criar customer sem nome quando há asaasCustomerId (${asaasCustomerId})`);
+    return null;
+  }
+
+  const { data: newCustomer, error: createError } = await supabase
+    .from("customers")
+    .insert({
+      tenant_id: tenantId,
+      customer_asaas_id: asaasCustomerId,
+      name: customerName,
+      email: customerData?.email || null,
+      phone: customerData?.phone || customerData?.mobilePhone || null,
+      cpf_cnpj: customerData?.cpfCnpj || null,
+    })
+    .select("id")
+    .single();
+
+  if (createError || !newCustomer) {
+    console.error("❌ Erro ao criar customer:", createError);
+    return null;
+  }
+
+  console.log(`✅ Customer criado: ${newCustomer.id} (nome: ${customerName})`);
+  return newCustomer.id;
+}
+
+// AIDEV-NOTE: Função auxiliar para buscar contrato por externalReference
+async function findContractByExternalReference(
+  tenantId: string,
+  externalReference: string | null
+): Promise<string | null> {
+  if (!externalReference) {
+    return null;
+  }
+
+  // AIDEV-NOTE: Tentar buscar contrato pelo número ou ID na externalReference
+  // Assumindo que externalReference pode conter contract_id ou contract_number
+  const { data: contract } = await supabase
+    .from("contracts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .or(`contract_number.eq.${externalReference},id.eq.${externalReference}`)
+    .maybeSingle();
+
+  if (contract) {
+    console.log(`✅ Contrato encontrado por externalReference: ${contract.id}`);
+    return contract.id;
+  }
+
+  return null;
+}
+
+// AIDEV-NOTE: Função auxiliar para buscar contrato por customer_id
+// Prioriza contratos ATIVOS e mais recentes
+async function findContractByCustomerId(
+  tenantId: string,
+  customerId: string | null
+): Promise<string | null> {
+  if (!customerId) {
+    return null;
+  }
+
+  // AIDEV-NOTE: Buscar contratos do customer, priorizando ATIVOS e mais recentes
+  // Ordem de prioridade:
+  // 1. Status ACTIVE
+  // 2. Mais recente (created_at DESC)
+  const { data: contract } = await supabase
+    .from("contracts")
+    .select("id, status, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("customer_id", customerId)
+    .in("status", ["ACTIVE", "DRAFT"]) // AIDEV-NOTE: Buscar apenas contratos ativos ou em rascunho
+    .order("status", { ascending: true }) // AIDEV-NOTE: ACTIVE vem antes de DRAFT
+    .order("created_at", { ascending: false }) // AIDEV-NOTE: Mais recente primeiro
+    .limit(1)
+    .maybeSingle();
+
+  if (contract) {
+    console.log(`✅ Contrato encontrado por customer_id: ${contract.id} (status: ${contract.status})`);
+    return contract.id;
+  }
+
+  return null;
+}
+
+// AIDEV-NOTE: Função auxiliar para mapear payment method para tipo
+function mapPaymentMethodToTipo(billingType: string | null | undefined): string {
+  if (!billingType) return "BOLETO";
+  
+  const typeMap: Record<string, string> = {
+    "PIX": "PIX",
+    "BOLETO": "BOLETO",
+    "BANK_SLIP": "BOLETO",
+    "CREDIT_CARD": "CREDIT_CARD",
+    "CASH": "CASH",
+    "TRANSFER": "PIX"
+  };
+  
+  return typeMap[billingType.toUpperCase()] || "BOLETO";
+}
+
+// AIDEV-NOTE: Função para buscar barcode do pagamento via API ASAAS
+async function fetchPaymentBarcode(
+  paymentId: string,
+  apiKey: string,
+  apiUrl: string
+): Promise<string | null> {
+  try {
+    const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
+    const barcodeUrl = `${baseUrl}/v3/payments/${paymentId}/identificationField`;
+    
+    const response = await fetch(barcodeUrl, {
+      method: 'GET',
+      headers: {
+        'access_token': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn(`⚠️ Não foi possível obter barcode para pagamento ${paymentId}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.identificationField || null;
+  } catch (error) {
+    console.error(`❌ Erro ao buscar barcode para pagamento ${paymentId}:`, error);
+    return null;
+  }
+}
+
+// AIDEV-NOTE: Função para buscar PIX key do pagamento via API ASAAS
+async function fetchPaymentPixKey(
+  paymentId: string,
+  apiKey: string,
+  apiUrl: string
+): Promise<string | null> {
+  try {
+    const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
+    const pixUrl = `${baseUrl}/v3/payments/${paymentId}/pixQrCode`;
+    
+    const response = await fetch(pixUrl, {
+      method: 'GET',
+      headers: {
+        'access_token': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn(`⚠️ Não foi possível obter PIX key para pagamento ${paymentId}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    // AIDEV-NOTE: PIX pode vir em diferentes campos (payload, encodedImage, qrCode, content)
+    return data.payload || data.encodedImage || data.qrCode || data.content || null;
+  } catch (error) {
+    console.error(`❌ Erro ao buscar PIX key para pagamento ${paymentId}:`, error);
     return null;
   }
 }
@@ -79,6 +383,7 @@ async function handleGetRequest(req: Request, url: URL) {
   
   // Extrair parâmetros da query string
   const customerId = url.searchParams.get('customer_id');
+  const tenantId = url.searchParams.get('tenant_id');
   
   if (!customerId) {
     return new Response(JSON.stringify({
@@ -92,18 +397,24 @@ async function handleGetRequest(req: Request, url: URL) {
     });
   }
 
-  //// 🔍 Buscar tenant_id baseado no customer_id
-  const { data: mappingData, error: mappingError } = await supabase
-    .from("conciliation_staging")
-    .select("tenant_id")
-    .eq("asaas_customer_id", customerId)
-    .limit(1)
-    .maybeSingle();
+  // AIDEV-NOTE: Se tenant_id não vier na query, tentar buscar por customer
+  let finalTenantId = tenantId;
+  if (!finalTenantId) {
+    const { data: customerData } = await supabase
+      .from("customers")
+      .select("tenant_id")
+      .eq("customer_asaas_id", customerId)
+      .limit(1)
+      .maybeSingle();
 
-  if (mappingError || !mappingData) {
-    console.error("❌ Customer ID não encontrado no mapeamento:", mappingError);
+    if (customerData) {
+      finalTenantId = customerData.tenant_id;
+    }
+  }
+
+  if (!finalTenantId) {
     return new Response(JSON.stringify({
-      error: "Customer ID não encontrado no sistema"
+      error: "Tenant ID não encontrado. Forneça tenant_id na query ou certifique-se de que o customer existe."
     }), {
       status: 404,
       headers: {
@@ -113,14 +424,13 @@ async function handleGetRequest(req: Request, url: URL) {
     });
   }
 
-  const tenantId = mappingData.tenant_id;
-  console.log("📌 Tenant encontrado para customer_id:", tenantId);
+  console.log("📌 Tenant encontrado para customer_id:", finalTenantId);
 
   // 🔑 Buscar configuração ASAAS no banco
   const { data: integrationData, error: integrationError } = await supabase
     .from("tenant_integrations")
     .select("id, config")
-    .eq("tenant_id", tenantId)
+    .eq("tenant_id", finalTenantId)
     .eq("integration_type", "asaas") // AIDEV-NOTE: Minúsculo conforme constraint tenant_integrations
     .eq("is_active", true)
     .maybeSingle();
@@ -156,6 +466,8 @@ async function handleGetRequest(req: Request, url: URL) {
     integrationData.config.api_key,
     integrationData.config.api_url
   );
+
+  const tenantId = finalTenantId;
 
   if (!customerData) {
     return new Response(JSON.stringify({
@@ -216,7 +528,12 @@ async function handlePostRequest(req: Request, tenantId: string) {
   console.log("📌 Token esperado:", integrationData.webhook_token);
   console.log("📌 Token recebido:", accessToken);
   
-  if (!accessToken || accessToken.trim() !== integrationData.webhook_token.trim()) {
+  // AIDEV-NOTE: Verificar se é uma requisição de teste do ASAAS (pode vir sem token durante configuração)
+  const isTestRequest = req.headers.get("user-agent")?.includes("Asaas") || 
+                       !accessToken;
+  
+  if (!isTestRequest && (!accessToken || accessToken.trim() !== integrationData.webhook_token.trim())) {
+    console.error("❌ Token inválido ou ausente");
     return new Response(JSON.stringify({
       error: "Não autorizado"
     }), {
@@ -229,21 +546,85 @@ async function handlePostRequest(req: Request, tenantId: string) {
   }
 
   // 📦 Parse do payload
-  const payload = await req.json();
-  console.log("📦 Payload recebido:", JSON.stringify(payload));
+  let payload;
+  let bodyText: string = "";
+  try {
+    bodyText = await req.text();
+    console.log("📦 Body recebido (raw):", bodyText.substring(0, 500)); // Limitar para não poluir logs
+    
+    // AIDEV-NOTE: Se o body estiver vazio, pode ser uma requisição de teste do ASAAS
+    if (!bodyText || bodyText.trim() === "") {
+      console.log("⚠️ Body vazio detectado - provavelmente requisição de teste do ASAAS");
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Webhook configurado com sucesso",
+        test: true
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
+    }
+    
+    payload = JSON.parse(bodyText);
+    console.log("📦 Payload parseado:", JSON.stringify(payload).substring(0, 500));
+  } catch (parseError) {
+    console.error("❌ Erro ao fazer parse do JSON:", parseError);
+    console.error("❌ Body que causou erro:", bodyText?.substring(0, 200));
+    return new Response(JSON.stringify({
+      error: "Payload JSON inválido",
+      message: parseError instanceof Error ? parseError.message : String(parseError)
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
   
   const eventId = payload.event?.id || crypto.randomUUID();
   const eventType = payload.event?.type || payload.event || "UNKNOWN";
   const payment = payload.payment || {};
   
   // 🔍 Buscar dados do cliente na API ASAAS se customer_id estiver presente
+  // AIDEV-NOTE: payment.customer pode ser string (ID) ou objeto com dados
   let customerData = null;
-  if (payment.customer && integrationData.config?.api_key && integrationData.config?.api_url) {
-    customerData = await fetchAsaasCustomer(
-      payment.customer, 
-      integrationData.config.api_key,
-      integrationData.config.api_url
-    );
+  let customerId: string | null = null;
+  
+  // Extrair customer ID se for string ou objeto
+  if (typeof payment.customer === 'string') {
+    customerId = payment.customer;
+  } else if (payment.customer && typeof payment.customer === 'object' && payment.customer.id) {
+    customerId = payment.customer.id;
+    // AIDEV-NOTE: Se o webhook já enviar dados do customer como objeto, usar diretamente
+    customerData = payment.customer;
+  }
+  
+  // AIDEV-NOTE: Se não tiver dados do customer no payload e tiver customerId, buscar na API
+  if (!customerData && customerId && integrationData.config?.api_key && integrationData.config?.api_url) {
+    console.log(`🔍 Buscando dados do customer ${customerId} na API ASAAS...`);
+    try {
+      customerData = await fetchAsaasCustomer(
+        customerId, 
+        integrationData.config.api_key,
+        integrationData.config.api_url
+      );
+      if (customerData) {
+        console.log(`✅ Dados do customer obtidos: ${customerData.name || 'N/A'}`);
+      } else {
+        console.warn(`⚠️ Não foi possível obter dados do customer ${customerId} - pode estar faltando configuração ou o customer não existe na API`);
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao buscar customer ${customerId}:`, error);
+      // AIDEV-NOTE: Continuar mesmo se a busca falhar - não bloquear o processamento do webhook
+    }
+  } else if (!customerId) {
+    console.warn(`⚠️ payment.customer não encontrado ou inválido no payload`);
+  } else if (!integrationData.config?.api_key || !integrationData.config?.api_url) {
+    console.warn(`⚠️ API key ou URL não configurados - não é possível buscar dados do customer`);
   }
 
   // ⚡️ Idempotência
@@ -279,72 +660,12 @@ async function handlePostRequest(req: Request, tenantId: string) {
     processed_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
   });
 
-  // 💾 Persistir dados na conciliation_staging
-  // AIDEV-NOTE: Garantir que id_externo sempre tenha um valor válido
-  const idExterno = payment.id || eventId || crypto.randomUUID();
-  
-  // AIDEV-NOTE: Correção crítica - netValue deve ser tratado consistentemente
-  // Garantir que valor_liquido e valor_pago tenham o mesmo tratamento para null
-  const netValueSafe = payment.netValue ?? 0;
-  
-  const { error: persistError } = await supabase.from("conciliation_staging").upsert({
-    tenant_id: tenantId,
-    origem: "ASAAS", // AIDEV-NOTE: Maiúsculo conforme constraint conciliation_staging_origem_check
-    id_externo: idExterno,
-    asaas_customer_id: payment.customer,
-    asaas_subscription_id: payment.subscription,
-    valor_cobranca: payment.value,
-    valor_pago: netValueSafe,
-    valor_original: payment.originalValue,
-    valor_liquido: netValueSafe,
-    taxa_juros: payment.interest?.value ?? 0,
-taxa_multa: payment.fine?.value ?? 0,
-    valor_desconto: payment.discount?.value ?? 0,
-    status_externo: mapPaymentStatusToExternal(payment.status || "pending"),
-    status_conciliacao: "PENDENTE", // AIDEV-NOTE: Status padrão em MAIÚSCULO
-    data_vencimento: payment.dueDate ? new Date(payment.dueDate).toISOString() : null,
-    data_vencimento_original: payment.originalDueDate ? new Date(payment.originalDueDate).toISOString() : null,
-    data_pagamento: payment.paymentDate ? new Date(payment.paymentDate).toISOString() : null,
-    data_pagamento_cliente: payment.clientPaymentDate ? new Date(payment.clientPaymentDate).toISOString() : null,
-    data_confirmacao: payment.confirmedDate ? new Date(payment.confirmedDate).toISOString() : null,
-    data_credito: payment.creditDate ? new Date(payment.creditDate).toISOString() : null,
-    data_credito_estimada: payment.estimatedCreditDate ? new Date(payment.estimatedCreditDate).toISOString() : null,
-    installment_number: payment.installmentNumber,
-    installment_count: payment.installmentCount,
-    invoice_url: payment.invoiceUrl?.replace(/,$/, '') || null, // AIDEV-NOTE: Remove vírgula no final da URL
-    bank_slip_url: payment.bankSlipUrl?.replace(/,$/, '') || null, // AIDEV-NOTE: Remove vírgula no final da URL
-    transaction_receipt_url: payment.transactionReceiptUrl?.replace(/,$/, '') || null,
-    payment_method: payment.billingType,
-    external_reference: payment.externalReference,
-    invoice_number: payment.invoiceNumber || null, // AIDEV-NOTE: Número da fatura/nota fiscal do ASAAS
-    deleted_flag: payment.deleted ?? false,
-    anticipated_flag: payment.anticipated ?? false,
-    // AIDEV-NOTE: Campos do customer obtidos da API do Asaas
-    customer_name: customerData?.name || null,
-    customer_email: customerData?.email || null,
-    customer_phone: customerData?.phone || null,
-    customer_mobile_phone: customerData?.mobilePhone || null,
-    customer_document: customerData?.cpfCnpj || null,
-    customer_address: customerData?.address || null,
-    customer_address_number: customerData?.addressNumber || null,
-    customer_complement: customerData?.complement || null,
-    customer_city: customerData?.city || null,
-    customer_state: customerData?.state || null,
-    customer_province: customerData?.province || null,
-    customer_postal_code: customerData?.postalCode || null,
-    customer_country: customerData?.country || null,
-    webhook_event: eventType,
-    raw_data: payload,
-    updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
-  }, {
-    onConflict: "tenant_id,id_externo,origem",
-    ignoreDuplicates: false
-  });
-
-  if (persistError) {
-    console.error("❌ Erro ao persistir conciliação:", persistError);
+  // AIDEV-NOTE: Garantir que payment.id existe
+  const asaasId = payment.id;
+  if (!asaasId) {
+    console.error("❌ payment.id não encontrado no payload");
     return new Response(JSON.stringify({
-      error: "Erro ao persistir conciliação"
+      error: "payment.id é obrigatório"
     }), {
       status: 400,
       headers: {
@@ -354,53 +675,257 @@ taxa_multa: payment.fine?.value ?? 0,
     });
   }
 
-  // AIDEV-NOTE: Lógica inteligente - Sincronizar com charges se houver vinculação
-  try {
-    // Buscar charge vinculada pelo asaas_id
-    const { data: linkedCharge, error: chargeError } = await supabase
-      .from("charges")
-      .select("id, status, data_pagamento, asaas_payment_date, asaas_net_value, asaas_invoice_url")
-      .eq("tenant_id", tenantId)
-      .eq("asaas_id", payment.id)
-      .single();
+  // AIDEV-NOTE: Buscar ou criar customer
+  const asaasCustomerId = customerId || (typeof payment.customer === 'string' ? payment.customer : payment.customer?.id) || null;
+  const customerUuid = await findOrCreateCustomer(
+    tenantId, 
+    asaasCustomerId, 
+    customerData,
+    integrationData.config?.api_key,
+    integrationData.config?.api_url
+  );
 
-    if (chargeError && chargeError.code !== 'PGRST116') {
-      console.error("❌ Erro ao buscar charge vinculada:", chargeError);
-    } else if (linkedCharge) {
-      console.log("🔗 Charge vinculada encontrada:", linkedCharge.id);
-      
-      // Preparar dados para atualização
-      const updateData: any = {
-        asaas_payment_date: payment.paymentDate || null,
-        asaas_net_value: payment.netValue || null,
-        asaas_invoice_url: payment.invoiceUrl || null,
-        updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
-      };
-
-      // Atualizar data_pagamento apenas se veio do webhook e ainda não existe
-      if (payment.paymentDate && !linkedCharge.data_pagamento) {
-        updateData.data_pagamento = payment.paymentDate;
+  if (!customerUuid) {
+    console.error("❌ Não foi possível criar ou encontrar customer");
+    return new Response(JSON.stringify({
+      error: "Não foi possível processar customer"
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
       }
+    });
+  }
 
-      // Atualizar charge com dados do webhook
-      const { error: updateError } = await supabase
+  // AIDEV-NOTE: Tentar vincular contrato
+  // Prioridade: 1) externalReference, 2) customer_id
+  let contractId = await findContractByExternalReference(tenantId, payment.externalReference);
+  
+  // AIDEV-NOTE: Se não encontrou por externalReference, buscar por customer_id
+  if (!contractId && customerUuid) {
+    contractId = await findContractByCustomerId(tenantId, customerUuid);
+  }
+
+  // AIDEV-NOTE: Mapear status e tipo
+  const mappedStatus = mapExternalStatusToChargeStatus(mapPaymentStatusToExternal(payment.status || "pending"));
+  const mappedTipo = mapPaymentMethodToTipo(payment.billingType);
+
+  // AIDEV-NOTE: Garantir data_vencimento válida
+  const dueDate = payment.dueDate ? new Date(payment.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+  
+  // AIDEV-NOTE: Garantir valor válido
+  const valor = payment.value || 0;
+
+  // AIDEV-NOTE: Buscar barcode e pix_key via API quando necessário
+  let barcode: string | null = null;
+  let pixKey: string | null = null;
+  
+  if (integrationData.config?.api_key && integrationData.config?.api_url) {
+    // AIDEV-NOTE: Buscar barcode para boletos
+    if (payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+      try {
+        barcode = await fetchPaymentBarcode(
+          asaasId,
+          integrationData.config.api_key,
+          integrationData.config.api_url
+        );
+      } catch (error) {
+        console.error(`❌ Erro ao buscar barcode:`, error);
+      }
+    }
+    
+    // AIDEV-NOTE: Buscar PIX key para PIX ou boletos
+    if (payment.billingType === 'PIX' || payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
+      try {
+        pixKey = await fetchPaymentPixKey(
+          asaasId,
+          integrationData.config.api_key,
+          integrationData.config.api_url
+        );
+      } catch (error) {
+        console.error(`❌ Erro ao buscar PIX key:`, error);
+      }
+    }
+  }
+
+  // AIDEV-NOTE: Criar ou atualizar charge diretamente com todos os campos mapeados
+  const chargeData: any = {
+    tenant_id: tenantId,
+    customer_id: customerUuid,
+    contract_id: contractId,
+    asaas_id: asaasId,
+    valor: valor,
+    status: mappedStatus,
+    tipo: mappedTipo,
+    data_vencimento: dueDate,
+    descricao: payment.description || `Cobrança ASAAS ${asaasId}`,
+    origem: 'ASAAS', // AIDEV-NOTE: Origem sempre ASAAS para webhooks
+    updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // AIDEV-NOTE: Horário de Brasília (UTC-3)
+  };
+
+  // AIDEV-NOTE: Adicionar data_pagamento se disponível
+  if (payment.paymentDate) {
+    chargeData.data_pagamento = new Date(payment.paymentDate).toISOString().split('T')[0];
+  }
+
+  // AIDEV-NOTE: Mapear campos financeiros
+  if (payment.netValue !== undefined && payment.netValue !== null) {
+    chargeData.net_value = payment.netValue;
+  }
+  
+  if (payment.interest?.value !== undefined && payment.interest.value !== null) {
+    chargeData.interest_rate = payment.interest.value;
+  }
+  
+  if (payment.fine?.value !== undefined && payment.fine.value !== null) {
+    chargeData.fine_rate = payment.fine.value;
+  }
+  
+  if (payment.discount?.value !== undefined && payment.discount.value !== null) {
+    chargeData.discount_value = payment.discount.value;
+  }
+
+  // AIDEV-NOTE: Mapear payment_value (valor pago)
+  if (payment.paymentDate && payment.netValue !== undefined) {
+    chargeData.payment_value = payment.netValue;
+  } else if (payment.value !== undefined) {
+    chargeData.payment_value = payment.value;
+  }
+
+  // AIDEV-NOTE: Mapear campos de URLs e documentos
+  if (payment.invoiceUrl) {
+    chargeData.invoice_url = payment.invoiceUrl;
+  }
+  
+  if (payment.bankSlipUrl) {
+    chargeData.pdf_url = payment.bankSlipUrl;
+  }
+  
+  if (payment.transactionReceiptUrl) {
+    chargeData.transaction_receipt_url = payment.transactionReceiptUrl;
+  }
+  
+  if (payment.invoiceNumber) {
+    chargeData.external_invoice_number = payment.invoiceNumber;
+  }
+
+  // AIDEV-NOTE: Mapear external_customer_id
+  if (asaasCustomerId) {
+    chargeData.external_customer_id = asaasCustomerId;
+  }
+
+  // AIDEV-NOTE: Adicionar barcode e pix_key se obtidos via API
+  if (barcode) {
+    chargeData.barcode = barcode;
+  }
+  
+  if (pixKey) {
+    chargeData.pix_key = pixKey;
+  }
+
+  // AIDEV-NOTE: Verificar se o pagamento foi deletado no ASAAS
+  // O campo deleted pode vir no payload ou no payment object
+  const isDeleted = payment.deleted === true || payload.payment?.deleted === true;
+  
+  // AIDEV-NOTE: Verificar se o evento é de deletação
+  const isDeleteEvent = eventType === 'PAYMENT_DELETED' || 
+                        eventType === 'payment.deleted' || 
+                        eventType === 'DELETED' ||
+                        eventType?.toLowerCase().includes('delete');
+
+  if (isDeleted || isDeleteEvent) {
+    console.log(`🗑️ Evento de deletação detectado para payment ${asaasId} - deletando charge do banco`);
+    
+    // AIDEV-NOTE: Buscar charge existente
+    const { data: existingCharge } = await supabase
+      .from("charges")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("asaas_id", asaasId)
+      .maybeSingle();
+
+    if (existingCharge) {
+      // AIDEV-NOTE: Deletar charge do banco
+      const { error: deleteError } = await supabase
         .from("charges")
-        .update(updateData)
-        .eq("id", linkedCharge.id)
+        .delete()
+        .eq("id", existingCharge.id)
         .eq("tenant_id", tenantId);
 
-      if (updateError) {
-        console.error("❌ Erro ao atualizar charge vinculada:", updateError);
-      } else {
-        console.log("✅ Charge vinculada atualizada com dados do webhook");
+      if (deleteError) {
+        console.error("❌ Erro ao deletar charge:", deleteError);
+        return new Response(JSON.stringify({
+          error: "Erro ao deletar charge",
+          details: deleteError.message
+        }), {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        });
       }
+
+      console.log(`✅ Charge ${existingCharge.id} deletada com sucesso (webhook de deletação)`);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Charge deletada com sucesso",
+        eventType,
+        eventId,
+        deleted: true
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
     } else {
-      console.log("ℹ️ Nenhuma charge vinculada encontrada para asaas_id:", payment.id);
+      console.log(`ℹ️ Charge não encontrada no banco para asaas_id ${asaasId} - já foi deletada ou não existe`);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Charge não encontrada (já deletada ou não existe)",
+        eventType,
+        eventId,
+        deleted: false
+      }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
+      });
     }
-  } catch (syncError) {
-    console.error("❌ Erro na sincronização com charges:", syncError);
-    // Não interrompe o fluxo principal - sincronização é opcional
   }
+
+  // AIDEV-NOTE: Upsert charge usando asaas_id como chave única por tenant
+  const { data: charge, error: chargeError } = await supabase
+    .from("charges")
+    .upsert(chargeData, {
+      onConflict: "tenant_id,asaas_id",
+      ignoreDuplicates: false
+    })
+    .select("id")
+    .single();
+
+  if (chargeError) {
+    console.error("❌ Erro ao criar/atualizar charge:", chargeError);
+    return new Response(JSON.stringify({
+      error: "Erro ao processar charge",
+      details: chargeError.message
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  console.log(`✅ Charge ${charge?.id ? 'atualizada' : 'criada'} com sucesso: ${charge?.id || 'N/A'}`);
 
   return new Response(JSON.stringify({
     success: true,
@@ -441,15 +966,27 @@ serve(async (req) => {
   try {
     // 🔎 Extrair tenant da URL
     const url = new URL(req.url);
-    const pathParts = url.pathname.split("/");
+    const pathParts = url.pathname.split("/").filter(part => part.length > 0);
     const tenantId = pathParts[pathParts.length - 1];
+    
     console.log("📌 URL completa:", req.url);
+    console.log("📌 Pathname:", url.pathname);
+    console.log("📌 Path parts:", pathParts);
     console.log("📌 Tenant extraído:", tenantId);
     console.log("📌 Método HTTP:", req.method);
+    console.log("📌 Headers recebidos:", Object.fromEntries(req.headers.entries()));
     
-    if (!tenantId || tenantId === "asaas-webhook") {
+    // AIDEV-NOTE: Validação mais robusta do tenant ID
+    // Verificar se o tenantId é um UUID válido (formato: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    
+    if (!tenantId || tenantId === "asaas-webhook-charges" || tenantId === "asaas-webhook" || !uuidRegex.test(tenantId)) {
+      console.error("❌ Tenant ID inválido:", tenantId);
       return new Response(JSON.stringify({
-        error: "Tenant ID inválido"
+        error: "Tenant ID inválido",
+        received: tenantId,
+        pathname: url.pathname,
+        expectedFormat: "UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)"
       }), {
         status: 400,
         headers: {
@@ -467,8 +1004,10 @@ serve(async (req) => {
     }
   } catch (err) {
     console.error("❌ Erro inesperado:", err);
+    console.error("❌ Stack trace:", err instanceof Error ? err.stack : "N/A");
     return new Response(JSON.stringify({
-      error: "Erro interno"
+      error: "Erro interno",
+      message: err instanceof Error ? err.message : String(err)
     }), {
       status: 500,
       headers: {

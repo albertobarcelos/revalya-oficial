@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Bell, FileText, Building2, CreditCard, Search, Smartphone, Receipt } from 'lucide-react';
+import { Bell, FileText, Building2, CreditCard, Search, Smartphone, Receipt, MessageSquare } from 'lucide-react';
 import type { Cobranca } from '@/types/database';
+import { findRelatedOverdueCharges } from '@/utils/chargeGrouping';
+import { useMessageCount } from '@/hooks/useMessageCount';
 
 // AIDEV-NOTE: Interface para props do componente de lista de cobranças do grupo
 interface ChargeGroupListProps {
@@ -22,6 +24,7 @@ interface ChargeGroupListProps {
   };
   selectedCharges: string[];
   overdueFilter: string;
+  allCharges?: Cobranca[]; // AIDEV-NOTE: Todas as cobranças para buscar relacionadas
   onClose: () => void;
   onChargeSelect: (chargeId: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
@@ -130,6 +133,7 @@ export function ChargeGroupList({
   groupedCharges,
   selectedCharges,
   overdueFilter,
+  allCharges,
   onClose,
   onChargeSelect,
   onSelectAll,
@@ -137,8 +141,63 @@ export function ChargeGroupList({
   onSendMessages,
   onOverdueFilterChange
 }: ChargeGroupListProps) {
+  // AIDEV-NOTE: TODOS os hooks devem ser chamados ANTES de qualquer early return
   const [searchTerm, setSearchTerm] = useState('');
   
+  // AIDEV-NOTE: Calcular cobranças vencidas relacionadas usando useMemo para performance
+  // IMPORTANTE: useMemo deve ser chamado antes de qualquer early return
+  const relatedOverdueGroups = useMemo(() => {
+    if (!selectedGroup || !allCharges || allCharges.length === 0) return [];
+    
+    const currentGroup = groupedCharges[selectedGroup];
+    if (!currentGroup || currentGroup.charges.length === 0) return [];
+    
+    // Não mostrar se já estiver no grupo "Vencidos"
+    if (selectedGroup === 'overdue') return [];
+    
+    return findRelatedOverdueCharges(currentGroup.charges, allCharges).slice(0, 5); // Limitar a 5 clientes
+  }, [selectedGroup, groupedCharges, allCharges]);
+
+  // AIDEV-NOTE: Preparar dados para o hook de contagem de mensagens
+  const { chargeIds, chargeDates } = useMemo(() => {
+    if (!selectedGroup) return { chargeIds: [], chargeDates: {} };
+    
+    const currentGroup = groupedCharges[selectedGroup];
+    if (!currentGroup) return { chargeIds: [], chargeDates: {} };
+
+    const ids: string[] = [];
+    const dates: { [key: string]: string } = {};
+
+    // Adicionar cobranças principais
+    currentGroup.charges.forEach((charge) => {
+      ids.push(charge.id);
+      if (charge.created_at) {
+        dates[charge.id] = charge.created_at;
+      }
+    });
+
+    // Adicionar cobranças vencidas relacionadas
+    relatedOverdueGroups.forEach((group) => {
+      group.overdueCharges.forEach((charge) => {
+        if (!ids.includes(charge.id)) {
+          ids.push(charge.id);
+          if (charge.created_at) {
+            dates[charge.id] = charge.created_at;
+          }
+        }
+      });
+    });
+
+    return { chargeIds: ids, chargeDates: dates };
+  }, [selectedGroup, groupedCharges, relatedOverdueGroups]);
+
+  // AIDEV-NOTE: Hook para buscar contagem de mensagens
+  const { messageCounts } = useMessageCount({
+    chargeIds,
+    chargeDates,
+  });
+  
+  // AIDEV-NOTE: Early returns APÓS todos os hooks
   if (!selectedGroup) return null;
 
   const currentGroup = groupedCharges[selectedGroup];
@@ -214,112 +273,262 @@ export function ChargeGroupList({
             </div>
           </div>
           
-          {/* AIDEV-NOTE: Lista de cobranças com altura flexível */}
+          {/* AIDEV-NOTE: Container scrollável para lista principal e cobranças vencidas */}
           <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-            {filteredCharges.map((charge) => (
-              <div
-                key={charge.id}
-                className="group relative flex items-start space-x-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all duration-200 cursor-pointer bg-white"
-                onClick={() => onViewCharge(charge)}
-              >
-                <Checkbox
-                  checked={selectedCharges.includes(charge.id)}
-                  onCheckedChange={(checked: any) => onChargeSelect(charge.id, checked as boolean)}
-                  onClick={(e: any) => e.stopPropagation()}
-                  className="mt-1"
-                />
-                
-                <div className="flex-1 min-w-0 space-y-3">
-                  {/* AIDEV-NOTE: Cabeçalho com nome/empresa e valor */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <h4 className="text-sm font-semibold text-gray-900 truncate">
-                          {charge.customers?.name || charge.customers?.company || 'Cliente não informado'}
-                        </h4>
-                        {charge.customers?.company && charge.customers?.name && (
-                          <Building2 className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                        )}
-                      </div>
-                      {charge.customers?.company && charge.customers?.name && (
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">
-                          {charge.customers.company}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="text-lg font-bold text-emerald-600">
-                        R$ {charge.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* AIDEV-NOTE: Informações do documento */}
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-4">
-                      {charge.customers?.cpf_cnpj && (
-                        <div className="flex items-center space-x-1 text-gray-600">
-                          <FileText className="h-3 w-3" />
-                          <span>{formatDocument(charge.customers.cpf_cnpj)}</span>
-                        </div>
-                      )}
-                    </div>
+            {filteredCharges.map((charge) => {
+              // AIDEV-NOTE: Verificar se este cliente tem cobranças vencidas relacionadas
+              const hasRelatedOverdue = relatedOverdueGroups.some(
+                g => g.customerId === charge.customer_id
+              );
+              const relatedGroup = relatedOverdueGroups.find(
+                g => g.customerId === charge.customer_id
+              );
+              
+              return (
+                <div key={charge.id} className="space-y-2">
+                  {/* AIDEV-NOTE: Cobrança principal */}
+                  <div
+                    className="group relative flex items-start space-x-4 p-4 border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all duration-200 cursor-pointer bg-white"
+                    onClick={() => onViewCharge(charge)}
+                  >
+                    <Checkbox
+                      checked={selectedCharges.includes(charge.id)}
+                      onCheckedChange={(checked: any) => onChargeSelect(charge.id, checked as boolean)}
+                      onClick={(e: any) => e.stopPropagation()}
+                      className="mt-1"
+                    />
                     
-                    <div className="flex items-center space-x-3">
-                      {/* AIDEV-NOTE: Tipo de cobrança e vencimento agrupados */}
-                      <div className="flex items-center space-x-3">
-                        {charge.tipo && (
-                          <div className="flex items-center space-x-1">
-                            {getPaymentIcon(charge.tipo)}
-                            <span className="text-xs text-gray-500 font-medium">
-                              {formatPaymentType(charge.tipo)}
-                            </span>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      {/* AIDEV-NOTE: Cabeçalho com nome/empresa e valor */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">
+                              {charge.customers?.name || charge.customers?.company || 'Cliente não informado'}
+                            </h4>
+                            {charge.customers?.company && charge.customers?.name && (
+                              <Building2 className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                            )}
+                            {hasRelatedOverdue && (
+                              <Badge variant="destructive" className="text-xs">
+                                {relatedGroup?.overdueCharges.length} vencida(s)
+                              </Badge>
+                            )}
                           </div>
-                        )}
-                        <div className="flex items-center space-x-1 text-gray-600">
-                          <span>Venc:</span>
-                          <span className="font-medium">
-                            {charge.data_vencimento ? format(parseISO(charge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
-                          </span>
+                          {charge.customers?.company && charge.customers?.name && (
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              {charge.customers.company}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-4">
+                          <p className="text-lg font-bold text-emerald-600">
+                            R$ {charge.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                          </p>
                         </div>
                       </div>
-                      
-                      {/* AIDEV-NOTE: Status traduzido com cores melhoradas */}
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs font-medium border ${getStatusColor(charge.status)}`}
-                      >
-                        {getStatusLabel(charge.status)}
-                      </Badge>
+
+                      {/* AIDEV-NOTE: Informações do documento */}
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-4">
+                          {charge.customers?.cpf_cnpj && (
+                            <div className="flex items-center space-x-1 text-gray-600">
+                              <FileText className="h-3 w-3" />
+                              <span>{formatDocument(charge.customers.cpf_cnpj)}</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center space-x-3">
+                          {/* AIDEV-NOTE: Tipo de cobrança e vencimento agrupados */}
+                          <div className="flex items-center space-x-3">
+                            {charge.tipo && (
+                              <div className="flex items-center space-x-1">
+                                {getPaymentIcon(charge.tipo)}
+                                <span className="text-xs text-gray-500 font-medium">
+                                  {formatPaymentType(charge.tipo)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex items-center space-x-1 text-gray-600">
+                              <span>Venc:</span>
+                              <span className="font-medium">
+                                {charge.data_vencimento ? format(parseISO(charge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* AIDEV-NOTE: Status traduzido com cores melhoradas */}
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs font-medium border ${getStatusColor(charge.status)}`}
+                          >
+                            {getStatusLabel(charge.status)}
+                          </Badge>
+                          
+                          {/* AIDEV-NOTE: Ícone de contagem de mensagens */}
+                          {(messageCounts.get(charge.id) || 0) > 0 && (
+                            <div className="flex items-center space-x-1 text-blue-600">
+                              <MessageSquare className="h-4 w-4" />
+                              <span className="text-xs font-medium">
+                                {messageCounts.get(charge.id) || 0}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* AIDEV-NOTE: Informações adicionais - Licença PDV e Contrato */}
+                      {(charge.contract_id || charge.tipo === 'BOLETO') && (
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 pt-1 border-t border-gray-100">
+                          {charge.contract_id && (
+                            <span className="flex items-center space-x-1">
+                              <span>Contrato:</span>
+                              <span className="font-medium text-gray-700">{charge.contract_id.slice(-8)}</span>
+                            </span>
+                          )}
+                          {charge.tipo === 'BOLETO' && (
+                            <span className="flex items-center space-x-1">
+                              <FileText className="h-3 w-3" />
+                              {/* AIDEV-NOTE: Exibindo o nome correto do serviço/produto da cobrança */}
+                              <span>
+                                {charge.contract?.services?.[0]?.service?.name || 
+                                 charge.contract?.services?.[0]?.description ||
+                                 charge.descricao || 
+                                 'Serviço não especificado'}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
+                  
+                  {/* AIDEV-NOTE: Cobranças vencidas relacionadas - linhas abaixo da principal */}
+                  {hasRelatedOverdue && relatedGroup && (
+                    <div className="ml-4 space-y-2 border-l-2 border-red-200 pl-4">
+                      {relatedGroup.overdueCharges.map((overdueCharge) => (
+                        <div
+                          key={overdueCharge.id}
+                          className="group relative flex items-start space-x-4 p-3 border border-red-200 rounded-lg hover:border-red-300 hover:shadow-sm transition-all duration-200 cursor-pointer bg-red-50"
+                          onClick={() => onViewCharge(overdueCharge)}
+                        >
+                          <Checkbox
+                            checked={selectedCharges.includes(overdueCharge.id)}
+                            onCheckedChange={(checked: any) => onChargeSelect(overdueCharge.id, checked as boolean)}
+                            onClick={(e: any) => e.stopPropagation()}
+                            className="mt-1"
+                          />
+                          
+                          <div className="flex-1 min-w-0 space-y-2">
+                            {/* AIDEV-NOTE: Cabeçalho com nome/empresa e valor */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="text-sm font-semibold text-red-900 truncate">
+                                    {overdueCharge.customers?.name || overdueCharge.customers?.company || 'Cliente não informado'}
+                                  </h4>
+                                  {overdueCharge.customers?.company && overdueCharge.customers?.name && (
+                                    <Building2 className="h-3 w-3 text-red-400 flex-shrink-0" />
+                                  )}
+                                  <Badge variant="destructive" className="text-xs">
+                                    Vencida
+                                  </Badge>
+                                </div>
+                                {overdueCharge.customers?.company && overdueCharge.customers?.name && (
+                                  <p className="text-xs text-red-500 mt-0.5 truncate">
+                                    {overdueCharge.customers.company}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right flex-shrink-0 ml-4">
+                                <p className="text-lg font-bold text-red-600">
+                                  R$ {overdueCharge.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}
+                                </p>
+                              </div>
+                            </div>
 
-                  {/* AIDEV-NOTE: Informações adicionais - Licença PDV e Contrato */}
-                  {(charge.contract_id || charge.tipo === 'BOLETO') && (
-                    <div className="flex items-center space-x-4 text-xs text-gray-500 pt-1 border-t border-gray-100">
-                      {charge.contract_id && (
-                        <span className="flex items-center space-x-1">
-                          <span>Contrato:</span>
-                          <span className="font-medium text-gray-700">{charge.contract_id.slice(-8)}</span>
-                        </span>
-                      )}
-                      {charge.tipo === 'BOLETO' && (
-                        <span className="flex items-center space-x-1">
-                          <FileText className="h-3 w-3" />
-                          {/* AIDEV-NOTE: Exibindo o nome correto do serviço/produto da cobrança */}
-                          <span>
-                            {charge.contract?.services?.[0]?.service?.name || 
-                             charge.contract?.services?.[0]?.description ||
-                             charge.descricao || 
-                             'Serviço não especificado'}
-                          </span>
-                        </span>
-                      )}
+                            {/* AIDEV-NOTE: Informações do documento */}
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center space-x-4">
+                                {overdueCharge.customers?.cpf_cnpj && (
+                                  <div className="flex items-center space-x-1 text-red-600">
+                                    <FileText className="h-3 w-3" />
+                                    <span>{formatDocument(overdueCharge.customers.cpf_cnpj)}</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div className="flex items-center space-x-3">
+                                {/* AIDEV-NOTE: Tipo de cobrança e vencimento agrupados */}
+                                <div className="flex items-center space-x-3">
+                                  {overdueCharge.tipo && (
+                                    <div className="flex items-center space-x-1">
+                                      {getPaymentIcon(overdueCharge.tipo)}
+                                      <span className="text-xs text-red-500 font-medium">
+                                        {formatPaymentType(overdueCharge.tipo)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center space-x-1 text-red-600">
+                                    <span>Venc:</span>
+                                    <span className="font-medium">
+                                      {overdueCharge.data_vencimento ? format(parseISO(overdueCharge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* AIDEV-NOTE: Status traduzido com cores melhoradas */}
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs font-medium border ${getStatusColor(overdueCharge.status)}`}
+                                >
+                                  {getStatusLabel(overdueCharge.status)}
+                                </Badge>
+                                
+                                {/* AIDEV-NOTE: Ícone de contagem de mensagens para cobranças vencidas */}
+                                {(messageCounts.get(overdueCharge.id) || 0) > 0 && (
+                                  <div className="flex items-center space-x-1 text-blue-600">
+                                    <MessageSquare className="h-4 w-4" />
+                                    <span className="text-xs font-medium">
+                                      {messageCounts.get(overdueCharge.id) || 0}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* AIDEV-NOTE: Informações adicionais - Licença PDV e Contrato */}
+                            {(overdueCharge.contract_id || overdueCharge.tipo === 'BOLETO') && (
+                              <div className="flex items-center space-x-4 text-xs text-red-500 pt-1 border-t border-red-200">
+                                {overdueCharge.contract_id && (
+                                  <span className="flex items-center space-x-1">
+                                    <span>Contrato:</span>
+                                    <span className="font-medium text-red-700">{overdueCharge.contract_id.slice(-8)}</span>
+                                  </span>
+                                )}
+                                {overdueCharge.tipo === 'BOLETO' && (
+                                  <span className="flex items-center space-x-1">
+                                    <FileText className="h-3 w-3" />
+                                    {/* AIDEV-NOTE: Exibindo o nome correto do serviço/produto da cobrança */}
+                                    <span>
+                                      {overdueCharge.contract?.services?.[0]?.service?.name || 
+                                       overdueCharge.contract?.services?.[0]?.description ||
+                                       overdueCharge.descricao || 
+                                       'Serviço não especificado'}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           {/* AIDEV-NOTE: Botão fixo na parte inferior */}

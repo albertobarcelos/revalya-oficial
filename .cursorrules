@@ -1,0 +1,169 @@
+# Cursor Rules - Revalya Financial System
+
+## 🎯 Contexto do Projeto
+
+Você está trabalhando no **Revalya**, um sistema financeiro multi-tenant completo construído com:
+- React 18 + TypeScript + Vite
+- Supabase (PostgreSQL + Edge Functions)
+- Shadcn/UI + Tailwind CSS
+- TanStack Query + Zustand
+
+## 🔐 Regras de Segurança Multi-Tenant (CRÍTICO)
+
+### 1. Sempre Validar Acesso
+- TODOS os componentes devem usar `useTenantAccessGuard()` antes de acessar dados
+- TODAS as queries devem incluir `tenant_id` na query key
+- TODAS as mutations devem incluir `tenant_id` nos dados
+
+### 2. Padrão de Query Segura
+```typescript
+const query = useSecureTenantQuery({
+  queryKey: ['resource', currentTenant?.id, filters],
+  queryFn: async () => {
+    await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: currentTenant.id
+    });
+    return fetchData();
+  },
+  enabled: hasAccess && !!currentTenant?.id
+});
+```
+
+### 3. Padrão de Mutation Segura
+```typescript
+const mutation = useSecureTenantMutation({
+  mutationFn: async (data) => {
+    await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: currentTenant.id
+    });
+    return createResource({ ...data, tenant_id: currentTenant.id });
+  }
+});
+```
+
+## 📝 Convenções de Código
+
+### Nomenclatura
+- **JavaScript/TypeScript**: `camelCase` para variáveis/funções, `PascalCase` para componentes
+- **Python**: `snake_case` para variáveis/funções, `PascalCase` para classes
+- **Constantes**: `UPPER_SNAKE_CASE`
+
+### Comentários
+- **Idioma**: Sempre em **português-BR**
+- **AIDEV-NOTE**: Obrigatório em operações críticas de segurança
+- Exemplo:
+```typescript
+// AIDEV-NOTE: Configuração obrigatória de contexto de tenant
+// Garante isolamento de dados entre tenants
+await supabase.rpc('set_tenant_context_simple', {
+  p_tenant_id: currentTenant.id
+});
+```
+
+### Query Keys
+- Formato: `['resource', tenant_id, ...params]`
+- Exemplo: `['charges', tenantId, { status: 'pending' }]`
+
+## 🎨 Padrões de Componentes
+
+### Template de Componente
+```typescript
+interface ComponentProps {
+  // Props tipadas
+}
+
+export function Component({ ...props }: ComponentProps) {
+  // 1. Hooks de segurança
+  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  
+  // 2. Estados e queries
+  const [state, setState] = useState();
+  const query = useSecureTenantQuery({...});
+  
+  // 3. Callbacks
+  const handleAction = useCallback(() => {
+    // Lógica
+  }, [dependencies]);
+  
+  // 4. Early returns
+  if (!hasAccess) return <AccessDenied />;
+  
+  // 5. Render
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      {/* Conteúdo */}
+    </motion.div>
+  );
+}
+```
+
+## 🚨 Validações Obrigatórias
+
+### Antes de Criar/Modificar Código
+
+1. ✅ Componente usa `useTenantAccessGuard()`?
+2. ✅ Query inclui `tenant_id` na query key?
+3. ✅ Mutation inclui `tenant_id` nos dados?
+4. ✅ Contexto de tenant configurado antes de operações?
+5. ✅ Comentários em português-BR?
+6. ✅ AIDEV-NOTE em operações críticas?
+7. ✅ Sem uso de `any` sem justificativa?
+8. ✅ Erros tratados e logados?
+
+## 📁 Estrutura de Pastas
+
+- `src/components/` - Componentes React
+- `src/hooks/` - React Hooks (templates em `hooks/templates/`)
+- `src/services/` - Serviços de negócio
+- `src/types/` - TypeScript types
+- `src/utils/` - Funções utilitárias
+- `src/lib/` - Bibliotecas e configurações
+- `src/pages/` - Páginas da aplicação
+- `src/core/` - Core do sistema (auth, security, tenant, state)
+
+## 🔧 Funcionalidades Principais
+
+1. **Dashboard Financeiro** - Métricas em tempo real
+2. **Gestão de Contratos** - Contratos digitais
+3. **Faturamento** - Kanban visual com geração automática
+4. **Reconciliação Bancária** - Integração ASAAS
+5. **Integrações** - ASAAS, WhatsApp, Evolution API
+
+## ⚠️ NUNCA Fazer
+
+- ❌ Criar queries sem validação de tenant
+- ❌ Usar `any` sem justificativa
+- ❌ Escrever comentários em inglês
+- ❌ Modificar migrations sem permissão
+- ❌ Alterar templates de segurança sem revisão
+- ❌ Criar RLS policies sem validação de tenant_id
+
+## ✅ SEMPRE Fazer
+
+- ✅ Validar acesso com `useTenantAccessGuard()`
+- ✅ Incluir `tenant_id` em queries e mutations
+- ✅ Configurar contexto de tenant antes de operações
+- ✅ Adicionar `AIDEV-NOTE` em operações críticas
+- ✅ Tratar e logar erros adequadamente
+- ✅ Usar tipos TypeScript específicos
+- ✅ Seguir padrões de nomenclatura
+
+## 📚 Documentação de Referência
+
+- `.cursor/BUGBOT.md` - Diretrizes de revisão
+- `.cursor/CONTEXT.md` - Contexto completo do projeto
+- `Contexto.md` - Especificidades técnicas
+- `SECURITY_GUIDELINES_AI_DEVELOPMENT.md` - Diretrizes de segurança
+
+## 🎯 Objetivos
+
+Ao gerar código, sempre:
+1. Priorizar segurança multi-tenant
+2. Seguir padrões estabelecidos
+3. Manter consistência com código existente
+4. Documentar operações críticas
+5. Validar tipos TypeScript
+

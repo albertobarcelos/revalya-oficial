@@ -84,13 +84,17 @@ export default function Register() {
 
       // Criar o usuário manualmente caso necessário
       if (data.user) {
+        /**
+         * Persistir dados do usuário na tabela public.users.
+         * Observação: company_name não existe como coluna em users; armazenamos em users.metadata.company_name.
+         */
         const { error: userError } = await supabase
           .from("users")
           .upsert({
             id: data.user.id,
             name,
             email,
-            company_name: company,
+            metadata: { company_name: company },
             user_role: 'TENANT_USER', // Papel padrão para novos usuários
             active: true,
           });

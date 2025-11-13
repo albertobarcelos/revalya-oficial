@@ -21,7 +21,7 @@ const PaginationContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ul
     ref={ref}
-    className={cn("flex flex-row items-center gap-1", className)}
+    className={cn("flex flex-row items-center gap-1.5", className)}
     {...props}
   />
 ))
@@ -50,7 +50,10 @@ const PaginationLink = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(
           variant: isActive ? "outline" : "ghost",
           size,
         }),
-        disabled && "pointer-events-none opacity-50",
+        "min-w-[2.5rem] h-9",
+        isActive && "bg-primary text-primary-foreground hover:bg-primary/90",
+        disabled && "pointer-events-none opacity-50 cursor-not-allowed",
+        !disabled && !isActive && "hover:bg-accent hover:text-accent-foreground",
         className
       )}
       disabled={disabled}
@@ -66,7 +69,7 @@ const PaginationPrevious = React.forwardRef<HTMLButtonElement, PaginationLinkPro
       ref={ref}
       aria-label="Go to previous page"
       size="default"
-      className={cn("gap-1 pl-2.5", className)}
+      className={cn("gap-1.5 px-3 min-w-[100px] justify-start", className)}
       disabled={disabled}
       {...props}
     >
@@ -83,7 +86,7 @@ const PaginationNext = React.forwardRef<HTMLButtonElement, PaginationLinkProps>(
       ref={ref}
       aria-label="Go to next page"
       size="default"
-      className={cn("gap-1 pr-2.5", className)}
+      className={cn("gap-1.5 px-3 min-w-[100px] justify-end", className)}
       disabled={disabled}
       {...props}
     >

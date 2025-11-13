@@ -6,6 +6,7 @@ export interface ContractService {
   description?: string;
   quantity: number;
   unit_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo do serviço
   discount_percentage: number;
   discount_amount: number;
   tax_rate: number;
@@ -74,6 +75,7 @@ export interface ExtendedContractService extends Omit<ContractService, 'id' | 'c
   name: string;
   quantity: number;
   unit_price: number;
+  cost_price?: number; // AIDEV-NOTE: Preço de custo do serviço
   discount_percentage: number;
   discount_amount: number;
   tax_rate: number;

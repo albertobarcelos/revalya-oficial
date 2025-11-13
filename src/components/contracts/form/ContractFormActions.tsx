@@ -557,6 +557,7 @@ export function ContractFormActions({
             description: service.description || service.name,
             quantity: service.quantity || 1,
             unit_price: service.unit_price || service.default_price || 0,
+            cost_price: service.cost_price || 0, // AIDEV-NOTE: Campo custo unitário adicionado para salvar edições
             discount_percentage: service.discount_percentage || 0,
             tax_rate: service.tax_rate || 0,
             payment_method: mappedPaymentMethod,

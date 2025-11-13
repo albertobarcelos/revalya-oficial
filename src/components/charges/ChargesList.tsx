@@ -121,7 +121,7 @@ export function ChargesList() {
     setCurrentPage(1);
   };
 
-  const handleViewCharge = (charge: Cobranca) => {
+  const handleViewCharge = (charge: Charge) => {
     // AIDEV-NOTE: Debug - Log da cobrança selecionada para abertura do drawer
     console.log('🔍 ChargesList - Cobrança selecionada para visualização:', {
       chargeId: charge.id,
@@ -475,13 +475,32 @@ export function ChargesList() {
                 <TableHead>N° Contrato</TableHead>
                 <TableHead>Valor</TableHead>
                 <TableHead>Vencimento</TableHead>
+                <TableHead>Pagamento</TableHead>
                 <TableHead>Parcelas</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {charges.map((charge) => (
+              {charges.map((charge) => {
+                // AIDEV-NOTE: Debug - Log dos dados da cobrança para verificar mapeamento
+                // Log apenas da primeira cobrança para não poluir o console
+                if (charges.indexOf(charge) === 0) {
+                  console.log('🔍 [CHARGES LIST DEBUG] Primeira cobrança na lista:', {
+                    chargeId: charge.id,
+                    valor: charge.valor,
+                    customerId: charge.customer_id,
+                    contractId: charge.contract_id,
+                    customers: charge.customers,
+                    customersName: charge.customers?.name,
+                    customersCompany: charge.customers?.company,
+                    customersCpfCnpj: charge.customers?.cpf_cnpj,
+                    contracts: charge.contracts,
+                    contractsNumber: charge.contracts?.contract_number
+                  });
+                }
+                
+                return (
                 <TableRow 
                   key={charge.id}
                   className="cursor-pointer hover:bg-muted/50"
@@ -496,12 +515,16 @@ export function ChargesList() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <span>{charge.customers?.name}</span>
+                      <span className="font-medium">
+                        {charge.customers?.name || (
+                          <span className="text-muted-foreground italic">Cliente não identificado</span>
+                        )}
+                      </span>
                       {charge.descricao && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Info className="h-4 w-4 text-muted-foreground hover:text-gray-900 transition-colors" />
+                              <Info className="h-4 w-4 text-muted-foreground hover:text-gray-900 transition-colors cursor-help" />
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="max-w-xs">{charge.descricao}</p>
@@ -511,26 +534,62 @@ export function ChargesList() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{charge.customers?.company || "-"}</TableCell>
-                  <TableCell>{formatCpfCnpj(charge.customers?.cpf_cnpj)}</TableCell>
+                  <TableCell>
+                    {charge.customers?.company ? (
+                      <span className="font-medium">{charge.customers.company}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {charge.customers?.cpf_cnpj ? (
+                      formatCpfCnpj(charge.customers.cpf_cnpj)
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium text-blue-600">
-                    {charge.contracts?.contract_number || 'N/A'}
+                    {charge.contracts?.contract_number || (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
                   </TableCell>
-                  <TableCell>{formatCurrency(charge.valor)}</TableCell>
-                  <TableCell>{formatDate(charge.data_vencimento)}</TableCell>
-                  <TableCell>
-                    <Badge variant={getInstallmentBadgeVariant(charge.descricao)} className="text-xs">
-                      {formatInstallmentDisplay(charge.descricao)}
-                    </Badge>
+                  <TableCell className="font-semibold">
+                    {formatCurrency(charge.valor || 0)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">
+                    {charge.data_vencimento ? (
+                      formatDate(charge.data_vencimento)
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {charge.data_pagamento ? (
+                      <span className="text-green-600 font-medium">
+                        {formatDate(charge.data_pagamento)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {charge.descricao ? (
+                      <Badge variant={getInstallmentBadgeVariant(charge.descricao)} className="text-xs">
+                        {formatInstallmentDisplay(charge.descricao)}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
                       {formatChargeType(charge.tipo, charge.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell>{getStatusBadge(charge.status || '')}</TableCell>
+                  <TableCell>{getStatusBadge(charge.status || 'PENDING')}</TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

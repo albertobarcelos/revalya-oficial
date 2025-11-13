@@ -50,7 +50,7 @@ export enum ReconciliationAction {
   COMPLEMENT_EXISTING = 'COMPLEMENT_EXISTING',     // Complementar cobrança existente
   REGISTER_CUSTOMER = 'REGISTER_CUSTOMER',         // Cadastrar novo cliente
   DELETE_IMPORTED = 'DELETE_IMPORTED',             // Excluir item importado
-  IMPORT_TO_CHARGE = 'IMPORT_TO_CHARGE',           // Importar para tabela de cobranças
+  // AIDEV-NOTE: IMPORT_TO_CHARGE removido - charges já são criadas diretamente
   MARK_AS_RECONCILED = 'MARK_AS_RECONCILED',       // Marcar como reconciliado
   EXPORT = 'EXPORT',                               // Exportar selecionados
   IGNORE = 'IGNORE'                                // Ignorar selecionados
@@ -61,8 +61,8 @@ export enum ReconciliationAction {
 // =====================================================
 
 /**
- * Movimentação importada de fonte externa - Estrutura da tabela conciliation_staging
- * AIDEV-NOTE: Interface atualizada para corresponder exatamente à estrutura da tabela conforme supabase-tabela.md
+ * Movimentação importada de fonte externa - Estrutura baseada em charges
+ * AIDEV-NOTE: Interface adaptada para trabalhar com charges diretamente (conciliation_staging foi unificado)
  */
 export interface ImportedMovement {
   // AIDEV-NOTE: Campos principais obrigatórios
@@ -194,7 +194,7 @@ export interface ReconciliationFilters {
   asaasBillingType?: string;            // Filtro por tipo de cobrança ASAAS
   asaasPaymentStatus?: string;          // Filtro por status de pagamento ASAAS
   
-  // AIDEV-NOTE: Novos filtros baseados na tabela conciliation_staging
+  // AIDEV-NOTE: Filtros baseados em charges do ASAAS
   paymentMethod?: string | 'ALL';       // Filtro por método de pagamento (PIX, BOLETO, etc.)
   customerDocument?: string;            // Filtro por documento do cliente
   valorOriginalMin?: number;            // Valor original mínimo

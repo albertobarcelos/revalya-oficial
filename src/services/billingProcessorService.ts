@@ -236,7 +236,6 @@ class BillingProcessorService {
       tipo: this.mapPaymentMethodToChargeType(billing.payment_method),
       data_vencimento: billing.due_date,
       descricao: `${contract.customer.name} - ${billing.reference_period}`,
-      link_pagamento: externalData.payment_url,
       asaas_id: externalData.external_id,
       codigo_barras: externalData.barcode,
       created_at: now,

@@ -22,6 +22,7 @@
     "db:reset": "supabase db reset",
     "db:migrate": "supabase migration up",
     "db:seed": "supabase seed",
+    "migrate:avatars": "tsx scripts/migrate-avatars.ts",
     "setup:asaas-webhook": "tsx scripts/setup-asaas-webhook.ts",
     "diagnose:evolution": "tsx scripts/diagnose-evolution-api.ts",
     "test:edge-function": "tsx scripts/test-edge-function.ts",

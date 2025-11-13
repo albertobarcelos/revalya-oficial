@@ -1,61 +1,24 @@
 import React, { useState } from "react";
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Building2, Calendar, FileText, Plus, Search, Eye, Trash2, AlertTriangle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useContracts } from "@/hooks/useContracts";
 import { useCustomers } from "@/hooks/useCustomers";
-import { formatCurrency } from "@/lib/utils";
-import { ContractStatusDropdown } from "@/components/contracts/ContractStatusDropdown";
-import { useNavigate } from "react-router-dom";
-import { toast } from "@/components/ui/use-toast";
-
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Contract } from "@/types/models/contract";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MultiSelect } from "primereact/multiselect"; // Adicionar se necessário, verificar convenções
+import { Plus, Search, Trash2, Eye, Building2, Calendar, FileText, AlertTriangle } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { formatCurrency } from "@/lib/utils";
+import { ContractStatusDropdown } from "./ContractStatusDropdown";
 
 interface ContractListProps {
   onCreateContract: () => void;
@@ -73,12 +36,13 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [contractToDelete, setContractToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
   
+  const queryClient = useQueryClient();
   const { customers } = useCustomers();
   
   const { 
     contracts, 
+    pagination,
     isLoading, 
     error, 
     refetch,
@@ -88,40 +52,54 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     status: statusFilter !== "ALL" ? statusFilter : undefined,
     limit: itemsPerPage,
     page: currentPage,
+    search: searchTerm || undefined, // Passar searchTerm como filtro para o backend
   });
 
-  // Listener para mudanças de rota - força refresh dos contratos
+  // AIDEV-NOTE: Validação de página apenas quando pagination muda E não está carregando
+  // CRÍTICO: Não corrigir página durante loading para evitar resetar página 2 para 1
   React.useEffect(() => {
-    const handleRouteChange = () => {
-      const newPath = window.location.pathname;
-      if (newPath !== currentPath) {
-        setCurrentPath(newPath);
-        // Se mudou para a página de contratos, força refresh
-        if (newPath.includes('/contracts')) {
-          refreshContracts();
-        }
-      }
-    };
+    // AIDEV-NOTE: Não validar durante loading - aguardar dados chegarem
+    if (isLoading) {
+      return;
+    }
 
-    // Listener para mudanças no histórico do navegador
-    window.addEventListener('popstate', handleRouteChange);
-    
-    // Cleanup
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
-    };
-  }, [currentPath, refreshContracts]);
+    if (pagination && pagination.totalPages > 0) {
+      // Apenas corrigir se a página atual for inválida E não estiver carregando
+      if (currentPage > pagination.totalPages) {
+        setCurrentPage(pagination.totalPages);
+      } else if (currentPage < 1) {
+        setCurrentPage(1);
+      }
+    } else if (pagination && pagination.totalPages === 0 && currentPage > 1) {
+      // Se não houver páginas mas estiver em página > 1, resetar
+      setCurrentPage(1);
+    }
+    // Removido currentPage das dependências para evitar loops
+  }, [pagination, isLoading]);
+
+  // AIDEV-NOTE: Invalidar cache quando página muda para garantir que nova query seja executada
+  // Com staleTime: 0 e query key mudando, isso garante que dados sejam atualizados imediatamente
+  React.useEffect(() => {
+    if (currentPage > 0) {
+      // Invalidar queries de contratos para forçar refetch com nova página
+      queryClient.invalidateQueries({ 
+        queryKey: ['contracts'],
+        exact: false 
+      });
+    }
+  }, [currentPage, queryClient]);
 
   // Força refresh quando o componente é montado
-  React.useEffect(() => {
-    refreshContracts();
-  }, [refreshContracts]);
+  // REMOVIDO: O useSecureTenantQuery já gerencia o ciclo de vida da query automaticamente
+  // React.useEffect(() => {
+  //   refreshContracts();
+  // }, [refreshContracts]);
 
   const navigate = useNavigate();
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedContracts(filteredContracts?.map(c => c.id) || []);
+      setSelectedContracts(contracts?.map(c => c.id) || []);
     } else {
       setSelectedContracts([]);
     }
@@ -132,19 +110,6 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
       checked ? [...prev, id] : prev.filter(i => i !== id)
     );
   };
-
-
-
-  // Filtrar contratos por termo de busca
-  const filteredContracts = contracts?.filter((contract: Contract) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      contract.contract_number?.toLowerCase().includes(term) ||
-      contract.customers?.name?.toLowerCase().includes(term) ||
-      contract?.description?.toLowerCase().includes(term)
-    );
-  });
 
   // Função para renderizar o indicador de status
   const renderStatusBadge = (status: string) => {
@@ -182,7 +147,6 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
 
   // Função para renderizar o tipo de faturamento
   const getBillingTypeLabel = (type: string) => {
-    // Agora os valores já vêm em português do banco
     return type || "Único";
   };
 
@@ -196,7 +160,6 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     if (onEditContract) {
       onEditContract(id);
     } else if (onViewContract) {
-      // Fallback caso onEditContract não esteja disponível
       onViewContract(id);
     }
   };
@@ -205,7 +168,6 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     onCreateContract();
   };
 
-  // AIDEV-NOTE: Função para abrir o modal de confirmação de exclusão
   const handleDeleteClick = () => {
     if (selectedContracts.length === 0) {
       toast({
@@ -216,8 +178,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
       return;
     }
 
-    // Verificar se todos os contratos selecionados estão em status DRAFT
-    const selectedContractData = filteredContracts?.filter(contract => 
+    const selectedContractData = contracts?.filter(contract => 
       selectedContracts.includes(contract.id)
     ) || [];
     
@@ -237,87 +198,71 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
     setShowDeleteDialog(true);
   };
 
-  // AIDEV-NOTE: Função para confirmar e executar a exclusão de contratos
   const handleConfirmDelete = async () => {
+    if (selectedContracts.length === 0) return;
+
+    setIsDeleting(true);
     try {
-      setIsDeleting(true);
-      
-      // Excluir contratos um por um usando mutateAsync
       for (const contractId of selectedContracts) {
-        await deleteContract.mutateAsync(contractId);
+        await deleteContract(contractId);
       }
       
-      // Refetch para atualizar a lista
-      await refetch();
-      
-      // Limpar seleção após exclusão
-      setSelectedContracts([]);
-      setShowDeleteDialog(false);
-      
       toast({
-        title: "Sucesso!",
+        title: "Sucesso",
         description: `${selectedContracts.length} contrato(s) excluído(s) com sucesso.`,
         variant: "default"
       });
-    } catch (error: any) {
+      
+      setSelectedContracts([]);
+      setShowDeleteDialog(false);
+    } catch (error) {
       console.error('Erro ao excluir contratos:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao excluir contratos.",
+        description: "Erro ao excluir contratos. Tente novamente.",
         variant: "destructive"
       });
     } finally {
       setIsDeleting(false);
-      setShowDeleteDialog(false);
     }
   };
 
-  // Verificar se há contratos DRAFT selecionados para habilitar o botão
-  const selectedDraftContracts = filteredContracts?.filter(contract => 
-    selectedContracts.includes(contract.id) && contract.status === 'DRAFT'
-  ) || [];
-  
-  const canDeleteSelected = selectedDraftContracts.length > 0;
-
   return (
-    <div className="h-full flex flex-col p-6 overflow-hidden">
-      <div className="flex items-center justify-between mb-6 flex-shrink-0">
-        <div className="flex w-full max-w-2xl items-center space-x-2">
-          <Input
-            placeholder="Buscar contratos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-9"
-          />
-          <Button variant="outline" size="sm" className="h-9 px-3 flex-shrink-0">
-            <Search className="h-4 w-4" />
-          </Button>
-          
-          {/* Filtros simples */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32 h-9">
+    <div className="flex flex-col h-full space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Buscar contratos..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1); // Reset para página 1 ao buscar
+              }}
+              className="pl-10 w-80"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(value) => {
+            setStatusFilter(value);
+            setCurrentPage(1); // Reset para página 1 ao filtrar
+          }}>
+            <SelectTrigger className="w-40">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Todos</SelectItem>
-              <SelectItem value="ACTIVE">Ativos</SelectItem>
               <SelectItem value="DRAFT">Rascunho</SelectItem>
-              <SelectItem value="SUSPENDED">Suspensos</SelectItem>
-              <SelectItem value="CANCELED">Cancelados</SelectItem>
-              <SelectItem value="EXPIRED">Expirados</SelectItem>
+              <SelectItem value="ACTIVE">Ativo</SelectItem>
+              <SelectItem value="SUSPENDED">Suspenso</SelectItem>
+              <SelectItem value="CANCELED">Cancelado</SelectItem>
+              <SelectItem value="EXPIRED">Expirado</SelectItem>
             </SelectContent>
           </Select>
-          
-
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {selectedContracts.length > 0 && (
-            <Button 
-              variant="destructive" 
-              onClick={handleDeleteClick}
-              disabled={!canDeleteSelected}
-              className="mr-2"
-            >
+            <Button variant="destructive" onClick={handleDeleteClick}>
               <Trash2 className="mr-2 h-4 w-4" />
               Excluir ({selectedContracts.length})
             </Button>
@@ -345,7 +290,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
             <div className="flex justify-center p-6 text-destructive">
               <span>Erro ao carregar contratos</span>
             </div>
-          ) : filteredContracts?.length === 0 ? (
+          ) : contracts?.length === 0 ? (
             <div className="flex justify-center p-6 text-muted-foreground">
               <span>Nenhum contrato encontrado</span>
             </div>
@@ -354,7 +299,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead><Checkbox checked={selectedContracts.length === filteredContracts.length} onCheckedChange={handleSelectAll} /></TableHead>
+                    <TableHead><Checkbox checked={selectedContracts.length === contracts.length} onCheckedChange={handleSelectAll} /></TableHead>
                     <TableHead>Número</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Status</TableHead>
@@ -368,10 +313,8 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredContracts?.map((contract: Contract) => (
-                    <TableRow 
-                      key={contract.id}
-                    >
+                  {contracts?.map((contract: Contract) => (
+                    <TableRow key={contract.id}>
                       <TableCell>
                         <Checkbox 
                           checked={selectedContracts.includes(contract.id)}
@@ -398,21 +341,18 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                       </TableCell>
                       <TableCell>{renderStageBadge(contract.stage)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {/* AIDEV-NOTE: Exibindo valor final considerando desconto aplicado */}
                         {formatCurrency(contract.total_amount - (contract.total_discount || 0))}
                       </TableCell>
                       <TableCell>{getBillingTypeLabel(contract.billing_type)}</TableCell>
                       <TableCell>
                         <div className="flex items-center">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {/* AIDEV-NOTE: Corrigido timezone - usar parseISO */}
                           {format(parseISO(contract.initial_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
-                          {/* AIDEV-NOTE: Corrigido timezone - usar parseISO */}
                           {format(parseISO(contract.final_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
                       </TableCell>
@@ -437,65 +377,29 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex items-center justify-between border-t p-4 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-muted-foreground">
-              {filteredContracts?.length || 0} contratos encontrados
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Itens por página:</span>
-              <Select 
-                value={itemsPerPage.toString()} 
-                onValueChange={(value) => {
-                  setItemsPerPage(Number(value));
-                  setCurrentPage(1); // Reset to first page when changing items per page
-                }}
-              >
-                <SelectTrigger className="w-20 h-8">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious 
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                />
-              </PaginationItem>
-              {Array.from({ length: Math.min(3, Math.ceil((contracts?.length || 0) / itemsPerPage)) }).map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    isActive={currentPage === i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
-              <PaginationItem>
-                <PaginationNext 
-                  onClick={() => 
-                    setCurrentPage((prev) => 
-                      Math.min(prev + 1, Math.ceil((contracts?.length || 0) / itemsPerPage))
-                    )
-                  }
-                  disabled={
-                    currentPage === Math.ceil((contracts?.length || 0) / itemsPerPage) ||
-                    (contracts?.length || 0) <= itemsPerPage
-                  }
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+        <CardFooter className="flex items-center justify-between border-t px-6 py-4 flex-shrink-0 bg-muted/30">
+          <PaginationControls
+            currentPage={currentPage}
+            totalItems={pagination?.total || 0}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(newPage) => {
+              // Validar que a nova página está dentro dos limites válidos
+              if (pagination) {
+                const validPage = Math.max(1, Math.min(newPage, pagination.totalPages || 1));
+                setCurrentPage(validPage);
+              } else {
+                setCurrentPage(Math.max(1, newPage));
+              }
+            }}
+            onItemsPerPageChange={(newItemsPerPage) => {
+              setItemsPerPage(newItemsPerPage);
+              setCurrentPage(1);
+            }}
+            statusTextTemplate={(start, end, total) => `${total} contratos encontrados`}
+            showItemsPerPageSelector={true}
+            showStatusText={true}
+            showNavigation={true}
+          />
         </CardFooter>
       </Card>
 

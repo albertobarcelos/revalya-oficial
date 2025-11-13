@@ -13,10 +13,20 @@ import csv from 'csv-parser';
 import * as XLSX from 'xlsx';
 
 // AIDEV-NOTE: Cliente Supabase com service role para operações administrativas
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// AIDEV-NOTE: Verificação para evitar execução no navegador (previne múltiplas instâncias GoTrueClient)
+let supabase: ReturnType<typeof createClient> | null = null;
+
+if (typeof window === 'undefined') {
+  // Apenas criar instância no ambiente Node.js/backend
+  supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+} else {
+  // No navegador, usar instância singleton se necessário
+  // AIDEV-NOTE: Este arquivo não deve ser usado no frontend, mas adicionamos proteção
+  console.warn('[DirectImportProcessor] Este módulo não deve ser usado no navegador');
+}
 
 interface ImportRow {
   nome?: string;
@@ -49,6 +59,9 @@ export class DirectImportProcessor {
       console.log(`🔄 [DirectProcessor] Iniciando processamento do job: ${jobId}`);
       
       // AIDEV-NOTE: Buscar dados do job
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const { data: job, error: jobError } = await supabase
         .from('import_jobs')
         .select('*')
@@ -62,6 +75,9 @@ export class DirectImportProcessor {
       console.log(`📄 [DirectProcessor] Job encontrado: ${job.filename}`);
 
       // AIDEV-NOTE: Atualizar status para processando
+      if (!supabase) {
+        throw new Error('Supabase client não disponível');
+      }
       await supabase
         .from('import_jobs')
         .update({ 
@@ -83,6 +99,9 @@ export class DirectImportProcessor {
       }
 
       // AIDEV-NOTE: Atualizar status final do job
+      if (!supabase) {
+        throw new Error('Supabase client não disponível');
+      }
       const finalStatus = processingResult.success ? 'completed' : 'failed';
       
       await supabase
@@ -107,6 +126,9 @@ export class DirectImportProcessor {
       console.error(`❌ [DirectProcessor] Erro ao processar job ${jobId}:`, error);
       
       // AIDEV-NOTE: Marcar job como falhou
+      if (!supabase) {
+        throw new Error('Supabase client não disponível');
+      }
       await supabase
         .from('import_jobs')
         .update({
@@ -262,6 +284,9 @@ export class DirectImportProcessor {
     try {
       console.log('🔍 [DirectProcessor] Buscando jobs pendentes...');
       
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const { data: pendingJobs, error } = await supabase
         .from('import_jobs')
         .select('id, filename')

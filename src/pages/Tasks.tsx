@@ -33,6 +33,8 @@ import { useCharges } from '@/hooks/useCharges';
 import { ChargeDetailDrawer } from '@/components/charges/ChargeDetailDrawer';
 import type { Cobranca } from '@/types/database';
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { UserSelect } from "@/components/users/UserSelect";
+import AssignedUserTag from "@/components/tasks/AssignedUserTag";
 import { clientsService } from "@/services/clientsService";
 import { useSecureTasks, type SecureTask } from '@/hooks/useSecureTasks'; // AIDEV-NOTE: Hook seguro multi-tenant
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hook de validação de acesso multi-tenant
@@ -76,6 +78,7 @@ export default function Tasks() {
   const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [newTaskAssignedTo, setNewTaskAssignedTo] = useState<string>('');
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isNewTaskDialogOpen, setIsNewTaskDialogOpen] = useState(false);
@@ -430,7 +433,11 @@ export default function Tasks() {
     setTaskToEdit(null);
   };
 
-  const startTaskEditing = (task: Task) => {
+  /**
+   * Inicia edição de uma tarefa existente, populando o formulário
+   * com os valores atuais, incluindo o responsável (assigned_to).
+   */
+  const startTaskEditing = (task: SecureTask) => {
     // Preencher o formulário com os dados da tarefa
     setNewTaskTitle(task.title);
     setNewTaskClient(task.clientName || '');
@@ -438,6 +445,7 @@ export default function Tasks() {
     setNewTaskPriority(task.priority);
     setNewTaskDueDate(task.dueDate || '');
     setNewTaskDescription(task.description || '');
+    setNewTaskAssignedTo(task.assigned_to || '');
     
     // Configurar o modo de edição
     setIsEditMode(true);
@@ -479,6 +487,7 @@ export default function Tasks() {
         description: newTaskDescription || undefined,
         priority: newTaskPriority,
         due_date: newTaskDueDate || undefined,
+        assigned_to: newTaskAssignedTo || undefined,
         status: 'pending' as const
       };
       
@@ -596,8 +605,18 @@ export default function Tasks() {
                     onChange={(e) => setNewTaskDescription(e.target.value)}
                     className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              </div>
+              {/* Campo: Responsável */}
+              <div className="space-y-2">
+                <Label htmlFor="assigned_to">Responsável</Label>
+                <UserSelect
+                  value={newTaskAssignedTo}
+                  onChange={(value) => setNewTaskAssignedTo(value)}
+                  placeholder="Selecione um responsável"
+                  inModal={true}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="priority">Prioridade</Label>
                     <Select value={newTaskPriority} onValueChange={(value: string) => setNewTaskPriority(value)}>
@@ -799,6 +818,8 @@ export default function Tasks() {
                                     Vencimento: {format(parseISO(task.dueDate), 'dd/MM/yyyy')}
                                   </span>
                                 )}
+                                {/* Responsável pela tarefa (multi-tenant) */}
+                                <AssignedUserTag userId={task.assigned_to} />
                                 
                                 <span className={`text-xs flex items-center ${
                                   task.priority === 'high' 

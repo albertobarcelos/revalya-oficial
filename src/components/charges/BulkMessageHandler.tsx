@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from '@tanstack/react-query';
 import { processMessageTags } from '@/utils/messageUtils';
 import { BulkMessageDialog } from './BulkMessageDialog';
 import { useCurrentTenant } from '@/hooks/useZustandTenant';
@@ -23,6 +24,7 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
   const [showBulkMessageDialog, setShowBulkMessageDialog] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { currentTenant } = useCurrentTenant();
   const evolutionConfig = useEvolutionApiConfig();
   
@@ -82,6 +84,37 @@ export const BulkMessageHandler: React.FC<BulkMessageHandlerProps> = ({
             }
           });
         }
+
+        // AIDEV-NOTE: Invalidar cache de contagem de mensagens após envio bem-sucedido
+        // Isso garante que o ícone de contagem seja atualizado imediatamente
+        console.log('🔄 Invalidando cache de contagem de mensagens...');
+        
+        // Invalidar todas as queries de message-counts que podem incluir os chargeIds enviados
+        await queryClient.invalidateQueries({
+          queryKey: ['message-counts'],
+          exact: false, // Invalidar todas as queries que começam com 'message-counts'
+        });
+
+        // Invalidar também o histórico de mensagens por cobrança
+        await queryClient.invalidateQueries({
+          queryKey: ['message-history-by-charge'],
+          exact: false,
+        });
+
+        // Invalidar histórico geral de mensagens
+        await queryClient.invalidateQueries({
+          queryKey: ['message-history'],
+          exact: false,
+        });
+
+        // AIDEV-NOTE: Forçar refetch imediato das queries de message-counts
+        // Isso garante que os dados sejam atualizados mesmo com staleTime
+        await queryClient.refetchQueries({
+          queryKey: ['message-counts'],
+          exact: false,
+        });
+
+        console.log('✅ Cache invalidado e refetch executado com sucesso');
       } else {
         throw new Error('Edge Function retornou sucesso = false');
       }

@@ -17,6 +17,10 @@ const serviceItemSchema = z.object({
     .number()
     .min(0, "O preço unitário não pode ser negativo")
     .default(0),
+  cost_price: z.coerce
+    .number()
+    .min(0, "O preço de custo não pode ser negativo")
+    .optional(),
   default_price: z.coerce
     .number()
     .min(0, "O preço padrão não pode ser negativo")

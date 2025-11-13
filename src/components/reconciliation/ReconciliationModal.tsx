@@ -53,7 +53,8 @@ import {
   ReconciliationModalProps,
   INITIAL_PAGINATION_STATE,
   INITIAL_FILTERS_STATE,
-  ReconciliationPagination
+  ReconciliationPagination,
+  ReconciliationMovement
 } from './types/ReconciliationModalTypes';
 import { 
   RECONCILIATION_CONFIG,
@@ -148,6 +149,7 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
     handleExport,
     handleReconciliationAction,
     handleActionModalConfirm,
+    // AIDEV-NOTE: handleBulkImportToCharges removido - charges já são criadas diretamente
     closeActionModal
   } = useReconciliationActions({
     currentTenant,
@@ -297,7 +299,14 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
                 <ReconciliationMainContent
                   paginatedMovements={paginatedMovements}
                   isLoading={isLoading}
-                  onAction={handleReconciliationAction}
+                  onAction={(movement, action) => {
+                    // AIDEV-NOTE: Convertendo selectedMovements (IDs) para objetos completos
+                    const selectedMovementObjects = selectedMovements
+                      .map(id => movements.find(mov => mov.id === id))
+                      .filter(Boolean) as ReconciliationMovement[];
+                    
+                    handleReconciliationAction(movement, action, selectedMovementObjects);
+                  }}
                   selectedMovements={selectedMovements}
                   onSelectionChange={setSelectedMovements}
                   pagination={{
@@ -327,11 +336,13 @@ const ReconciliationModal: React.FC<ReconciliationModalProps> = ({
          isOpen={actionModal.isOpen}
          action={actionModal.action}
          movement={actionModal.movement}
+         movements={actionModal.movements}
          onClose={closeActionModal}
          onActionComplete={async (movement, action, data) => {
            // AIDEV-NOTE: Usando a função do hook customizado com parâmetros corretos
            await handleActionModalConfirm(movement, action, data);
          }}
+         // AIDEV-NOTE: onBulkImportToCharges removido - charges já são criadas diretamente
        />
     </AnimatePresence>
   );

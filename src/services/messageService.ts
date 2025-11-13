@@ -137,7 +137,6 @@ export const messageService = {
           amount: charge.valor,
           dueDate: dueDate,
           status: charge.status,
-          paymentLink: charge.link_pagamento || '',
         },
         template: {
           id: templateId,

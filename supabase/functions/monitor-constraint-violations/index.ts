@@ -1,11 +1,14 @@
 /**
  * EDGE FUNCTION: Monitor Constraint Violations
  * 
- * Monitora violações de constraint na tabela conciliation_staging
+ * Monitora violações de constraint nas tabelas do sistema
  * e envia alertas quando detectadas.
  * 
  * AIDEV-NOTE: Esta função deve ser executada periodicamente (cron)
  * para detectar problemas de constraint violation em tempo real.
+ * 
+ * NOTA: A tabela conciliation_staging foi migrada para charges, mas ainda existe para rollback.
+ * Esta função pode monitorar ambas as tabelas durante o período de transição.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -89,6 +92,8 @@ serve(async (req: Request) => {
     }
 
     // AIDEV-NOTE: Verificar também estatísticas gerais da tabela
+    // NOTA: A tabela conciliation_staging foi migrada para charges, mas ainda existe para rollback
+    // Esta verificação pode ser útil para monitoramento durante o período de transição
     const { data: tableStats, error: statsError } = await supabase
       .rpc('get_table_statistics', { table_name: 'conciliation_staging' })
       .single();
@@ -96,7 +101,7 @@ serve(async (req: Request) => {
     if (statsError) {
       console.log('⚠️ Não foi possível obter estatísticas da tabela:', statsError.message);
     } else if (tableStats) {
-      console.log(`📊 Estatísticas da tabela conciliation_staging:`);
+      console.log(`📊 Estatísticas da tabela conciliation_staging (mantida para rollback):`);
       console.log(`   - Total de registros: ${tableStats.total_rows || 'N/A'}`);
       console.log(`   - Inserções hoje: ${tableStats.inserts_today || 'N/A'}`);
     }

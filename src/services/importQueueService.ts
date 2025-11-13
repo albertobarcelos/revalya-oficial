@@ -11,10 +11,20 @@ import { createClient } from '@supabase/supabase-js';
 import { importErrorHandler, ErrorContext } from '@/utils/importErrorHandler';
 
 // AIDEV-NOTE: Cliente Supabase com privilégios de service role
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// AIDEV-NOTE: Verificação para evitar execução no navegador (previne múltiplas instâncias GoTrueClient)
+let supabase: ReturnType<typeof createClient> | null = null;
+
+if (typeof window === 'undefined') {
+  // Apenas criar instância no ambiente Node.js/backend
+  supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+} else {
+  // No navegador, usar instância singleton se necessário
+  // AIDEV-NOTE: Este arquivo não deve ser usado no frontend, mas adicionamos proteção
+  console.warn('[ImportQueueService] Este módulo não deve ser usado no navegador');
+}
 
 export interface QueueJob {
   id: string;
@@ -64,6 +74,9 @@ export class ImportQueueService {
    */
   async enqueueJob(jobData: Omit<QueueJob, 'id' | 'created_at' | 'status' | 'retry_count'>): Promise<string> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const { data, error } = await supabase
         .from('import_jobs')
         .insert({
@@ -94,6 +107,9 @@ export class ImportQueueService {
    */
   async getNextJob(): Promise<QueueJob | null> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const { data, error } = await supabase
         .from('import_jobs')
         .select('*')
@@ -123,6 +139,9 @@ export class ImportQueueService {
     updates: Partial<QueueJob> = {}
   ): Promise<void> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const updateData: any = {
         status,
         ...updates
@@ -256,6 +275,9 @@ export class ImportQueueService {
    */
   async getQueueStats(tenantId?: string): Promise<QueueStats> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       let query = supabase
         .from('import_jobs')
         .select('status');
@@ -300,6 +322,9 @@ export class ImportQueueService {
    */
   async cleanupOldJobs(daysOld: number = 30): Promise<number> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
@@ -329,6 +354,9 @@ export class ImportQueueService {
    */
   async retryFailedJobs(tenantId?: string): Promise<number> {
     try {
+      if (!supabase) {
+        throw new Error('Supabase client não disponível - este módulo deve ser usado apenas no backend');
+      }
       let query = supabase
         .from('import_jobs')
         .update({ 
@@ -337,7 +365,7 @@ export class ImportQueueService {
           error_details: null
         })
         .eq('status', 'failed')
-        .lt('retry_count', supabase.raw('max_retries'));
+        .lt('retry_count', supabase!.raw('max_retries'));
 
       if (tenantId) {
         query = query.eq('tenant_id', tenantId);

@@ -118,16 +118,27 @@ export interface ContractFilters {
   search?: string
 }
 
-export function useContracts(filters: ContractFilters = {}) {
+export function useContracts(filters: ContractFilters & { page?: number; limit?: number; search?: string } = {}) {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard()
   const queryClient = useQueryClient()
 
-  // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT
+  // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT E PAGINAÇÃO
+  // AIDEV-NOTE: Query key separada por parâmetros para garantir que mudanças de página sejam detectadas
+  // Isso evita problemas de cache e garante que a query seja refeita quando a página muda
+  const queryKey = [
+    'contracts', 
+    currentTenant?.id, 
+    filters.page || 1, 
+    filters.limit || 10, 
+    filters.status || 'ALL',
+    filters.search || ''
+  ];
+  
   const query = useSecureTenantQuery(
-    ['contracts', currentTenant?.id, JSON.stringify(filters)],
+    queryKey,
     async (supabase, tenantId) => {
-      throttledAudit('contracts_query', `Buscando contratos para tenant: ${tenantId}`);
-      throttledAudit('contracts_current_tenant', `CurrentTenant na query: ${currentTenant?.name} (${currentTenant?.id})`);
+      throttledAudit('contracts_query', `Buscando contratos para tenant: ${tenantId}`, undefined, 30000); // 30s throttle
+      throttledAudit('contracts_current_tenant', `CurrentTenant na query: ${currentTenant?.name} (${currentTenant?.id})`, undefined, 30000); // 30s throttle
       
       // 🚨 VALIDAÇÃO CRÍTICA: Verificar se tenantId corresponde ao currentTenant
       if (tenantId !== currentTenant?.id) {
@@ -139,7 +150,37 @@ export function useContracts(filters: ContractFilters = {}) {
         throw new Error('Violação crítica de segurança: Tenant ID inconsistente');
       }
       
-      const { data, error } = await supabase
+      // 🏗️ APLICAR PAGINAÇÃO
+      const page = filters.page || 1;
+      const limit = filters.limit || 10;
+      const offset = (page - 1) * limit;
+      const search = filters.search;
+      
+      // 📊 BUSCAR TOTAL DE REGISTROS PRIMEIRO
+      let countQuery = supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO
+
+      // 🔍 APLICAR FILTRO DE CUSTOMER_ID SE EXISTIR
+      if (filters.customer_id) {
+        countQuery = countQuery.eq('customer_id', filters.customer_id);
+      }
+
+      // 🔍 APLICAR FILTRO DE BUSCA SE EXISTIR
+      if (search) {
+        countQuery = countQuery.or(`contract_number.ilike.%${search}%,description.ilike.%${search}%`);
+      }
+
+      const { count: total, error: countError } = await countQuery;
+
+      if (countError) {
+        console.error('❌ Erro ao buscar total de contratos:', countError)
+        throw countError
+      }
+      
+      // 📋 BUSCAR CONTRATOS COM PAGINAÇÃO
+      let contractsQuery = supabase
         .from('contracts')
         .select(`
           id,
@@ -171,7 +212,28 @@ export function useContracts(filters: ContractFilters = {}) {
             phone
           )
         `)
-        .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
+        .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO
+
+      // 🔍 APLICAR FILTRO DE CUSTOMER_ID SE EXISTIR
+      if (filters.customer_id) {
+        contractsQuery = contractsQuery.eq('customer_id', filters.customer_id);
+      }
+
+      // 🔍 APLICAR FILTRO DE STATUS SE EXISTIR
+      if (filters.status && filters.status !== 'ALL') {
+        contractsQuery = contractsQuery.eq('status', filters.status);
+      }
+
+      contractsQuery = contractsQuery
+        .range(offset, offset + limit - 1) // 📄 APLICAR LIMIT E OFFSET
+        .order('created_at', { ascending: false }); // 📅 ORDENAR POR DATA DE CRIAÇÃO
+
+      // 🔍 APLICAR FILTRO DE BUSCA SE EXISTIR
+      if (search) {
+        contractsQuery = contractsQuery.or(`contract_number.ilike.%${search}%,description.ilike.%${search}%`);
+      }
+
+      const { data, error } = await contractsQuery;
 
       if (error) {
         console.error('❌ Erro ao buscar contratos:', error)
@@ -189,7 +251,27 @@ export function useContracts(filters: ContractFilters = {}) {
         throw new Error('Violação de segurança detectada')
       }
 
-      return data as any[]
+      // 📊 RETORNAR DADOS COM METADATA DE PAGINAÇÃO
+      const totalPages = Math.ceil((total || 0) / limit);
+      
+      return {
+        data: data as any[],
+        pagination: {
+          page,
+          limit,
+          total: total || 0,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      };
+    },
+    {
+      // AIDEV-NOTE: Configurações específicas para paginação
+      // staleTime: 0 garante que mudanças de página sempre refazem a query
+      // Isso resolve o problema de cache retornando dados da página anterior
+      staleTime: 0,
+      refetchOnWindowFocus: false,
     }
   )
 
@@ -454,7 +536,8 @@ export function useContracts(filters: ContractFilters = {}) {
 
   // AIDEV-NOTE: Retornando objetos completos das mutações para permitir uso de mutate e mutateAsync
   return {
-    contracts: query.data || [],
+    contracts: query.data?.data || [],
+    pagination: query.data?.pagination || { page: 1, limit: 10, total: 0, totalPages: 1, hasNext: false, hasPrev: false },
     isLoading: query.isLoading,
     error: query.error,
     createContract: createContract, // ✅ Objeto completo da mutação

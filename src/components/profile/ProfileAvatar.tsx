@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { supabase, STORAGE_BUCKETS } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { logError, logDebug } from "@/lib/logger";
 import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
@@ -29,18 +29,25 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
     }
   }, [url]);
 
+  /**
+   * Baixa/resolve a URL de exibição do avatar pela chave do arquivo no Storage.
+   * Comentário de nível de função: usa URL assinada para funcionar com buckets privados
+   * e faz fallback para URL pública automaticamente.
+   */
   async function downloadImage(path: string) {
     try {
-      const { data: { publicUrl } } = supabase.storage
-        .from(STORAGE_BUCKETS.AVATARS)
-        .getPublicUrl(path);
-
-      setAvatarUrl(publicUrl);
+      const url = await getImageUrl(STORAGE_BUCKETS.AVATARS, path, 3600);
+      setAvatarUrl(url);
     } catch (error) {
       logError('Erro ao obter URL da imagem', 'ProfileAvatar', error);
     }
   }
 
+  /**
+   * Faz upload do avatar para o bucket de AVATARS e atualiza o estado/parent com a chave do arquivo.
+   * Comentário de nível de função: valida extensão/tamanho, gera nome único com tenant, realiza upload
+   * e retorna a chave do arquivo (não a URL), permitindo que o front resolva a URL assinada na visualização.
+   */
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setUploading(true);
@@ -69,11 +76,12 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
         throw new Error('A imagem deve ter no máximo 2MB.');
       }
 
-      // AIDEV-NOTE: Gera nome no formato esperado pelas políticas RLS
-      // Formato: avatar_{tenant_id}_{user_id}_{timestamp}.{ext}
+      // AIDEV-NOTE: Gera nome e caminho seguindo o padrão de contract-attachments
+      // Padrão: {tenant_id}/{user_id}/{nome_unico}.{ext}
       const tenantId = currentTenant?.id || 'default';
       const timestamp = Date.now();
-      const fileName = `avatar_${tenantId}_${user.id}_${timestamp}.${fileExt}`;
+      const fileName = `avatar_${timestamp}.${fileExt}`;
+      const filePath = `${tenantId}/${user.id}/${fileName}`;
 
       logDebug('Iniciando upload do arquivo', 'ProfileAvatar', { 
         fileName,
@@ -82,12 +90,13 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
         bucket: STORAGE_BUCKETS.AVATARS
       });
 
-      // Faz o upload do arquivo
+      // Faz o upload do arquivo seguindo o mesmo padrão de opções do contract-attachments
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKETS.AVATARS)
-        .upload(fileName, file, {
+        .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: true
+          upsert: false, // AIDEV-NOTE: manter consistência com contract-attachments
+          contentType: file.type // Define explicitamente o MIME da imagem
         });
 
       if (uploadError) {
@@ -102,19 +111,16 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
 
       logDebug('Upload concluído com sucesso', 'ProfileAvatar', { 
         uploadData,
-        fileName
+        filePath
       });
 
-      // Obtém a URL pública do arquivo
-      const { data: { publicUrl } } = supabase.storage
-        .from(STORAGE_BUCKETS.AVATARS)
-        .getPublicUrl(fileName);
+      // Obtém uma URL assinada para exibição imediata
+      const signedUrl = await getImageUrl(STORAGE_BUCKETS.AVATARS, filePath, 3600);
+      logDebug('URL de exibição obtida (assinada/pública)', 'ProfileAvatar', { signedUrl });
 
-      logDebug('URL pública obtida', 'ProfileAvatar', { publicUrl });
-
-      // Atualiza a URL no estado e notifica o componente pai
-      setAvatarUrl(publicUrl);
-      onUpload?.(fileName);
+      // Atualiza a URL no estado e notifica o componente pai com a chave
+      setAvatarUrl(signedUrl);
+      onUpload?.(filePath);
       
       toast({
         title: "Sucesso",

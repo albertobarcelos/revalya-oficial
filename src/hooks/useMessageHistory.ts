@@ -40,8 +40,8 @@ export function useMessageHistory(chargeId: string | null) {
     error,
     refetch: refreshMessageHistory
   } = useSecureTenantQuery(
-    // 🔑 QUERY KEY PADRONIZADA COM TENANT_ID
-    ['message-history', chargeId],
+    // 🔑 QUERY KEY PADRONIZADA - useSecureTenantQuery adiciona tenant_id automaticamente
+    ['message-history-by-charge', chargeId],
     async (supabase, tenantId) => {
       // AIDEV-NOTE: Validação crítica - chargeId deve existir
       if (!chargeId) {
@@ -55,17 +55,12 @@ export function useMessageHistory(chargeId: string | null) {
         currentTenant: currentTenant?.name 
       });
 
-      // 🛡️ VERIFICAÇÃO DE EXISTÊNCIA DA TABELA
-      const { data: tables, error: tableError } = await supabase
-        .from('information_schema.tables')
-        .select('table_name')
-        .eq('table_schema', 'public')
-        .eq('table_name', 'message_history');
-      
-      if (tableError || !tables || tables.length === 0) {
-        console.log('🔍 [DEBUG] Tabela message_history não existe. Retornando array vazio.');
-        return [];
-      }
+      // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
+      console.log(`🔍 [QUERY] useMessageHistory - Executando query:`, {
+        tenantId,
+        chargeId,
+        query: 'SELECT from message_history WHERE tenant_id = ? AND charge_id = ?'
+      });
 
       // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
       const { data, error } = await supabase
@@ -94,7 +89,8 @@ export function useMessageHistory(chargeId: string | null) {
       console.log('✅ [DEBUG] useMessageHistory - Dados carregados com sucesso:', {
         count: data?.length || 0,
         tenantId,
-        chargeId
+        chargeId,
+        statuses: data?.map(m => m.status) || []
       });
 
       return data || [];
