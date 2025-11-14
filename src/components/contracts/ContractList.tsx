@@ -255,7 +255,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
               <SelectItem value="DRAFT">Rascunho</SelectItem>
               <SelectItem value="ACTIVE">Ativo</SelectItem>
               <SelectItem value="SUSPENDED">Suspenso</SelectItem>
-              <SelectItem value="CANCELED">Cancelado</SelectItem>
+              <SelectItem value="CANCELLED">Cancelado</SelectItem>
               <SelectItem value="EXPIRED">Expirado</SelectItem>
             </SelectContent>
           </Select>

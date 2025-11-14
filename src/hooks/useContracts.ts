@@ -155,12 +155,24 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
       const limit = filters.limit || 10;
       const offset = (page - 1) * limit;
       const search = filters.search;
+      let customerIds: string[] = [];
+      if (search) {
+        const { data: customersMatches, error: customersError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .or(`name.ilike.%${search}%,company.ilike.%${search}%`);
+        if (!customersError) {
+          customerIds = (customersMatches || []).map((c: any) => c.id);
+        }
+      }
       
       // 📊 BUSCAR TOTAL DE REGISTROS PRIMEIRO
+      let countSelect = 'id';
       let countQuery = supabase
         .from('contracts')
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO
+        .select(countSelect, { count: 'exact', head: true })
+        .eq('tenant_id', tenantId);
 
       // 🔍 APLICAR FILTRO DE CUSTOMER_ID SE EXISTIR
       if (filters.customer_id) {
@@ -169,7 +181,14 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
 
       // 🔍 APLICAR FILTRO DE BUSCA SE EXISTIR
       if (search) {
-        countQuery = countQuery.or(`contract_number.ilike.%${search}%,description.ilike.%${search}%`);
+        const orConditions = [
+          `contract_number.ilike.%${search}%`,
+          `description.ilike.%${search}%`
+        ];
+        if (customerIds.length > 0) {
+          orConditions.push(`customer_id.in.(${customerIds.join(',')})`);
+        }
+        countQuery = countQuery.or(orConditions.join(','));
       }
 
       const { count: total, error: countError } = await countQuery;
@@ -230,7 +249,14 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
 
       // 🔍 APLICAR FILTRO DE BUSCA SE EXISTIR
       if (search) {
-        contractsQuery = contractsQuery.or(`contract_number.ilike.%${search}%,description.ilike.%${search}%`);
+        const orConditions = [
+          `contract_number.ilike.%${search}%`,
+          `description.ilike.%${search}%`
+        ];
+        if (customerIds.length > 0) {
+          orConditions.push(`customer_id.in.(${customerIds.join(',')})`);
+        }
+        contractsQuery = contractsQuery.or(orConditions.join(','));
       }
 
       const { data, error } = await contractsQuery;
