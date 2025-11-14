@@ -14,6 +14,7 @@ interface CustomerFormData {
   name: string;
   email: string;
   phone: string;
+  celular_whatsapp?: string;
   cpfCnpj?: string;
   postal_code?: string; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
   address?: string;
@@ -154,6 +155,7 @@ const clientsService = {
       updateData.name = data.name;
       updateData.email = data.email;
       updateData.phone = data.phone;
+      updateData.celular_whatsapp = data.celular_whatsapp;
       
       // Adiciona também no objeto que será enviado para o Asaas
       asaasData.cpfCnpj = cpfCnpjValue;

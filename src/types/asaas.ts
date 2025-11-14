@@ -170,6 +170,7 @@ export interface CreateCustomerDTO {
   cpfCnpj?: string;
   email?: string;
   phone?: string;
+  celular_whatsapp?: string;
   // AIDEV-NOTE: Removido mobilePhone - campo não existe na tabela customers
   address?: string;
   addressNumber?: string;
