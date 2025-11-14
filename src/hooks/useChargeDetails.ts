@@ -50,6 +50,7 @@ export function useChargeDetails(chargeId: string | null) {
             name,
             email,
             phone,
+            celular_whatsapp,
             company,
             cpf_cnpj,
             address,
@@ -154,6 +155,7 @@ export function useChargeDetails(chargeId: string | null) {
           company: enrichedData?.customer?.company, // Nome da empresa vem do campo company do customer
           email: enrichedData?.customer?.email,
           phone: enrichedData?.customer?.phone,
+          celular_whatsapp: enrichedData?.customer?.celular_whatsapp,
           cpf_cnpj: enrichedData?.customer?.cpf_cnpj,
           address: enrichedData?.customer?.address,
           city: enrichedData?.customer?.city,

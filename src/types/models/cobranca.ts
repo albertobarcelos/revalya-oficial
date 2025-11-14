@@ -22,6 +22,7 @@ export interface Cobranca {
     name: string;
     email: string;
     phone?: string;
+    celular_whatsapp?: string;
     cpf_cnpj?: string;
     company?: string;
   };
