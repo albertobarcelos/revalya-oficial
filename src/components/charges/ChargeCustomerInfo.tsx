@@ -1,9 +1,10 @@
 import { memo } from 'react';
+import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Cobranca } from '@/types';
-import { formatCpfCnpj } from '@/lib/utils';
+import { formatCpfCnpj, formatPhoneNumber } from '@/lib/utils';
 
 interface ChargeCustomerInfoProps {
   chargeDetails: Cobranca | null;
@@ -12,6 +13,18 @@ interface ChargeCustomerInfoProps {
 
 function ChargeCustomerInfoComponent({ chargeDetails, onSendMessage }: ChargeCustomerInfoProps) {
   if (!chargeDetails) return null;
+  const { slug } = useParams<{ slug: string }>();
+
+  /**
+   * Abre o contrato em uma nova aba seguindo o padrão
+   * /{slug}/contratos?id={contractId}&mode=edit
+   */
+  const handleOpenContract = () => {
+    const contractId = chargeDetails.contract?.id;
+    if (!contractId || !slug) return;
+    const url = `/${slug}/contratos?id=${contractId}&mode=edit`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="space-y-4">
@@ -38,16 +51,33 @@ function ChargeCustomerInfoComponent({ chargeDetails, onSendMessage }: ChargeCus
           <div>
             <h4 className="text-sm font-medium text-muted-foreground">Empresa</h4>
             <p>{chargeDetails.customer?.company || 'Não informado'}</p>
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-muted-foreground">Telefone</h4>
+              <p>{formatPhoneNumber(chargeDetails.customer?.phone || '') || 'Não informado'}</p>
+              <div className="mt-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Celular</h4>
+                <p>{formatPhoneNumber(chargeDetails.customer?.celular_whatsapp) || 'Não informado'}</p>
+              </div>
+            </div>
           </div>
           <div>
             <h4 className="text-sm font-medium text-muted-foreground">CPF/CNPJ</h4>
             <p>{formatCpfCnpj(chargeDetails.customer?.cpf_cnpj) || 'Não informado'}</p>
+            <div className="mt-2">
+              <h4 className="text-sm font-medium text-muted-foreground">Contrato</h4>
+              {chargeDetails.contract?.contract_number ? (
+                <button
+                  type="button"
+                  onClick={handleOpenContract}
+                  className="text-primary hover:underline cursor-pointer"
+                >
+                  {chargeDetails.contract.contract_number}
+                </button>
+              ) : (
+                <p>Não informado</p>
+              )}
+            </div>
           </div>
-        </div>
-
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground">Telefone</h4>
-          <p>{chargeDetails.customer?.phone || 'Não informado'}</p>
         </div>
       </div>
 

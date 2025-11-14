@@ -229,57 +229,50 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Buscar contratos..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1); // Reset para página 1 ao buscar
-              }}
-              className="pl-10 w-80"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={(value) => {
-            setStatusFilter(value);
-            setCurrentPage(1); // Reset para página 1 ao filtrar
-          }}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todos</SelectItem>
-              <SelectItem value="DRAFT">Rascunho</SelectItem>
-              <SelectItem value="ACTIVE">Ativo</SelectItem>
-              <SelectItem value="SUSPENDED">Suspenso</SelectItem>
-              <SelectItem value="CANCELLED">Cancelado</SelectItem>
-              <SelectItem value="EXPIRED">Expirado</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedContracts.length > 0 && (
-            <Button variant="destructive" onClick={handleDeleteClick}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Excluir ({selectedContracts.length})
-            </Button>
-          )}
-          <Button onClick={onCreateContract}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Contrato
-          </Button>
-        </div>
-      </div>
-
       <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <CardTitle>Contratos</CardTitle>
-          <CardDescription>
-            Gerencie todos os contratos de sua empresa
-          </CardDescription>
+        <CardHeader className="pb-3 flex-shrink-0 w-full flex flex-row items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Buscar contratos..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-10 w-80"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={(value) => {
+              setStatusFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="DRAFT">Rascunho</SelectItem>
+                <SelectItem value="ACTIVE">Ativo</SelectItem>
+                <SelectItem value="SUSPENDED">Suspenso</SelectItem>
+                <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                <SelectItem value="EXPIRED">Expirado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedContracts.length > 0 && (
+              <Button variant="destructive" onClick={handleDeleteClick}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Excluir ({selectedContracts.length})
+              </Button>
+            )}
+            <Button onClick={onCreateContract}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Contrato
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0 flex-1 overflow-hidden">
           {isLoading ? (
