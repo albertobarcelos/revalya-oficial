@@ -377,6 +377,242 @@ async function fetchPaymentPixKey(
   }
 }
 
+// AIDEV-NOTE: Função para criar notificação detalhada de atualização de charge
+// CRÍTICO: Sistema financeiro precisa de assertividade - mostrar exatamente o que mudou
+async function createChargeUpdateNotification(
+  tenantId: string,
+  chargeId: string,
+  asaasId: string,
+  oldCharge: any,
+  newChargeData: any,
+  eventType: string,
+  isNewCharge: boolean
+): Promise<void> {
+  try {
+    // AIDEV-NOTE: Mapear nomes amigáveis dos campos para exibição
+    const fieldNames: Record<string, string> = {
+      status: 'Status',
+      valor: 'Valor',
+      data_vencimento: 'Data de Vencimento',
+      data_pagamento: 'Data de Pagamento',
+      payment_value: 'Valor Pago',
+      net_value: 'Valor Líquido',
+      tipo: 'Tipo de Pagamento',
+      descricao: 'Descrição',
+      customer_id: 'Cliente',
+      contract_id: 'Contrato',
+      barcode: 'Código de Barras',
+      pix_key: 'Chave PIX',
+      invoice_url: 'URL da Fatura',
+      pdf_url: 'URL do PDF',
+      transaction_receipt_url: 'URL do Comprovante',
+      external_invoice_number: 'Número da Fatura Externa',
+      interest_rate: 'Taxa de Juros',
+      fine_rate: 'Taxa de Multa',
+      discount_value: 'Valor de Desconto',
+      external_customer_id: 'ID do Cliente Externo'
+    };
+
+    // AIDEV-NOTE: Identificar campos alterados
+    const changes: Array<{ field: string; oldValue: any; newValue: any; fieldName: string }> = [];
+    
+    if (isNewCharge) {
+      // AIDEV-NOTE: Para nova charge, todos os campos são "novos"
+      for (const [key, value] of Object.entries(newChargeData)) {
+        if (key !== 'tenant_id' && key !== 'updated_at' && value !== null && value !== undefined) {
+          const fieldName = fieldNames[key] || key;
+          changes.push({
+            field: key,
+            oldValue: null,
+            newValue: value,
+            fieldName
+          });
+        }
+      }
+    } else {
+      // AIDEV-NOTE: Para charge existente, comparar valores
+      for (const [key, newValue] of Object.entries(newChargeData)) {
+        if (key === 'tenant_id' || key === 'updated_at') continue;
+        
+        const oldValue = oldCharge?.[key];
+        
+        // AIDEV-NOTE: Comparar valores considerando tipos diferentes
+        const oldValueStr = oldValue !== null && oldValue !== undefined ? String(oldValue) : null;
+        const newValueStr = newValue !== null && newValue !== undefined ? String(newValue) : null;
+        
+        if (oldValueStr !== newValueStr) {
+          const fieldName = fieldNames[key] || key;
+          changes.push({
+            field: key,
+            oldValue: oldValue,
+            newValue: newValue,
+            fieldName
+          });
+        }
+      }
+    }
+
+    // AIDEV-NOTE: Formatar valores para exibição
+    const formatValue = (value: any, field: string): string => {
+      if (value === null || value === undefined) return 'N/A';
+      
+      // AIDEV-NOTE: Formatação específica por tipo de campo
+      if (field === 'valor' || field === 'payment_value' || field === 'net_value' || field === 'discount_value') {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
+      }
+      
+      if (field === 'interest_rate' || field === 'fine_rate') {
+        return `${Number(value)}%`;
+      }
+      
+      if (field === 'data_vencimento' || field === 'data_pagamento') {
+        return new Date(value).toLocaleDateString('pt-BR');
+      }
+      
+      if (field === 'status') {
+        const statusMap: Record<string, string> = {
+          'PENDING': 'Pendente',
+          'RECEIVED': 'Recebido',
+          'OVERDUE': 'Vencido',
+          'CONFIRMED': 'Confirmado',
+          'REFUNDED': 'Reembolsado'
+        };
+        return statusMap[value] || value;
+      }
+      
+      if (field === 'tipo') {
+        const tipoMap: Record<string, string> = {
+          'PIX': 'PIX',
+          'BOLETO': 'Boleto',
+          'CREDIT_CARD': 'Cartão de Crédito',
+          'CASH': 'Dinheiro'
+        };
+        return tipoMap[value] || value;
+      }
+      
+      // AIDEV-NOTE: Truncar valores muito longos
+      const strValue = String(value);
+      if (strValue.length > 100) {
+        return `${strValue.substring(0, 100)}...`;
+      }
+      
+      return strValue;
+    };
+
+    // AIDEV-NOTE: Construir mensagem resumida em uma linha
+    const action = isNewCharge ? 'CRIADA' : 'ATUALIZADA';
+    const changeCount = changes.length;
+    const statusEmoji = changeCount > 0 ? '🔄' : 'ℹ️';
+    
+    let summaryMessage = `${statusEmoji} Cobrança ${action} | ASAAS ID: ${asaasId}`;
+    if (changeCount > 0) {
+      const mainChanges = changes.slice(0, 3).map(c => c.fieldName).join(', ');
+      summaryMessage += ` | Alterações: ${mainChanges}${changeCount > 3 ? ` +${changeCount - 3} mais` : ''}`;
+    }
+
+    // AIDEV-NOTE: Construir conteúdo detalhado
+    let content = isNewCharge 
+      ? `📝 Nova cobrança criada via webhook ASAAS.\n\n`
+      : `🔄 Cobrança atualizada via webhook ASAAS.\n\n`;
+    
+    content += `📋 Informações da Cobrança:\n`;
+    content += `• ID Interno: ${chargeId}\n`;
+    content += `• ID ASAAS: ${asaasId}\n`;
+    content += `• Tipo de Evento: ${eventType}\n`;
+    content += `• Data/Hora: ${new Date().toLocaleString('pt-BR')}\n\n`;
+
+    if (changes.length > 0) {
+      content += `📊 Alterações Detectadas (${changes.length}):\n\n`;
+      
+      for (const change of changes) {
+        const oldFormatted = formatValue(change.oldValue, change.field);
+        const newFormatted = formatValue(change.newValue, change.field);
+        
+        content += `• ${change.fieldName}:\n`;
+        if (isNewCharge) {
+          content += `  → Novo valor: ${newFormatted}\n`;
+        } else {
+          content += `  → Valor anterior: ${oldFormatted}\n`;
+          content += `  → Novo valor: ${newFormatted}\n`;
+        }
+        content += `\n`;
+      }
+    } else {
+      content += `ℹ️ Nenhuma alteração detectada (dados já estavam atualizados).\n\n`;
+    }
+
+    // AIDEV-NOTE: Adicionar informações financeiras importantes
+    const financialInfo: string[] = [];
+    if (newChargeData.valor) {
+      financialInfo.push(`Valor: ${formatValue(newChargeData.valor, 'valor')}`);
+    }
+    if (newChargeData.payment_value) {
+      financialInfo.push(`Valor Pago: ${formatValue(newChargeData.payment_value, 'payment_value')}`);
+    }
+    if (newChargeData.net_value) {
+      financialInfo.push(`Valor Líquido: ${formatValue(newChargeData.net_value, 'net_value')}`);
+    }
+    if (newChargeData.status) {
+      financialInfo.push(`Status: ${formatValue(newChargeData.status, 'status')}`);
+    }
+    
+    if (financialInfo.length > 0) {
+      content += `💰 Resumo Financeiro:\n`;
+      financialInfo.forEach(info => {
+        content += `• ${info}\n`;
+      });
+      content += `\n`;
+    }
+
+    // AIDEV-NOTE: Metadata com informações estruturadas para análise
+    const metadata = {
+      notification_type: 'charge_webhook_update',
+      tenant_id: tenantId,
+      charge_id: chargeId,
+      asaas_id: asaasId,
+      event_type: eventType,
+      is_new_charge: isNewCharge,
+      changes: changes.map(c => ({
+        field: c.field,
+        field_name: c.fieldName,
+        old_value: c.oldValue,
+        new_value: c.newValue
+      })),
+      financial_summary: {
+        valor: newChargeData.valor,
+        payment_value: newChargeData.payment_value,
+        net_value: newChargeData.net_value,
+        status: newChargeData.status,
+        tipo: newChargeData.tipo
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    // AIDEV-NOTE: Inserir notificação na tabela
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        tenant_id: tenantId,
+        type: isNewCharge ? 'charge_created' : 'charge_updated',
+        recipient_email: 'system@revalya.com', // AIDEV-NOTE: Email do sistema
+        subject: summaryMessage, // AIDEV-NOTE: Mensagem resumida em uma linha
+        content: content, // AIDEV-NOTE: Conteúdo detalhado
+        metadata: metadata,
+        sent_at: null,
+        error: null
+      });
+
+    if (notificationError) {
+      console.error(`❌ Erro ao criar notificação de atualização de charge:`, notificationError);
+    } else {
+      console.log(`📧 Notificação de atualização de charge criada: ${chargeId} (${changes.length} alterações)`);
+    }
+  } catch (error) {
+    console.error(`❌ Erro ao criar notificação de atualização de charge:`, error);
+    // AIDEV-NOTE: Não falhar o processamento do webhook se a notificação falhar
+  }
+}
+
 // AIDEV-NOTE: Handler para requisições GET - consultas à API ASAAS
 async function handleGetRequest(req: Request, url: URL) {
   console.log("🔍 Processando requisição GET para consulta API ASAAS");
@@ -466,8 +702,6 @@ async function handleGetRequest(req: Request, url: URL) {
     integrationData.config.api_key,
     integrationData.config.api_url
   );
-
-  const tenantId = finalTenantId;
 
   if (!customerData) {
     return new Response(JSON.stringify({
@@ -901,6 +1135,16 @@ async function handlePostRequest(req: Request, tenantId: string) {
     }
   }
 
+  // AIDEV-NOTE: Buscar charge existente ANTES do upsert para comparar mudanças
+  const { data: existingCharge } = await supabase
+    .from("charges")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("asaas_id", asaasId)
+    .maybeSingle();
+
+  const isNewCharge = !existingCharge;
+
   // AIDEV-NOTE: Upsert charge usando asaas_id como chave única por tenant
   const { data: charge, error: chargeError } = await supabase
     .from("charges")
@@ -908,7 +1152,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
       onConflict: "tenant_id,asaas_id",
       ignoreDuplicates: false
     })
-    .select("id")
+    .select("*")
     .single();
 
   if (chargeError) {
@@ -925,13 +1169,29 @@ async function handlePostRequest(req: Request, tenantId: string) {
     });
   }
 
-  console.log(`✅ Charge ${charge?.id ? 'atualizada' : 'criada'} com sucesso: ${charge?.id || 'N/A'}`);
+  console.log(`✅ Charge ${charge?.id ? (isNewCharge ? 'criada' : 'atualizada') : 'processada'} com sucesso: ${charge?.id || 'N/A'}`);
+
+  // AIDEV-NOTE: Criar notificação detalhada da atualização/criação
+  // CRÍTICO: Sistema financeiro precisa de assertividade - registrar todas as mudanças
+  if (charge?.id) {
+    await createChargeUpdateNotification(
+      tenantId,
+      charge.id,
+      asaasId,
+      existingCharge || null,
+      chargeData,
+      eventType,
+      isNewCharge
+    );
+  }
 
   return new Response(JSON.stringify({
     success: true,
     message: "Webhook processado com sucesso",
     eventType,
-    eventId
+    eventId,
+    charge_id: charge?.id,
+    is_new: isNewCharge
   }), {
     status: 200,
     headers: {

@@ -404,6 +404,25 @@ export function ChargeGroupList({
                                 {charge.data_vencimento ? format(parseISO(charge.data_vencimento), 'dd/MM/yyyy') : 'N/A'}
                               </span>
                             </div>
+                            {/* AIDEV-NOTE: Exibir data de pagamento quando o grupo for "paid" */}
+                            {selectedGroup === 'paid' && charge.data_pagamento && (
+                              <div className="flex items-center space-x-1 text-emerald-600">
+                                <span>Pago:</span>
+                                <span className="font-medium">
+                                  {(() => {
+                                    try {
+                                      // AIDEV-NOTE: data_pagamento pode vir como string "YYYY-MM-DD" ou Date
+                                      const dateStr = String(charge.data_pagamento);
+                                      // Garantir formato ISO para parseISO
+                                      const isoDate = dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00';
+                                      return format(parseISO(isoDate), 'dd/MM/yyyy');
+                                    } catch (error) {
+                                      return String(charge.data_pagamento).split('T')[0].split('-').reverse().join('/');
+                                    }
+                                  })()}
+                                </span>
+                              </div>
+                            )}
                           </div>
                           
                           {/* AIDEV-NOTE: Status traduzido com cores melhoradas */}
