@@ -1,9 +1,12 @@
 import { motion } from 'framer-motion';
 import { Calendar } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useState, useEffect } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { DateRange } from 'react-day-picker';
 
 interface ChargeGroupProps {
   group: {
@@ -17,6 +20,7 @@ interface ChargeGroupProps {
     startDate: Date;
     endDate: Date;
   };
+  onDateRangeChange?: (range: { startDate: Date; endDate: Date }) => void;
 }
 
 const formatCurrency = (value: number): string => {
@@ -26,8 +30,40 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-export function ChargeGroup({ group, groupKey, onClick, dateRange }: ChargeGroupProps) {
+export function ChargeGroup({ group, groupKey, onClick, dateRange, onDateRangeChange }: ChargeGroupProps) {
   const totalValue = group.charges.reduce((sum, charge) => sum + (Number(charge.valor) || 0), 0);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(
+    dateRange ? { from: dateRange.startDate, to: dateRange.endDate } : undefined
+  );
+
+  // AIDEV-NOTE: Sincronizar selectedRange quando dateRange mudar externamente
+  useEffect(() => {
+    if (dateRange) {
+      setSelectedRange({ from: dateRange.startDate, to: dateRange.endDate });
+    }
+  }, [dateRange]);
+
+  const handleDateSelect = (range: DateRange | undefined) => {
+    setSelectedRange(range);
+  };
+
+  const handleDateApply = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevenir que o onClick do card seja acionado
+    if (selectedRange?.from && selectedRange?.to && onDateRangeChange) {
+      onDateRangeChange({
+        startDate: selectedRange.from,
+        endDate: selectedRange.to
+      });
+      setIsDatePickerOpen(false);
+    }
+  };
+
+  const handleDateCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedRange(dateRange ? { from: dateRange.startDate, to: dateRange.endDate } : undefined);
+    setIsDatePickerOpen(false);
+  };
 
   return (
     <motion.div
@@ -46,10 +82,53 @@ export function ChargeGroup({ group, groupKey, onClick, dateRange }: ChargeGroup
 
         {groupKey === 'paid' && dateRange && (
           <div className="mt-3 border-t border-white/20 pt-3">
-            <div className="flex items-center justify-between text-white/90 text-xs">
-              <Calendar className="h-4 w-4" />
-              <span>{format(dateRange.startDate, 'dd/MM/yyyy', { locale: ptBR })} - {format(dateRange.endDate, 'dd/MM/yyyy', { locale: ptBR })}</span>
-            </div>
+            <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevenir que o onClick do card seja acionado
+                    setIsDatePickerOpen(true);
+                  }}
+                  className="flex items-center justify-between w-full text-white/90 text-xs hover:text-white transition-colors"
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span>
+                    {format(dateRange.startDate, 'dd/MM/yyyy', { locale: ptBR })} - {format(dateRange.endDate, 'dd/MM/yyyy', { locale: ptBR })}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent 
+                className="w-auto p-0" 
+                align="start"
+                onClick={(e) => e.stopPropagation()} // Prevenir propagação do evento
+              >
+                <CalendarComponent
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange.startDate}
+                  selected={selectedRange}
+                  onSelect={handleDateSelect}
+                  numberOfMonths={2}
+                  locale={ptBR}
+                />
+                <div className="flex justify-end gap-2 p-3 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDateCancel}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleDateApply}
+                    disabled={!selectedRange?.from || !selectedRange?.to}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
       </div>

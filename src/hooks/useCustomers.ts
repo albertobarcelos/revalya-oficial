@@ -10,6 +10,7 @@ export interface Customer {
   cpf_cnpj?: string | number
   email?: string
   phone?: string
+  celular_whatsapp?: string
   active?: boolean
   tenant_id: string
   created_at?: string
@@ -59,7 +60,7 @@ export function useCustomers(params?: UseCustomersParams) {
       
       let query = supabase
         .from('customers')
-        .select('id, name, company, cpf_cnpj, email, phone, created_at, updated_at', { count: 'estimated' })
+        .select('id, name, company, cpf_cnpj, email, phone, celular_whatsapp, created_at, updated_at', { count: 'estimated' })
         .eq('tenant_id', tenantId)
 
       // Aplicar filtros de busca se fornecidos

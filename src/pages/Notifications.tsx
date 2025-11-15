@@ -47,7 +47,7 @@ export default function Notifications() {
     unreadCount,
     totalCount
   } = useSecureNotifications({
-    read: filter === 'all' ? undefined : filter === 'read',
+    // AIDEV-NOTE: Campo 'read' removido - não existe na tabela notifications
     type: typeFilter === 'all' ? undefined : typeFilter,
     limit: 50
   });

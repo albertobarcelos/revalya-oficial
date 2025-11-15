@@ -96,9 +96,13 @@ export function ChargesDashboard() {
   // AIDEV-NOTE: Estados para filtros de data dos cards específicos
   const [paidFilter, setPaidFilter] = useState(() => {
     const today = new Date();
+    const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    endDate.setHours(23, 59, 59, 999);
     return {
-      startDate: new Date(today.getFullYear(), today.getMonth(), 1), // Primeiro dia do mês atual
-      endDate: new Date(today.getFullYear(), today.getMonth() + 1, 0) // Último dia do mês atual
+      startDate,
+      endDate
     };
   });
 
@@ -122,8 +126,25 @@ export function ChargesDashboard() {
     charges.forEach(charge => {
       // Filtro para cobranças PAGAS
       if (['RECEIVED', 'RECEIVED_IN_CASH', 'RECEIVED_PIX', 'RECEIVED_BOLETO', 'RECEIVED_CARD', 'CONFIRMED', 'PAID'].includes(charge.status)) {
-        const paymentDate = parseISO(charge.data_pagamento + 'T00:00:00');
-        if (paymentDate >= paidFilter.startDate && paymentDate <= paidFilter.endDate) {
+        // AIDEV-NOTE: Verificar se data_pagamento existe antes de filtrar
+        if (!charge.data_pagamento) {
+          return; // Se não tem data de pagamento, não incluir no grupo "Pagas"
+        }
+        
+        // AIDEV-NOTE: data_pagamento vem como string no formato "YYYY-MM-DD" (tipo date do PostgreSQL)
+        // Comparar usando strings YYYY-MM-DD para evitar problemas de timezone
+        const paymentDateStr = String(charge.data_pagamento).trim(); // Garantir que é string e remover espaços
+        
+        // Extrair apenas a parte da data (YYYY-MM-DD) caso venha com hora
+        const paymentDateOnly = paymentDateStr.split('T')[0].split(' ')[0];
+        
+        // Normalizar datas do filtro para formato YYYY-MM-DD
+        const startDateStr = format(paidFilter.startDate, 'yyyy-MM-dd');
+        const endDateStr = format(paidFilter.endDate, 'yyyy-MM-dd');
+        
+        // AIDEV-NOTE: Comparar strings YYYY-MM-DD diretamente (mais confiável que Date)
+        // Isso evita problemas de timezone e garante comparação precisa
+        if (paymentDateOnly >= startDateStr && paymentDateOnly <= endDateStr) {
           groups.paid.charges.push(charge);
         }
         return;
@@ -302,6 +323,7 @@ export function ChargesDashboard() {
               isSelected={selectedGroup === key}
               onClick={() => handleGroupClick(key)}
               dateRange={key === 'paid' ? paidFilter : undefined}
+              onDateRangeChange={key === 'paid' ? (range) => setPaidFilter(range) : undefined}
             />
           ))}
         </div>

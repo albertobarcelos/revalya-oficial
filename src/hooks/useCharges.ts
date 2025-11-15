@@ -27,6 +27,7 @@ export interface Charge {
     company?: string
     email?: string
     phone?: string
+    celular_whatsapp?: string
     cpf_cnpj?: string
   }
   contracts?: {
@@ -141,6 +142,7 @@ export function useCharges(params: UseChargesParams = {}) {
             company,
             email,
             phone,
+            celular_whatsapp,
             cpf_cnpj
           ),
           contracts(
@@ -208,12 +210,16 @@ export function useCharges(params: UseChargesParams = {}) {
         // AIDEV-NOTE: Processar resultado da RPC
         const rpcData = rpcResult?.data || [];
         const rpcTotal = rpcResult?.total || 0;
-        
+
         // AIDEV-NOTE: Buscar serviços dos contratos (se necessário)
         const contractIds = rpcData && rpcData.length > 0
           ? [...new Set(rpcData.filter((charge: any) => charge.contract_id).map((charge: any) => charge.contract_id))]
           : [];
+        const customerIdsForPhones = rpcData && rpcData.length > 0
+          ? [...new Set(rpcData.map((charge: any) => charge.customer_id).filter(Boolean))]
+          : [];
         let contractServicesMap: Record<string, any[]> = {};
+        let customerPhonesMap: Record<string, { phone: string | null; celular_whatsapp: string | null }> = {};
         
         if (contractIds.length > 0) {
           const { data: servicesData, error: servicesError } = await supabase
@@ -248,15 +254,33 @@ export function useCharges(params: UseChargesParams = {}) {
             }, {} as Record<string, any[]>);
           }
         }
+
+        if (customerIdsForPhones.length > 0) {
+          const { data: customersData, error: customersError } = await supabase
+            .from('customers')
+            .select('id, phone, celular_whatsapp')
+            .eq('tenant_id', tenantId)
+            .in('id', customerIdsForPhones);
+
+          if (customersError) {
+            console.error('🚨 [ERROR] useCharges - Erro ao buscar celulares/WhatsApp dos clientes na RPC:', customersError);
+          } else {
+            customerPhonesMap = (customersData || []).reduce((acc: Record<string, { phone: string | null; celular_whatsapp: string | null }>, c: any) => {
+              acc[c.id] = { phone: c.phone || null, celular_whatsapp: c.celular_whatsapp || null };
+              return acc;
+            }, {} as Record<string, { phone: string | null; celular_whatsapp: string | null }>);
+          }
+        }
         
         // AIDEV-NOTE: Converter dados da RPC para formato esperado (igual ao processamento normal)
         const enrichedData = rpcData.map((charge: any) => {
           const customers = charge.customers || null;
           const contracts = charge.contracts || null;
+          const phoneInfo = customerPhonesMap[charge.customer_id] || { phone: customers?.phone ?? null, celular_whatsapp: customers?.celular_whatsapp ?? null };
           
           return {
             ...charge,
-            customers: customers || undefined,
+            customers: customers ? { ...customers, phone: phoneInfo.phone, celular_whatsapp: phoneInfo.celular_whatsapp } : (phoneInfo ? { id: charge.customer_id, name: undefined, phone: phoneInfo.phone, celular_whatsapp: phoneInfo.celular_whatsapp } : undefined),
             contracts: contracts ? {
               ...contracts,
               services: contractServicesMap[charge.contract_id!] || []

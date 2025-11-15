@@ -37,6 +37,7 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
       cpfCnpj: cpfCnpjValue,
       email: customer.email || '',
       phone: customer.phone || '',
+      celular_whatsapp: (customer as any).celular_whatsapp || '',
       company: customer.company || '',
       address: customer.address || '',
       addressNumber: customer.address_number || '',
@@ -62,6 +63,7 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
         name: customer.name || '',
         email: customer.email || '',
         phone: customer.phone || '',
+        celular_whatsapp: (customer as any).celular_whatsapp || '',
         cpfCnpj: customer.cpf_cnpj || '',
         company: customer.company || '', // AIDEV-NOTE: Campo company adicionado para sincronização correta
         address: customer.address || '',

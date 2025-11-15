@@ -93,6 +93,8 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
     return 'N/A';
   };
 
+  const installmentInfo = extractInstallmentInfo(chargeDetails.descricao || '');
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'PAID':
@@ -119,10 +121,12 @@ function ChargePaymentDetailsComponent({ chargeDetails }: ChargePaymentDetailsPr
           <h3 className="text-sm font-medium text-muted-foreground">Vencimento</h3>
           <p className="text-lg">{formatDate(chargeDetails.data_vencimento)}</p>
         </div>
-        <div>
-          <h3 className="text-sm font-medium text-muted-foreground">Parcelas</h3>
-          <p className="text-lg font-medium">{extractInstallmentInfo(chargeDetails.descricao)}</p>
-        </div>
+        {installmentInfo !== 'N/A' && (
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Parcelas</h3>
+            <p className="text-lg font-medium">{installmentInfo}</p>
+          </div>
+        )}
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
           <div className="mt-1">{getStatusBadge(chargeDetails.status)}</div>

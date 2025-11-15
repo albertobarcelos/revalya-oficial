@@ -18,6 +18,7 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
     name: '',
     email: '',
     phone: '',
+    celular_whatsapp: '',
     // AIDEV-NOTE: Removido mobilePhone - campo não existe na tabela customers
     cpfCnpj: '',
     postal_code: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
@@ -96,6 +97,7 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
         name: '',
         email: '',
         phone: '',
+        celular_whatsapp: '',
         cpfCnpj: '',
         postal_code: '',
         address: '',
@@ -194,6 +196,7 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
                   email: '',
                   phone: '',
                   // AIDEV-NOTE: Removido mobilePhone - campo não existe na tabela customers
+                  celular_whatsapp: '',
                   cpfCnpj: '',
                   postal_code: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
                   address: '',
