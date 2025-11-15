@@ -32,8 +32,10 @@ export function useSecureTenantQuery<T>(
   // AIDEV-NOTE: Instância do SecurityMiddleware para configurar contexto de tenant
   const securityMiddleware = new SecurityMiddleware({ supabaseClient: supabase });
   
-  // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido e ativo
-  const isValidTenant = currentTenant?.id && currentTenant?.active;
+  // 🚨 VALIDAÇÃO CRÍTICA: Tenant deve estar definido, ativo e ter ID válido (não vazio)
+  const isValidTenant = currentTenant?.id && 
+                        currentTenant.id.trim() !== '' && 
+                        currentTenant?.active;
   
   // AIDEV-NOTE: Simplificar - remover delay desnecessário que estava causando problemas
   // O tenant já está validado pelo useTenantAccessGuard, não precisa de delay adicional
@@ -59,8 +61,8 @@ export function useSecureTenantQuery<T>(
     
     queryFn: async () => {
       // 🛡️ VALIDAÇÃO DUPLA DE SEGURANÇA
-      if (!currentTenant?.id) {
-        throw new Error('❌ ERRO CRÍTICO: Tenant não definido - possível vazamento de dados!');
+      if (!currentTenant?.id || currentTenant.id.trim() === '') {
+        throw new Error('❌ ERRO CRÍTICO: Tenant não definido ou ID inválido - possível vazamento de dados!');
       }
       
       if (!currentTenant.active) {
