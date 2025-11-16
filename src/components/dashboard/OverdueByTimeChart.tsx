@@ -53,8 +53,8 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
       return (
         <div className="bg-white p-3 shadow-md rounded-lg border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
           <p className="font-medium">{formatPeriod(payload[0].payload.period)}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Valor: {formatCurrency(payload[0].value)}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Cobranças: {payload[0].payload.count}</p>
+          <p className="text-body text-gray-500 dark:text-gray-300">Valor: {formatCurrency(payload[0].value)}</p>
+          <p className="text-body text-gray-500 dark:text-gray-300">Cobranças: {payload[0].payload.count}</p>
         </div>
       );
     }
@@ -103,7 +103,7 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
             </ResponsiveContainer>
           ) : (
             <div className="text-center p-6">
-              <p className="text-sm text-muted-foreground">Não há dados de inadimplência para exibir</p>
+              <p className="text-body text-muted-foreground">Não há dados de inadimplência para exibir</p>
             </div>
           )}
         </div>

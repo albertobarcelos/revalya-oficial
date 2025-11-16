@@ -15,7 +15,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
   MoreHorizontal, 
-  Edit, 
   Trash2, 
   Eye,
   AlertCircle,
@@ -154,11 +153,14 @@ export default function ProductsPage() {
   }, [refetch]);
 
   const handleEditProduct = useCallback((product: Product) => {
+    console.log('🔍 [DEBUG] handleEditProduct chamado com produto:', product);
     setEditingProduct(product);
     setIsEditModalOpen(true);
+    console.log('🔍 [DEBUG] Estado atualizado - isEditModalOpen: true, editingProduct:', product);
   }, []);
 
-  const handleDeleteProduct = useCallback((productId: string) => {
+  const handleDeleteProduct = useCallback((product: Product | string) => {
+    const productId = typeof product === 'string' ? product : product.id;
     if (window.confirm('Tem certeza que deseja excluir este produto?')) {
       deleteProduct(productId);
     }
@@ -198,14 +200,14 @@ export default function ProductsPage() {
   const TableHeaderComponent = ({ isSticky = false }: { isSticky?: boolean }) => (
     <TableHeader className={isSticky ? "sticky top-0 bg-background z-10" : ""}>
       <TableRow className="h-10">
-        <TableHead className="py-2">Nome</TableHead>
-        <TableHead className="py-2">Código</TableHead>
-        <TableHead className="py-2">Valor</TableHead>
-        <TableHead className="py-2">Unidade</TableHead>
-        <TableHead className="py-2">Taxa (%)</TableHead>
-        <TableHead className="py-2">Status</TableHead>
-        <TableHead className="py-2">Retenção</TableHead>
-        <TableHead className="text-right py-2">Ações</TableHead>
+        <TableHead className="py-2 text-table font-medium">Nome</TableHead>
+        <TableHead className="py-2 text-table font-medium">Código</TableHead>
+        <TableHead className="py-2 text-table font-medium">Valor</TableHead>
+        <TableHead className="py-2 text-table font-medium">Unidade</TableHead>
+        <TableHead className="py-2 text-table font-medium">Taxa (%)</TableHead>
+        <TableHead className="py-2 text-table font-medium">Status</TableHead>
+        <TableHead className="py-2 text-table font-medium">Retenção</TableHead>
+        <TableHead className="text-right py-2 text-table font-medium">Excluir</TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -230,7 +232,7 @@ export default function ProductsPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-destructive mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Acesso Negado</h3>
+            <h3 className="text-heading-3 font-semibold mb-2">Acesso Negado</h3>
             <p className="text-muted-foreground">
               {accessError || "Você não tem permissão para acessar esta página."}
             </p>
@@ -271,7 +273,7 @@ export default function ProductsPage() {
         <div className="flex items-center justify-center h-32">
           <div className="text-center">
             <AlertCircle className="mx-auto h-8 w-8 text-destructive mb-2" />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               Erro ao carregar produtos: {error.message}
             </p>
           </div>
@@ -284,7 +286,7 @@ export default function ProductsPage() {
         <div className="flex items-center justify-center h-32">
           <div className="text-center">
             <Package className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {searchTerm ? 'Nenhum produto encontrado para sua busca.' : 'Nenhum produto cadastrado.'}
             </p>
           </div>
@@ -305,21 +307,22 @@ export default function ProductsPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.2 }}
-                  className="group hover:bg-muted/50"
+                  className="group hover:bg-muted/50 cursor-pointer"
+                  onClick={() => handleEditProduct(product)}
                 >
                   <TableCell className="font-medium py-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-sm">{product.name}</span>
+                      <span className="text-table">{product.name}</span>
                       {product.description && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Info 
-                                className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-help" 
+                                className="h-3 w-3 hover:text-foreground transition-colors cursor-help" 
                               />
                             </TooltipTrigger>
                             <TooltipContent side="right" className="max-w-[300px]">
-                              <p className="text-xs">{product.description}</p>
+                              <p className="text-small">{product.description}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -327,51 +330,47 @@ export default function ProductsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="font-mono">
+                    <span className="text-table">
                       {product.code}
-                    </Badge>
+                    </span>
                   </TableCell>
                   <TableCell>
-                    <span className="font-semibold text-green-600">
+                    <span className="text-table text-green-600">
                       {formatCurrency(product.unit_price)}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {translateUnit(product.unit)}
+                    <Badge variant="secondary" className="text-table">
+                      {translateUnit(product.unit_of_measure || 'un')}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {product.tax_rate ? `${product.tax_rate}%` : '-'}
+                    <span className="text-table">
+                      {product.tax_rate ? `${product.tax_rate}%` : '-'}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <Badge 
                       variant={product.is_active ? "default" : "secondary"}
-                      className={product.is_active ? "bg-green-100 text-green-800" : ""}
+                      className={product.is_active ? "bg-green-100 text-green-800 text-table" : "text-table"}
                     >
                       {product.is_active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">
+                    <span className="text-table">
                       {product.withholding_tax ? 'Sim' : 'Não'}
-                    </Badge>
+                    </span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEditProduct(product)}
-                        className="h-8 w-8 p-0 hover:bg-blue-100"
-                      >
-                        <span className="sr-only">Editar produto</span>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteProduct(product)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // AIDEV-NOTE: Prevenir que o clique no botão dispare o onClick da linha
+                          handleDeleteProduct(product.id);
+                        }}
                         className="h-8 w-8 p-0 hover:bg-red-100"
                       >
                         <span className="sr-only">Excluir produto</span>
@@ -425,8 +424,8 @@ export default function ProductsPage() {
       
       {/* AIDEV-NOTE: Modal específico para edição de produtos */}
       <EditProductDialog
-        Open={isEditModalOpen}
-        Close={handleCancelEdit}
+        isOpen={isEditModalOpen}
+        onClose={handleCancelEdit}
         onSuccess={handleEditSuccess}
         product={editingProduct}
       />

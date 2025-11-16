@@ -14,34 +14,49 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { useProductForm } from './hooks/useProductForm';
-import { generateInternalCode } from '@/lib/utils/productUtils';
 import type { Product } from '@/hooks/useSecureProducts';
-import { motion } from 'framer-motion';
 import { useProductCategories } from '@/hooks/useSecureProducts';
+import { useStorageLocations } from '@/hooks/useStorageLocations';
+import { motion } from 'framer-motion';
 import { 
+  X,
+  Save,
+  Plus,
+  List,
+  Copy,
+  Share2,
+  UserX,
+  Paperclip,
+  Clock,
+  Grid3x3,
+  Trash2,
+  Image as ImageIcon,
+  Edit,
+  Search,
+  Info,
   Package, 
   DollarSign, 
-  Hash, 
-  Barcode, 
-  Layers, 
+  Warehouse,
+  Truck,
   FileText, 
-  Receipt, 
-  MessageSquare,
-  ShoppingCart,
   Tag,
-  AlertTriangle,
-  MapPin,
-  BarChart3,
-  Info,
-  Save,
-  Loader2
+  Receipt, 
+  HelpCircle,
+  Globe
 } from 'lucide-react';
-import { useState } from 'react';
-
-// AIDEV-NOTE: Estrutura de abas para organização clara das informações do produto
-// Seguindo as especificações: Dados Gerais, Estoque, Fiscal (condicional), Observações
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { formatCurrency } from '@/lib/utils';
 
 interface EditProductDialogProps {
   product: Product | null;
@@ -49,18 +64,6 @@ interface EditProductDialogProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
-
-// AIDEV-NOTE: Interface para configuração do tenant - controla exibição condicional
-interface TenantConfig {
-  nfe_enabled: boolean;
-  stock_control_enabled: boolean;
-}
-
-// Mock da configuração do tenant - em produção virá da API
-const mockTenantConfig: TenantConfig = {
-  nfe_enabled: true, // Controla exibição da aba Fiscal
-  stock_control_enabled: true // Controla funcionalidades de estoque
-};
 
 export function EditProductDialog({
   product,
@@ -72,8 +75,51 @@ export function EditProductDialog({
   if (!product) {
     return null;
   }
+
+  const [activeTab, setActiveTab] = useState('estoque');
+  const [productDefinition, setProductDefinition] = useState({
+    simples: false,
+    kit: false,
+    comVariacoes: true
+  });
+
   // AIDEV-NOTE: Hook para buscar categorias da tabela products do tenant
-  const { data: categories, isLoading: isLoadingCategories } = useProductCategories();
+  const { data: categoriesData, isLoading: isLoadingCategories } = useProductCategories();
+  const categories = categoriesData || [];
+  
+  // AIDEV-NOTE: Hook para buscar locais de estoque cadastrados no sistema
+  const { 
+    locations, 
+    isLoading: isLoadingLocations 
+  } = useStorageLocations({ is_active: true });
+
+  // AIDEV-NOTE: Estado para edição inline do estoque mínimo por local
+  const [editingMinStock, setEditingMinStock] = useState<{ locationId: string; value: number } | null>(null);
+  
+  // AIDEV-NOTE: Estado para armazenar estoque mínimo por local (será persistido no banco futuramente)
+  const [minStockByLocation, setMinStockByLocation] = useState<Record<string, number>>({});
+
+  // AIDEV-NOTE: Estado local para controlar o valor formatado do preço durante a digitação
+  const [unitPriceDisplay, setUnitPriceDisplay] = useState<string>('');
+
+  // AIDEV-NOTE: Função para converter string formatada em número
+  const parsePrice = (value: string): number => {
+    if (!value || value.trim() === '') return 0;
+    // Remove R$, espaços, pontos (separadores de milhar) e substitui vírgula por ponto
+    const cleaned = value
+      .replace(/R\$\s?/g, '')
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .trim();
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // AIDEV-NOTE: Função para formatar número como preço brasileiro (sem R$)
+  const formatPrice = (value: number): string => {
+    if (!value || value === 0) return '';
+    return value.toFixed(2).replace('.', ',');
+  };
 
   // AIDEV-NOTE: Busca segura de dados completos do produto usando padrões multi-tenant
   const {
@@ -99,6 +145,7 @@ export function EditProductDialog({
           stock_quantity,
           min_stock_quantity,
           category,
+          category_id,
           supplier,
           tax_rate,
           has_inventory,
@@ -119,39 +166,140 @@ export function EditProductDialog({
       return data;
     },
     {
-      enabled: isOpen && !!product?.id, // Só executa quando diálogo está aberto e tem ID
-      staleTime: 5 * 60 * 1000 // 5 minutos de cache
+      enabled: isOpen && !!product?.id,
+      staleTime: 5 * 60 * 1000
     }
   );
 
-  const { formData, isLoading, handleSubmit, handleChange } = useProductForm(
-    completeProduct || product, // Usa dados completos ou fallback para dados básicos
+  const { formData, isLoading, handleSubmit, handleChange, updateProductMutation } = useProductForm(
+    completeProduct || product,
     () => {
       onSuccess?.();
-      onOpenChange(false);
+      onClose();
     }
   );
 
-  // AIDEV-NOTE: Estado local para controle de estoque - usado quando tenant permite
-  const [stockControlEnabled, setStockControlEnabled] = useState(
-    mockTenantConfig.stock_control_enabled
-  );
+  // AIDEV-NOTE: Sincronizar estado local quando formData.unit_price mudar externamente
+  useEffect(() => {
+    if (formData.unit_price && formData.unit_price > 0) {
+      setUnitPriceDisplay(formatPrice(formData.unit_price));
+    } else {
+      setUnitPriceDisplay('');
+    }
+  }, [formData.unit_price]);
 
-  // AIDEV-NOTE: Função para gerar código interno automaticamente
-  const generateInternalCode = () => {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-    return `PRD-${timestamp}-${random}`;
+  // AIDEV-NOTE: Função wrapper para handleSubmit que sincroniza o preço antes de salvar
+  const handleSubmitWithPriceSync = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    
+    // Sincronizar o valor do preço antes de submeter
+    const numericValue = parsePrice(unitPriceDisplay);
+    
+    // Criar um novo formData com o valor atualizado do preço
+    const updatedFormData = {
+      ...formData,
+      unit_price: numericValue
+    };
+    
+    // Atualizar o estado local também
+    handleChange('unit_price', numericValue);
+    
+    // Validar antes de submeter
+    if (!updatedFormData.name.trim()) {
+      return;
+    }
+    
+    if (updatedFormData.unit_price <= 0) {
+      return;
+    }
+    
+    // Chamar a mutação diretamente com os dados atualizados
+    updateProductMutation.mutate(updatedFormData);
+  }, [unitPriceDisplay, formData, handleChange, updateProductMutation]);
+
+  // AIDEV-NOTE: Preparar dados de estoque baseados nos locais cadastrados
+  // Por enquanto, distribui o estoque total do produto entre os locais
+  // Futuramente, isso virá de uma tabela product_stock_by_location
+  const stockData = useMemo(() => {
+    if (locations.length === 0) {
+      // Local padrão quando não há locais cadastrados
+      return [
+        {
+          id: 'default',
+          locationId: 'default',
+          location: 'PADRAO - Local de Estoque Padrão',
+          locationDescription: 'Local de estoque padrão do sistema',
+          availableStock: formData.stock_quantity || 0,
+          unitCMC: formData.cost_price || 0,
+          totalCMC: (formData.cost_price || 0) * (formData.stock_quantity || 0),
+          minStock: minStockByLocation['default'] ?? formData.min_stock_quantity ?? 0,
+          inboundForecast: 0,
+          outboundForecast: 0,
+          locationType: 'Estoque próprio da empresa',
+          isActive: true
+        }
+      ];
+    }
+
+    return locations.map((location, index) => {
+      // Distribuir estoque: primeiro local recebe todo o estoque disponível
+      const availableStock = index === 0 ? (formData.stock_quantity || 0) : 0;
+      
+      // Estoque mínimo por local (usa valor salvo ou divide o mínimo geral)
+      const minStock = minStockByLocation[location.id] ?? 
+        (locations.length > 0 
+          ? Math.floor((formData.min_stock_quantity || 0) / locations.length)
+          : 0);
+
+      // CMC (Custo Médio de Compra) - usando cost_price do produto
+      const unitCMC = formData.cost_price || 0;
+      const totalCMC = unitCMC * availableStock;
+
+      return {
+        id: location.id,
+        locationId: location.id,
+        location: location.name,
+        locationDescription: location.description || '',
+        availableStock: availableStock,
+        unitCMC: unitCMC,
+        totalCMC: totalCMC,
+        minStock: minStock,
+        inboundForecast: 0,
+        outboundForecast: 0,
+        locationType: location.description || 'Estoque próprio da empresa',
+        isActive: location.is_active
+      };
+    });
+  }, [locations, formData.stock_quantity, formData.cost_price, formData.min_stock_quantity, minStockByLocation]);
+
+  // AIDEV-NOTE: Handler para editar estoque mínimo inline
+  const handleMinStockEdit = (locationId: string, currentValue: number) => {
+    setEditingMinStock({ locationId, value: currentValue });
   };
 
-  // AIDEV-NOTE: Renderização condicional baseada no estado de carregamento
+  // AIDEV-NOTE: Handler para salvar estoque mínimo
+  const handleMinStockSave = (locationId: string, newValue: number) => {
+    // Atualizar estado local
+    setMinStockByLocation(prev => ({
+      ...prev,
+      [locationId]: newValue
+    }));
+    setEditingMinStock(null);
+    
+    // TODO: Implementar salvamento no banco de dados
+    // Futuramente, criar tabela product_stock_by_location ou similar
+    // para armazenar estoque mínimo por local de estoque
+  };
+
   if (isLoadingProduct) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Carregando produto...</span>
+        <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0">
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Carregando produto...</p>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -160,144 +308,231 @@ export function EditProductDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Package className="h-6 w-6 text-blue-600" />
-            {product?.id ? 'Editar Produto' : 'Cadastro de Produto'}
-          </DialogTitle>
-          <DialogDescription className="text-gray-600">
-            {product?.id 
-              ? 'Atualize as informações do produto usando as abas organizadas abaixo.'
-              : 'Preencha as informações do novo produto usando as abas organizadas abaixo.'
-            }
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <DialogTitle className="text-heading-1 font-semibold">Produtos</DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </Button>
+        </div>
 
-        <ScrollArea className="flex-1 px-6">
-          <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
-              <TabsTrigger value="general" className="flex items-center gap-2">
-                <Info className="h-4 w-4" />
-                Dados Gerais
-              </TabsTrigger>
-              <TabsTrigger value="stock" className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Estoque
-              </TabsTrigger>
-              {mockTenantConfig.nfe_enabled && (
-                <TabsTrigger value="fiscal" className="flex items-center gap-2">
-                  <Receipt className="h-4 w-4" />
-                  Fiscal
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="notes" className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Observações
-              </TabsTrigger>
-            </TabsList>
-
-            {/* ABA: DADOS GERAIS */}
-            <TabsContent value="general" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-6"
-              >
-                {/* Seção: Identificação */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                    <Tag className="h-5 w-5 text-blue-600" />
-                    Identificação do Produto
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-sm font-medium">
-                        Nome do Produto *
-                      </Label>
-                      <Input
-                        id="name"
-                        name="name"
-                        value={formData.name || ''}
-                        onChange={handleChange}
-                        placeholder="Ex: Notebook Dell Inspiron 15"
-                        className="w-full"
-                        required
+        {/* Main Content */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <ScrollArea className="flex-1 px-6 py-4">
+              {/* Product Image and Basic Info */}
+              <div className="grid grid-cols-12 gap-6 mb-6">
+                {/* Product Image */}
+                <div className="col-span-2">
+                  {formData.image_url ? (
+                    <div className="w-[70px] h-[70px] rounded-lg overflow-hidden mb-2 border">
+                      <img 
+                        src={formData.image_url} 
+                        alt={formData.name || 'Produto'}
+                        className="w-full h-full object-cover"
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="code" className="text-sm font-medium">
-                        Código Interno
-                      </Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="code"
-                          name="code"
-                          value={formData.code || ''}
-                          onChange={handleChange}
-                          placeholder="Código interno do produto"
-                          className="flex-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleChange({
-                            target: { name: 'code', value: generateInternalCode() }
-                          } as any)}
-                          className="px-3"
-                        >
-                          <Hash className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  ) : (
+                    <div className="w-[70px] h-[70px] bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white mb-2 border border-blue-700 shadow-sm">
+                      <Package className="h-8 w-8" />
                     </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-[70px] text-[12px]"
+                    onClick={() => {/* TODO: Implementar upload de imagem */}}
+                  >
+                    <Edit className="h-3 w-3 mr-1" />
+                    Alterar
+                  </Button>
+                </div>
+
+                {/* Basic Product Information */}
+                <div className="col-span-8 space-y-4">
+                  {/* Descrição - linha completa */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="description" className="text-label font-medium leading-none">
+                      Descrição
+                    </Label>
+                    <Input
+                      id="description"
+                      name="description"
+                      value={formData.name || ''}
+                      onChange={(e) => handleChange('name', e.target.value)}
+                      placeholder="Descrição do produto"
+                      className="h-[25px] text-input leading-tight"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="barcode" className="text-sm font-medium">
-                        Código de Barras
+                  {/* Primeira linha: Código do Produto, Código EAN, Unidade, Preço Unitário */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="code" className="text-label font-medium leading-none block">
+                        Código do Produto
+                      </Label>
+                      <Input
+                        id="code"
+                        name="code"
+                        value={formData.code || ''}
+                        onChange={(e) => handleChange('code', e.target.value || null)}
+                        placeholder="Código do produto"
+                        className="h-[25px] text-input leading-tight"
+                      />
+                  </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="barcode" className="text-label font-medium leading-none flex items-center gap-1.5">
+                        Código EAN (GTIN)
+                        <Globe className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </Label>
                       <Input
                         id="barcode"
                         name="barcode"
                         value={formData.barcode || ''}
-                        onChange={handleChange}
-                        placeholder="Ex: 7891234567890"
-                        className="w-full"
+                        onChange={(e) => handleChange('barcode', e.target.value || null)}
+                        placeholder="Código EAN"
+                        className="h-[25px] text-input leading-tight"
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="category_id" className="text-sm font-medium">
-                        Categoria
+                    <div className="space-y-1.5">
+                      <Label htmlFor="unit_of_measure" className="text-label font-medium leading-none block">
+                        Unidade
+                      </Label>
+                      <Select
+                        value={formData.unit_of_measure || 'un'}
+                        onValueChange={(value) => handleChange('unit_of_measure', value || null)}
+                      >
+                        <SelectTrigger className="h-[25px] text-select leading-tight">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="un">Unidade (UN)</SelectItem>
+                          <SelectItem value="kg">Quilograma (KG)</SelectItem>
+                          <SelectItem value="g">Grama (G)</SelectItem>
+                          <SelectItem value="l">Litro (L)</SelectItem>
+                          <SelectItem value="ml">Mililitro (ML)</SelectItem>
+                          <SelectItem value="m">Metro (M)</SelectItem>
+                          <SelectItem value="cm">Centímetro (CM)</SelectItem>
+                          <SelectItem value="m2">Metro Quadrado (M²)</SelectItem>
+                          <SelectItem value="m3">Metro Cúbico (M³)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="unit_price" className="text-label font-medium leading-none block">
+                        Preço Unitário de Venda
+                      </Label>
+                      <Input
+                        id="unit_price"
+                        name="unit_price"
+                        type="text"
+                        value={unitPriceDisplay}
+                        onChange={(e) => {
+                          // Permite digitação livre - apenas remove caracteres inválidos
+                          const inputValue = e.target.value;
+                          // Permite números, vírgula e ponto (mas apenas uma vírgula ou ponto)
+                          let cleaned = inputValue.replace(/[^\d,.]/g, '');
+                          // Garante apenas um separador decimal
+                          const parts = cleaned.split(/[,.]/);
+                          if (parts.length > 2) {
+                            // Se houver mais de um separador, mantém apenas o primeiro
+                            cleaned = parts[0] + (parts[1] ? ',' + parts.slice(1).join('') : '');
+                          }
+                          // Substitui ponto por vírgula para padronizar
+                          cleaned = cleaned.replace('.', ',');
+                          setUnitPriceDisplay(cleaned);
+                        }}
+                        onFocus={(e) => {
+                          // Ao focar, mantém o valor atual para facilitar edição
+                          // Não altera nada, apenas permite editar
+                        }}
+                        onBlur={(e) => {
+                          // Ao sair do foco, converte para número e formata
+                          const numericValue = parsePrice(e.target.value);
+                          if (numericValue > 0) {
+                            const formatted = formatPrice(numericValue);
+                            setUnitPriceDisplay(formatted);
+                            // Atualiza o formData com o valor numérico
+                            handleChange({
+                              target: { name: 'unit_price', value: numericValue.toString() }
+                            } as React.ChangeEvent<HTMLInputElement>);
+                          } else {
+                            setUnitPriceDisplay('');
+                            handleChange({
+                              target: { name: 'unit_price', value: '0' }
+                            } as React.ChangeEvent<HTMLInputElement>);
+                          }
+                        }}
+                        placeholder="0,00"
+                        className="h-[25px] text-input leading-tight"
+                      />
+                    </div>
+                    </div>
+
+                  {/* Segunda linha: Código NCM, Família de Produto */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ncm" className="text-label font-medium leading-none block">
+                        Código NCM
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="ncm"
+                          name="ncm"
+                          value={formData.category || ''}
+                          onChange={(e) => handleChange('category', e.target.value || null)}
+                          placeholder="2106.90.90 OUTROS PREPARACOES ALIMENTICIAS"
+                          className="h-[25px] text-input leading-tight pr-8"
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="absolute right-0 top-0 h-[25px] w-[25px] hover:bg-transparent pointer-events-auto"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            // TODO: Implementar busca de NCM
+                          }}
+                        >
+                          <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="category_id" className="text-label font-medium leading-none flex items-center gap-1.5">
+                        Família de Produto
+                        <Edit className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </Label>
                       <Select
                         value={formData.category_id || ''}
-                        onValueChange={(value) => handleChange({
-                          target: { name: 'category_id', value }
-                        } as any)}
+                        onValueChange={(value) => handleChange('category_id', value || null)}
                         disabled={isLoadingCategories}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder={
-                            isLoadingCategories 
-                              ? "Carregando categorias..." 
-                              : "Selecione uma categoria"
-                          } />
+                        <SelectTrigger className="h-[25px] text-select leading-tight">
+                          <SelectValue placeholder="Selecione a família do produto" />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories?.map((category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                          {(!categories || categories.length === 0) && !isLoadingCategories && (
-                            <SelectItem value="no-categories" disabled>
-                              Nenhuma categoria encontrada
+                          {categories && categories.length > 0 ? (
+                            categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>
+                              Nenhuma categoria disponível
                             </SelectItem>
                           )}
                         </SelectContent>
@@ -306,457 +541,425 @@ export function EditProductDialog({
                   </div>
                 </div>
 
-                {/* Seção: Precificação */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                    <DollarSign className="h-5 w-5 text-green-600" />
-                    Precificação
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="unit_price" className="text-sm font-medium">
-                        Preço de Venda *
-                      </Label>
-                      <Input
-                        id="unit_price"
-                        name="unit_price"
-                        type="number"
-                        step="0.01"
-                        value={formData.unit_price || ''}
-                        onChange={handleChange}
-                        placeholder="0,00"
-                        className="w-full"
-                        required
+                {/* Product Definition - Lado direito */}
+                <div className="col-span-2">
+                  <div className="mb-6">
+                    <h3 className="text-label font-semibold mb-3 text-foreground">Definição do Produto</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2.5">
+                      <Switch
+                          checked={productDefinition.simples}
+                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, simples: checked }))}
                       />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="unit_of_measure" className="text-sm font-medium">
-                        Unidade de Medida
+                        <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
+                          Simples
+                          <Info className="h-3 w-3 text-muted-foreground" />
                       </Label>
-                      <Select
-                        value={formData.unit_of_measure || ''}
-                        onValueChange={(value) => handleChange({
-                          target: { name: 'unit_of_measure', value }
-                        } as any)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="un">Unidade (un)</SelectItem>
-                          <SelectItem value="kg">Quilograma (kg)</SelectItem>
-                          <SelectItem value="g">Grama (g)</SelectItem>
-                          <SelectItem value="l">Litro (l)</SelectItem>
-                          <SelectItem value="ml">Mililitro (ml)</SelectItem>
-                          <SelectItem value="m">Metro (m)</SelectItem>
-                          <SelectItem value="cm">Centímetro (cm)</SelectItem>
-                          <SelectItem value="m2">Metro Quadrado (m²)</SelectItem>
-                          <SelectItem value="m3">Metro Cúbico (m³)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    </div>
+                      <div className="flex items-center gap-2.5">
+                        <Switch
+                          checked={productDefinition.kit}
+                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, kit: checked }))}
+                        />
+                        <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
+                          Kit
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </Label>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <Switch
+                          checked={productDefinition.comVariacoes}
+                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, comVariacoes: checked }))}
+                        />
+                        <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
+                          Com Variações
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </Label>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </TabsContent>
+                      </div>
 
-            {/* ABA: ESTOQUE */}
-            <TabsContent value="stock" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-6"
-              >
-                {/* Controle de Estoque */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                      <Layers className="h-5 w-5 text-purple-600" />
-                      Controle de Estoque
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="stock-control"
-                        checked={stockControlEnabled}
-                        onCheckedChange={setStockControlEnabled}
-                      />
-                      <Label htmlFor="stock-control" className="text-sm">
-                        Ativar controle
-                      </Label>
+              {/* Tabs */}
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-7">
+                  <TabsTrigger value="estoque">Estoque</TabsTrigger>
+                  <TabsTrigger value="custo-estoque">Custo do Estoque</TabsTrigger>
+                  <TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>
+                  <TabsTrigger value="informacoes-adicionais">Informações Adicionais</TabsTrigger>
+                  <TabsTrigger value="caracteristicas">Características</TabsTrigger>
+                  <TabsTrigger value="recomendacoes-fiscais">Recomendações Fiscais</TabsTrigger>
+                  <TabsTrigger value="observacoes">Observações</TabsTrigger>
+                </TabsList>
+
+                {/* Estoque Tab */}
+                <TabsContent value="estoque" className="mt-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Switch id="batch-control" />
+                    <Label htmlFor="batch-control" className="flex items-center gap-1">
+                      Este produto possui controle de lote
+                      <Info className="h-3 w-3 text-muted-foreground" />
+                        </Label>
+                      </div>
+
+                  <div className="mb-4">
+                    <h4 className="text-label font-semibold mb-2 flex items-center gap-1">
+                          Estoque Mínimo
+                      <Info className="h-3 w-3 text-muted-foreground" />
+                    </h4>
+                    <p className="text-[12px] text-muted-foreground">
+                      Clique diretamente em qualquer célula desta coluna para atualizar o estoque mínimo de cada local de estoque.
+                    </p>
+                      </div>
+
+                  <div className="mb-4">
+                    <h4 className="text-label font-semibold mb-3">Abaixo um resumo das informações de estoque deste produto</h4>
+                    
+                    {/* Resumo de Estoque */}
+                    <div className="grid grid-cols-4 gap-4 mb-4">
+                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <div className="text-[12px] text-blue-600 font-medium mb-1">Estoque Total</div>
+                        <div className="text-heading-3 font-bold text-blue-900">
+                          {(formData.stock_quantity || 0).toLocaleString('pt-BR')}
+                      </div>
+                </div>
+                      <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                        <div className="text-[12px] text-green-600 font-medium mb-1">Valor Total (CMC)</div>
+                        <div className="text-heading-3 font-bold text-green-900">
+                          {formatCurrency((formData.cost_price || 0) * (formData.stock_quantity || 0))}
+                    </div>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                        <div className="text-[12px] text-orange-600 font-medium mb-1">Estoque Mínimo</div>
+                        <div className="text-heading-3 font-bold text-orange-900">
+                          {(formData.min_stock_quantity || 0).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                      <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                        <div className="text-[12px] text-purple-600 font-medium mb-1">Locais de Estoque</div>
+                        <div className="text-heading-3 font-bold text-purple-900">
+                          {locations.length}
+                        </div>
                     </div>
                   </div>
+                </div>
 
-                  {stockControlEnabled && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      transition={{ duration: 0.3 }}
-                      className="grid grid-cols-1 md:grid-cols-4 gap-4"
-                    >
+                  {isLoadingLocations ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <span className="ml-2 text-muted-foreground">Carregando locais de estoque...</span>
+                      </div>
+                  ) : stockData.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Warehouse className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Nenhum local de estoque cadastrado</p>
+                      <p className="text-[12px] mt-2">Cadastre locais de estoque em Configurações → Estoque → Local de Estoque</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="border rounded-lg overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Local de Estoque</TableHead>
+                              <TableHead>Estoque Disponível</TableHead>
+                              <TableHead>CMC Unitário</TableHead>
+                              <TableHead>CMC Total</TableHead>
+                              <TableHead className="cursor-pointer hover:bg-muted/50">
+                                Estoque Mínimo
+                                <Info className="h-3 w-3 inline ml-1 text-muted-foreground" />
+                              </TableHead>
+                              <TableHead>Previsão de Entrada</TableHead>
+                              <TableHead>Previsão de Saída</TableHead>
+                              <TableHead>Tipo de Local de Estoque</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {stockData.map((item) => (
+                              <TableRow 
+                                key={item.id} 
+                                className={item.availableStock === 0 ? "bg-red-50" : ""}
+                              >
+                                <TableCell className="font-medium">
+                                  <div>
+                                    <div className="font-semibold flex items-center gap-2">
+                                      {item.location}
+                                      {!item.isActive && (
+                                        <Badge variant="secondary" className="text-[12px]">
+                                          Inativo
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {item.locationDescription && (
+                                      <div className="text-[12px] text-muted-foreground mt-1">
+                                        {item.locationDescription}
+                  </div>
+                )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={item.availableStock > 0 ? "default" : "secondary"}
+                                    className={item.availableStock === 0 ? "bg-red-100 text-red-800" : ""}
+                                  >
+                                    {item.availableStock.toLocaleString('pt-BR')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-body">
+                                    {formatCurrency(item.unitCMC)}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-semibold text-body">
+                                    {formatCurrency(item.totalCMC)}
+                                  </span>
+                                </TableCell>
+                                <TableCell 
+                                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                  onClick={() => handleMinStockEdit(item.locationId, item.minStock)}
+                                >
+                                  {editingMinStock?.locationId === item.locationId ? (
+                                    <div className="flex items-center gap-2">
+                        <Input
+                                        type="number"
+                                        value={editingMinStock.value}
+                                        onChange={(e) => setEditingMinStock({
+                                          locationId: item.locationId,
+                                          value: parseInt(e.target.value) || 0
+                                        })}
+                                        onBlur={() => handleMinStockSave(item.locationId, editingMinStock.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleMinStockSave(item.locationId, editingMinStock.value);
+                                          }
+                                          if (e.key === 'Escape') {
+                                            setEditingMinStock(null);
+                                          }
+                                        }}
+                                        className="w-20 h-[25px]"
+                                        autoFocus
+                        />
+                      </div>
+                                  ) : (
+                                    <span className="font-medium">{item.minStock}</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-blue-50">
+                                    {item.inboundForecast.toLocaleString('pt-BR')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-orange-50">
+                                    {item.outboundForecast.toLocaleString('pt-BR')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Warehouse className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-[12px] text-muted-foreground">
+                                      {item.locationType}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="flex items-center justify-between text-body text-muted-foreground mt-4">
+                        <span>
+                          {stockData.length} - {stockData.length} de {stockData.length} registros
+                        </span>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" disabled>
+                            anterior
+                          </Button>
+                          <Button variant="outline" size="sm" disabled>
+                            próximo
+                          </Button>
+                      </div>
+                    </div>
+                    </>
+                  )}
+                </TabsContent>
+
+                {/* Custo do Estoque Tab */}
+                <TabsContent value="custo-estoque" className="mt-6">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="cost_price" className="text-sm font-medium">
-                          Preço de Custo
-                        </Label>
+                        <Label htmlFor="cost_price">Preço de Custo</Label>
                         <Input
                           id="cost_price"
                           name="cost_price"
                           type="number"
                           step="0.01"
                           value={formData.cost_price || ''}
-                          onChange={handleChange}
-                          placeholder="0,00"
-                          className="w-full"
+                          onChange={(e) => handleChange('cost_price', e.target.value ? parseFloat(e.target.value) : null)}
+                          className="h-[25px]"
                         />
                       </div>
+                      </div>
+                      </div>
+                </TabsContent>
 
+                {/* Fornecedores Tab */}
+                <TabsContent value="fornecedores" className="mt-6">
+                  <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="current_stock" className="text-sm font-medium">
-                          Estoque Atual
-                        </Label>
+                      <Label htmlFor="supplier">Fornecedor Principal</Label>
                         <Input
-                          id="current_stock"
-                          name="current_stock"
-                          type="number"
-                          value={formData.current_stock || ''}
-                          onChange={handleChange}
-                          placeholder="0"
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="min_stock" className="text-sm font-medium">
-                          Estoque Mínimo
-                        </Label>
-                        <Input
-                          id="min_stock"
-                          name="min_stock"
-                          type="number"
-                          value={formData.min_stock || ''}
-                          onChange={handleChange}
-                          placeholder="0"
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="max_stock" className="text-sm font-medium">
-                          Estoque Máximo
-                        </Label>
-                        <Input
-                          id="max_stock"
-                          name="max_stock"
-                          type="number"
-                          value={formData.max_stock || ''}
-                          onChange={handleChange}
-                          placeholder="0"
-                          className="w-full"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* Localização */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                    <MapPin className="h-5 w-5 text-red-600" />
-                    Localização no Estoque
-                  </h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="storage_location" className="text-sm font-medium">
-                        Local de Armazenamento
-                      </Label>
-                      <Input
-                        id="storage_location"
-                        name="storage_location"
-                        value={formData.storage_location || ''}
-                        onChange={handleChange}
-                        placeholder="Ex: Prateleira A-1, Setor B"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="supplier" className="text-sm font-medium">
-                        Fornecedor Principal
-                      </Label>
-                      <Input
                         id="supplier"
                         name="supplier"
                         value={formData.supplier || ''}
-                        onChange={handleChange}
+                          onChange={(e) => handleChange('supplier', e.target.value || null)}
                         placeholder="Nome do fornecedor"
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Alertas de Estoque */}
-                {stockControlEnabled && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                      <div>
-                        <h4 className="font-medium text-yellow-800">Alertas de Estoque</h4>
-                        <p className="text-sm text-yellow-700 mt-1">
-                          Quando ativado, você receberá notificações quando o estoque atingir os níveis mínimo ou máximo configurados.
-                        </p>
+                        className="h-[25px]"
+                        />
                       </div>
-                    </div>
                   </div>
-                )}
-              </motion.div>
             </TabsContent>
 
-            {/* ABA: FISCAL (Condicional) */}
-            {mockTenantConfig.nfe_enabled && (
-              <TabsContent value="fiscal" className="space-y-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                    <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                      <Receipt className="h-5 w-5 text-indigo-600" />
-                      Informações Fiscais
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Informações Adicionais Tab */}
+                <TabsContent value="informacoes-adicionais" className="mt-6">
+                  <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="ncm" className="text-sm font-medium">
-                          NCM (Nomenclatura Comum do Mercosul)
-                        </Label>
+                      <Label htmlFor="name">Nome do Produto</Label>
                         <Input
-                          id="ncm"
-                          name="ncm"
-                          value={formData.ncm || ''}
-                          onChange={handleChange}
-                          placeholder="Ex: 8471.30.12"
-                          className="w-full"
+                        id="name"
+                        name="name"
+                        value={formData.name || ''}
+                          onChange={(e) => handleChange('name', e.target.value)}
+                        required
+                        className="h-[25px]"
                         />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="cest" className="text-sm font-medium">
-                          Código CEST
-                        </Label>
-                        <Input
-                          id="cest"
-                          name="cest"
-                          value={formData.cest || ''}
-                          onChange={handleChange}
-                          placeholder="Ex: 01.001.00"
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="cfop" className="text-sm font-medium">
-                          CFOP (Código Fiscal de Operações)
-                        </Label>
-                        <Select
-                          value={formData.cfop || ''}
-                          onValueChange={(value) => handleChange({
-                            target: { name: 'cfop', value }
-                          } as any)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o CFOP" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="5102">5102 - Venda de mercadoria adquirida</SelectItem>
-                            <SelectItem value="5101">5101 - Venda de produção própria</SelectItem>
-                            <SelectItem value="5405">5405 - Venda de bem do ativo imobilizado</SelectItem>
-                            <SelectItem value="5949">5949 - Outra saída de mercadoria</SelectItem>
-                          </SelectContent>
-                        </Select>
                       </div>
                     </div>
+            </TabsContent>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Características Tab */}
+                <TabsContent value="caracteristicas" className="mt-6">
+                  <div className="text-center py-12 space-y-4">
+                    <p className="text-muted-foreground">
+                      Este produto ainda não tem nenhuma característica =P
+                    </p>
+                    <p className="text-body text-muted-foreground">
+                      A característica pode ser a cor, tamanho, dimensão, voltagem, etc...
+                    </p>
+                    <Button className="bg-primary text-primary-foreground">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Incluir uma característica agora
+                    </Button>
+                      </div>
+                </TabsContent>
+
+                {/* Recomendações Fiscais Tab */}
+                <TabsContent value="recomendacoes-fiscais" className="mt-6">
+                  <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="icms_rate" className="text-sm font-medium">
-                          Alíquota ICMS (%)
-                        </Label>
+                      <Label htmlFor="tax_rate">Taxa de Imposto (%)</Label>
                         <Input
-                          id="icms_rate"
-                          name="icms_rate"
+                        id="tax_rate"
+                        name="tax_rate"
                           type="number"
                           step="0.01"
-                          value={formData.icms_rate || ''}
-                          onChange={handleChange}
-                          placeholder="0,00"
-                          className="w-full"
+                          value={formData.tax_rate || 0}
+                          onChange={(e) => handleChange('tax_rate', parseFloat(e.target.value) || 0)}
+                          className="h-[25px]"
                         />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="ipi_rate" className="text-sm font-medium">
-                          Alíquota IPI (%)
-                        </Label>
-                        <Input
-                          id="ipi_rate"
-                          name="ipi_rate"
-                          type="number"
-                          step="0.01"
-                          value={formData.ipi_rate || ''}
-                          onChange={handleChange}
-                          placeholder="0,00"
-                          className="w-full"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="pis_cofins_rate" className="text-sm font-medium">
-                          PIS/COFINS (%)
-                        </Label>
-                        <Input
-                          id="pis_cofins_rate"
-                          name="pis_cofins_rate"
-                          type="number"
-                          step="0.01"
-                          value={formData.pis_cofins_rate || ''}
-                          onChange={handleChange}
-                          placeholder="0,00"
-                          className="w-full"
-                        />
-                      </div>
                     </div>
                   </div>
-
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-                      <div>
-                        <h4 className="font-medium text-blue-800">Informações Fiscais</h4>
-                        <p className="text-sm text-blue-700 mt-1">
-                          As informações fiscais são utilizadas para emissão de notas fiscais. 
-                          Consulte seu contador para definir os códigos e alíquotas corretas.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
               </TabsContent>
-            )}
 
-            {/* ABA: OBSERVAÇÕES */}
-            <TabsContent value="notes" className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="space-y-6"
-              >
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  <h3 className="flex items-center gap-2 font-semibold text-gray-800">
-                    <FileText className="h-5 w-5 text-gray-600" />
-                    Observações e Descrições
-                  </h3>
-                  
+                {/* Observações Tab */}
+                <TabsContent value="observacoes" className="mt-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="description" className="text-sm font-medium">
-                        Descrição Detalhada
-                      </Label>
+                      <Label htmlFor="description">Observações</Label>
                       <Textarea
                         id="description"
                         name="description"
                         value={formData.description || ''}
-                        onChange={handleChange}
-                        placeholder="Descreva as características, especificações técnicas e detalhes importantes do produto..."
-                        className="w-full min-h-[120px] resize-none"
-                        rows={5}
+                        onChange={(e) => handleChange('description', e.target.value || null)}
+                        rows={6}
+                        placeholder="Adicione observações sobre o produto..."
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="internal_notes" className="text-sm font-medium">
-                        Observações Internas
-                      </Label>
-                      <Textarea
-                        id="internal_notes"
-                        name="internal_notes"
-                        value={formData.internal_notes || ''}
-                        onChange={handleChange}
-                        placeholder="Anotações internas, lembretes, informações para a equipe..."
-                        className="w-full min-h-[80px] resize-none"
-                        rows={3}
-                      />
-                      <p className="text-xs text-gray-500">
-                        * As observações internas não são exibidas para clientes
-                      </p>
                     </div>
-                  </div>
-                </div>
-
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <MessageSquare className="h-5 w-5 text-green-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-green-800">Dicas para Descrições</h4>
-                      <ul className="text-sm text-green-700 mt-1 space-y-1">
-                        <li>• Inclua especificações técnicas importantes</li>
-                        <li>• Mencione garantia e condições de uso</li>
-                        <li>• Destaque diferenciais e benefícios</li>
-                        <li>• Use palavras-chave para facilitar buscas</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
             </TabsContent>
           </Tabs>
         </ScrollArea>
-
-        {/* RODAPÉ FIXO COM BOTÕES */}
-        <DialogFooter className="px-6 py-4 border-t bg-gray-50">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Info className="h-4 w-4" />
-              <span>* Campos obrigatórios</span>
             </div>
             
-            <div className="flex items-center gap-3">
+          {/* Right Sidebar - Actions */}
+          <div className="w-64 border-l bg-muted/30 p-4 flex flex-col gap-2">
               <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
+              variant="ghost"
+              className="w-full justify-start"
+                onClick={handleSubmitWithPriceSync}
                 disabled={isLoading}
               >
-                Cancelar
-              </Button>
-              
-              <Button
-                type="submit"
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
                     <Save className="h-4 w-4 mr-2" />
-                    {product?.id ? 'Atualizar Produto' : 'Cadastrar Produto'}
-                  </>
-                )}
+              Salvar
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <Plus className="h-4 w-4 mr-2" />
+              Incluir
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <List className="h-4 w-4 mr-2" />
+              Estrutura do Produto
+            </Button>
+            {productDefinition.comVariacoes && (
+              <Button variant="ghost" className="w-full justify-start">
+                <List className="h-4 w-4 mr-2" />
+                Variações do Produto
+              </Button>
+            )}
+            <Button variant="ghost" className="w-full justify-start">
+              <Copy className="h-4 w-4 mr-2" />
+              Duplicar
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <Share2 className="h-4 w-4 mr-2" />
+              Compartilham...
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <UserX className="h-4 w-4 mr-2" />
+              Inativar
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <Paperclip className="h-4 w-4 mr-2" />
+              Anexos
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <Clock className="h-4 w-4 mr-2" />
+              Histórico de Alterações
+            </Button>
+            <Button variant="ghost" className="w-full justify-start">
+              <Grid3x3 className="h-4 w-4 mr-2" />
+              Tarefas
+              </Button>
+              <Button
+              variant="ghost"
+              className="w-full justify-start text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
               </Button>
             </div>
           </div>
-        </DialogFooter>
+
+        {/* Help Button */}
+        <div className="absolute bottom-4 right-4">
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <HelpCircle className="h-5 w-5 text-blue-500" />
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

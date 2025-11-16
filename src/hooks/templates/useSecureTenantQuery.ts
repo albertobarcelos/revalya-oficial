@@ -150,6 +150,10 @@ export function useSecureTenantMutation<TData, TVariables>(
       // 🔄 INVALIDAR CACHE ESPECÍFICO DO TENANT
       if (options?.invalidateQueries) {
         options.invalidateQueries.forEach(queryKey => {
+          // AIDEV-NOTE: Invalidar todas as variações da query key (com e sem tenant_id)
+          queryClient.invalidateQueries({ 
+            queryKey: [queryKey] 
+          });
           queryClient.invalidateQueries({ 
             queryKey: [queryKey, currentTenant?.id] 
           });

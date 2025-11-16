@@ -79,7 +79,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
               {icon}
             </div>
             <div>
-              <h3 className="text-sm font-medium text-white/90">{title}</h3>
+              <h3 className="text-label font-medium text-white/90">{title}</h3>
               {count !== undefined && (
                 <p className="text-xs text-white/70">{count} itens</p>
               )}
@@ -102,7 +102,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
         
         <div className="space-y-1">
           <motion.p 
-            className="text-2xl font-bold text-white"
+            className="text-heading-1 font-bold text-white"
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.3, delay: delay + 0.2 }}
@@ -188,8 +188,8 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
             <Calendar className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatCurrency(metrics.mrrTotal)}</p>
-            <div className="flex items-center gap-2 text-sm">
+            <p className="text-heading-1 font-bold">{formatCurrency(metrics.mrrTotal)}</p>
+            <div className="flex items-center gap-2 text-body">
               <span className="text-slate-400">MRR Growth:</span>
               <span className={cn(
                 "font-medium",
@@ -209,12 +209,12 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Novos Clientes</h3>
+            <h3 className="text-label font-medium text-slate-300">Novos Clientes</h3>
             <Users className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatNumber(metrics.newCustomers)}</p>
-            <p className="text-sm text-slate-400">Este mês</p>
+            <p className="text-heading-1 font-bold">{formatNumber(metrics.newCustomers)}</p>
+            <p className="text-body text-slate-400">Este mês</p>
           </div>
         </motion.div>
         
@@ -226,12 +226,12 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Ticket Médio</h3>
+            <h3 className="text-label font-medium text-slate-300">Ticket Médio</h3>
             <Target className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatCurrency(metrics.avgTicket)}</p>
-            <p className="text-sm text-slate-400">Por cobrança</p>
+            <p className="text-heading-1 font-bold">{formatCurrency(metrics.avgTicket)}</p>
+            <p className="text-body text-slate-400">Por cobrança</p>
           </div>
         </motion.div>
         
@@ -243,12 +243,12 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Dias p/ Receber</h3>
+            <h3 className="text-label font-medium text-slate-300">Dias p/ Receber</h3>
             <Clock className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{Math.round(metrics.avgDaysToReceive)}</p>
-            <p className="text-sm text-slate-400">Média em dias</p>
+            <p className="text-heading-1 font-bold">{Math.round(metrics.avgDaysToReceive)}</p>
+            <p className="text-body text-slate-400">Média em dias</p>
           </div>
         </motion.div>
       </div>

@@ -229,18 +229,18 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       
       return (
         <div className="bg-white dark:bg-black border border-border rounded-xl p-4 shadow-lg">
-          <p className="text-lg font-bold mb-2">{fullMonth}</p>
+          <p className="text-heading-3 font-bold mb-2">{fullMonth}</p>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Esperado:</span>
+              <span className="text-body text-muted-foreground">Esperado:</span>
               <span className="text-base font-bold text-pink-500">
                 {formatCurrency(valorEsperado)}
               </span>
             </div>
             
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Recebido:</span>
+              <span className="text-body text-muted-foreground">Recebido:</span>
               <span className="text-base font-bold text-blue-500">
                 {formatCurrency(valorRecebido)}
               </span>
@@ -249,7 +249,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
             <div className="h-px w-full bg-border my-2" />
             
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Diferença:</span>
+              <span className="text-body text-muted-foreground">Diferença:</span>
               <span className={`text-base font-bold ${isDeficit ? 'text-red-500' : 'text-green-500'}`}>
                 {isDeficit ? '-' : '+'}
                 {formatCurrency(diferenca)}
@@ -266,7 +266,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
     <Card className="col-span-2 overflow-hidden bg-blue-50/80 dark:bg-slate-900/80">
       <CardHeader className="flex flex-row items-start justify-between pb-0">
         <div>
-          <CardTitle className="text-xl font-semibold">
+          <CardTitle className="text-heading-1 font-semibold">
             Tendência de Receita
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -277,7 +277,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
         <div className="flex flex-col items-end">
           <div className={`flex items-center rounded-full ${growth >= 0 ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'} px-3 py-1 mb-1`}>
             {growth >= 0 ? <TrendingUp className="mr-1.5 h-4 w-4" /> : <TrendingDown className="mr-1.5 h-4 w-4" />}
-            <span className="text-sm font-medium" title="Crescimento baseado nos valores esperados (a vencer) comparando o mês atual com o primeiro mês do período de 6 meses">{growth.toFixed(1)}%</span>
+            <span className="text-body font-medium" title="Crescimento baseado nos valores esperados (a vencer) comparando o mês atual com o primeiro mês do período de 6 meses">{growth.toFixed(1)}%</span>
           </div>
           <span className="text-xs text-muted-foreground">Crescimento semestral</span>
         </div>
@@ -402,7 +402,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
         <div className="grid grid-cols-2 gap-4 p-6 pt-4">
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Recebido</div>
-            <div className="text-2xl font-bold text-blue-500 tracking-tight">
+            <div className="text-heading-1 font-bold text-blue-500 tracking-tight">
               {formatCurrency(currentMonthData.pagamentos)}
             </div>
             <div className="text-xs text-muted-foreground mt-2">
@@ -412,7 +412,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
           
           <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Esperado</div>
-            <div className="text-2xl font-bold text-pink-500 tracking-tight">
+            <div className="text-heading-1 font-bold text-pink-500 tracking-tight">
               {formatCurrency(currentMonthData.vencimentos)}
             </div>
             <div className="text-xs text-muted-foreground mt-2">

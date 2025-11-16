@@ -250,7 +250,7 @@ export function KeyMetricsCards({ metrics }: KeyMetricsCardsProps) {
             {/* Value display - large and prominent */}
             <div className="px-5 pb-5 mt-auto z-10">
               <p className={cn(
-                "text-3xl font-bold",
+                "text-heading-1 font-bold",
                 card.valueColor,
                 "tracking-tight transition-all duration-300",
                 "group-hover:translate-y-[-2px]"

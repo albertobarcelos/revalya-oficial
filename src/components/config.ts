@@ -66,26 +66,31 @@ export const defaultTheme: ThemeConfig = {
     inner: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)'
   },
   typography: {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    // AIDEV-NOTE: Fontes padronizadas conforme Omie
+    fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    fontFamilyOpenSans: '"Open Sans", sans-serif',
+    fontFamilyPoppins: 'Poppins, sans-serif',
     fontSize: {
-      xs: '0.75rem',   // 12px
-      sm: '0.875rem',  // 14px
-      md: '1rem',      // 16px
-      lg: '1.125rem',  // 18px
-      xl: '1.25rem',   // 20px
-      xxl: '1.5rem'    // 24px
+      xs: '12px',      // Select (Omie)
+      sm: '13.2px',    // Tables (Omie)
+      md: '14px',      // Body, Inputs, Buttons (Omie - padrão)
+      lg: '16px',      // Headings H1, H2, H3 (Omie)
+      xl: '22px',      // Labels grandes (Omie)
+      xxl: '24px'      // Tamanho extra grande
     },
     fontWeight: {
       light: 300,
-      normal: 400,
-      medium: 500,
+      normal: 400,     // Padrão Omie
+      medium: 500,     // H2 Omie
       semibold: 600,
-      bold: 700
+      bold: 700        // H1, H4, Labels Omie
     },
     lineHeight: {
-      tight: 1.25,
-      normal: 1.5,
-      relaxed: 1.75
+      tight: '15.4px',    // H4 Omie
+      normal: '17.6px',   // H1, H2, H3 Omie
+      base: '20px',       // Body, Inputs, Buttons Omie (padrão)
+      relaxed: '18.48px', // Tables Omie
+      loose: '31.4286px'  // Labels grandes Omie
     }
   },
   breakpoints: {

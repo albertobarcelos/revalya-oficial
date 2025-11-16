@@ -96,7 +96,7 @@ const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>((
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          className="block text-label font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
@@ -219,7 +219,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>((
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          className="block text-label font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
@@ -322,7 +322,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>((
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          className="block text-label font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
@@ -423,7 +423,7 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>((
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          className="block text-label font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
@@ -523,7 +523,7 @@ const MaskedInput = React.forwardRef<HTMLInputElement, MaskedInputProps>((
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          className="block text-label font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}

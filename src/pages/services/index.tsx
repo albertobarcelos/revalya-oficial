@@ -169,12 +169,12 @@ export default function ServicesPage() {
               <div className="text-center space-y-4">
                 <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
                 <div>
-                  <h3 className="text-lg font-semibold">Acesso Negado</h3>
+                  <h3 className="text-heading-3 font-semibold">Acesso Negado</h3>
                   <p className="text-muted-foreground">
                     {accessError || 'Você não tem permissão para acessar esta página.'}
                   </p>
                   {currentTenant && (
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="text-small text-muted-foreground mt-2">
                       Tenant: {currentTenant.name} ({currentTenant.active ? 'ativo' : 'inativo'})
                     </p>
                   )}
@@ -341,14 +341,14 @@ export default function ServicesPage() {
   const TableHeaderComponent = ({ isSticky = false }: { isSticky?: boolean }) => (
     <TableHeader className={isSticky ? "sticky top-0 bg-background z-10" : ""}>
       <TableRow className="h-10">
-        <TableHead className="py-2">Nome</TableHead>
-        <TableHead className="py-2">Código</TableHead>
-        <TableHead className="py-2">Valor</TableHead>
-        <TableHead className="py-2">Unidade</TableHead>
-        <TableHead className="py-2">Taxa (%)</TableHead>
-        <TableHead className="py-2">Status</TableHead>
-        <TableHead className="py-2">Retenção</TableHead>
-        <TableHead className="text-right py-2">Ações</TableHead>
+        <TableHead className="py-2 text-table font-medium">Nome</TableHead>
+        <TableHead className="py-2 text-table font-medium">Código</TableHead>
+        <TableHead className="py-2 text-table font-medium">Valor</TableHead>
+        <TableHead className="py-2 text-table font-medium">Unidade</TableHead>
+        <TableHead className="py-2 text-table font-medium">Taxa (%)</TableHead>
+        <TableHead className="py-2 text-table font-medium">Status</TableHead>
+        <TableHead className="py-2 text-table font-medium">Retenção</TableHead>
+        <TableHead className="text-right py-2 text-table font-medium">Ações</TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -384,8 +384,8 @@ export default function ServicesPage() {
         <div className="flex items-center justify-center py-6 rounded-md border">
           <div className="text-center text-muted-foreground">
             <AlertCircle className="h-6 w-6 mx-auto mb-2 text-destructive" />
-            <p className="text-sm">Erro ao carregar serviços</p>
-            <p className="text-xs">{error.message}</p>
+            <p className="text-body">Erro ao carregar serviços</p>
+            <p className="text-small">{error.message}</p>
           </div>
         </div>
       );
@@ -396,9 +396,9 @@ export default function ServicesPage() {
         <div className="flex items-center justify-center py-6 rounded-md border">
           <div className="text-center text-muted-foreground">
             <Package className="h-6 w-6 mx-auto mb-2" />
-            <p className="text-sm">Nenhum serviço encontrado</p>
+            <p className="text-body">Nenhum serviço encontrado</p>
             {searchTerm ? (
-              <p className="text-xs">Tente um termo de busca diferente.</p>
+              <p className="text-small">Tente um termo de busca diferente.</p>
             ) : (
               <div className="mt-3">
                 <Button size="sm" onClick={() => console.log('Criar primeiro serviço')}>
@@ -430,17 +430,17 @@ export default function ServicesPage() {
                   >
                     <TableCell className="font-medium py-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sm">{service.name}</span>
+                        <span className="text-table">{service.name}</span>
                         {service.description && (
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Info 
-                                  className="h-3 w-3 text-muted-foreground hover:text-foreground transition-colors cursor-help" 
+                                  className="h-3 w-3 hover:text-foreground transition-colors cursor-help" 
                                 />
                               </TooltipTrigger>
                               <TooltipContent side="right" className="max-w-[300px]">
-                                <p className="text-xs">{service.description}</p>
+                                <p className="text-small">{service.description}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -449,44 +449,44 @@ export default function ServicesPage() {
                     </TableCell>
                     <TableCell className="py-1">
                       {service.code ? (
-                        <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">{service.code}</Badge>
+                        <span className="text-table">{service.code}</span>
                       ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
+                        <span className="text-table">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="font-mono py-1 text-xs sm:text-sm">
-                        {formatCurrency(service.default_price)}
+                    <TableCell className="py-1">
+                        <span className="text-table text-green-600">
+                          {formatCurrency(service.default_price)}
+                        </span>
                       </TableCell>
-                      <TableCell className="py-1">
+                    <TableCell className="py-1">
                         {service.unit_type ? (
-                          <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">{translateUnit(service.unit_type)}</Badge>
+                          <Badge variant="secondary" className="text-table">{translateUnit(service.unit_type)}</Badge>
                         ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
+                          <span className="text-table">-</span>
                         )}
                       </TableCell>
                     <TableCell className="py-1">
                       {service.tax_rate > 0 ? (
-                        <Badge variant="secondary" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">
+                        <span className="text-table">
                           {service.tax_rate}%
-                        </Badge>
+                        </span>
                       ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
+                        <span className="text-table">-</span>
                       )}
                     </TableCell>
                     <TableCell className="py-1">
                       <Badge 
                         variant={service.is_active ? "default" : "secondary"}
-                        className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5 ${service.is_active ? "bg-green-100 text-green-800" : ""}`}
+                        className={service.is_active ? "bg-green-100 text-green-800 text-table" : "text-table"}
                       >
                         {service.is_active ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </TableCell>
                     <TableCell className="py-1">
-                      {service.withholding_tax ? (
-                        <Badge variant="destructive" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">Sim</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0 sm:py-0.5">Não</Badge>
-                      )}
+                      <span className="text-table">
+                        {service.withholding_tax ? 'Sim' : 'Não'}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right py-1">
                       <Button 

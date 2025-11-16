@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { Layout } from "@/components/layout/Layout";
-import { Loader2, Users, Zap, BrainCircuit, Package } from "lucide-react";
+import { Loader2, Users, Zap, BrainCircuit, Package, Warehouse } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { whatsappService } from "@/services/whatsappService";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { UserManagement } from "@/components/users/UserManagement";
 import { CobrancaInteligente } from "@/components/cobranca-inteligente/CobrancaInteligente";
 import { ProductCategoriesManager } from "@/components/products/ProductCategoriesManager";
+import { StorageLocationManager } from "@/components/estoque/StorageLocationManager";
 import { logService } from "@/services/logService";
 import { CanalIntegration } from "@/components/canais/CanalIntegration";
 import { IntegrationServices } from "@/components/integracoes/IntegrationServices";
@@ -35,6 +36,7 @@ const MODULE_NAME = 'Settings';
 export default function Settings() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("usuarios");
+  const [activeEstoqueSubTab, setActiveEstoqueSubTab] = useState("categorias");
   const [isSaving, setIsSaving] = useState(false);
   
   // AIDEV-NOTE: Usando hook de segurança multi-tenant obrigatório
@@ -176,7 +178,7 @@ export default function Settings() {
     <Layout title="Configurações">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold tracking-tight">Configurações</h2>
+          <h2 className="text-heading-1 tracking-tight">Configurações</h2>
         </div>
         
         {/* AIDEV-NOTE: Verificação de acesso obrigatória antes de renderizar conteúdo */}
@@ -209,13 +211,13 @@ export default function Settings() {
                   <Zap className="h-4 w-4" />
                   Integrações
                 </TabsTrigger>
-                <TabsTrigger value="categorias" className="flex items-center gap-2">
-                  <Package className="h-4 w-4" />
-                  Categorias
-                </TabsTrigger>
                 <TabsTrigger value="cobranca-inteligente" className="flex items-center gap-2">
                   <BrainCircuit className="h-4 w-4" />
                   Cobrança Inteligente
+                </TabsTrigger>
+                <TabsTrigger value="estoque" className="flex items-center gap-2">
+                  <Warehouse className="h-4 w-4" />
+                  Estoque
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -245,15 +247,34 @@ export default function Settings() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="categorias" className="space-y-4 mt-2 overflow-y-auto">
-                <ProductCategoriesManager />
-              </TabsContent>
-
               <TabsContent value="cobranca-inteligente" className="space-y-4 mt-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-2">
                 <CobrancaInteligente 
                   tenantId={currentTenant.id}
                   tenantSlug={tenantData?.slug || currentTenant.slug || 'default'}
                 />
+              </TabsContent>
+
+              <TabsContent value="estoque" className="space-y-4 mt-2 h-full">
+                <Tabs value={activeEstoqueSubTab} onValueChange={setActiveEstoqueSubTab} className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="categorias" className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Categorias
+                    </TabsTrigger>
+                    <TabsTrigger value="local-estoque" className="flex items-center gap-2">
+                      <Warehouse className="h-4 w-4" />
+                      Local de Estoque
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="categorias" className="space-y-4 mt-2">
+                    <ProductCategoriesManager />
+                  </TabsContent>
+                  
+                  <TabsContent value="local-estoque" className="space-y-4 mt-2">
+                    <StorageLocationManager />
+                  </TabsContent>
+                </Tabs>
               </TabsContent>
             </div>
           </Tabs>
