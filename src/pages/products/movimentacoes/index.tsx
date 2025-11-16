@@ -132,33 +132,49 @@ export default function StockMovementsPage() {
 
   // Calcular estatísticas
   const stats = useMemo(() => {
-    const outbound = movements
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // AIDEV-NOTE: Separar movimentos reais (passado/hoje) de previsões (futuro)
+    const realMovements = movements.filter(m => {
+      const movementDate = new Date(m.movement_date);
+      movementDate.setHours(0, 0, 0, 0);
+      return movementDate <= today;
+    });
+    
+    const forecastMovements = movements.filter(m => {
+      const movementDate = new Date(m.movement_date);
+      movementDate.setHours(0, 0, 0, 0);
+      return movementDate > today;
+    });
+    
+    // Previsão de saída: apenas movimentos futuros de SAIDA
+    const outboundForecast = forecastMovements
       .filter(m => m.movement_type === 'SAIDA')
       .reduce((sum, m) => sum + m.quantity, 0);
     
-    const inbound = movements
+    // Previsão de entrada: apenas movimentos futuros de ENTRADA
+    const inboundForecast = forecastMovements
       .filter(m => m.movement_type === 'ENTRADA')
       .reduce((sum, m) => sum + m.quantity, 0);
     
-    const available = movements.length > 0
+    // Estoque disponível: usar o último accumulated_balance dos movimentos reais (passado/hoje)
+    // Se não houver movimentos reais, usar o último de todos os movimentos
+    const available = realMovements.length > 0
+      ? realMovements[realMovements.length - 1]?.accumulated_balance || 0
+      : movements.length > 0
       ? movements[movements.length - 1]?.accumulated_balance || 0
       : 0;
     
     const unit = movements[0]?.product?.unit_of_measure || 'UN';
     
     return {
-      outboundForecast: outbound,
-      inboundForecast: inbound,
+      outboundForecast,
+      inboundForecast,
       availableStock: available,
       unit
     };
   }, [movements]);
-
-  // Calcular altura do gráfico baseado na altura disponível
-  const chartHeight = useMemo(() => {
-    // Altura total menos padding e espaço para os cards
-    return Math.max(400, typeof window !== 'undefined' ? window.innerHeight - 450 : 500);
-  }, []);
 
   // Dados para o gráfico
   const chartData = useMemo(() => {
@@ -288,6 +304,7 @@ export default function StockMovementsPage() {
                     value={selectedProductId || undefined}
                     onValueChange={(productId, product) => setSelectedProductId(productId || null)}
                     placeholder="Selecione o produto"
+                    height="default"
                   />
                 </div>
 
@@ -381,62 +398,64 @@ export default function StockMovementsPage() {
                 onSort={handleSort}
               />
 
-              {/* Gráfico e Estatísticas Integrados */}
-              <div className="relative w-full h-[calc(100vh-400px)] min-h-[500px] bg-white rounded-lg border">
-                {/* Gráfico ocupando toda a área */}
-                <div className="absolute inset-0 p-4">
-                  <StockForecastChart data={chartData} height={chartHeight} />
-                </div>
-                
-                {/* Cards pequenos no canto inferior direito */}
-                <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-10">
-                  {/* Previsão de Saída */}
-                  <div className="bg-white rounded-lg border shadow-sm p-3 w-[200px]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-small font-medium text-muted-foreground mb-1">
-                          Previsão de Saída
-                        </p>
-                        <p className="text-heading-3 font-bold">
-                          {formatStockQuantity(stats.outboundForecast, stats.unit)}
-                        </p>
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 ml-2">
-                        <ArrowDown className="h-4 w-4 text-red-600" />
+              {/* Gráfico e Estatísticas Integrados - Componente Único */}
+              <div className="w-full bg-white rounded-lg border p-4">
+                <div className="flex gap-4">
+                  {/* Gráfico à esquerda (menor) */}
+                  <div className="flex-1 min-w-0">
+                    <StockForecastChart data={chartData} height={400} />
+                  </div>
+                  
+                  {/* Cards empilhados à direita */}
+                  <div className="flex flex-col gap-3 w-[240px] flex-shrink-0">
+                    {/* Previsão de Saída */}
+                    <div className="bg-white rounded-lg border shadow-sm p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-small font-medium text-muted-foreground mb-1">
+                            Previsão de Saída
+                          </p>
+                          <p className="text-heading-3 font-bold">
+                            {formatStockQuantity(stats.outboundForecast, stats.unit)}
+                          </p>
+                        </div>
+                        <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 ml-2">
+                          <ArrowDown className="h-4 w-4 text-red-600" />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Previsão de Entrada */}
-                  <div className="bg-white rounded-lg border shadow-sm p-3 w-[200px]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-small font-medium text-muted-foreground mb-1">
-                          Previsão de Entrada
-                        </p>
-                        <p className="text-heading-3 font-bold">
-                          {formatStockQuantity(stats.inboundForecast, stats.unit)}
-                        </p>
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 ml-2">
-                        <ArrowUp className="h-4 w-4 text-green-600" />
+                    {/* Previsão de Entrada */}
+                    <div className="bg-white rounded-lg border shadow-sm p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-small font-medium text-muted-foreground mb-1">
+                            Previsão de Entrada
+                          </p>
+                          <p className="text-heading-3 font-bold">
+                            {formatStockQuantity(stats.inboundForecast, stats.unit)}
+                          </p>
+                        </div>
+                        <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 ml-2">
+                          <ArrowUp className="h-4 w-4 text-green-600" />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Estoque disponível até o momento */}
-                  <div className="bg-white rounded-lg border-2 border-blue-500 shadow-sm p-3 w-[200px]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-small font-medium text-muted-foreground mb-1">
-                          Estoque disponível até o momento
-                        </p>
-                        <p className="text-heading-1 font-bold text-blue-600">
-                          {formatStockQuantity(stats.availableStock, stats.unit)}
-                        </p>
-                      </div>
-                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 ml-2">
-                        <Package className="h-4 w-4 text-blue-600" />
+                    {/* Estoque disponível até o momento */}
+                    <div className="bg-white rounded-lg border-2 border-blue-500 shadow-sm p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <p className="text-small font-medium text-muted-foreground mb-1">
+                            Estoque disponível até o momento
+                          </p>
+                          <p className="text-heading-1 font-bold text-blue-600">
+                            {formatStockQuantity(stats.availableStock, stats.unit)}
+                          </p>
+                        </div>
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 ml-2">
+                          <Package className="h-4 w-4 text-blue-600" />
+                        </div>
                       </div>
                     </div>
                   </div>

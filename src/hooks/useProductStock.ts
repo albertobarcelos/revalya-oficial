@@ -58,11 +58,22 @@ export function useProductStock(params?: UseProductStockParams) {
   // 📊 Query function segura para buscar estoque por local
   const fetchStockQuery = async (supabase: SupabaseClient, tenantId: string) => {
     console.log(`📊 [AUDIT] Buscando estoque por local para tenant: ${tenantId}`);
+    console.log(`🔍 [DEBUG QUERY] Parâmetros recebidos:`, { product_id, storage_location_id, page, limit });
     
     // AIDEV-NOTE: Configurar contexto de tenant antes da query
-    await supabase.rpc('set_tenant_context_simple', {
+    // IMPORTANTE: O useSecureTenantQuery já configura o contexto, mas fazemos novamente aqui para garantir
+    const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
       p_tenant_id: tenantId
     });
+    
+    if (contextError) {
+      console.error('🚨 [ERROR] Falha ao configurar contexto de tenant:', contextError);
+      throw contextError;
+    }
+    
+    // AIDEV-NOTE: Verificar se o contexto foi configurado corretamente
+    const { data: contextCheck } = await supabase.rpc('get_current_tenant_context');
+    console.log('🔍 [DEBUG QUERY] Contexto de tenant verificado:', contextCheck);
     
     let query = supabase
       .from('product_stock_by_location')
@@ -74,10 +85,14 @@ export function useProductStock(params?: UseProductStockParams) {
     
     // Aplicar filtros
     if (product_id) {
+      console.log(`🔍 [DEBUG QUERY] Aplicando filtro product_id: ${product_id}`);
       query = query.eq('product_id', product_id);
+    } else {
+      console.log(`🔍 [DEBUG QUERY] Sem filtro product_id - buscando todos os produtos`);
     }
     
     if (storage_location_id) {
+      console.log(`🔍 [DEBUG QUERY] Aplicando filtro storage_location_id: ${storage_location_id}`);
       query = query.eq('storage_location_id', storage_location_id);
     }
     
@@ -88,12 +103,19 @@ export function useProductStock(params?: UseProductStockParams) {
     const offset = (page - 1) * limit;
     query = query.range(offset, offset + limit - 1);
     
+    console.log(`🔍 [DEBUG QUERY] Executando query com offset: ${offset}, limit: ${limit}`);
     const { data, error, count } = await query;
     
     if (error) {
       console.error('🚨 [ERROR] Falha ao buscar estoque por local:', error);
+      console.error('🚨 [ERROR] Detalhes do erro:', JSON.stringify(error, null, 2));
+      console.error('🚨 [ERROR] Código do erro:', error.code);
+      console.error('🚨 [ERROR] Mensagem do erro:', error.message);
       throw error;
     }
+    
+    console.log(`🔍 [DEBUG QUERY] Query executada - data length: ${data?.length || 0}, count: ${count || 0}`);
+    console.log(`🔍 [DEBUG QUERY] Primeiros registros:`, data?.slice(0, 3));
     
     // AIDEV-NOTE: Validação dupla de segurança
     const invalidData = data?.filter(item => item.tenant_id !== tenantId);
@@ -107,6 +129,8 @@ export function useProductStock(params?: UseProductStockParams) {
     }
     
     console.log(`✅ [SUCCESS] ${data?.length || 0} registros de estoque encontrados`);
+    console.log('🔍 [DEBUG HOOK] Dados retornados:', data);
+    console.log('🔍 [DEBUG HOOK] Filtros aplicados:', { product_id, storage_location_id, tenantId });
     
     return {
       stock: data || [],
@@ -123,6 +147,9 @@ export function useProductStock(params?: UseProductStockParams) {
     limit
   ];
   
+  const isEnabled = hasAccess && !!currentTenant?.id;
+  console.log(`🔍 [DEBUG HOOK] useSecureTenantQuery enabled: ${isEnabled}`, { hasAccess, currentTenantId: currentTenant?.id, product_id });
+  
   const {
     data,
     isLoading,
@@ -132,14 +159,32 @@ export function useProductStock(params?: UseProductStockParams) {
     queryKey,
     fetchStockQuery,
     {
-      enabled: hasAccess && !!currentTenant?.id,
-      staleTime: 2 * 60 * 1000, // 2 minutos (estoque muda frequentemente)
+      enabled: isEnabled, // AIDEV-NOTE: Habilitado quando tem acesso e tenant
+      staleTime: 0, // AIDEV-NOTE: Sem cache para debug (voltar para 2 * 60 * 1000 depois)
+      gcTime: 0, // AIDEV-NOTE: Sem garbage collection para debug
       refetchOnWindowFocus: false
     }
   );
   
+  console.log(`🔍 [DEBUG HOOK] useSecureTenantQuery retornou:`, { 
+    hasData: !!data, 
+    dataKeys: data ? Object.keys(data) : null,
+    dataContent: data, // AIDEV-NOTE: Ver conteúdo completo
+    isLoading, 
+    error: error ? error.message : null 
+  });
+  
+  // AIDEV-NOTE: Verificar estrutura dos dados
+  console.log('🔍 [DEBUG HOOK] data?.stock:', data?.stock);
+  console.log('🔍 [DEBUG HOOK] data?.totalCount:', data?.totalCount);
+  console.log('🔍 [DEBUG HOOK] typeof data:', typeof data);
+  console.log('🔍 [DEBUG HOOK] Array.isArray(data):', Array.isArray(data));
+  
   const stock = data?.stock || [];
   const totalCount = data?.totalCount || 0;
+  
+  console.log('🔍 [DEBUG HOOK] stock extraído:', stock);
+  console.log('🔍 [DEBUG HOOK] totalCount:', totalCount);
 
   // 🔄 Mutação segura para atualizar estoque
   const updateStockMutation = useSecureTenantMutation(

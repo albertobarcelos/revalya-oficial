@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,18 +29,15 @@ import { useProductForm } from './hooks/useProductForm';
 import type { Product } from '@/hooks/useSecureProducts';
 import { useProductCategories } from '@/hooks/useSecureProducts';
 import { useStorageLocations } from '@/hooks/useStorageLocations';
+import { useProductStock } from '@/hooks/useProductStock';
 import { motion } from 'framer-motion';
 import { 
   X,
   Save,
   Plus,
-  List,
   Copy,
-  Share2,
-  UserX,
-  Paperclip,
+  Ban,
   Clock,
-  Grid3x3,
   Trash2,
   Image as ImageIcon,
   Edit,
@@ -77,11 +75,7 @@ export function EditProductDialog({
   }
 
   const [activeTab, setActiveTab] = useState('estoque');
-  const [productDefinition, setProductDefinition] = useState({
-    simples: false,
-    kit: false,
-    comVariacoes: true
-  });
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
 
   // AIDEV-NOTE: Hook para buscar categorias da tabela products do tenant
   const { data: categoriesData, isLoading: isLoadingCategories } = useProductCategories();
@@ -92,6 +86,25 @@ export function EditProductDialog({
     locations, 
     isLoading: isLoadingLocations 
   } = useStorageLocations({ is_active: true });
+
+  // AIDEV-NOTE: Hook para buscar estoque real do produto por local
+  // IMPORTANTE: Sem limite de paginação para buscar todos os locais
+  const { 
+    stock: productStockByLocation, 
+    isLoading: isLoadingStock,
+    refetch: refetchStock
+  } = useProductStock({ 
+    product_id: product.id,
+    limit: 1000 // AIDEV-NOTE: Buscar todos os locais (sem paginação)
+  });
+  
+  // AIDEV-NOTE: Forçar refetch quando o dialog abrir para garantir dados atualizados
+  React.useEffect(() => {
+    if (isOpen && product.id) {
+      console.log('🔍 [DEBUG] Forçando refetch do estoque para product_id:', product.id);
+      refetchStock();
+    }
+  }, [isOpen, product.id, refetchStock]);
 
   // AIDEV-NOTE: Estado para edição inline do estoque mínimo por local
   const [editingMinStock, setEditingMinStock] = useState<{ locationId: string; value: number } | null>(null);
@@ -205,9 +218,13 @@ export function EditProductDialog({
     handleChange('unit_price', numericValue);
     
     // Validar antes de submeter
-    if (!updatedFormData.name.trim()) {
+    if (!updatedFormData.name || !updatedFormData.name.trim()) {
+      setDescriptionError('Este campo é obrigatório');
       return;
     }
+    
+    // Limpar erro se validação passar
+    setDescriptionError(null);
     
     if (updatedFormData.unit_price <= 0) {
       return;
@@ -217,10 +234,13 @@ export function EditProductDialog({
     updateProductMutation.mutate(updatedFormData);
   }, [unitPriceDisplay, formData, handleChange, updateProductMutation]);
 
-  // AIDEV-NOTE: Preparar dados de estoque baseados nos locais cadastrados
-  // Por enquanto, distribui o estoque total do produto entre os locais
-  // Futuramente, isso virá de uma tabela product_stock_by_location
+  // AIDEV-NOTE: Preparar dados de estoque baseados nos dados reais de product_stock_by_location
+  // Cada local tem seu estoque individual controlado pela tabela product_stock_by_location
   const stockData = useMemo(() => {
+    console.log('🔍 [DEBUG STOCK] productStockByLocation recebido:', productStockByLocation);
+    console.log('🔍 [DEBUG STOCK] locations recebidas:', locations);
+    console.log('🔍 [DEBUG STOCK] product.id:', product.id);
+    
     if (locations.length === 0) {
       // Local padrão quando não há locais cadastrados
       return [
@@ -241,19 +261,57 @@ export function EditProductDialog({
       ];
     }
 
-    return locations.map((location, index) => {
-      // Distribuir estoque: primeiro local recebe todo o estoque disponível
-      const availableStock = index === 0 ? (formData.stock_quantity || 0) : 0;
+    // AIDEV-NOTE: Criar um mapa de estoque por local_id para busca rápida
+    const stockMap = new Map(
+      (productStockByLocation || []).map((stock: any) => {
+        console.log('🔍 [DEBUG STOCK] Mapeando stock:', {
+          storage_location_id: stock.storage_location_id,
+          product_id: stock.product_id,
+          available_stock: stock.available_stock,
+          unit_cmc: stock.unit_cmc,
+          total_cmc: stock.total_cmc
+        });
+        return [stock.storage_location_id, stock];
+      })
+    );
+
+    console.log('🔍 [DEBUG STOCK] stockMap criado com', stockMap.size, 'itens');
+
+    return locations.map((location: any) => {
+      // AIDEV-NOTE: Buscar estoque real do local na tabela product_stock_by_location
+      const stockForLocation = stockMap.get(location.id) as any;
+      
+      console.log(`🔍 [DEBUG STOCK] Local "${location.name}" (ID: ${location.id}):`, {
+        encontrado: !!stockForLocation,
+        stockData: stockForLocation
+      });
+      
+      // Se não houver registro na tabela, estoque é 0 (será criado na primeira movimentação)
+      // AIDEV-NOTE: Converter strings DECIMAL para números (Supabase retorna DECIMAL como string)
+      const availableStock = stockForLocation?.available_stock 
+        ? parseFloat(String(stockForLocation.available_stock)) 
+        : 0;
+      const unitCMC = stockForLocation?.unit_cmc 
+        ? parseFloat(String(stockForLocation.unit_cmc)) 
+        : 0;
+      const totalCMC = stockForLocation?.total_cmc 
+        ? parseFloat(String(stockForLocation.total_cmc)) 
+        : (unitCMC * availableStock);
       
       // Estoque mínimo por local (usa valor salvo ou divide o mínimo geral)
       const minStock = minStockByLocation[location.id] ?? 
-        (locations.length > 0 
-          ? Math.floor((formData.min_stock_quantity || 0) / locations.length)
-          : 0);
+        (stockForLocation?.min_stock 
+          ? parseFloat(String(stockForLocation.min_stock))
+          : (locations.length > 0 
+            ? Math.floor((formData.min_stock_quantity || 0) / locations.length)
+            : 0));
 
-      // CMC (Custo Médio de Compra) - usando cost_price do produto
-      const unitCMC = formData.cost_price || 0;
-      const totalCMC = unitCMC * availableStock;
+      console.log(`🔍 [DEBUG STOCK] Dados finais para "${location.name}":`, {
+        availableStock,
+        unitCMC,
+        totalCMC,
+        minStock
+      });
 
       return {
         id: location.id,
@@ -270,7 +328,7 @@ export function EditProductDialog({
         isActive: location.is_active
       };
     });
-  }, [locations, formData.stock_quantity, formData.cost_price, formData.min_stock_quantity, minStockByLocation]);
+  }, [locations, productStockByLocation, formData.stock_quantity, formData.cost_price, formData.min_stock_quantity, minStockByLocation, product.id]);
 
   // AIDEV-NOTE: Handler para editar estoque mínimo inline
   const handleMinStockEdit = (locationId: string, currentValue: number) => {
@@ -308,15 +366,18 @@ export function EditProductDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col">
+      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col [&>button]:hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <DialogTitle className="text-heading-1 font-semibold">Produtos</DialogTitle>
+        <div className="flex items-center justify-between h-[55px] min-h-[55px] bg-[rgb(244,245,246)] px-6">
+          <DialogTitle className="text-[18px] font-normal leading-[18.48px] text-[rgb(0, 0, 0)]" style={{ fontFamily: '"Poppins", sans-serif' }}>Produtos</DialogTitle>
+          <DialogDescription className="sr-only">
+            Editar informações do produto
+          </DialogDescription>
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8"
+            className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Fechar</span>
@@ -327,11 +388,11 @@ export function EditProductDialog({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Content Area */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1 px-6 py-4">
+            <ScrollArea className="flex-1 py-4">
               {/* Product Image and Basic Info */}
-              <div className="grid grid-cols-12 gap-6 mb-6">
+              <div className="flex gap-[45px] mb-6 px-6">
                 {/* Product Image */}
-                <div className="col-span-2">
+                <div className="flex-shrink-0">
                   {formData.image_url ? (
                     <div className="w-[70px] h-[70px] rounded-lg overflow-hidden mb-2 border">
                       <img 
@@ -356,21 +417,35 @@ export function EditProductDialog({
                   </Button>
                 </div>
 
-                {/* Basic Product Information */}
-                <div className="col-span-8 space-y-4">
+                {/* Basic Product Information and Definition */}
+                <div className="flex-1 flex gap-6">
+                  <div className="flex-1 space-y-4">
                   {/* Descrição - linha completa */}
                   <div className="space-y-1.5">
                     <Label htmlFor="description" className="text-label font-medium leading-none">
-                      Descrição
+                      Descrição <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="description"
                       name="description"
                       value={formData.name || ''}
-                      onChange={(e) => handleChange('name', e.target.value)}
+                      onChange={(e) => {
+                        handleChange('name', e.target.value);
+                        // Limpar erro quando o usuário começar a digitar
+                        if (descriptionError) {
+                          setDescriptionError(null);
+                        }
+                      }}
                       placeholder="Descrição do produto"
-                      className="h-[25px] text-input leading-tight"
+                      className={`h-[25px] text-input text-foreground border-[0.8px] focus:border-black ${
+                        descriptionError 
+                          ? 'border-red-500 focus:border-red-500' 
+                          : 'border-[#b9b9b9]'
+                      }`}
                     />
+                    {descriptionError && (
+                      <p className="text-[12px] text-red-500 mt-1">{descriptionError}</p>
+                    )}
                   </div>
 
                   {/* Primeira linha: Código do Produto, Código EAN, Unidade, Preço Unitário */}
@@ -379,13 +454,13 @@ export function EditProductDialog({
                       <Label htmlFor="code" className="text-label font-medium leading-none block">
                         Código do Produto
                       </Label>
-                      <Input
-                        id="code"
-                        name="code"
-                        value={formData.code || ''}
+                        <Input
+                          id="code"
+                          name="code"
+                          value={formData.code || ''}
                         onChange={(e) => handleChange('code', e.target.value || null)}
                         placeholder="Código do produto"
-                        className="h-[25px] text-input leading-tight"
+                        className="h-[25px] text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
                       />
                   </div>
 
@@ -400,7 +475,7 @@ export function EditProductDialog({
                         value={formData.barcode || ''}
                         onChange={(e) => handleChange('barcode', e.target.value || null)}
                         placeholder="Código EAN"
-                        className="h-[25px] text-input leading-tight"
+                        className="h-[25px] text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
                       />
                     </div>
 
@@ -412,7 +487,7 @@ export function EditProductDialog({
                         value={formData.unit_of_measure || 'un'}
                         onValueChange={(value) => handleChange('unit_of_measure', value || null)}
                       >
-                        <SelectTrigger className="h-[25px] text-select leading-tight">
+                        <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent>
@@ -475,7 +550,7 @@ export function EditProductDialog({
                           }
                         }}
                         placeholder="0,00"
-                        className="h-[25px] text-input leading-tight"
+                        className="h-[25px] text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
                       />
                     </div>
                     </div>
@@ -493,7 +568,7 @@ export function EditProductDialog({
                           value={formData.category || ''}
                           onChange={(e) => handleChange('category', e.target.value || null)}
                           placeholder="2106.90.90 OUTROS PREPARACOES ALIMENTICIAS"
-                          className="h-[25px] text-input leading-tight pr-8"
+                          className="h-[25px] text-input text-foreground pr-8 border-[0.8px] border-[#b9b9b9] focus:border-black"
                         />
                         <Button 
                           variant="ghost" 
@@ -520,68 +595,49 @@ export function EditProductDialog({
                         onValueChange={(value) => handleChange('category_id', value || null)}
                         disabled={isLoadingCategories}
                       >
-                        <SelectTrigger className="h-[25px] text-select leading-tight">
+                        <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
                           <SelectValue placeholder="Selecione a família do produto" />
                         </SelectTrigger>
                         <SelectContent>
                           {categories && categories.length > 0 ? (
                             categories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.name}
-                              </SelectItem>
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="" disabled>
+                            <div className="px-2 py-1.5 text-[12px] text-muted-foreground">
                               Nenhuma categoria disponível
-                            </SelectItem>
+                            </div>
                           )}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-                </div>
 
-                {/* Product Definition - Lado direito */}
-                <div className="col-span-2">
-                  <div className="mb-6">
-                    <h3 className="text-label font-semibold mb-3 text-foreground">Definição do Produto</h3>
+                  </div>
+
+                  {/* Product Definition - Lado direito */}
+                  <div className="flex-shrink-0 w-64">
+                    <h3 className="text-[12px] font-semibold mb-3 text-foreground">Definição do Produto</h3>
                     <div className="space-y-3">
                       <div className="flex items-center gap-2.5">
                       <Switch
-                          checked={productDefinition.simples}
-                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, simples: checked }))}
+                          checked={true}
+                          disabled
                       />
                         <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
                           Simples
                           <Info className="h-3 w-3 text-muted-foreground" />
                       </Label>
                     </div>
-                      <div className="flex items-center gap-2.5">
-                        <Switch
-                          checked={productDefinition.kit}
-                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, kit: checked }))}
-                        />
-                        <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
-                          Kit
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                        </Label>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <Switch
-                          checked={productDefinition.comVariacoes}
-                          onCheckedChange={(checked) => setProductDefinition(prev => ({ ...prev, comVariacoes: checked }))}
-                        />
-                        <Label className="flex items-center gap-1.5 cursor-pointer text-label font-medium text-foreground">
-                          Com Variações
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                        </Label>
-                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>
-                      </div>
 
               {/* Tabs */}
+              <div className="px-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-7">
                   <TabsTrigger value="estoque">Estoque</TabsTrigger>
@@ -595,26 +651,18 @@ export function EditProductDialog({
 
                 {/* Estoque Tab */}
                 <TabsContent value="estoque" className="mt-6 space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Switch id="batch-control" />
-                    <Label htmlFor="batch-control" className="flex items-center gap-1">
-                      Este produto possui controle de lote
-                      <Info className="h-3 w-3 text-muted-foreground" />
-                        </Label>
-                      </div>
-
                   <div className="mb-4">
-                    <h4 className="text-label font-semibold mb-2 flex items-center gap-1">
+                    <h4 className="text-[12px] font-semibold mb-2 flex items-center gap-1">
                           Estoque Mínimo
                       <Info className="h-3 w-3 text-muted-foreground" />
                     </h4>
                     <p className="text-[12px] text-muted-foreground">
                       Clique diretamente em qualquer célula desta coluna para atualizar o estoque mínimo de cada local de estoque.
                     </p>
-                      </div>
+                    </div>
 
                   <div className="mb-4">
-                    <h4 className="text-label font-semibold mb-3">Abaixo um resumo das informações de estoque deste produto</h4>
+                    <h4 className="text-[12px] font-semibold mb-3">Abaixo um resumo das informações de estoque deste produto</h4>
                     
                     {/* Resumo de Estoque */}
                     <div className="grid grid-cols-4 gap-4 mb-4">
@@ -738,7 +786,7 @@ export function EditProductDialog({
                                             setEditingMinStock(null);
                                           }
                                         }}
-                                        className="w-20 h-[25px]"
+                                        className="w-20 h-[25px] text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
                                         autoFocus
                         />
                       </div>
@@ -781,8 +829,8 @@ export function EditProductDialog({
                           <Button variant="outline" size="sm" disabled>
                             próximo
                           </Button>
-                      </div>
                     </div>
+                  </div>
                     </>
                   )}
                 </TabsContent>
@@ -800,7 +848,7 @@ export function EditProductDialog({
                           step="0.01"
                           value={formData.cost_price || ''}
                           onChange={(e) => handleChange('cost_price', e.target.value ? parseFloat(e.target.value) : null)}
-                          className="h-[25px]"
+                          className="h-[25px] text-foreground border-[0.8px] border-black"
                         />
                       </div>
                       </div>
@@ -812,15 +860,15 @@ export function EditProductDialog({
                   <div className="space-y-4">
                       <div className="space-y-2">
                       <Label htmlFor="supplier">Fornecedor Principal</Label>
-                        <Input
+                      <Input
                         id="supplier"
                         name="supplier"
                         value={formData.supplier || ''}
                           onChange={(e) => handleChange('supplier', e.target.value || null)}
                         placeholder="Nome do fornecedor"
-                        className="h-[25px]"
-                        />
-                      </div>
+                        className="h-[25px] text-foreground"
+                      />
+                    </div>
                   </div>
             </TabsContent>
 
@@ -835,10 +883,10 @@ export function EditProductDialog({
                         value={formData.name || ''}
                           onChange={(e) => handleChange('name', e.target.value)}
                         required
-                        className="h-[25px]"
+                        className="h-[25px] text-foreground"
                         />
                       </div>
-                    </div>
+                      </div>
             </TabsContent>
 
                 {/* Características Tab */}
@@ -869,10 +917,10 @@ export function EditProductDialog({
                           step="0.01"
                           value={formData.tax_rate || 0}
                           onChange={(e) => handleChange('tax_rate', parseFloat(e.target.value) || 0)}
-                          className="h-[25px]"
+                          className="h-[25px] text-foreground border-[0.8px] border-black"
                         />
+                      </div>
                     </div>
-                  </div>
               </TabsContent>
 
                 {/* Observações Tab */}
@@ -887,11 +935,13 @@ export function EditProductDialog({
                         onChange={(e) => handleChange('description', e.target.value || null)}
                         rows={6}
                         placeholder="Adicione observações sobre o produto..."
+                        className="text-foreground"
                       />
-                    </div>
-                    </div>
+                  </div>
+                </div>
             </TabsContent>
           </Tabs>
+          </div>
         </ScrollArea>
             </div>
             
@@ -905,45 +955,23 @@ export function EditProductDialog({
               >
                     <Save className="h-4 w-4 mr-2" />
               Salvar
-            </Button>
+              </Button>
             <Button variant="ghost" className="w-full justify-start">
               <Plus className="h-4 w-4 mr-2" />
               Incluir
             </Button>
             <Button variant="ghost" className="w-full justify-start">
-              <List className="h-4 w-4 mr-2" />
-              Estrutura do Produto
-            </Button>
-            {productDefinition.comVariacoes && (
-              <Button variant="ghost" className="w-full justify-start">
-                <List className="h-4 w-4 mr-2" />
-                Variações do Produto
-              </Button>
-            )}
-            <Button variant="ghost" className="w-full justify-start">
               <Copy className="h-4 w-4 mr-2" />
               Duplicar
             </Button>
             <Button variant="ghost" className="w-full justify-start">
-              <Share2 className="h-4 w-4 mr-2" />
-              Compartilham...
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <UserX className="h-4 w-4 mr-2" />
+              <Ban className="h-4 w-4 mr-2" />
               Inativar
             </Button>
             <Button variant="ghost" className="w-full justify-start">
-              <Paperclip className="h-4 w-4 mr-2" />
-              Anexos
+              <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
+              <span className="truncate">Histórico de Alterações</span>
             </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <Clock className="h-4 w-4 mr-2" />
-              Histórico de Alterações
-            </Button>
-            <Button variant="ghost" className="w-full justify-start">
-              <Grid3x3 className="h-4 w-4 mr-2" />
-              Tarefas
-              </Button>
               <Button
               variant="ghost"
               className="w-full justify-start text-destructive hover:text-destructive"

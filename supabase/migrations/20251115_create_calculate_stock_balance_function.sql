@@ -31,13 +31,13 @@ DECLARE
 BEGIN
   -- AIDEV-NOTE: Obter saldo atual e CMC do local de estoque
   SELECT 
-    COALESCE(available_stock, 0),
-    COALESCE(unit_cmc, 0)
+    COALESCE(psbl.available_stock, 0),
+    COALESCE(psbl.unit_cmc, 0)
   INTO v_current_balance, v_current_cmc
-  FROM public.product_stock_by_location
-  WHERE tenant_id = p_tenant_id
-    AND product_id = p_product_id
-    AND storage_location_id = p_storage_location_id;
+  FROM public.product_stock_by_location psbl
+  WHERE psbl.tenant_id = p_tenant_id
+    AND psbl.product_id = p_product_id
+    AND psbl.storage_location_id = p_storage_location_id;
   
   -- Se não existe registro, criar com valores iniciais
   IF v_current_balance IS NULL THEN

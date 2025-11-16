@@ -7,7 +7,7 @@
 
 import * as React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowUpDown, MoreHorizontal, Trash2, Edit, Filter } from 'lucide-react';
+import { ArrowUpDown, MoreHorizontal, Trash2, Edit, Filter, Package } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -119,10 +119,14 @@ export function StockMovementsTable({
 
   if (movements.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32">
-        <div className="text-center">
-          <p className="text-body text-muted-foreground">
-            Nenhuma movimentação encontrada.
+      <div className="flex items-center justify-center h-64 bg-muted/30 rounded-lg border border-dashed">
+        <div className="text-center max-w-md px-4">
+          <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+          <p className="text-body font-medium text-foreground mb-2">
+            Nenhuma movimentação de estoque registrada
+          </p>
+          <p className="text-small text-muted-foreground">
+            Não há movimentações para os filtros selecionados. Tente ajustar os filtros ou criar uma nova movimentação.
           </p>
         </div>
       </div>

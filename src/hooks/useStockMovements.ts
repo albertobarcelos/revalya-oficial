@@ -113,16 +113,11 @@ export function useStockMovements(params?: UseStockMovementsParams) {
       p_tenant_id: tenantId
     });
     
-    // Query com joins para relacionamentos
+    // Query sem joins - PostgREST não está reconhecendo os relacionamentos
+    // AIDEV-NOTE: Buscando dados básicos primeiro, depois enriquecendo com queries separadas
     let query = supabase
       .from('stock_movements')
-      .select(`
-        *,
-        product:products(id, name, code, sku, unit_of_measure),
-        storage_location:storage_locations!stock_movements_storage_location_id_fkey(id, name, description),
-        origin_location:storage_locations!stock_movements_origin_storage_location_id_fkey(id, name, description),
-        destination_location:storage_locations!stock_movements_destination_storage_location_id_fkey(id, name, description)
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('tenant_id', tenantId);
     
     // Aplicar filtros
@@ -181,10 +176,94 @@ export function useStockMovements(params?: UseStockMovementsParams) {
       throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
-    console.log(`✅ [SUCCESS] ${data?.length || 0} movimentações encontradas`);
+    // AIDEV-NOTE: Buscar todos os relacionamentos separadamente
+    // Coletar IDs únicos
+    const productIds = [...new Set(data?.map(m => m.product_id).filter(Boolean) || [])];
+    const storageLocationIds = [...new Set(data?.map(m => m.storage_location_id).filter(Boolean) || [])];
+    const originLocationIds = [...new Set(data?.filter(m => m.origin_storage_location_id).map(m => m.origin_storage_location_id) || [])];
+    const destinationLocationIds = [...new Set(data?.filter(m => m.destination_storage_location_id).map(m => m.destination_storage_location_id) || [])];
+    
+    // Buscar products
+    let productsMap: Record<string, any> = {};
+    if (productIds.length > 0) {
+      const { data: productsData } = await supabase
+        .from('products')
+        .select('id, name, code, sku, unit_of_measure')
+        .in('id', productIds)
+        .eq('tenant_id', tenantId);
+      
+      if (productsData) {
+        productsMap = productsData.reduce((acc, prod) => {
+          acc[prod.id] = prod;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+    }
+    
+    // Buscar storage_locations (principal)
+    let storageLocationsMap: Record<string, any> = {};
+    if (storageLocationIds.length > 0) {
+      const { data: storageData } = await supabase
+        .from('storage_locations')
+        .select('id, name, description')
+        .in('id', storageLocationIds)
+        .eq('tenant_id', tenantId);
+      
+      if (storageData) {
+        storageLocationsMap = storageData.reduce((acc, loc) => {
+          acc[loc.id] = loc;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+    }
+    
+    // Buscar origin_locations
+    let originLocationsMap: Record<string, any> = {};
+    if (originLocationIds.length > 0) {
+      const { data: originData } = await supabase
+        .from('storage_locations')
+        .select('id, name, description')
+        .in('id', originLocationIds)
+        .eq('tenant_id', tenantId);
+      
+      if (originData) {
+        originLocationsMap = originData.reduce((acc, loc) => {
+          acc[loc.id] = loc;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+    }
+    
+    // Buscar destination_locations
+    let destinationLocationsMap: Record<string, any> = {};
+    if (destinationLocationIds.length > 0) {
+      const { data: destData } = await supabase
+        .from('storage_locations')
+        .select('id, name, description')
+        .in('id', destinationLocationIds)
+        .eq('tenant_id', tenantId);
+      
+      if (destData) {
+        destinationLocationsMap = destData.reduce((acc, loc) => {
+          acc[loc.id] = loc;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+    }
+    
+    // AIDEV-NOTE: Enriquecer dados com todos os relacionamentos
+    const enrichedData = data?.map(movement => ({
+      ...movement,
+      product: movement.product_id ? productsMap[movement.product_id] : undefined,
+      storage_location: movement.storage_location_id ? storageLocationsMap[movement.storage_location_id] : undefined,
+      origin_location: movement.origin_storage_location_id ? originLocationsMap[movement.origin_storage_location_id] : undefined,
+      destination_location: movement.destination_storage_location_id ? destinationLocationsMap[movement.destination_storage_location_id] : undefined
+    })) || [];
+    
+    console.log(`✅ [SUCCESS] ${enrichedData.length} movimentações encontradas`);
     
     return {
-      movements: data || [],
+      movements: enrichedData,
       totalCount: count || 0
     };
   };
@@ -225,13 +304,27 @@ export function useStockMovements(params?: UseStockMovementsParams) {
     async (supabase: SupabaseClient, tenantId: string, movementData: CreateStockMovementDTO) => {
       console.log(`📝 [AUDIT] Criando movimentação de estoque para tenant: ${tenantId}`);
       
-      // AIDEV-NOTE: Configurar contexto de tenant antes da mutation
-      await supabase.rpc('set_tenant_context_simple', {
-        p_tenant_id: tenantId
-      });
+      // AIDEV-NOTE: Obter ID do usuário atual para created_by
+      // NOTA: O contexto de tenant já é configurado pelo useSecureTenantMutation
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+      
+      // AIDEV-NOTE: Validar parâmetros antes de chamar RPC
+      if (!movementData.product_id) {
+        throw new Error('product_id é obrigatório');
+      }
+      if (!movementData.storage_location_id) {
+        throw new Error('storage_location_id é obrigatório');
+      }
+      if (!movementData.movement_type) {
+        throw new Error('movement_type é obrigatório');
+      }
+      if (!movementData.quantity || movementData.quantity <= 0) {
+        throw new Error('quantity deve ser maior que zero');
+      }
       
       // AIDEV-NOTE: Calcular saldo acumulado e CMC usando função RPC
-      const { data: balanceData, error: balanceError } = await supabase.rpc('calculate_stock_balance', {
+      console.log('🔍 [DEBUG] Chamando calculate_stock_balance com:', {
         p_tenant_id: tenantId,
         p_product_id: movementData.product_id,
         p_storage_location_id: movementData.storage_location_id,
@@ -240,9 +333,24 @@ export function useStockMovements(params?: UseStockMovementsParams) {
         p_unit_value: movementData.unit_value || 0
       });
       
+      const { data: balanceData, error: balanceError } = await supabase.rpc('calculate_stock_balance', {
+        p_tenant_id: tenantId,
+        p_product_id: movementData.product_id,
+        p_storage_location_id: movementData.storage_location_id,
+        p_movement_type: movementData.movement_type,
+        p_quantity: Number(movementData.quantity),
+        p_unit_value: Number(movementData.unit_value || 0)
+      });
+      
       if (balanceError) {
         console.error('🚨 [ERROR] Falha ao calcular saldo:', balanceError);
-        throw balanceError;
+        console.error('🚨 [ERROR] Detalhes do erro:', JSON.stringify(balanceError, null, 2));
+        throw new Error(balanceError.message || 'Erro ao calcular saldo de estoque');
+      }
+      
+      if (!balanceData || balanceData.length === 0) {
+        console.warn('⚠️ [WARN] calculate_stock_balance retornou dados vazios');
+        throw new Error('Função calculate_stock_balance não retornou dados');
       }
       
       const balanceResult = balanceData?.[0];
@@ -264,7 +372,8 @@ export function useStockMovements(params?: UseStockMovementsParams) {
         customer_or_supplier: movementData.customer_or_supplier || null,
         observation: movementData.observation || null,
         origin_storage_location_id: movementData.origin_storage_location_id || null,
-        destination_storage_location_id: movementData.destination_storage_location_id || null
+        destination_storage_location_id: movementData.destination_storage_location_id || null,
+        created_by: userId // AIDEV-NOTE: Campo obrigatório para auditoria e RLS
       };
       
       // Se for transferência, também atualizar o local de origem ANTES de inserir a movimentação
@@ -307,33 +416,41 @@ export function useStockMovements(params?: UseStockMovementsParams) {
       }
       
       // AIDEV-NOTE: Atualizar stock_quantity do produto baseado no tipo de movimento
-      // Para transferências, não alteramos o estoque total (apenas muda de local)
-      if (movementData.movement_type !== 'TRANSFERENCIA') {
-        const { data: productData } = await supabase
-          .from('products')
-          .select('stock_quantity')
-          .eq('id', movementData.product_id)
-          .eq('tenant_id', tenantId)
-          .single();
+      // IMPORTANTE: Só atualizar estoque se a data do movimento for hoje ou no passado
+      // Movimentos com data futura são apenas previsões e não devem alterar o estoque atual
+      const movementDate = new Date(movementData.movement_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      movementDate.setHours(0, 0, 0, 0);
+      
+      const isPastOrToday = movementDate <= today;
+      
+      // AIDEV-NOTE: Atualizar stock_quantity como soma de todos os locais
+      // IMPORTANTE: Para transferências, o estoque total não muda, mas a distribuição sim
+      // Por isso sempre recalculamos a soma de todos os locais
+      if (isPastOrToday) {
+        // AIDEV-NOTE: Calcular stock_quantity como soma de todos os available_stock de product_stock_by_location
+        // Isso garante que stock_quantity sempre reflete a soma de todos os locais
+        const { data: stockByLocation } = await supabase
+          .from('product_stock_by_location')
+          .select('available_stock')
+          .eq('product_id', movementData.product_id)
+          .eq('tenant_id', tenantId);
         
-        if (productData) {
-          let newStockQuantity = productData.stock_quantity || 0;
-          
-          if (movementData.movement_type === 'ENTRADA') {
-            newStockQuantity += movementData.quantity;
-          } else if (movementData.movement_type === 'SAIDA') {
-            newStockQuantity = Math.max(0, newStockQuantity - movementData.quantity);
-          } else if (movementData.movement_type === 'AJUSTE') {
-            // Para ajuste, usar o saldo acumulado calculado
-            newStockQuantity = balanceResult?.accumulated_balance || movementData.quantity;
-          }
+        if (stockByLocation) {
+          // Somar todos os estoques de todos os locais
+          const totalStock = stockByLocation.reduce((sum, stock) => sum + (stock.available_stock || 0), 0);
           
           await supabase
             .from('products')
-            .update({ stock_quantity: newStockQuantity })
+            .update({ stock_quantity: totalStock })
             .eq('id', movementData.product_id)
             .eq('tenant_id', tenantId);
+          
+          console.log(`📦 [STOCK] Estoque total atualizado: ${totalStock} (soma de ${stockByLocation.length} locais, tipo: ${movementData.movement_type})`);
         }
+      } else if (!isPastOrToday) {
+        console.log(`📅 [FORECAST] Movimento com data futura (${movementData.movement_date}) - não atualiza estoque atual`);
       }
       
       console.log(`✅ [SUCCESS] Movimentação criada com sucesso: ${insertedData.id}`);

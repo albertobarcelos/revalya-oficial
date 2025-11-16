@@ -6,13 +6,13 @@
  */
 
 import * as React from 'react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
+  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,10 @@ export function CreateStockMovementDialog({
   const { toast } = useToast();
   const { createMovement, isCreating } = useStockMovements();
   const { locations } = useStorageLocations({ is_active: true });
-  const { products } = useSecureProducts({ limit: 1 });
+  // AIDEV-NOTE: Buscar produtos - se houver initialProductId, buscar todos para encontrar o produto específico
+  const { products } = useSecureProducts({ 
+    limit: initialProductId ? 100 : 1 
+  });
 
   const [formData, setFormData] = useState<Partial<CreateStockMovementDTO>>({
     product_id: initialProductId || '',
@@ -72,7 +75,18 @@ export function CreateStockMovementDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const selectedProduct = products.find(p => p.id === formData.product_id) || null;
+  // AIDEV-NOTE: Buscar produto selecionado
+  const selectedProduct = React.useMemo(() => {
+    if (!formData.product_id) return null;
+    return products.find(p => p.id === formData.product_id) || null;
+  }, [formData.product_id, products]);
+
+  // AIDEV-NOTE: Garantir que o product_id seja definido quando initialProductId mudar
+  useEffect(() => {
+    if (initialProductId && initialProductId !== formData.product_id) {
+      setFormData(prev => ({ ...prev, product_id: initialProductId }));
+    }
+  }, [initialProductId, formData.product_id]);
 
   const handleChange = useCallback((field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -200,136 +214,177 @@ export function CreateStockMovementDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>Novo Movimento de Estoque</DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-6 w-6"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </DialogHeader>
+      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col [&>button]:hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between h-[55px] min-h-[55px] bg-[rgb(244,245,246)] px-6">
+          <DialogTitle className="text-[18px] font-normal leading-[18.48px] text-[rgb(0, 0, 0)]" style={{ fontFamily: '"Poppins", sans-serif' }}>
+            Novo Movimento de Estoque
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Criar nova movimentação de estoque
+          </DialogDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </Button>
+        </div>
 
-        <div className="overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Produto (read-only) */}
-            <div className="space-y-2">
-              <Label htmlFor="product">Produto</Label>
-              <ProductSearchInput
-                value={formData.product_id || undefined}
-                onValueChange={handleProductChange}
-                placeholder="Selecione o produto"
-                disabled={!!initialProductId}
-              />
-              {errors.product_id && (
-                <p className="text-body text-destructive">{errors.product_id}</p>
-              )}
-            </div>
+            {/* Produto e Local de Estoque na mesma linha */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="product" className="text-label font-medium leading-none">
+                  Produto
+                </Label>
+                {initialProductId || selectedProduct ? (
+                  // Se já tem produto selecionado (vindo da tela anterior), mostrar apenas o nome
+                  <div className="text-heading-1 font-bold">
+                    {selectedProduct?.name || 'Carregando...'}
+                  </div>
+                ) : (
+                  // Se não tem produto, mostrar o campo de busca
+                  <>
+                    <ProductSearchInput
+                      value={formData.product_id || undefined}
+                      onValueChange={handleProductChange}
+                      placeholder="Selecione o produto"
+                    />
+                    {selectedProduct && (
+                      <div className="text-heading-1 font-bold mt-1">
+                        {selectedProduct.name}
+                      </div>
+                    )}
+                  </>
+                )}
+                {errors.product_id && (
+                  <p className="text-body text-destructive">{errors.product_id}</p>
+                )}
+              </div>
 
-            {/* Tipo do Movimento */}
-            <div className="space-y-2">
-              <Label htmlFor="movement_type">Tipo do Movimento de Estoque</Label>
-              <Select
-                value={formData.movement_type}
-                onValueChange={(value) => handleChange('movement_type', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOVEMENT_TYPE_OPTIONS.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Data */}
-            <div className="space-y-2">
-              <Label htmlFor="movement_date">Data</Label>
-              <DatePicker
-                date={selectedDate}
-                setDate={handleDateSelect}
-              />
-              {errors.movement_date && (
-                <p className="text-body text-destructive">{errors.movement_date}</p>
-              )}
-            </div>
-
-            {/* Quantidade */}
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantidade (UN)</Label>
-              <Input
-                id="quantity"
-                type="number"
-                step="0.000001"
-                value={formData.quantity || ''}
-                onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 0)}
-                placeholder="0,000000"
-              />
-              {errors.quantity && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded p-2 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                  <p className="text-body text-yellow-800">{errors.quantity}</p>
+              {/* Local de Estoque (ou Local de Destino para transferências) */}
+              {!isTransfer && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="storage_location_id" className="text-label font-medium leading-none">
+                    Local de Estoque
+                  </Label>
+                  <Select
+                    value={formData.storage_location_id || ''}
+                    onValueChange={(value) => handleChange('storage_location_id', value)}
+                  >
+                    <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
+                      <SelectValue placeholder="Selecione o local de estoque" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map(location => (
+                        <SelectItem key={location.id} value={location.id}>
+                          {location.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.storage_location_id && (
+                    <p className="text-body text-destructive">{errors.storage_location_id}</p>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Valor Unitário */}
-            <div className="space-y-2">
-              <Label htmlFor="unit_value">Valor Unitário</Label>
-              <Input
-                id="unit_value"
-                type="number"
-                step="0.01"
-                value={formData.unit_value || ''}
-                onChange={(e) => handleChange('unit_value', parseFloat(e.target.value) || 0)}
-                placeholder="0,000000"
-              />
-            </div>
-
-            {/* Local de Estoque (ou Local de Destino para transferências) */}
-            {!isTransfer && (
-              <div className="space-y-2">
-                <Label htmlFor="storage_location_id">Local de Estoque</Label>
+            {/* Tipo do Movimento e Data na mesma linha */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="movement_type" className="text-label font-medium leading-none">
+                  Tipo do Movimento de Estoque
+                </Label>
                 <Select
-                  value={formData.storage_location_id || ''}
-                  onValueChange={(value) => handleChange('storage_location_id', value)}
+                  value={formData.movement_type}
+                  onValueChange={(value) => handleChange('movement_type', value)}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o local de estoque" />
+                  <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {locations.map(location => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name}
+                    {MOVEMENT_TYPE_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.storage_location_id && (
-                  <p className="text-body text-destructive">{errors.storage_location_id}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="movement_date" className="text-label font-medium leading-none">
+                  Data
+                </Label>
+                <DatePicker
+                  date={selectedDate}
+                  setDate={handleDateSelect}
+                  className="[&>button]:h-[25px] [&>button]:text-input [&>button]:border-[0.8px] [&>button]:border-[#b9b9b9] [&>button]:focus:border-black [&>button]:rounded-[1.2px]"
+                />
+                {errors.movement_date && (
+                  <p className="text-body text-destructive">{errors.movement_date}</p>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* Quantidade e Valor Unitário na mesma linha */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="quantity" className="text-label font-medium leading-none">
+                  Quantidade (UN)
+                </Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  step="0.000001"
+                  value={formData.quantity || ''}
+                  onChange={(e) => handleChange('quantity', parseFloat(e.target.value) || 0)}
+                  placeholder="0,000000"
+                  className="h-[25px] text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
+                />
+                {errors.quantity && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-2 flex items-start gap-2 mt-1">
+                    <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-body text-yellow-800">{errors.quantity}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="unit_value" className="text-label font-medium leading-none">
+                  Valor Unitário
+                </Label>
+                <Input
+                  id="unit_value"
+                  type="number"
+                  step="0.01"
+                  value={formData.unit_value || ''}
+                  onChange={(e) => handleChange('unit_value', parseFloat(e.target.value) || 0)}
+                  placeholder="0,000000"
+                  className="h-[25px] text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black"
+                />
+              </div>
+            </div>
 
             {/* Campos condicionais para transferência */}
             {isTransfer && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="origin_storage_location_id">Local de Origem</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="origin_storage_location_id" className="text-label font-medium leading-none">
+                    Local de Origem
+                  </Label>
                   <Select
                     value={formData.origin_storage_location_id || ''}
                     onValueChange={(value) => handleChange('origin_storage_location_id', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
                       <SelectValue placeholder="Selecione o local de origem" />
                     </SelectTrigger>
                     <SelectContent>
@@ -345,13 +400,15 @@ export function CreateStockMovementDialog({
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="destination_storage_location_id">Local de Destino</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="destination_storage_location_id" className="text-label font-medium leading-none">
+                    Local de Destino
+                  </Label>
                   <Select
                     value={formData.destination_storage_location_id || ''}
                     onValueChange={(value) => handleChange('destination_storage_location_id', value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
                       <SelectValue placeholder="Selecione o local de destino" />
                     </SelectTrigger>
                     <SelectContent>
@@ -370,13 +427,15 @@ export function CreateStockMovementDialog({
             )}
 
             {/* Motivo do Movimento */}
-            <div className="space-y-2">
-              <Label htmlFor="movement_reason">Motivo do Movimento de Estoque</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="movement_reason" className="text-label font-medium leading-none">
+                Motivo do Movimento de Estoque
+              </Label>
               <Select
                 value={formData.movement_reason || ''}
                 onValueChange={(value) => handleChange('movement_reason', value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-[25px] text-select border-[0.8px] border-[#b9b9b9] focus:border-black">
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -390,14 +449,17 @@ export function CreateStockMovementDialog({
             </div>
 
             {/* Observação */}
-            <div className="space-y-2">
-              <Label htmlFor="observation">Observação</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="observation" className="text-label font-medium leading-none">
+                Observação
+              </Label>
               <Textarea
                 id="observation"
                 value={formData.observation || ''}
                 onChange={(e) => handleChange('observation', e.target.value)}
                 placeholder="Observações adicionais..."
                 rows={4}
+                className="text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black rounded-[1.2px]"
               />
             </div>
 

@@ -129,8 +129,12 @@ export function useSecureTenantMutation<TData, TVariables>(
       
       throttledTenantGuard('mutation_audit', `✏️ [AUDIT] Mutação para tenant: ${currentTenant.name} (${currentTenant.id})`);
       
-      // AIDEV-NOTE: Configurar contexto de tenant no banco ANTES da operação
-      const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id);
+      // AIDEV-NOTE: Obter ID do usuário atual para contexto
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+      
+      // AIDEV-NOTE: Configurar contexto de tenant no banco ANTES da operação (com user_id para RLS)
+      const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id, userId);
       
       if (!contextApplied) {
         throw new Error('❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados');

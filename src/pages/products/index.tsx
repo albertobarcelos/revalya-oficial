@@ -65,30 +65,40 @@ import { supabase } from '@/lib/supabase';
 import { CreateProductDialog } from '@/components/products/CreateProductDialog';
 import { EditProductDialog } from '@/components/products/EditProductDialog';
 
-// AIDEV-NOTE: Função para traduzir unidades do inglês para português
+// AIDEV-NOTE: Função para formatar unidades no padrão "Nome Completo (ABREVIAÇÃO)"
 const translateUnit = (unit: string): string => {
-  const translations: Record<string, string> = {
-    'unit': 'unidade',
-    'piece': 'peça',
-    'kg': 'kg',
-    'gram': 'grama',
-    'liter': 'litro',
-    'meter': 'metro',
-    'hour': 'hora',
-    'day': 'dia',
-    'month': 'mês',
-    'year': 'ano',
-    'box': 'caixa',
-    'pack': 'pacote',
-    'bottle': 'garrafa',
-    'can': 'lata',
-    'bag': 'saco',
-    'dozen': 'dúzia',
-    'pair': 'par',
-    'set': 'conjunto'
+  const unitMap: Record<string, string> = {
+    'un': 'Unidade (UN)',
+    'kg': 'Quilograma (KG)',
+    'g': 'Grama (G)',
+    'l': 'Litro (L)',
+    'ml': 'Mililitro (ML)',
+    'm': 'Metro (M)',
+    'cm': 'Centímetro (CM)',
+    'm2': 'Metro Quadrado (M²)',
+    'm3': 'Metro Cúbico (M³)',
+    // Fallbacks para valores antigos ou diferentes
+    'unit': 'Unidade (UN)',
+    'piece': 'Peça',
+    'gram': 'Grama (G)',
+    'liter': 'Litro (L)',
+    'meter': 'Metro (M)',
+    'hour': 'Hora',
+    'day': 'Dia',
+    'month': 'Mês',
+    'year': 'Ano',
+    'box': 'Caixa',
+    'pack': 'Pacote',
+    'bottle': 'Garrafa',
+    'can': 'Lata',
+    'bag': 'Saco',
+    'dozen': 'Dúzia',
+    'pair': 'Par',
+    'set': 'Conjunto'
   };
   
-  return translations[unit?.toLowerCase()] || unit || 'unidade';
+  const normalizedUnit = unit?.toLowerCase() || 'un';
+  return unitMap[normalizedUnit] || unit || 'Unidade (UN)';
 };
 
 // AIDEV-NOTE: Componente principal da página de produtos
