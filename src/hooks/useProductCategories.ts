@@ -54,6 +54,11 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
   const fetchCategoriesQuery = async (supabase: SupabaseClient, tenantId: string) => {
     console.log(`📊 [AUDIT] Buscando categorias para tenant: ${tenantId}`);
     
+    // AIDEV-NOTE: Configurar contexto de tenant antes da query
+    await supabase.rpc('set_tenant_context_simple', {
+      p_tenant_id: tenantId
+    });
+    
     let query = supabase
       .from('product_categories')
       .select('*', { count: 'exact' })
@@ -80,6 +85,17 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     if (error) {
       console.error('🚨 [ERROR] Falha ao buscar categorias:', error);
       throw error;
+    }
+    
+    // AIDEV-NOTE: Validação dupla de segurança - verificar se todos os dados pertencem ao tenant correto
+    const invalidData = data?.filter(item => item.tenant_id !== tenantId);
+    if (invalidData && invalidData.length > 0) {
+      console.error('🚨 [SECURITY] Violação de segurança detectada:', {
+        invalidItems: invalidData.length,
+        expectedTenant: tenantId,
+        invalidTenants: invalidData.map(item => item.tenant_id)
+      });
+      throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
     console.log(`✅ [SUCCESS] ${data?.length || 0} categorias encontradas`);
@@ -118,24 +134,37 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, categoryData: CreateProductCategoryDTO) => {
       console.log(`📝 [AUDIT] Criando categoria para tenant: ${tenantId}`);
       
-      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
-      // O INSERT é bem-sucedido, mas o SELECT posterior não respeita o contexto de tenant
-      const { error } = await supabase
+      // AIDEV-NOTE: Configurar contexto de tenant antes da mutation
+      await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId
+      });
+      
+      const { data: insertedData, error } = await supabase
         .from('product_categories')
         .insert({
           ...categoryData,
           tenant_id: tenantId,
           created_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
       
       if (error) {
         console.error('🚨 [ERROR] Falha ao criar categoria:', error);
         throw error;
       }
       
+      // AIDEV-NOTE: Validação dupla de segurança - verificar se o dado criado pertence ao tenant correto
+      if (insertedData && insertedData.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY] Violação de segurança na criação:', {
+          expectedTenant: tenantId,
+          returnedTenant: insertedData.tenant_id
+        });
+        throw new Error('❌ ERRO CRÍTICO: Categoria criada com tenant_id incorreto - possível vazamento de segurança!');
+      }
+      
       console.log(`✅ [SUCCESS] Categoria criada com sucesso`);
-      // AIDEV-NOTE: Retornando dados básicos sem consulta adicional para evitar RLS
-      return {
+      return insertedData || {
         ...categoryData,
         tenant_id: tenantId,
         created_at: new Date().toISOString()
@@ -154,7 +183,11 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, { id, ...categoryData }: { id: string } & Partial<CreateProductCategoryDTO>) => {
       console.log(`📝 [AUDIT] Atualizando categoria ${id} para tenant: ${tenantId}`);
       
-      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
+      // AIDEV-NOTE: Configurar contexto de tenant antes da mutation
+      await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId
+      });
+      
       const { error } = await supabase
         .from('product_categories')
         .update({
@@ -191,6 +224,11 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, categoryId: string) => {
       console.log(`🗑️ [AUDIT] Deletando categoria ${categoryId} para tenant: ${tenantId}`);
       
+      // AIDEV-NOTE: Configurar contexto de tenant antes da mutation
+      await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId
+      });
+      
       const { error } = await supabase
         .from('product_categories')
         .delete()
@@ -218,7 +256,11 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     async (supabase: SupabaseClient, tenantId: string, { id, is_active }: { id: string; is_active: boolean }) => {
       console.log(`🔄 [AUDIT] Alternando status da categoria ${id} para tenant: ${tenantId}`);
       
-      // AIDEV-NOTE: Removido .select() para evitar violação RLS na consulta de retorno
+      // AIDEV-NOTE: Configurar contexto de tenant antes da mutation
+      await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId
+      });
+      
       const { error } = await supabase
         .from('product_categories')
         .update({

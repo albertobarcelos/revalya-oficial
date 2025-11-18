@@ -59,7 +59,7 @@ async function fetchAsaasCustomer(
     const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
     const customerUrl = `${baseUrl}/v3/customers/${customerId}`;
     
-    const response = await fetch(customerUrl, {
+    const response = await fetchWithRetry(customerUrl, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -68,7 +68,11 @@ async function fetchAsaasCustomer(
     });
     
     if (!response.ok) {
-      console.warn(`⚠️ Não foi possível obter dados do customer ${customerId}: ${response.status}`);
+      if (response.status === 429) {
+        console.warn(`⚠️ Rate limit (429) ao buscar customer ${customerId} - será processado na próxima execução`);
+      } else {
+        console.warn(`⚠️ Não foi possível obter dados do customer ${customerId}: ${response.status}`);
+      }
       return null;
     }
     
@@ -249,6 +253,151 @@ async function findOrCreateCustomer(
   return newCustomer.id;
 }
 
+// AIDEV-NOTE: Criar notificação de sincronização
+async function createSyncNotification(
+  tenantId: string,
+  summary: {
+    success: boolean;
+    total_checked: number;
+    total_updated: number;
+    total_imported: number;
+    total_deleted: number;
+    total_skipped: number;
+    total_errors: number;
+    remaining_charges: number;
+    total_charges: number;
+  },
+  isConsolidated: boolean = false
+): Promise<void> {
+  try {
+    // AIDEV-NOTE: Construir mensagem resumida em uma linha
+    const statusEmoji = summary.success ? '✅' : '⚠️';
+    const statusText = summary.success ? 'SUCESSO' : 'COM ERROS';
+    const scope = isConsolidated ? 'TODOS OS TENANTS' : `TENANT ${tenantId}`;
+    
+    const message = `${statusEmoji} Sincronização ASAAS ${scope} - ${statusText} | Verificadas: ${summary.total_checked} | Atualizadas: ${summary.total_updated} | Importadas: ${summary.total_imported} | Deletadas: ${summary.total_deleted} | Sem alterações: ${summary.total_skipped} | Erros: ${summary.total_errors}${summary.remaining_charges > 0 ? ` | Restantes: ${summary.remaining_charges}` : ''}`;
+    
+    // AIDEV-NOTE: Construir conteúdo detalhado
+    const tenantInfo = isConsolidated 
+      ? 'Sincronização de charges do ASAAS concluída para todos os tenants com integração ativa.'
+      : `Sincronização de charges do ASAAS concluída para o tenant ${tenantId}.`;
+    
+    const content = `${tenantInfo}\n\n` +
+      `📊 Resumo da Execução:\n` +
+      `${summary.total_charges > 0 ? `• Total de charges no banco: ${summary.total_charges}\n` : ''}` +
+      `• Charges verificadas: ${summary.total_checked}\n` +
+      `• Charges atualizadas: ${summary.total_updated}\n` +
+      `• Novas charges importadas: ${summary.total_imported}\n` +
+      `• Charges deletadas: ${summary.total_deleted}\n` +
+      `• Charges sem alterações: ${summary.total_skipped}\n` +
+      `• Erros encontrados: ${summary.total_errors}\n` +
+      `${summary.remaining_charges > 0 ? `• Charges restantes para próxima execução: ${summary.remaining_charges}\n` : ''}\n` +
+      `${summary.total_errors > 0 ? `⚠️ ATENÇÃO: ${summary.total_errors} erro(s) encontrado(s). Verifique os logs da Edge Function para mais detalhes.\n` : '✅ Todas as charges foram processadas com sucesso.\n'}` +
+      `\nPróxima execução: ${new Date(Date.now() + 60 * 60 * 1000).toLocaleString('pt-BR')}`;
+    
+    // AIDEV-NOTE: Metadata com informações detalhadas para análise
+    const metadata = {
+      sync_type: 'asaas_charges',
+      tenant_id: tenantId,
+      is_consolidated: isConsolidated,
+      execution_summary: {
+        success: summary.success,
+        total_charges: summary.total_charges,
+        total_checked: summary.total_checked,
+        total_updated: summary.total_updated,
+        total_imported: summary.total_imported,
+        total_deleted: summary.total_deleted,
+        total_skipped: summary.total_skipped,
+        total_errors: summary.total_errors,
+        remaining_charges: summary.remaining_charges,
+        next_run_will_process: summary.remaining_charges > 0
+      },
+      timestamp: new Date().toISOString(),
+      troubleshooting: summary.total_errors > 0 ? {
+        action: 'Verifique os logs da Edge Function sync-charges-from-asaas-api',
+        common_issues: [
+          'Rate limiting (429) - A função já trata automaticamente com retry',
+          'Charges não encontradas (404) - Podem ter sido deletadas no ASAAS',
+          'Erros de conexão - Verifique a conectividade com a API ASAAS',
+          'Dados inválidos - Verifique a estrutura dos dados retornados pela API'
+        ],
+        how_to_fix: [
+          '1. Acesse os logs da Edge Function no Supabase Dashboard',
+          '2. Procure por mensagens de erro específicas',
+          '3. Verifique se a integração ASAAS está ativa e configurada corretamente',
+          '4. Se o erro persistir, verifique as credenciais da API ASAAS',
+          '5. Para rate limiting, aguarde a próxima execução (a função faz retry automático)'
+        ]
+      } : null
+    };
+    
+    // AIDEV-NOTE: Inserir notificação na tabela
+    // AIDEV-NOTE: recipient_email é obrigatório, usando email do sistema
+    // AIDEV-NOTE: subject contém a mensagem resumida em uma linha
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        tenant_id: tenantId,
+        type: summary.success ? 'sync_success' : 'sync_error',
+        recipient_email: 'system@revalya.com', // AIDEV-NOTE: Email do sistema para notificações automáticas
+        subject: message, // AIDEV-NOTE: Mensagem resumida em uma linha
+        content: content, // AIDEV-NOTE: Conteúdo detalhado
+        metadata: metadata,
+        sent_at: null,
+        error: summary.total_errors > 0 ? `${summary.total_errors} erro(s) durante a sincronização` : null
+      });
+    
+    if (notificationError) {
+      console.error(`❌ Erro ao criar notificação:`, notificationError);
+    } else {
+      console.log(`📧 Notificação de sincronização criada com sucesso`);
+    }
+  } catch (error) {
+    console.error(`❌ Erro ao criar notificação de sincronização:`, error);
+    // AIDEV-NOTE: Não falhar a sincronização se a notificação falhar
+  }
+}
+
+// AIDEV-NOTE: Função auxiliar para fazer requisições com retry e backoff exponencial
+// Trata especificamente erros 429 (rate limiting) da API ASAAS
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = 3,
+  baseDelay: number = 2000
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // AIDEV-NOTE: Se for 429 (rate limit), aguardar e tentar novamente
+      if (response.status === 429) {
+        const delay = baseDelay * Math.pow(2, attempt); // Backoff exponencial: 2s, 4s, 8s
+        console.warn(`⚠️ Rate limit (429) detectado. Aguardando ${delay}ms antes de tentar novamente (tentativa ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue; // Tentar novamente
+      }
+      
+      // AIDEV-NOTE: Para outros erros, retornar a resposta
+      return response;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // AIDEV-NOTE: Se não for a última tentativa, aguardar antes de tentar novamente
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.warn(`⚠️ Erro na requisição (tentativa ${attempt + 1}/${maxRetries}). Aguardando ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  // AIDEV-NOTE: Se todas as tentativas falharam, lançar o último erro
+  throw lastError || new Error('Falha ao fazer requisição após múltiplas tentativas');
+}
+
 // AIDEV-NOTE: Buscar dados do pagamento na API ASAAS
 async function fetchPaymentFromAsaas(
   paymentId: string,
@@ -259,7 +408,7 @@ async function fetchPaymentFromAsaas(
     const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
     const paymentUrl = `${baseUrl}/v3/payments/${paymentId}`;
     
-    const response = await fetch(paymentUrl, {
+    const response = await fetchWithRetry(paymentUrl, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -272,6 +421,11 @@ async function fetchPaymentFromAsaas(
       if (response.status === 404) {
         console.warn(`⚠️ Pagamento ${paymentId} não encontrado no ASAAS (404) - pode ter sido deletado`);
         return { data: null, notFound: true };
+      }
+      // AIDEV-NOTE: 429 já foi tratado no fetchWithRetry, mas se ainda ocorrer, logar
+      if (response.status === 429) {
+        console.warn(`⚠️ Rate limit (429) persistente ao buscar pagamento ${paymentId} - será processado na próxima execução`);
+        return { data: null, notFound: false };
       }
       console.warn(`⚠️ Erro ao buscar pagamento ${paymentId}: ${response.status}`);
       return { data: null, notFound: false };
@@ -295,7 +449,7 @@ async function fetchPaymentBarcode(
     const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
     const barcodeUrl = `${baseUrl}/v3/payments/${paymentId}/identificationField`;
     
-    const response = await fetch(barcodeUrl, {
+    const response = await fetchWithRetry(barcodeUrl, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -304,6 +458,9 @@ async function fetchPaymentBarcode(
     });
     
     if (!response.ok) {
+      if (response.status === 429) {
+        console.warn(`⚠️ Rate limit (429) ao buscar barcode do pagamento ${paymentId}`);
+      }
       return null;
     }
     
@@ -325,7 +482,7 @@ async function fetchPaymentPixKey(
     const baseUrl = apiUrl.endsWith('/v3') ? apiUrl.replace(/\/v3$/, '') : apiUrl.replace(/\/$/, '');
     const pixUrl = `${baseUrl}/v3/payments/${paymentId}/pixQrCode`;
     
-    const response = await fetch(pixUrl, {
+    const response = await fetchWithRetry(pixUrl, {
       method: 'GET',
       headers: {
         'access_token': apiKey,
@@ -334,6 +491,9 @@ async function fetchPaymentPixKey(
     });
     
     if (!response.ok) {
+      if (response.status === 429) {
+        console.warn(`⚠️ Rate limit (429) ao buscar PIX key do pagamento ${paymentId}`);
+      }
       return null;
     }
     
@@ -532,7 +692,7 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
         
         console.log(`🔍 Buscando charges do Asaas: ${paymentsUrl}`);
         
-        const asaasResponse = await fetch(paymentsUrl, {
+        const asaasResponse = await fetchWithRetry(paymentsUrl, {
           method: 'GET',
           headers: {
             'access_token': api_key,
@@ -727,6 +887,9 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
 
       try {
         totalChecked++;
+        
+        // AIDEV-NOTE: Pequeno delay antes de cada requisição para evitar rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // AIDEV-NOTE: Buscar dados atualizados da API ASAAS
         const { data: paymentData, notFound } = await fetchPaymentFromAsaas(charge.asaas_id, api_key, api_url);
@@ -1054,8 +1217,9 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
       break;
     }
     
-    // AIDEV-NOTE: Pequena pausa entre lotes para não sobrecarregar a API
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // AIDEV-NOTE: Pausa entre lotes para não sobrecarregar a API ASAAS
+    // Aumentado para 2 segundos para evitar rate limiting (429)
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   // AIDEV-NOTE: Calcular charges restantes baseado nas pendentes, não no total
@@ -1067,6 +1231,19 @@ async function syncChargesForTenant(tenantId: string): Promise<any> {
   if (remainingCharges > 0) {
     console.log(`⏭️  ${remainingCharges} charges restantes serão processadas nas próximas execuções`);
   }
+
+  // AIDEV-NOTE: Criar notificação de execução
+  await createSyncNotification(tenantId, {
+    success: totalErrors === 0,
+    total_checked: totalChecked,
+    total_updated: totalUpdated,
+    total_imported: totalImported,
+    total_deleted: totalDeleted,
+    total_skipped: totalSkipped,
+    total_errors: totalErrors,
+    remaining_charges: remainingCharges,
+    total_charges: totalCharges || 0
+  });
 
   return {
     success: true,
@@ -1137,15 +1314,64 @@ serve(async (req) => {
       console.log(`📊 Encontrados ${tenantIds.length} tenants com integração ASAAS ativa`);
 
       const results: any[] = [];
+      let totalChecked = 0;
+      let totalUpdated = 0;
+      let totalImported = 0;
+      let totalDeleted = 0;
+      let totalSkipped = 0;
+      let totalErrors = 0;
+      let tenantsWithErrors = 0;
+      
       for (const tenantId of tenantIds) {
         const result = await syncChargesForTenant(tenantId);
         results.push(result);
+        
+        // AIDEV-NOTE: Consolidar estatísticas de todos os tenants
+        if (result.success) {
+          totalChecked += result.total_checked || 0;
+          totalUpdated += result.updated || 0;
+          totalImported += result.imported || 0;
+          totalDeleted += result.total_deleted || 0;
+          totalSkipped += result.skipped || 0;
+          totalErrors += result.errors || 0;
+          if (result.errors > 0) {
+            tenantsWithErrors++;
+          }
+        } else {
+          tenantsWithErrors++;
+          totalErrors++;
+        }
+      }
+
+      // AIDEV-NOTE: Criar notificação consolidada para múltiplos tenants
+      // Usar o primeiro tenant_id como referência (ou criar uma notificação global)
+      if (tenantIds.length > 0) {
+        await createSyncNotification(tenantIds[0], {
+          success: tenantsWithErrors === 0,
+          total_checked: totalChecked,
+          total_updated: totalUpdated,
+          total_imported: totalImported,
+          total_deleted: totalDeleted,
+          total_skipped: totalSkipped,
+          total_errors: totalErrors,
+          remaining_charges: 0, // AIDEV-NOTE: Consolidado, não calculamos restantes
+          total_charges: 0 // AIDEV-NOTE: Consolidado, não calculamos total
+        }, true); // AIDEV-NOTE: Indicar que é notificação consolidada
       }
 
       return new Response(
         JSON.stringify({
           success: true,
           total_tenants: tenantIds.length,
+          tenants_with_errors: tenantsWithErrors,
+          consolidated: {
+            total_checked: totalChecked,
+            total_updated: totalUpdated,
+            total_imported: totalImported,
+            total_deleted: totalDeleted,
+            total_skipped: totalSkipped,
+            total_errors: totalErrors
+          },
           results
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

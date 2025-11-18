@@ -130,8 +130,182 @@
   * {
     @apply border-border;
   }
+  html {
+    /* AIDEV-NOTE: Base font-size para garantir que rem seja calculado corretamente */
+    font-size: 14px;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    /* AIDEV-NOTE: Fonte padronizada conforme Omie */
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgb(51, 51, 51);
+  }
+  
+  /* AIDEV-NOTE: Headings padronizados conforme Omie */
+  h1 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 17.6px;
+    color: rgb(51, 51, 51);
+  }
+  
+  h2 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 17.6px;
+    color: rgb(51, 51, 51);
+  }
+  
+  h3 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 17.6px;
+    color: rgb(53, 50, 48);
+  }
+  
+  h4 {
+    font-family: Poppins, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 15.4px;
+    color: rgb(51, 51, 51);
+  }
+  
+  /* AIDEV-NOTE: Inputs padronizados conforme Omie */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  textarea {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 17.1429px;
+    color: rgb(51, 51, 51);
+    padding: 1px 2px 1px 2px;
+  }
+  
+  /* AIDEV-NOTE: Select padronizado conforme Omie */
+  select {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: rgb(75, 75, 75);
+  }
+  
+  /* AIDEV-NOTE: Buttons padronizados conforme Omie */
+  button {
+    font-family: "Open Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  /* AIDEV-NOTE: Links padronizados conforme Omie */
+  a {
+    font-family: "Open Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgb(0, 183, 255);
+  }
+  
+  /* AIDEV-NOTE: Tables padronizadas conforme Omie */
+  th,
+  thead td {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+    color: rgb(91, 91, 91);
+  }
+  
+  td {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+    color: rgb(91, 91, 91);
+  }
+  
+  /* AIDEV-NOTE: Classes utilitárias globais para facilitar manutenção */
+  /* Todos os elementos devem herdar automaticamente do body, mas estas classes garantem consistência */
+  .text-body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  .text-heading-1 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-2 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-3 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-4 {
+    font-family: Poppins, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 15.4px;
+  }
+  
+  .text-input {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 17.1429px;
+    color: rgb(51, 51, 51);
+  }
+  
+  .text-select {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+  }
+  
+  .text-table {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+  }
+  
+  .text-label {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  .text-small {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
   }
 }
 

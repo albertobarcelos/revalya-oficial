@@ -47,7 +47,7 @@ export default function Notifications() {
     unreadCount,
     totalCount
   } = useSecureNotifications({
-    read: filter === 'all' ? undefined : filter === 'read',
+    // AIDEV-NOTE: Campo 'read' removido - não existe na tabela notifications
     type: typeFilter === 'all' ? undefined : typeFilter,
     limit: 50
   });
@@ -127,7 +127,7 @@ export default function Notifications() {
             className="text-center"
           >
             <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-heading-1 font-bold text-gray-900 dark:text-white mb-2">
               Acesso Negado
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
@@ -150,7 +150,7 @@ export default function Notifications() {
             className="text-center"
           >
             <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h2 className="text-heading-1 font-bold text-gray-900 dark:text-white mb-2">
               Erro ao Carregar Notificações
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-4">
@@ -188,7 +188,7 @@ export default function Notifications() {
                 )}
               </motion.div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-heading-1 font-bold text-gray-900 dark:text-white">
                   Notificações
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
@@ -228,28 +228,28 @@ export default function Notifications() {
             >
               <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-800">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
-                  <div className="text-sm text-blue-600/70 dark:text-blue-400/70">Total</div>
+                  <div className="text-heading-1 font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
+                  <div className="text-body text-blue-600/70 dark:text-blue-400/70">Total</div>
                 </div>
               </Card>
               <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border-red-200 dark:border-red-800">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.unread}</div>
-                  <div className="text-sm text-red-600/70 dark:text-red-400/70">Não Lidas</div>
+                  <div className="text-heading-1 font-bold text-red-600 dark:text-red-400">{stats.unread}</div>
+                  <div className="text-body text-red-600/70 dark:text-red-400/70">Não Lidas</div>
                 </div>
               </Card>
               <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-800">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.recent}</div>
-                  <div className="text-sm text-green-600/70 dark:text-green-400/70">Recentes</div>
+                  <div className="text-heading-1 font-bold text-green-600 dark:text-green-400">{stats.recent}</div>
+                  <div className="text-body text-green-600/70 dark:text-green-400/70">Recentes</div>
                 </div>
               </Card>
               <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-800">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                  <div className="text-heading-1 font-bold text-purple-600 dark:text-purple-400">
                     {Object.keys(stats.byType).length}
                   </div>
-                  <div className="text-sm text-purple-600/70 dark:text-purple-400/70">Tipos</div>
+                  <div className="text-body text-purple-600/70 dark:text-purple-400/70">Tipos</div>
                 </div>
               </Card>
             </motion.div>
@@ -333,7 +333,7 @@ export default function Notifications() {
                     className="text-gray-500 dark:text-gray-400 text-center"
                   >
                     <Bell className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-medium mb-2">Nenhuma notificação</h3>
+                    <h3 className="text-heading-3 font-medium mb-2">Nenhuma notificação</h3>
                     <p>Você não possui notificações {filter !== 'all' ? filter === 'read' ? 'lidas' : 'não lidas' : ''} no momento.</p>
                   </motion.div>
                 </CardContent>
@@ -358,7 +358,7 @@ export default function Notifications() {
                         <div className="flex items-center gap-3">
                           {getNotificationIcon(notification.type)}
                           <div>
-                            <CardTitle className="text-lg flex items-center gap-2">
+                            <CardTitle className="text-heading-3 flex items-center gap-2">
                               {notification.title || notification.type}
                               {!notification.read && (
                                 <Badge variant="secondary" className="text-xs">

@@ -32,7 +32,7 @@ export const ROUTES = {
   TENANT: {
     ROOT: (slug: string) => `/${slug}`,
     DASHBOARD: (slug: string) => `/${slug}/dashboard`,
-    SETTINGS: (slug: string) => `/${slug}/settings`,
+    SETTINGS: (slug: string) => `/${slug}/configuracoes`,
     USERS: (slug: string) => `/${slug}/users`,
   }
 };

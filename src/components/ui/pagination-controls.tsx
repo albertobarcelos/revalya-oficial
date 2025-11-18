@@ -184,14 +184,14 @@ export function PaginationControls({
       {(showStatusText || showItemsPerPageSelector) && (
         <div className={`flex flex-col gap-3 md:flex-row md:items-center md:gap-4 ${statusClassName}`}>
           {showStatusText && (
-            <p className="text-sm text-muted-foreground font-medium">
+            <p className="text-body text-muted-foreground font-medium">
               {getStatusText()}
             </p>
           )}
           
           {showItemsPerPageSelector && (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">{itemsPerPageLabel}</span>
+              <span className="text-body text-muted-foreground whitespace-nowrap">{itemsPerPageLabel}</span>
               <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
                 <SelectTrigger className="w-[70px] h-9">
                   <SelectValue />
@@ -227,7 +227,7 @@ export function PaginationControls({
               
               {!showNumberedPagination && (
                 <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-muted/50">
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-body font-medium text-foreground">
                     {pageLabel} <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
                   </span>
                 </div>

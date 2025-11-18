@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard } from 'lucide-react';
+import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,6 +27,8 @@ interface KanbanFiltersProps {
   onToggleSelectionMode?: () => void;
   isSelectionMode?: boolean;
   isLoading?: boolean;
+  // AIDEV-NOTE: Prop para abrir modal de faturamento avulso
+  onOpenStandaloneBilling?: () => void;
 }
 
 /**
@@ -48,7 +50,8 @@ export function KanbanFilters({
   hasActiveFilters,
   onToggleSelectionMode,
   isSelectionMode = false,
-  isLoading = false
+  isLoading = false,
+  onOpenStandaloneBilling
 }: KanbanFiltersProps) {
   
   // AIDEV-NOTE: Estado local para controlar expansão dos filtros
@@ -111,6 +114,20 @@ export function KanbanFilters({
               >
                 <X className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Limpar</span>
+              </Button>
+            )}
+
+            {/* AIDEV-NOTE: Botão para criar faturamento avulso */}
+            {onOpenStandaloneBilling && (
+              <Button
+                variant="default"
+                onClick={onOpenStandaloneBilling}
+                disabled={isLoading}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Faturamento Avulso</span>
+                <span className="sm:hidden">Avulso</span>
               </Button>
             )}
 

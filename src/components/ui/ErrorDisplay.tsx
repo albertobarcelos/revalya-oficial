@@ -146,7 +146,7 @@ export function ErrorDisplay({
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-body font-medium text-gray-900">
                 {error.userMessage}
               </p>
               {error.field && (
@@ -191,7 +191,7 @@ export function ErrorDisplay({
                   <IconComponent className={`h-5 w-5 ${config.color}`} />
                   <div>
                     <h3 className="font-semibold text-gray-900">{config.title}</h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-body text-gray-600">
                       {categoryErrors.length} erro{categoryErrors.length !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -252,7 +252,7 @@ export function ErrorDisplay({
             <h2 className="font-semibold text-red-900">
               {errors.length} erro{errors.length !== 1 ? 's' : ''} encontrado{errors.length !== 1 ? 's' : ''}
             </h2>
-            <p className="text-sm text-red-700">
+            <p className="text-body text-red-700">
               Revise os erros abaixo e tome as ações necessárias
             </p>
           </div>
