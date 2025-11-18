@@ -80,6 +80,65 @@
   .ultra-thin-focus button[role="combobox"] {
     @apply focus-visible:ring-1 focus-visible:ring-offset-0;
   }
+
+  td .status {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-style: normal;
+    font-variant: normal;
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: 17.1429px;
+    text-decoration: none;
+    text-align: center;
+    text-indent: 0px;
+    text-transform: none;
+    vertical-align: middle;
+    white-space: normal;
+    word-spacing: 0px;
+    background-attachment: scroll;
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    background-position: 0% 0%;
+    background-repeat: repeat;
+    color: rgb(85, 85, 85);
+    height: 50.5px;
+    width: 88px;
+    border: 0;
+    margin: 0;
+    padding: 8px;
+    max-height: none;
+    min-height: 0;
+    max-width: 88px;
+    min-width: 88px;
+    position: static;
+    float: none;
+    display: inline-block;
+    clear: none;
+    z-index: auto;
+    list-style-image: none;
+    list-style-type: disc;
+    list-style-position: outside;
+    border-collapse: collapse;
+    border-spacing: 0px;
+    caption-side: top;
+    empty-cells: show;
+    table-layout: auto;
+    overflow: hidden;
+    cursor: default;
+    visibility: visible;
+    transform: none;
+    transition: all .2s ease;
+    outline: rgb(255, 0, 0) dashed 1px;
+    outline-offset: 0px;
+    box-sizing: border-box;
+    resize: none;
+    text-shadow: none;
+    text-overflow: ellipsis;
+    word-wrap: normal;
+    box-shadow: none;
+    border-radius: 0px;
+  }
 }
 
 /* Estilização moderna da barra de rolagem com foco em UX/UI */

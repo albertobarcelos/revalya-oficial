@@ -41,8 +41,10 @@ const TenantUsersPage = lazy(() => import('../../pages/tenant/users'));
 const ExamplesPage = lazy(() => import('../../pages/dashboard/examples'));
 const FaturamentoKanban = lazy(() => import('../../pages/FaturamentoKanban'));
 const Recebimentos = lazy(() => import('../../pages/Recebimentos'));
+const ContasAPagar = lazy(() => import('../../pages/ContasAPagar'));
 const Reconciliation = lazy(() => import('../../pages/Reconciliation'));
 const ContractSettings = lazy(() => import('../../pages/ContractSettings'));
+const FinanceSettings = lazy(() => import('../../pages/FinanceSettings'));
 const Tasks = lazy(() => import('../../pages/Tasks'));
 const NotFound = lazy(() => import('../../pages/NotFound'));
 
@@ -125,6 +127,7 @@ export function TenantAutoLoginRouter() {
         <Route path="faturamento" element={<FaturamentoKanban />} />
         <Route path="faturamento-kanban" element={<FaturamentoKanban />} />
         <Route path="recebimentos" element={<Recebimentos />} />
+        <Route path="contas-a-pagar" element={<ContasAPagar />} />
         <Route path="conciliacao" element={<Reconciliation />} />
         
         {/* ========== ROTAS DE COMUNICAÇÃO ========== */}
@@ -137,6 +140,7 @@ export function TenantAutoLoginRouter() {
         {/* ========== ROTAS AUXILIARES ========== */}
         <Route path="dashboard/examples" element={<ExamplesPage />} />
         <Route path="contract-settings" element={<ContractSettings />} />
+        <Route path="configuracoes-financeiras" element={<FinanceSettings />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="relatorios" element={<Dashboard />} />
         

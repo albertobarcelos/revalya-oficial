@@ -5,6 +5,9 @@ const routeNames: { [key: string]: string } = {
   '': 'Início',
   'clients': 'Clientes',
   'charges': 'Cobranças',
+  'cobrancas': 'Cobranças',
+  'recebimentos': 'Recebimentos',
+  'contas-a-pagar': 'Contas a Pagar',
   'notifications': 'Notificações',
   'settings': 'Configurações',
   'dashboard': 'Dashboard',
@@ -18,6 +21,7 @@ const routeNames: { [key: string]: string } = {
   'profile': 'Perfil',
   'integrations': 'Integrações',
   'invites': 'Convites',
+  'configuracoes-financeiras': 'Configurações Financeiras',
 };
 
 export function Breadcrumbs() {
