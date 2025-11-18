@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+ 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil, Banknote, FileText, Settings } from 'lucide-react';
 import { useTenantAccessGuard, useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { listFinancialSettings, createFinancialSetting, deleteFinancialSetting, type FinancialSettingType } from '@/services/financialSettingsService';
 import { listFinancialDocuments, createFinancialDocument, deleteFinancialDocument, updateFinancialDocument, type CreditTitleType } from '@/services/financialDocumentsService';
@@ -370,323 +371,405 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
     );
   }
 
+  const embedded = !!props?.tenantId;
+  const wrapperClass = embedded ? "space-y-4 mt-2 h-[calc(100vh-240px)] overflow-auto pr-2" : "container mx-auto p-6 space-y-6";
   return (
-      <div className="container mx-auto p-6 space-y-6">
+      <div className={wrapperClass}>
         
 
-        <Card>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  {tabs.map(t => (
-                    <TabsTrigger key={t.key} value={t.key}>{t.label}</TabsTrigger>
-                  ))}
-                </TabsList>
-                <div>
-                  <Button onClick={() => {
-                    if (activeTab === 'categorias') {
-                      setShowCategoryForm(true);
-                    } else if (activeTab === 'documentos') {
-                      setShowDocumentModal(true);
-                    } else if (activeTab === 'lancamentos') {
-                      setEditLaunch(null);
-                      setEntryName('');
-                      setEntryOperation('');
-                      setGenerateBankMovement(false);
-                      setConsiderSettlementMovement(false);
-                      setEntryActive(true);
-                      setShowEntryModal(true);
-                    }
-                  }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="justify-start">
+            <TabsTrigger value="categorias" className="flex items-center gap-2">
+              <Banknote className="h-4 w-4" />
+              Categoria de Despesas
+            </TabsTrigger>
+            <TabsTrigger value="documentos" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Tipo de Documentos
+            </TabsTrigger>
+            <TabsTrigger value="lancamentos" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Tipo de Lançamento
+            </TabsTrigger>
+          </TabsList>
 
-              {/* Categoria de Despesas */}
-              <TabsContent value="categorias">
-                {showCategoryForm && (
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <Label>Descrição</Label>
-                      <Input className="mt-2" value={expenseCategoryInput} onChange={(e) => setExpenseCategoryInput(e.target.value)} placeholder="Ex.: Aluguel, Água, Energia" />
-                    </div>
-                    <div>
-                      <Label>Categoria para agrupar no DRE</Label>
-                      <Select value={expenseDre} onValueChange={(v) => setExpenseDre(v as any)}>
-                        <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">Não exibir</SelectItem>
-                          <SelectItem value="DEFAULT">Despesas padrão</SelectItem>
-                          <SelectItem value="SALES">Despesas de vendas</SelectItem>
-                          <SelectItem value="ADMIN">Despesas administrativas</SelectItem>
-                          <SelectItem value="FINANCIAL">Despesas financeiras</SelectItem>
-                          <SelectItem value="MARKETING">Despesas com marketing</SelectItem>
-                          <SelectItem value="PERSONAL">Despesas pessoais</SelectItem>
-                          <SelectItem value="SOCIAL_CHARGES">Despesas com encargos sociais</SelectItem>
-                          <SelectItem value="OTHER">Outras despesas</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button disabled={!expenseCategoryInput.trim()} onClick={() => { handleAdd('EXPENSE_CATEGORY', expenseCategoryInput); }}>
-                        Salvar
-                      </Button>
-                      <Button variant="outline" onClick={() => { setExpenseCategoryInput(''); setShowCategoryForm(false); }}>
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(expenseQuery.data?.length || 0) === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={2} className="text-muted-foreground">Nenhuma categoria cadastrada</TableCell>
-                        </TableRow>
-                      ) : (
-                        expenseQuery.data?.map((c) => (
-                          <TableRow key={c.id}>
-                            <TableCell>{c.name}</TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-
-              {/* Tipo de Documentos */}
-              <TabsContent value="documentos">
-                <div className="flex justify-end">
-                  <Dialog open={showDocumentModal} onOpenChange={(open) => { setShowDocumentModal(open); if (!open) { setEditDocumentId(null); setDocumentActive(true); } }}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{editDocumentId ? 'Editar Tipo de Documento' : 'Novo Tipo de Documento'}</DialogTitle>
-                        <DialogDescription>Preencha os dados abaixo e salve.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2">
-                          <Label>Nome</Label>
-                          <Input className="mt-2" value={documentTypeInput} onChange={(e) => setDocumentTypeInput(e.target.value)} placeholder="Ex.: Recibo, Duplicata, Cheque" />
-                        </div>
-                        <div className="flex flex-col gap-2 mt-2 md:mt-0">
-                          <Label>Situação</Label>
-                          <div className="flex items-center gap-3 md:mt-[30px]">
-                            <span className={`${documentActive ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>{documentActive ? 'Ativo' : 'Inativo'}</span>
-                            <Switch checked={documentActive} onCheckedChange={setDocumentActive} />
-                          </div>
-                        </div>
-                        <div className="md:col-span-2">
-                          <Label>Tipo de título de crédito</Label>
-                          <Select value={creditTitle} onValueChange={setCreditTitle}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="OUTROS">Outros</SelectItem>
-                              <SelectItem value="CHEQUE">Cheque</SelectItem>
-                              <SelectItem value="DUPLICATA">Duplicata</SelectItem>
-                              <SelectItem value="PROMISSORIA">Promissória</SelectItem>
-                              <SelectItem value="RECIBO">Recibo</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+              {/* Categoria de Despesas (modelo igual ao Local de Estoque) */}
+              <TabsContent value="categorias" className="space-y-4 mt-2">
+                {/* Header */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Banknote className="h-6 w-6 text-primary" />
                         <div>
-                          <Label>Abertura</Label>
-                          <Select value={launchOpen} onValueChange={setLaunchOpen}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
-                                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Quitação</Label>
-                          <Select value={launchSettle} onValueChange={setLaunchSettle}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
-                                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Acréscimo</Label>
-                          <Select value={launchAddition} onValueChange={setLaunchAddition}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              {launchsQuery.data?.filter(opt => opt.operation_type === 'CREDIT').map((opt) => (
-                                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <CardTitle>Categoria de Despesas</CardTitle>
+                          <CardDescription>Gerencie as categorias de despesas para seu DRE</CardDescription>
                         </div>
                       </div>
-                      <DialogFooter>
-                        <Button onClick={handleAddDocument} disabled={!documentTypeInput.trim()}>Salvar</Button>
-                        <Button variant="outline" onClick={() => setShowDocumentModal(false)}>Cancelar</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
+                      <Dialog open={showCategoryForm} onOpenChange={setShowCategoryForm}>
+                        <DialogTrigger asChild>
+                          <Button className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Nova Categoria
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Criar Categoria de Despesa</DialogTitle>
+                            <DialogDescription>Defina a descrição e a categoria de agrupamento</DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label>Descrição</Label>
+                              <Input className="mt-2" value={expenseCategoryInput} onChange={(e) => setExpenseCategoryInput(e.target.value)} placeholder="Ex.: Aluguel, Água, Energia" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Categoria para agrupar no DRE</Label>
+                              <Select value={expenseDre} onValueChange={(v) => setExpenseDre(v as any)}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="NONE">Não exibir</SelectItem>
+                                  <SelectItem value="DEFAULT">Despesas padrão</SelectItem>
+                                  <SelectItem value="SALES">Despesas de vendas</SelectItem>
+                                  <SelectItem value="ADMIN">Despesas administrativas</SelectItem>
+                                  <SelectItem value="FINANCIAL">Despesas financeiras</SelectItem>
+                                  <SelectItem value="MARKETING">Despesas com marketing</SelectItem>
+                                  <SelectItem value="PERSONAL">Despesas pessoais</SelectItem>
+                                  <SelectItem value="SOCIAL_CHARGES">Encargos sociais</SelectItem>
+                                  <SelectItem value="OTHER">Outras despesas</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowCategoryForm(false)}>Cancelar</Button>
+                            <Button disabled={!expenseCategoryInput.trim()} onClick={() => { handleAdd('EXPENSE_CATEGORY', expenseCategoryInput); }}>
+                              Salvar
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                </Card>
 
-                <div className="mt-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Tipo de documento</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
+                {/* Lista de Categorias */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Categorias Cadastradas</CardTitle>
+                    <CardDescription>Lista de todas as categorias de despesas cadastradas</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {expenseQuery.isLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="ml-2 text-muted-foreground">Carregando categorias...</span>
+                      </div>
+                    ) : (expenseQuery.data?.length || 0) === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Banknote className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhuma categoria cadastrada</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Categoria</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
                         <TableBody>
-                      {(documentQuery.data?.length || 0) === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={2} className="text-muted-foreground">Nenhum tipo cadastrado</TableCell>
-                        </TableRow>
-                      ) : (
-                        documentQuery.data?.map((c) => (
-                          <TableRow key={c.id}>
-                            <TableCell>{c.name}</TableCell>
-                            <TableCell>
-                              <span className={`${c.is_active ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>
-                                {c.is_active ? 'Ativo' : 'Inativo'}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" onClick={() => {
-                                setEditDocumentId(c.id);
-                                setDocumentTypeInput(c.name);
-                                setCreditTitle(c.credit_title_type);
-                                setLaunchOpen(c.open_id || '');
-                                setLaunchSettle(c.settle_id || '');
-                                setLaunchAddition(c.addition_id || '');
-                                setDocumentActive(!!c.is_active);
-                                setShowDocumentModal(true);
-                              }}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => documentDeleteMutation.mutate({ id: c.id })}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                          {expenseQuery.data?.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell>{c.name}</TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
-              {/* Tipo de Lançamento */}
-              <TabsContent value="lancamentos">
-                <div className="flex justify-end">
-                  <Dialog open={showEntryModal} onOpenChange={setShowEntryModal}>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Novo tipo de lançamento financeiro</DialogTitle>
-                        <DialogDescription>Preencha os dados e salve.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Tipo de Documentos (modelo igual ao Local de Estoque) */}
+              <TabsContent value="documentos" className="space-y-4 mt-2">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-6 w-6 text-primary" />
                         <div>
-                          <Label>Nome</Label>
-                          <Input className="mt-2" value={entryName} onChange={(e) => setEntryName(e.target.value)} placeholder="Ex.: Saída, Entrada, Transferência" />
-                        </div>
-                        <div className="flex flex-col gap-2 mt-2 md:mt-0">
-                          <Label>Situação</Label>
-                          <div className="flex items-center gap-3 md:mt-[30px]">
-                            <span className={`${entryActive ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>{entryActive ? 'Ativo' : 'Inativo'}</span>
-                            <Switch checked={entryActive} onCheckedChange={setEntryActive} />
-                          </div>
-                        </div>
-                        <div className="md:col-span-2">
-                          <Label>Tipo de operação</Label>
-                          <Select value={entryOperation} onValueChange={setEntryOperation}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              {ENTRY_OPERATION_OPTIONS.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="md:col-span-2 space-y-3 mt-2">
-                          <label className="flex items-center gap-2">
-                            <Checkbox checked={generateBankMovement} onCheckedChange={(v) => setGenerateBankMovement(!!v)} />
-                            Gerar movimento bancário
-                          </label>
-                          <label className="flex items-center gap-2">
-                            <Checkbox checked={considerSettlementMovement} onCheckedChange={(v) => setConsiderSettlementMovement(!!v)} />
-                            Considerar movimentação de quitação
-                          </label>
+                          <CardTitle>Tipos de Documentos</CardTitle>
+                          <CardDescription>Gerencie os tipos de documentos financeiros</CardDescription>
                         </div>
                       </div>
-                      <DialogFooter>
-                        <Button onClick={handleAddEntryType} disabled={!entryName.trim()}>Salvar</Button>
-                        <Button variant="outline" onClick={() => setShowEntryModal(false)}>Cancelar</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
+                      <Dialog open={showDocumentModal} onOpenChange={(open) => { setShowDocumentModal(open); if (!open) { setEditDocumentId(null); setDocumentActive(true); } }}>
+                        <DialogTrigger asChild>
+                          <Button className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Novo Tipo
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{editDocumentId ? 'Editar Tipo de Documento' : 'Novo Tipo de Documento'}</DialogTitle>
+                            <DialogDescription>Preencha os dados abaixo e salve.</DialogDescription>
+                          </DialogHeader>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                              <Label>Nome</Label>
+                              <Input className="mt-2" value={documentTypeInput} onChange={(e) => setDocumentTypeInput(e.target.value)} placeholder="Ex.: Recibo, Duplicata, Cheque" />
+                            </div>
+                            <div className="flex flex-col gap-2 mt-2 md:mt-0">
+                              <Label>Situação</Label>
+                              <div className="flex items-center gap-3 md:mt-[30px]">
+                                <span className={`${documentActive ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>{documentActive ? 'Ativo' : 'Inativo'}</span>
+                                <Switch checked={documentActive} onCheckedChange={setDocumentActive} />
+                              </div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <Label>Tipo de título de crédito</Label>
+                              <Select value={creditTitle} onValueChange={setCreditTitle}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="OUTROS">Outros</SelectItem>
+                                  <SelectItem value="CHEQUE">Cheque</SelectItem>
+                                  <SelectItem value="DUPLICATA">Duplicata</SelectItem>
+                                  <SelectItem value="PROMISSORIA">Promissória</SelectItem>
+                                  <SelectItem value="RECIBO">Recibo</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Abertura</Label>
+                              <Select value={launchOpen} onValueChange={setLaunchOpen}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
+                                    <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Quitação</Label>
+                              <Select value={launchSettle} onValueChange={setLaunchSettle}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
+                                    <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Acréscimo</Label>
+                              <Select value={launchAddition} onValueChange={setLaunchAddition}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  {launchsQuery.data?.filter(opt => opt.operation_type === 'CREDIT').map((opt) => (
+                                    <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={handleAddDocument} disabled={!documentTypeInput.trim()}>Salvar</Button>
+                            <Button variant="outline" onClick={() => setShowDocumentModal(false)}>Cancelar</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                </Card>
 
-                <div className="mt-6">
-                  <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tipo de lançamento</TableHead>
-                      <TableHead>Operação</TableHead>
-                      <TableHead>Situação</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                    <TableBody>
-                      {(launchsQuery.data?.length || 0) === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={2} className="text-muted-foreground">Nenhum tipo cadastrado</TableCell>
-                        </TableRow>
-                      ) : (
-                        launchsQuery.data?.map((c) => (
-                          <TableRow key={c.id}>
-                            <TableCell>{c.name}</TableCell>
-                            <TableCell>
-                              {c.operation_type === 'DEBIT' ? 'Débito' : c.operation_type === 'CREDIT' ? 'Crédito' : '-'}
-                            </TableCell>
-                            <TableCell>
-                              <span className={`${c.is_active ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>
-                                {c.is_active ? 'Ativo' : 'Inativo'}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" onClick={() => openEditLaunch(c)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDeleteLaunch(c.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tipos Cadastrados</CardTitle>
+                    <CardDescription>Lista de todos os tipos de documentos</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {documentQuery.isLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="ml-2 text-muted-foreground">Carregando tipos...</span>
+                      </div>
+                    ) : (documentQuery.data?.length || 0) === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhum tipo cadastrado</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tipo de documento</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                        </TableHeader>
+                        <TableBody>
+                          {documentQuery.data?.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell>{c.name}</TableCell>
+                              <TableCell>
+                                <span className={`${c.is_active ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>
+                                  {c.is_active ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="sm" onClick={() => {
+                                  setEditDocumentId(c.id);
+                                  setDocumentTypeInput(c.name);
+                                  setCreditTitle(c.credit_title_type);
+                                  setLaunchOpen(c.open_id || '');
+                                  setLaunchSettle(c.settle_id || '');
+                                  setLaunchAddition(c.addition_id || '');
+                                  setDocumentActive(!!c.is_active);
+                                  setShowDocumentModal(true);
+                                }}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => documentDeleteMutation.mutate({ id: c.id })}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Tipo de Lançamento (modelo igual ao Local de Estoque) */}
+              <TabsContent value="lancamentos" className="space-y-4 mt-2">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Settings className="h-6 w-6 text-primary" />
+                        <div>
+                          <CardTitle>Tipos de Lançamento</CardTitle>
+                          <CardDescription>Gerencie os tipos de lançamentos financeiros</CardDescription>
+                        </div>
+                      </div>
+                      <Dialog open={showEntryModal} onOpenChange={setShowEntryModal}>
+                        <DialogTrigger asChild>
+                          <Button className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Novo Tipo
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Novo tipo de lançamento financeiro</DialogTitle>
+                            <DialogDescription>Preencha os dados e salve.</DialogDescription>
+                          </DialogHeader>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label>Nome</Label>
+                              <Input className="mt-2" value={entryName} onChange={(e) => setEntryName(e.target.value)} placeholder="Ex.: Saída, Entrada, Transferência" />
+                            </div>
+                            <div className="flex flex-col gap-2 mt-2 md:mt-0">
+                              <Label>Situação</Label>
+                              <div className="flex items-center gap-3 md:mt-[30px]">
+                                <span className={`${entryActive ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>{entryActive ? 'Ativo' : 'Inativo'}</span>
+                                <Switch checked={entryActive} onCheckedChange={setEntryActive} />
+                              </div>
+                            </div>
+                            <div className="md:col-span-2">
+                              <Label>Tipo de operação</Label>
+                              <Select value={entryOperation} onValueChange={setEntryOperation}>
+                                <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                                <SelectContent>
+                                  {ENTRY_OPERATION_OPTIONS.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="md:col-span-2 space-y-3 mt-2">
+                              <label className="flex items-center gap-2">
+                                <Checkbox checked={generateBankMovement} onCheckedChange={(v) => setGenerateBankMovement(!!v)} />
+                                Gerar movimento bancário
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <Checkbox checked={considerSettlementMovement} onCheckedChange={(v) => setConsiderSettlementMovement(!!v)} />
+                                Considerar movimentação de quitação
+                              </label>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button onClick={handleAddEntryType} disabled={!entryName.trim()}>Salvar</Button>
+                            <Button variant="outline" onClick={() => setShowEntryModal(false)}>Cancelar</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tipos Cadastrados</CardTitle>
+                    <CardDescription>Lista de todos os tipos de lançamentos</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {launchsQuery.isLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="ml-2 text-muted-foreground">Carregando tipos...</span>
+                      </div>
+                    ) : (launchsQuery.data?.length || 0) === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Settings className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>Nenhum tipo cadastrado</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Tipo de lançamento</TableHead>
+                            <TableHead>Operação</TableHead>
+                            <TableHead>Situação</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {launchsQuery.data?.map((c) => (
+                            <TableRow key={c.id}>
+                              <TableCell>{c.name}</TableCell>
+                              <TableCell>
+                                {c.operation_type === 'DEBIT' ? 'Débito' : c.operation_type === 'CREDIT' ? 'Crédito' : '-'}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`${c.is_active ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>
+                                  {c.is_active ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="sm" onClick={() => openEditLaunch(c)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteLaunch(c.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Modal de edição de lançamento */}
@@ -700,9 +783,7 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
                 }}
               />
 
-            </Tabs>
-          </CardContent>
-        </Card>
+        </Tabs>
       </div>
   );
 }

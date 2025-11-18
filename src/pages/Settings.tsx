@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { Layout } from "@/components/layout/Layout";
-import { Loader2, Users, Zap, BrainCircuit, Package, Banknote } from "lucide-react";
-import { Loader2, Users, Zap, BrainCircuit, Package, Warehouse } from "lucide-react";
+import { Loader2, Users, Zap, BrainCircuit, Package, Warehouse, Banknote } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { whatsappService } from "@/services/whatsappService";
@@ -39,6 +38,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("usuarios");
   const [activeEstoqueSubTab, setActiveEstoqueSubTab] = useState("categorias");
+  
   const [isSaving, setIsSaving] = useState(false);
   
   // AIDEV-NOTE: Usando hook de segurança multi-tenant obrigatório
@@ -220,6 +220,7 @@ export default function Settings() {
                 <TabsTrigger value="configuracoes-financeiras" className="flex items-center gap-2">
                   <Banknote className="h-4 w-4" />
                   Configurações Financeiras
+                </TabsTrigger>
                 <TabsTrigger value="estoque" className="flex items-center gap-2">
                   <Warehouse className="h-4 w-4" />
                   Estoque
@@ -259,8 +260,9 @@ export default function Settings() {
                 />
               </TabsContent>
 
-              <TabsContent value="configuracoes-financeiras" className="space-y-4 mt-2">
+              <TabsContent value="configuracoes-financeiras" className="space-y-4 mt-2 h-full">
                 <FinanceSettingsEmbedded tenantId={currentTenant.id} />
+              </TabsContent>
               <TabsContent value="estoque" className="space-y-4 mt-2 h-full">
                 <Tabs value={activeEstoqueSubTab} onValueChange={setActiveEstoqueSubTab} className="space-y-4">
                   <TabsList>
