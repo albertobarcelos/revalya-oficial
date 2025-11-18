@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { Layout } from "@/components/layout/Layout";
-import { Loader2, Users, Zap, BrainCircuit, Package } from "lucide-react";
+import { Loader2, Users, Zap, BrainCircuit, Package, Banknote } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { whatsappService } from "@/services/whatsappService";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserManagement } from "@/components/users/UserManagement";
 import { CobrancaInteligente } from "@/components/cobranca-inteligente/CobrancaInteligente";
+import { FinanceSettingsEmbedded } from "./FinanceSettings";
 import { ProductCategoriesManager } from "@/components/products/ProductCategoriesManager";
 import { logService } from "@/services/logService";
 import { CanalIntegration } from "@/components/canais/CanalIntegration";
@@ -217,6 +218,10 @@ export default function Settings() {
                   <BrainCircuit className="h-4 w-4" />
                   Cobrança Inteligente
                 </TabsTrigger>
+                <TabsTrigger value="configuracoes-financeiras" className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4" />
+                  Configurações Financeiras
+                </TabsTrigger>
               </TabsList>
             </div>
             
@@ -254,6 +259,10 @@ export default function Settings() {
                   tenantId={currentTenant.id}
                   tenantSlug={tenantData?.slug || currentTenant.slug || 'default'}
                 />
+              </TabsContent>
+
+              <TabsContent value="configuracoes-financeiras" className="space-y-4 mt-2">
+                <FinanceSettingsEmbedded tenantId={currentTenant.id} />
               </TabsContent>
             </div>
           </Tabs>

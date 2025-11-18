@@ -9,13 +9,21 @@ type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Updat
 export interface FinanceEntryFilters {
   tenant_id: string;
   type?: 'RECEIVABLE' | 'PAYABLE';
-  status?: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  status?: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED';
+  statuses?: ('PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'REFUNDED')[];
   category?: string;
-  start_date?: Date | string;
-  end_date?: Date | string;
+  start_date?: Date | string; // due_date início
+  end_date?: Date | string;   // due_date fim
+  issue_start_date?: Date | string;
+  issue_end_date?: Date | string;
+  payment_start_date?: Date | string;
+  payment_end_date?: Date | string;
+  min_amount?: number;
+  max_amount?: number;
   customer_id?: string;
   contract_id?: string;
   payment_method?: string;
+  invoice_status?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -137,7 +145,9 @@ class FinanceEntriesService {
       query = query.eq('type', filters.type);
     }
 
-    if (filters.status) {
+    if (filters.statuses && filters.statuses.length > 0) {
+      query = query.in('status', filters.statuses);
+    } else if (filters.status) {
       query = query.eq('status', filters.status);
     }
 
@@ -157,6 +167,10 @@ class FinanceEntriesService {
       query = query.eq('payment_method', filters.payment_method);
     }
 
+    if (filters.invoice_status) {
+      query = query.eq('invoice_status', filters.invoice_status);
+    }
+
     if (filters.search) {
       query = query.ilike('description', `%${filters.search}%`);
     }
@@ -169,6 +183,34 @@ class FinanceEntriesService {
     if (filters.end_date) {
       const endDate = typeof filters.end_date === 'string' ? filters.end_date : format(filters.end_date, 'yyyy-MM-dd');
       query = query.lte('due_date', endDate);
+    }
+
+    if (filters.issue_start_date) {
+      const issueStart = typeof filters.issue_start_date === 'string' ? filters.issue_start_date : format(filters.issue_start_date, 'yyyy-MM-dd');
+      query = query.gte('issue_date', issueStart);
+    }
+
+    if (filters.issue_end_date) {
+      const issueEnd = typeof filters.issue_end_date === 'string' ? filters.issue_end_date : format(filters.issue_end_date, 'yyyy-MM-dd');
+      query = query.lte('issue_date', issueEnd);
+    }
+
+    if (filters.payment_start_date) {
+      const payStart = typeof filters.payment_start_date === 'string' ? filters.payment_start_date : format(filters.payment_start_date, 'yyyy-MM-dd');
+      query = query.gte('payment_date', payStart);
+    }
+
+    if (filters.payment_end_date) {
+      const payEnd = typeof filters.payment_end_date === 'string' ? filters.payment_end_date : format(filters.payment_end_date, 'yyyy-MM-dd');
+      query = query.lte('payment_date', payEnd);
+    }
+
+    if (typeof filters.min_amount === 'number') {
+      query = query.gte('net_amount', filters.min_amount);
+    }
+
+    if (typeof filters.max_amount === 'number') {
+      query = query.lte('net_amount', filters.max_amount);
     }
 
     // Aplicar paginação
