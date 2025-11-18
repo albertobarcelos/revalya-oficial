@@ -5,9 +5,10 @@ import { queryClient } from '@/lib/queryClient';
 import { format, startOfMonth, endOfMonth, addDays, isToday, isBefore, isAfter } from 'date-fns';
 
 // AIDEV-NOTE: Interface atualizada para refletir dados da VIEW billing_kanban corrigida
+// AIDEV-NOTE: contract_id agora pode ser NULL para suportar faturamentos avulsos
 export interface KanbanContract {
   id: string;
-  contract_id: string;
+  contract_id: string | null; // Nullable para suportar faturamentos avulsos
   customer_id: string;
   customer_name: string;
   contract_number: string;
@@ -178,10 +179,10 @@ export function useBillingKanban() {
         
         const contract: KanbanContract = {
           id: row.id,
-          contract_id: row.contract_id,
+          contract_id: row.contract_id || null, // AIDEV-NOTE: Pode ser NULL para faturamentos avulsos
           customer_id: row.customer_id,
           customer_name: row.customer_name,
-          contract_number: row.contract_number,
+          contract_number: row.contract_number || 'Faturamento Avulso', // AIDEV-NOTE: Fallback para avulsos
           amount: row.amount || row.amount_planned || 0, // AIDEV-NOTE: Fallback para amount_planned se amount for null
           status: getStatusLabel(category),
           bill_date: row.bill_date,

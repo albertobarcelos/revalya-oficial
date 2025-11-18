@@ -1,8 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
-import { executeWithAuth } from '@/lib/supabase-utils';
-import { logAccess } from '@/lib/audit';
-import { logService } from '@/lib/logService';
+import { executeWithAuth, logAccess } from '@/utils/authUtils';
+import { logService } from '@/services/logService';
 
 type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
 
@@ -101,10 +100,10 @@ class GatewayService {
     // AIDEV-NOTE: Validação de credenciais antes de criar cobrança
     // Verifica se o gateway está configurado e tem credenciais válidas
     const gateway = await this.getGatewayConfig(provider);
-    const validation = this.validateGatewayConfig(gateway);
+    const validation = await this.validateGatewayConfig(gateway.id);
     
-    if (!validation.isValid) {
-      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    if (!validation.valid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.error || 'Erro desconhecido'}`);
     }
 
     switch (provider.toLowerCase()) {
@@ -127,10 +126,10 @@ class GatewayService {
   async processWebhook(provider: string, payload: any): Promise<WebhookData> {
     // AIDEV-NOTE: Validação de credenciais antes de processar webhook
     const gateway = await this.getGatewayConfig(provider);
-    const validation = this.validateGatewayConfig(gateway);
+    const validation = await this.validateGatewayConfig(gateway.id);
     
-    if (!validation.isValid) {
-      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    if (!validation.valid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.error || 'Erro desconhecido'}`);
     }
 
     switch (provider.toLowerCase()) {
@@ -153,10 +152,10 @@ class GatewayService {
   async getChargeStatus(provider: string, external_id: string): Promise<ChargeResponse> {
     // AIDEV-NOTE: Validação de credenciais antes de consultar status
     const gateway = await this.getGatewayConfig(provider);
-    const validation = this.validateGatewayConfig(gateway);
+    const validation = await this.validateGatewayConfig(gateway.id);
     
-    if (!validation.isValid) {
-      throw new Error(`Gateway ${provider} não configurado: ${validation.errors.join(', ')}`);
+    if (!validation.valid) {
+      throw new Error(`Gateway ${provider} não configurado: ${validation.error || 'Erro desconhecido'}`);
     }
 
     switch (provider.toLowerCase()) {
