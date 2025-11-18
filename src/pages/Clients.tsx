@@ -7,7 +7,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -31,7 +31,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PaginationControls, usePaginationState } from "@/components/ui/pagination-controls";
+import { PaginationFooter } from "@/components/layout/PaginationFooter";
+import { usePaginationState } from "@/components/ui/pagination-controls";
 import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
 import { CreateClientForm } from "@/components/clients/CreateClientForm";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
@@ -182,14 +183,14 @@ export default function Clients() {
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead className="hidden md:table-cell">Empresa</TableHead>
-                      <TableHead className="hidden lg:table-cell">CPF/CNPJ</TableHead>
-                      <TableHead className="hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="hidden md:table-cell">Telefone</TableHead>
-                      <TableHead className="hidden md:table-cell">Status</TableHead>
-                      <TableHead className="w-16 sm:w-20">Ações</TableHead>
+                    <TableRow className="h-10">
+                      <TableHead className="py-2 text-table font-medium">Nome</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
+                      <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                      <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Email</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Telefone</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
+                      <TableHead className="w-16 sm:w-20 py-2 text-table font-medium">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -221,7 +222,7 @@ export default function Clients() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex flex-col space-y-3 md:space-y-0 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
-            <h2 className="text-3xl font-bold tracking-tight">Clientes</h2>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clientes</h2>
             <div className="relative w-full md:w-80">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -246,7 +247,7 @@ export default function Clients() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Importar clientes do Asaas ou planilha</p>
+                  <p className="text-small">Importar clientes do Asaas ou planilha</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -257,15 +258,15 @@ export default function Clients() {
                   <div>
                     <Dialog open={isNewClientDialogOpen} onOpenChange={setIsNewClientDialogOpen}>
                       <DialogTrigger asChild>
-                        <Button className="h-8 px-2 gap-1">
-                          <UserPlus className="h-4 w-4" />
-                          <span className="hidden sm:inline">Novo Cliente</span>
+                        <Button>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Novo Cliente
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-4xl max-h-[90vh]">
                         <DialogHeader>
-                          <DialogTitle>Novo Cliente</DialogTitle>
-                          <DialogDescription>
+                          <DialogTitle className="text-heading-1">Novo Cliente</DialogTitle>
+                          <DialogDescription className="text-body">
                             Cadastre um novo cliente no sistema
                           </DialogDescription>
                         </DialogHeader>
@@ -282,7 +283,7 @@ export default function Clients() {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Adicionar novo cliente</p>
+                  <p className="text-small">Adicionar novo cliente</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -295,13 +296,13 @@ export default function Clients() {
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead className="hidden md:table-cell">Empresa</TableHead>
-                      <TableHead className="hidden lg:table-cell">CPF/CNPJ</TableHead>
-                      <TableHead className="hidden sm:table-cell">Contato</TableHead>
-                      <TableHead className="hidden md:table-cell">Status</TableHead>
-                      <TableHead className="w-16 sm:w-20">Ações</TableHead>
+                    <TableRow className="h-10">
+                      <TableHead className="py-2 text-table font-medium">Nome</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
+                      <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                      <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Contato</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
+                      <TableHead className="w-16 sm:w-20 py-2 text-table font-medium">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -314,7 +315,9 @@ export default function Clients() {
             ) : paginatedCustomers.length === 0 ? (
               <div className="flex items-center justify-center py-8 rounded-md border">
                 <div className="text-center text-muted-foreground">
-                  {searchTerm ? 'Nenhum cliente encontrado para a busca' : 'Nenhum cliente cadastrado'}
+                  <p className="text-body">
+                    {searchTerm ? 'Nenhum cliente encontrado para a busca' : 'Nenhum cliente cadastrado'}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -322,14 +325,14 @@ export default function Clients() {
                 <div className="max-h-[calc(100vh-16rem)] overflow-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead className="hidden md:table-cell">Empresa</TableHead>
-                        <TableHead className="hidden lg:table-cell">CPF/CNPJ</TableHead>
-                        <TableHead className="hidden sm:table-cell">Email</TableHead>
-                        <TableHead className="hidden md:table-cell">Telefone</TableHead>
-                        <TableHead className="hidden md:table-cell">Status</TableHead>
-                        <TableHead className="w-16 sm:w-20">Ações</TableHead>
+                      <TableRow className="h-10">
+                        <TableHead className="py-2 text-table font-medium">Nome</TableHead>
+                        <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
+                        <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                        <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Email</TableHead>
+                        <TableHead className="hidden md:table-cell py-2 text-table font-medium">Telefone</TableHead>
+                        <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
+                        <TableHead className="w-16 sm:w-20 py-2 text-table font-medium">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -337,28 +340,28 @@ export default function Clients() {
                         <TableRow key={customer.id} className="hover:bg-muted/50 h-12">
                           <TableCell className="font-medium py-1">
                             <div className="flex flex-col">
-                              <span className="font-medium text-sm">{customer.name}</span>
-                              <div className="md:hidden text-xs text-muted-foreground mt-0.5 space-y-0.5">
+                              <span className="text-table">{customer.name}</span>
+                              <div className="md:hidden text-table mt-0.5 space-y-0.5">
                                 {customer.company && (
                                   <div className="flex items-center">
                                     <Building2 className="mr-1 h-3 w-3" />
-                                    <span className="truncate text-xs">{customer.company}</span>
+                                    <span className="truncate text-table">{customer.company}</span>
                                   </div>
                                 )}
                                 {customer.cpf_cnpj && (
-                                  <div className="lg:hidden text-xs">{formatCpfCnpj(customer.cpf_cnpj)}</div>
+                                  <div className="lg:hidden text-table">{formatCpfCnpj(customer.cpf_cnpj)}</div>
                                 )}
                                 <div className="sm:hidden flex flex-col space-y-0.5">
                                   {customer.email && (
                                     <div className="flex items-center">
                                       <Mail className="mr-1 h-3 w-3" />
-                                      <span className="truncate text-xs">{customer.email}</span>
+                                      <span className="truncate text-table">{customer.email}</span>
                                     </div>
                                   )}
                                   {customer.phone && (
                                     <div className="flex items-center">
                                       <Phone className="mr-1 h-3 w-3" />
-                                      <span className="text-xs">{customer.phone}</span>
+                                      <span className="text-table">{customer.phone}</span>
                                     </div>
                                   )}
                                 </div>
@@ -367,37 +370,37 @@ export default function Clients() {
                           </TableCell>
                           <TableCell className="hidden md:table-cell py-1">
                             <div className="flex items-center">
-                              <Building2 className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="truncate text-sm">{customer.company || '-'}</span>
+                              <Building2 className="mr-1.5 h-3.5 w-3.5" />
+                              <span className="truncate text-table">{customer.company || '-'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="hidden lg:table-cell py-1">
-                            <span className="font-mono text-xs">
+                            <span className="text-table">
                               {customer.cpf_cnpj !== undefined ? formatCpfCnpj(customer.cpf_cnpj) : "-"}
                             </span>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell py-1">
                             {customer.email ? (
-                              <div className="flex items-center text-xs text-muted-foreground">
+                              <div className="flex items-center text-table">
                                 <Mail className="mr-1.5 h-3.5 w-3.5" />
                                 <span className="truncate max-w-28">{customer.email}</span>
                               </div>
                             ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
+                              <span className="text-table">-</span>
                             )}
                           </TableCell>
                           <TableCell className="hidden md:table-cell py-1">
                             {customer.phone ? (
-                              <div className="flex items-center text-xs text-muted-foreground">
+                              <div className="flex items-center text-table">
                                 <Phone className="mr-1.5 h-3.5 w-3.5" />
-                                <span className="text-xs">{customer.phone}</span>
+                                <span className="text-table">{customer.phone}</span>
                               </div>
                             ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
+                              <span className="text-table">-</span>
                             )}
                           </TableCell>
                           <TableCell className="hidden md:table-cell py-1">
-                            <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            <div className={`inline-flex items-center rounded-full px-2 py-0.5 text-table font-medium ${
                               customer.active !== false 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-red-100 text-red-800'
@@ -419,7 +422,7 @@ export default function Clients() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p className="text-xs">Editar cliente</p>
+                                  <p className="text-small">Editar cliente</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -434,22 +437,17 @@ export default function Clients() {
           </CardContent>
           
           {!isLoading && total > 0 && (
-            <CardFooter>
-              <PaginationControls
+            <div className="flex-shrink-0">
+              <PaginationFooter
                 currentPage={pagination.currentPage}
+                totalPages={totalPages}
                 totalItems={total}
                 itemsPerPage={pagination.itemsPerPage}
                 onPageChange={pagination.setCurrentPage}
                 onItemsPerPageChange={pagination.setItemsPerPage}
-                statusTextTemplate={(start, end, total) => 
-                  `Mostrando ${start} a ${end} de ${total} clientes`
-                }
-                showNavigationButtons={true}
-                showItemsPerPageSelector={true}
-                showStatusText={true}
                 isLoading={isLoading}
               />
-            </CardFooter>
+            </div>
           )}
         </Card>
 

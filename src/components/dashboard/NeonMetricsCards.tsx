@@ -167,8 +167,8 @@ export function NeonMetricsCards({ metrics }: NeonMetricsCardsProps) {
           
           <div className="py-4">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-sm text-gray-400">Valor atual</span>
-              <span className="text-xl font-bold text-white">
+              <span className="text-body text-gray-400">Valor atual</span>
+              <span className="text-heading-1 font-bold text-white">
                 {typeof activeMetric?.value === 'number' && 
                  !isNaN(activeMetric?.value) ? (
                   activeMetric?.title.includes("Tempo") || activeMetric?.title.includes("Prazo") ? 
@@ -182,7 +182,7 @@ export function NeonMetricsCards({ metrics }: NeonMetricsCardsProps) {
             
             {activeMetric?.trendData && activeMetric.trendData.length > 0 && (
               <div className="mt-4 pb-4 border-b border-[#1E293B]">
-                <h4 className="text-sm font-medium mb-2 text-gray-300">Tendência dos últimos meses</h4>
+                <h4 className="text-label font-medium mb-2 text-gray-300">Tendência dos últimos meses</h4>
                 <div className="h-40 w-full bg-[#111525] rounded-md p-3">
                   {/* Aqui você integraria um gráfico maior da biblioteca Recharts ou similar */}
                   <div className="flex items-center justify-center h-full text-gray-500">
@@ -194,12 +194,12 @@ export function NeonMetricsCards({ metrics }: NeonMetricsCardsProps) {
             
             {activeMetric?.details && (
               <div className="mt-4">
-                <h4 className="text-sm font-medium mb-2 text-gray-300">Detalhes adicionais</h4>
+                <h4 className="text-label font-medium mb-2 text-gray-300">Detalhes adicionais</h4>
                 <div className="space-y-2">
                   {Object.entries(activeMetric.details).map(([key, value]) => (
                     <div key={key} className="flex justify-between bg-[#111525] p-2 rounded">
-                      <span className="text-sm text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                      <span className="text-sm font-medium text-white">
+                      <span className="text-body text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                      <span className="text-body font-medium text-white">
                         {typeof value === 'number' && !key.includes('period') && !key.includes('trend') ? 
                           formatCurrency(value as number) : 
                           value as string}

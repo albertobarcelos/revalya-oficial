@@ -33,6 +33,7 @@ import { Layout } from '@/components/layout/Layout';
 import { useNavigate, useParams } from 'react-router-dom';
 import { NewContractForm } from '@/components/contracts/NewContractForm';
 import { MonthlyBillingDetails } from '@/components/billing/MonthlyBillingDetails';
+import { CreateStandaloneBillingDialog } from '@/components/billing/CreateStandaloneBillingDialog';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useTenantAccessGuard, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
@@ -86,16 +87,15 @@ function KanbanCard({
   const isRenovar = columnId === 'renovar';
   
   // AIDEV-NOTE: Função para abrir modal de detalhes do contrato com proteção contra múltiplos cliques e validação de contract_id
+  // AIDEV-NOTE: Para faturamentos avulsos (contract_id NULL), não abre modal de contrato
   const handleViewDetails = useCallback(async () => {
     if (isClicking) return;
     
     // AIDEV-NOTE: Validação defensiva para prevenir contract_id undefined
+    // AIDEV-NOTE: Faturamentos avulsos não têm contract_id, então não abrem modal de contrato
     if (!contract.contract_id) {
-      console.error('Erro: contract_id está undefined para o contrato:', {
-        id: contract.id,
-        customer_name: contract.customer_name,
-        contract_number: contract.contract_number
-      });
+      // AIDEV-NOTE: Para faturamentos avulsos, não fazer nada ou mostrar toast
+      console.log('Faturamento avulso - não há contrato associado');
       return;
     }
     
@@ -193,6 +193,15 @@ function KanbanCard({
             </div>
           )}
           
+          {/* AIDEV-NOTE: Badge para faturamentos avulsos */}
+          {!contract.contract_id && (
+            <div className="mb-2">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-300">
+                Avulso
+              </Badge>
+            </div>
+          )}
+
           {/* Header com drag handle */}
           <div 
             className={cn(
@@ -204,7 +213,7 @@ function KanbanCard({
           >
             <div className="flex items-center space-x-2">
               <span className={cn("font-semibold text-xs", styles.textPrimary)}>
-                {contract.contract_id ? `#${contract.contract_id.slice(-8)}` : 'N/A'}
+                {contract.contract_id ? `#${contract.contract_id.slice(-8)}` : contract.contract_number || 'Avulso'}
               </span>
             </div>
             {/* Badge de status — agora discreto, somente ícone com tooltip */}
@@ -498,6 +507,7 @@ export default function FaturamentoKanban() {
   const [isBilling, setIsBilling] = useState(false);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [contractMode, setContractMode] = useState<'view' | 'edit'>('view');
+  const [isStandaloneBillingOpen, setIsStandaloneBillingOpen] = useState(false);
 
   // AIDEV-NOTE: Abrir modal com segurança multi-tenant (define contexto + filtra tenant)
   const handleViewDetails = useCallback(async (contractId: string) => {
@@ -647,7 +657,8 @@ export default function FaturamentoKanban() {
         throw new Error('Falha na configuração de segurança. Tente novamente.');
       }
 
-      // AIDEV-NOTE: Processar cada período de faturamento usando attempt_billing_period_charge
+      // AIDEV-NOTE: Processar cada período de faturamento
+      // AIDEV-NOTE: Detectar se é período de contrato ou faturamento avulso
       for (const periodId of periodIds) {
         try {
           // AIDEV-NOTE: CAMADA 5 - Validação crítica antes da operação
@@ -659,11 +670,55 @@ export default function FaturamentoKanban() {
 
           console.log(`📋 [BILLING] Processando período de faturamento: ${periodId}`);
 
-          // AIDEV-NOTE: Usar attempt_billing_period_charge para criar cobrança e atualizar status
-          const { data: result, error: billingError } = await supabase.rpc('attempt_billing_period_charge', {
-            p_period_id: periodId,
-            p_tenant_id: tenantId
-          });
+          // AIDEV-NOTE: Verificar se é período avulso ou de contrato
+          // Buscar período para determinar o tipo
+          const { data: standalonePeriod } = await supabase
+            .from('standalone_billing_periods')
+            .select('id')
+            .eq('id', periodId)
+            .eq('tenant_id', tenantId)
+            .single();
+
+          let result: any;
+          let billingError: any;
+
+          if (standalonePeriod) {
+            // AIDEV-NOTE: É um faturamento avulso - usar serviço completo
+            console.log(`📋 [BILLING] Processando faturamento avulso: ${periodId}`);
+            try {
+              const { standaloneBillingService } = await import('@/services/standaloneBillingService');
+              const processResult = await standaloneBillingService.processStandaloneBilling(
+                supabase,
+                tenantId,
+                periodId
+              );
+
+              if (processResult.success) {
+                result = {
+                  success: true,
+                  charge_id: processResult.charge_id
+                };
+                billingError = null;
+              } else {
+                result = { success: false, error: processResult.error };
+                billingError = new Error(processResult.error || 'Erro ao processar faturamento avulso');
+              }
+            } catch (serviceError: any) {
+              console.error('❌ [BILLING] Erro ao processar faturamento avulso via serviço:', serviceError);
+              result = { success: false, error: serviceError?.message || 'Erro desconhecido' };
+              billingError = serviceError;
+            }
+          } else {
+            // AIDEV-NOTE: É um período de contrato - usar função original
+            console.log(`📋 [BILLING] Processando período de contrato: ${periodId}`);
+            const { data: contractResult, error: contractError } = await supabase.rpc('attempt_billing_period_charge', {
+              p_period_id: periodId,
+              p_tenant_id: tenantId
+            });
+
+            result = contractResult;
+            billingError = contractError;
+          }
 
           if (billingError) {
             console.error('❌ [BILLING] Erro ao processar período:', billingError);
@@ -1054,6 +1109,10 @@ export default function FaturamentoKanban() {
               onToggleSelectionMode={toggleSelectionMode}
               isSelectionMode={showCheckboxes}
               isLoading={isLoading}
+              onOpenStandaloneBilling={() => {
+                console.log('🔵 [STANDALONE] Botão clicado, abrindo dialog');
+                setIsStandaloneBillingOpen(true);
+              }}
             />
           
             {/* Botão de faturamento - aparece quando há contratos selecionados */}
@@ -1137,6 +1196,22 @@ export default function FaturamentoKanban() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* AIDEV-NOTE: Modal de faturamento avulso */}
+        {isStandaloneBillingOpen && (
+          <CreateStandaloneBillingDialog
+            isOpen={isStandaloneBillingOpen}
+            onClose={() => {
+              console.log('🔴 [STANDALONE] Fechando dialog');
+              setIsStandaloneBillingOpen(false);
+            }}
+            onSuccess={() => {
+              console.log('✅ [STANDALONE] Faturamento criado com sucesso');
+              refreshData();
+              setIsStandaloneBillingOpen(false);
+            }}
+          />
+        )}
       </div>
     </Layout>
   );

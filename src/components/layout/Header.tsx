@@ -99,7 +99,7 @@ const Header = ({ children }: HeaderProps) => {
                   <User className="mr-2 h-4 w-4" />
                   <span>Perfil</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate(isInTenant ? `/${tenantId}/settings` : "/settings")}>
+                <DropdownMenuItem onClick={() => navigate(isInTenant ? `/${tenantId}/configuracoes` : "/configuracoes")}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Configurações</span>
                 </DropdownMenuItem>

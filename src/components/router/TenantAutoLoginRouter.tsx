@@ -15,7 +15,7 @@ import { useTenantStore } from '@/store/tenantStore';
  */
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
-    <div className="text-lg">Carregando...</div>
+    <div className="text-heading-3">Carregando...</div>
   </div>
 );
 
@@ -35,6 +35,7 @@ const Invites = lazy(() => import('../../pages/Invites'));
 const UpdateValues = lazy(() => import('../../pages/UpdateValues'));
 const ServicesPage = lazy(() => import('../../pages/services'));
 const ProductsPage = lazy(() => import('../../pages/products'));
+const StockMovementsPage = lazy(() => import('../../pages/products/movimentacoes'));
 const MessageHistoryPage = lazy(() => import('../../pages/messages/history'));
 const TenantUsersPage = lazy(() => import('../../pages/tenant/users'));
 const ExamplesPage = lazy(() => import('../../pages/dashboard/examples'));
@@ -107,7 +108,6 @@ export function TenantAutoLoginRouter() {
         
         {/* ========== ROTAS DE GESTÃO ========== */}
         <Route path="notifications" element={<Notifications />} />
-        <Route path="settings" element={<Settings />} />
         <Route path="configuracoes" element={<Settings />} />
         <Route path="templates" element={<Templates />} />
         <Route path="profile" element={<Profile />} />
@@ -117,7 +117,8 @@ export function TenantAutoLoginRouter() {
         
         {/* ========== ROTAS DE PRODUTOS E SERVIÇOS ========== */}
         <Route path="services" element={<ServicesPage />} />
-        <Route path="products" element={<ProductsPage />} />
+        <Route path="produtos" element={<ProductsPage />} />
+        <Route path="produtos/movimentacoes" element={<StockMovementsPage />} />
         
         {/* ========== ROTAS FINANCEIRAS ========== */}
         <Route path="financeiro" element={<FaturamentoKanban />} />

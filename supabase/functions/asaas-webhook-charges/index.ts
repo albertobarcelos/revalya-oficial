@@ -1080,7 +1080,55 @@ async function handlePostRequest(req: Request, tenantId: string) {
       .maybeSingle();
 
     if (existingCharge) {
-      // AIDEV-NOTE: Deletar charge do banco
+      // AIDEV-NOTE: Verificar se há finance_entries relacionados antes de deletar
+      const { data: relatedEntries, error: entriesError } = await supabase
+        .from("finance_entries")
+        .select("id")
+        .eq("charge_id", existingCharge.id)
+        .eq("tenant_id", tenantId);
+
+      if (entriesError) {
+        console.error("❌ Erro ao verificar finance_entries:", entriesError);
+        return new Response(JSON.stringify({
+          error: "Erro ao verificar dependências",
+          details: entriesError.message
+        }), {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        });
+      }
+
+      // AIDEV-NOTE: Se houver finance_entries relacionados, deletá-los primeiro
+      if (relatedEntries && relatedEntries.length > 0) {
+        console.log(`⚠️ Encontrados ${relatedEntries.length} finance_entries relacionados. Deletando primeiro...`);
+        
+        const { error: deleteEntriesError } = await supabase
+          .from("finance_entries")
+          .delete()
+          .eq("charge_id", existingCharge.id)
+          .eq("tenant_id", tenantId);
+
+        if (deleteEntriesError) {
+          console.error("❌ Erro ao deletar finance_entries:", deleteEntriesError);
+          return new Response(JSON.stringify({
+            error: "Erro ao deletar finance_entries relacionados",
+            details: deleteEntriesError.message
+          }), {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json"
+            }
+          });
+        }
+
+        console.log(`✅ ${relatedEntries.length} finance_entries deletados com sucesso`);
+      }
+
+      // AIDEV-NOTE: Agora deletar a charge (sem dependências)
       const { error: deleteError } = await supabase
         .from("charges")
         .delete()
@@ -1108,7 +1156,8 @@ async function handlePostRequest(req: Request, tenantId: string) {
         message: "Charge deletada com sucesso",
         eventType,
         eventId,
-        deleted: true
+        deleted: true,
+        finance_entries_deleted: relatedEntries?.length || 0
       }), {
         status: 200,
         headers: {

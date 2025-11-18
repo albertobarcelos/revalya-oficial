@@ -152,7 +152,7 @@ export function ModernMetricCard({
             <div className="relative z-10 p-5">
               <div className="flex justify-between items-start mb-3">
                 <h3 
-                  className="text-sm font-bold transition-colors"
+                  className="text-body font-bold transition-colors"
                   style={{ 
                     color: colors.text,
                     textShadow: isDark ? `0 0 8px rgba(${colors.glow}, 0.5)` : ''
@@ -175,7 +175,7 @@ export function ModernMetricCard({
               
               <div className="space-y-2">
                 <p 
-                  className={`text-2xl font-bold tracking-tight transition-all duration-300 ${isHovered ? 'scale-105 origin-left' : ''}`}
+                  className={`text-heading-1 font-bold tracking-tight transition-all duration-300 ${isHovered ? 'scale-105 origin-left' : ''}`}
                   style={{ 
                     color: colors.valueText,
                     textShadow: isDark 

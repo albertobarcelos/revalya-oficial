@@ -80,11 +80,6 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const queryClient = useQueryClient();
   
-  // AIDEV-NOTE: Debug temporário para identificar problema de tenant
-  console.log('[DEBUG] useSecureProducts - URL atual:', window.location.href);
-  console.log('[DEBUG] useSecureProducts - currentTenant:', currentTenant);
-  console.log('[DEBUG] useSecureProducts - hasAccess:', hasAccess);
-  
   // 🛡️ VALIDAÇÃO DE ACESSO OBRIGATÓRIA - Só valida se a query estiver habilitada
   if (options.enabled !== false && !hasAccess) {
     throw new Error(accessError || 'Acesso negado');

@@ -55,7 +55,7 @@ export function BulkInsertProgress({
       >
         <Card className="border-2 shadow-lg">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle className="flex items-center gap-2 text-heading-3">
               {isLoading ? (
                 <>
                   <motion.div
@@ -89,7 +89,7 @@ export function BulkInsertProgress({
             {/* Barra de Progresso */}
             {(isLoading || progress) && (
               <div className="space-y-2">
-                <div className="flex justify-between text-sm text-muted-foreground">
+                <div className="flex justify-between text-body text-muted-foreground">
                   <span>
                     {progress?.processed || 0} de {progress?.total || 0} registros
                   </span>
@@ -110,14 +110,14 @@ export function BulkInsertProgress({
                 transition={{ delay: 0.2 }}
                 className="space-y-3"
               >
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-body">
                   <div className="space-y-1">
                     <div className="text-muted-foreground">Total de registros</div>
-                    <div className="font-semibold text-lg">{result.totalRecords}</div>
+                    <div className="font-semibold text-heading-3">{result.totalRecords}</div>
                   </div>
                   <div className="space-y-1">
                     <div className="text-muted-foreground">Processados</div>
-                    <div className="font-semibold text-lg text-green-600">
+                    <div className="font-semibold text-heading-3 text-green-600">
                       {result.processedRecords}
                     </div>
                   </div>
@@ -139,7 +139,7 @@ export function BulkInsertProgress({
                     )}
                   </div>
 
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-body text-muted-foreground">
                     {result.duration}ms
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export function BulkInsertProgress({
                     transition={{ delay: 0.3 }}
                     className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg"
                   >
-                    <div className="text-sm font-medium text-gray-800 mb-2">
+                    <div className="text-body font-medium text-gray-800 mb-2">
                       Resumo dos erros:
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -199,10 +199,10 @@ export function BulkInsertProgress({
                 animate={{ opacity: 1 }}
                 className="p-3 bg-red-50 border border-red-200 rounded-lg"
               >
-                <div className="text-sm font-medium text-red-800 mb-1">
+                <div className="text-body font-medium text-red-800 mb-1">
                   Erro na operação:
                 </div>
-                <div className="text-sm text-red-700">{error}</div>
+                <div className="text-body text-red-700">{error}</div>
               </motion.div>
             )}
           </CardContent>

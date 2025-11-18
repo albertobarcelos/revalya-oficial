@@ -297,8 +297,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
         <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Contratos Ativos</p>
-              <p className="text-2xl font-bold text-card-foreground">{dashboardStats.activeContracts}</p>
+              <p className="text-label font-medium text-muted-foreground">Contratos Ativos</p>
+              <p className="text-heading-1 font-bold text-card-foreground">{dashboardStats.activeContracts}</p>
               <p className="text-xs text-muted-foreground">de {dashboardStats.totalContracts} total</p>
             </div>
             <div className="p-3 bg-primary/10 rounded-full">
@@ -310,8 +310,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
         <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Receita Mensal</p>
-              <p className="text-2xl font-bold text-card-foreground">{formatCurrency(dashboardStats.monthlyRevenue)}</p>
+              <p className="text-label font-medium text-muted-foreground">Receita Mensal</p>
+              <p className="text-heading-1 font-bold text-card-foreground">{formatCurrency(dashboardStats.monthlyRevenue)}</p>
               <p className="text-xs text-success">+12% vs mês anterior</p>
             </div>
             <div className="p-3 bg-success/10 rounded-full">
@@ -323,8 +323,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
         <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Score de Compliance</p>
-              <p className="text-2xl font-bold text-card-foreground">{dashboardStats.complianceScore}%</p>
+              <p className="text-label font-medium text-muted-foreground">Score de Compliance</p>
+              <p className="text-heading-1 font-bold text-card-foreground">{dashboardStats.complianceScore}%</p>
               <p className="text-xs text-success">Excelente</p>
             </div>
             <div className="p-3 bg-success/10 rounded-full">
@@ -336,8 +336,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
         <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Pagamentos Pendentes</p>
-              <p className="text-2xl font-bold text-card-foreground">{dashboardStats.pendingPayments}</p>
+              <p className="text-label font-medium text-muted-foreground">Pagamentos Pendentes</p>
+              <p className="text-heading-1 font-bold text-card-foreground">{dashboardStats.pendingPayments}</p>
               <p className="text-xs text-danger">{dashboardStats.overduePayments} em atraso</p>
             </div>
             <div className="p-3 bg-warning/10 rounded-full">
@@ -360,7 +360,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
                 <div className="flex items-center gap-3">
                   <Shield className="w-5 h-5 text-red-600" />
                   <div>
-                    <p className="text-sm font-medium text-red-900">
+                    <p className="text-body font-medium text-red-900">
                       {dashboardStats.auditAlerts} alerta(s) de auditoria
                     </p>
                     <p className="text-xs text-red-600">Requer atenção imediata</p>
@@ -380,7 +380,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
                 <div className="flex items-center gap-3">
                   <CreditCard className="w-5 h-5 text-yellow-600" />
                   <div>
-                    <p className="text-sm font-medium text-yellow-900">
+                    <p className="text-body font-medium text-yellow-900">
                       {dashboardStats.overduePayments} pagamento(s) em atraso
                     </p>
                     <p className="text-xs text-yellow-600">Ação necessária</p>
@@ -400,7 +400,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
                 <div className="flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-blue-600" />
                   <div>
-                    <p className="text-sm font-medium text-blue-900">
+                    <p className="text-body font-medium text-blue-900">
                       {dashboardStats.expiringContracts} contrato(s) vencendo em 30 dias
                     </p>
                     <p className="text-xs text-blue-600">Renovação necessária</p>
@@ -465,7 +465,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
                   <Icon className="w-4 h-4" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                  <p className="text-body font-medium text-gray-900">{activity.title}</p>
                   <p className="text-xs text-gray-500">{activity.description}</p>
                 </div>
                 <div className="text-xs text-gray-400">
@@ -486,30 +486,30 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Ativos</span>
+              <span className="text-body text-gray-600">Ativos</span>
               <div className="flex items-center gap-2">
                 <div className="w-20 bg-gray-200 rounded-full h-2">
                   <div className="bg-green-600 h-2 rounded-full" style={{ width: '91%' }}></div>
                 </div>
-                <span className="text-sm font-medium text-gray-900">91%</span>
+                <span className="text-body font-medium text-gray-900">91%</span>
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Vencendo</span>
+              <span className="text-body text-gray-600">Vencendo</span>
               <div className="flex items-center gap-2">
                 <div className="w-20 bg-gray-200 rounded-full h-2">
                   <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '5%' }}></div>
                 </div>
-                <span className="text-sm font-medium text-gray-900">5%</span>
+                <span className="text-body font-medium text-gray-900">5%</span>
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">Vencidos</span>
+              <span className="text-body text-gray-600">Vencidos</span>
               <div className="flex items-center gap-2">
                 <div className="w-20 bg-gray-200 rounded-full h-2">
                   <div className="bg-red-600 h-2 rounded-full" style={{ width: '4%' }}></div>
                 </div>
-                <span className="text-sm font-medium text-gray-900">4%</span>
+                <span className="text-body font-medium text-gray-900">4%</span>
               </div>
             </div>
           </div>
@@ -532,8 +532,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-600">Tempo de Resposta</span>
-                <span className="text-sm font-medium text-gray-900">1.2s</span>
+                <span className="text-body text-gray-600">Tempo de Resposta</span>
+                <span className="text-body font-medium text-gray-900">1.2s</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: '85%' }}></div>
@@ -541,8 +541,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-600">Disponibilidade</span>
-                <span className="text-sm font-medium text-gray-900">99.9%</span>
+                <span className="text-body text-gray-600">Disponibilidade</span>
+                <span className="text-body font-medium text-gray-900">99.9%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div className="bg-green-600 h-2 rounded-full" style={{ width: '99.9%' }}></div>
@@ -584,11 +584,11 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-body text-gray-600">
                 <Users className="w-4 h-4" />
                 <span>Tenant: {tenantId}</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-body text-gray-600">
                 <Target className="w-4 h-4" />
                 <span>User: {userId}</span>
               </div>
@@ -617,7 +617,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ tenantId, userI
                 <button
                   key={item.id}
                   onClick={() => setActiveModule(item.id as DashboardModule)}
-                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-body transition-colors ${
                     activeModule === item.id
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

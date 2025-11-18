@@ -105,13 +105,13 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
       return (
         <div className="bg-white border rounded-lg shadow-lg p-3 dark:bg-gray-800">
           <p className="font-medium text-gray-900 dark:text-white">{label}</p>
-          <p className="text-sm text-emerald-600 font-medium mt-1 flex justify-between">
+          <p className="text-body text-emerald-600 font-medium mt-1 flex justify-between">
             <span>Entrada:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.inflow || 0)}</span>
           </p>
-          <p className="text-sm text-red-500 font-medium flex justify-between">
+          <p className="text-body text-red-500 font-medium flex justify-between">
             <span>Saída:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.outflow || 0)}</span>
           </p>
-          <p className="text-sm font-medium mt-1 border-t pt-1 flex justify-between text-blue-500">
+          <p className="text-body font-medium mt-1 border-t pt-1 flex justify-between text-blue-500">
             <span>Saldo:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.balance || 0)}</span>
           </p>
         </div>
@@ -158,7 +158,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
         </div>
         
         {/* Resumo dos valores */}
-        <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
+        <div className="grid grid-cols-3 gap-4 mt-2 text-body">
           <div className="flex flex-col">
             <span className="text-gray-500">Total a Receber</span>
             <span className="font-medium text-emerald-600">{formatCurrency(totals.inflow)}</span>

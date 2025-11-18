@@ -106,7 +106,7 @@ export function ProductCategoriesManager() {
       >
         <ShieldAlert className="h-16 w-16 text-destructive" />
         <div className="text-center space-y-2">
-          <h3 className="text-lg font-semibold">Acesso Negado</h3>
+          <h3 className="text-heading-3 font-semibold">Acesso Negado</h3>
           <p className="text-muted-foreground">
             Você não tem permissão para acessar o gerenciamento de categorias de produtos.
           </p>
@@ -348,7 +348,7 @@ export function ProductCategoriesManager() {
           {categories.length === 0 ? (
             <div className="p-8 text-center">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">Nenhuma categoria encontrada</h3>
+              <h3 className="text-heading-3 font-medium mb-2">Nenhuma categoria encontrada</h3>
               <p className="text-muted-foreground mb-4">
                 Crie sua primeira categoria para começar a organizar seus produtos
               </p>

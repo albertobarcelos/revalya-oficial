@@ -1,4 +1,4 @@
-import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt } from "lucide-react";
+import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt, Activity } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -260,7 +260,16 @@ export default function Sidebar() {
       children: [
         { icon: Users, label: "Clientes", path: `/${tenantSlug}/clientes` },
         { icon: LayoutGrid, label: "Serviços", path: `/${tenantSlug}/services` },
-        { icon: Package, label: "Produtos", path: `/${tenantSlug}/products` },
+        { 
+          icon: Package, 
+          label: "Produtos",
+          id: "produtos",
+          isSubmenu: true,
+          children: [
+            { icon: Package, label: "Produtos", path: `/${tenantSlug}/produtos` },
+            { icon: Activity, label: "Movimentações", path: `/${tenantSlug}/produtos/movimentacoes` },
+          ]
+        },
       ]
     },
     { 
@@ -281,7 +290,7 @@ export default function Sidebar() {
   ];
 
   const settingsLinks = [
-    { icon: Settings, label: "Configurações", path: `/${tenantSlug}/settings` },
+    { icon: Settings, label: "Configurações", path: `/${tenantSlug}/configuracoes` },
     { icon: Settings, label: "Config. Contratos", path: `/${tenantSlug}/contratos-config` },
   ];
 
@@ -373,22 +382,68 @@ export default function Sidebar() {
                   {!isCollapsed && expandedMenus.includes(link.id) && (
                     <div className="pl-8 mt-1 space-y-1">
                       {link.children.map((child: any) => (
-                        <Link
-                          key={child.path}
-                          to={child.path}
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
-                            {
-                              "bg-white/10 text-white font-medium": location.pathname === child.path,
-                              "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== child.path,
-                            }
-                          )}
-                        >
-                          <child.icon className="h-4 w-4 flex-shrink-0" />
-                          <span className="whitespace-nowrap overflow-hidden">
-                            {child.label}
-                          </span>
-                        </Link>
+                        child.isSubmenu ? (
+                          // Renderização de submenu aninhado
+                          <div key={`submenu-${child.id}`} className="relative">
+                            <button
+                              onClick={() => toggleSubmenu(child.id)}
+                              className={cn(
+                                "w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                {
+                                  "text-gray-400 hover:bg-white/5 hover:text-white": true,
+                                }
+                              )}
+                            >
+                              <child.icon className="h-4 w-4 flex-shrink-0" />
+                              <span className="flex-1 text-left whitespace-nowrap overflow-hidden">
+                                {child.label}
+                              </span>
+                              <ChevronDown className={`h-3 w-3 transition-transform ${expandedMenus.includes(child.id) ? 'rotate-180' : ''}`} />
+                            </button>
+                            
+                            {/* Submenu aninhado */}
+                            {expandedMenus.includes(child.id) && (
+                              <div className="pl-6 mt-1 space-y-1">
+                                {child.children.map((grandchild: any) => (
+                                  <Link
+                                    key={grandchild.path}
+                                    to={grandchild.path}
+                                    className={cn(
+                                      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                      {
+                                        "bg-white/10 text-white font-medium": location.pathname === grandchild.path,
+                                        "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== grandchild.path,
+                                      }
+                                    )}
+                                  >
+                                    <grandchild.icon className="h-4 w-4 flex-shrink-0" />
+                                    <span className="whitespace-nowrap overflow-hidden">
+                                      {grandchild.label}
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // Renderização de link direto
+                          <Link
+                            key={child.path}
+                            to={child.path}
+                            className={cn(
+                              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                              {
+                                "bg-white/10 text-white font-medium": location.pathname === child.path,
+                                "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== child.path,
+                              }
+                            )}
+                          >
+                            <child.icon className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap overflow-hidden">
+                              {child.label}
+                            </span>
+                          </Link>
+                        )
                       ))}
                     </div>
                   )}
