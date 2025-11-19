@@ -313,7 +313,7 @@ export default function Sidebar() {
       <div
         ref={sidebarRef}
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-[#0e1429] shadow-lg transition-all duration-300 ease-in-out md:relative overflow-hidden",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-[#10002B] shadow-lg transition-all duration-300 ease-in-out md:relative overflow-hidden",
           {
             "w-64": !isCollapsed,
             "w-[68px]": isCollapsed,
@@ -457,7 +457,7 @@ export default function Sidebar() {
                   className={cn(
                     "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                     {
-                      "bg-white/10 text-white font-medium border-l-2 border-indigo-400": location.pathname === link.path,
+                      "bg-white/10 text-white font-medium border-l-2 border-primary": location.pathname === link.path,
                       "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== link.path,
                       "justify-center": isCollapsed
                     }
@@ -487,7 +487,7 @@ export default function Sidebar() {
                 className={cn(
                   "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                   {
-                    "bg-white/10 text-white font-medium border-l-2 border-indigo-400": location.pathname === link.path,
+                    "bg-white/10 text-white font-medium border-l-2 border-primary": location.pathname === link.path,
                     "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== link.path,
                     "justify-center": isCollapsed
                   }
