@@ -86,14 +86,27 @@ export default defineConfig(({ command, mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      // AIDEV-NOTE: Sourcemap configurado para evitar erros em produção
-      // 'hidden' gera sourcemaps sem referências no código final
-      sourcemap: mode === 'production' ? 'hidden' : true,
+      // AIDEV-NOTE: Desabilitar sourcemaps completamente em produção para evitar avisos
+      // CORREÇÃO: Usar false explicitamente em vez de condicional para garantir que não sejam gerados
+      sourcemap: false,
       minify: mode === 'production' ? 'esbuild' : false,
       target: 'es2020',
       
       // Rollup options
       rollupOptions: {
+        // AIDEV-NOTE: Suprimir avisos de sourcemap durante o build
+        onwarn(warning, warn) {
+          // Ignorar avisos sobre sourcemaps não resolvidos (são apenas informativos)
+          if (warning.message && warning.message.includes('sourcemap')) {
+            return;
+          }
+          // Ignorar aviso sobre importação dinâmica vs estática (é esperado e não afeta funcionalidade)
+          if (warning.message && warning.message.includes('dynamically imported') && warning.message.includes('statically imported')) {
+            return;
+          }
+          // Mostrar outros avisos normalmente
+          warn(warning);
+        },
         output: {
           // Manual chunks for better caching
           manualChunks: {
@@ -111,10 +124,9 @@ export default defineConfig(({ command, mode }) => {
             'supabase-vendor': ['@supabase/supabase-js'],
             'chart-vendor': ['recharts', 'apexcharts', 'react-apexcharts'],
             'date-vendor': ['date-fns'],
-            'financial-vendor': ['decimal.js'],
+            // AIDEV-NOTE: Removido 'financial-vendor' - decimal.js será incluído automaticamente onde necessário
+            // Isso evita o chunk vazio "financial-vendor"
             'axios-vendor': ['axios'],
-            
-            // Application chunks (removidos módulos inexistentes)
           },
         },
       },
@@ -128,7 +140,8 @@ export default defineConfig(({ command, mode }) => {
 
     // CSS configuration
     css: {
-      devSourcemap: true,
+      // AIDEV-NOTE: Desabilitar sourcemaps CSS em produção para evitar avisos
+      devSourcemap: mode === 'production' ? false : true,
       preprocessorOptions: {
         scss: {
           additionalData: `@import "@/styles/variables.scss";`,

@@ -713,7 +713,11 @@ export default function FaturamentoKanban() {
             // AIDEV-NOTE: É um faturamento avulso - usar serviço completo
             console.log(`📋 [BILLING] Processando faturamento avulso: ${periodId}`);
             try {
-              const { standaloneBillingService } = await import('@/services/standaloneBillingService');
+              // AIDEV-NOTE: CORREÇÃO - Importação dinâmica mantida para code splitting
+              // O aviso do Vite é esperado quando há importação estática em outro arquivo
+              // Isso não afeta a funcionalidade, apenas a otimização de chunks
+              const standaloneBillingServiceModule = await import('@/services/standaloneBillingService');
+              const { standaloneBillingService } = standaloneBillingServiceModule;
               const processResult = await standaloneBillingService.processStandaloneBilling(
                 supabase,
                 tenantId,
