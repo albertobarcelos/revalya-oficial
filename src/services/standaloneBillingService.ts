@@ -56,6 +56,7 @@ export interface StandaloneBillingPeriod {
   payment_method?: string;
   payment_gateway_id?: string;
   description?: string;
+  order_number?: string; // AIDEV-NOTE: Número sequencial da Ordem de Serviço (001, 002, ...)
   created_at: string;
   updated_at: string;
   customer?: {
@@ -119,6 +120,7 @@ class StandaloneBillingService {
     );
 
     // AIDEV-NOTE: Criar período avulso
+    // O order_number será gerado automaticamente pelo trigger no banco de dados
     const { data: period, error: periodError } = await supabaseClient
       .from('standalone_billing_periods')
       .insert({
@@ -132,6 +134,7 @@ class StandaloneBillingService {
         payment_method: data.payment_method,
         payment_gateway_id: data.payment_gateway_id || null,
         description: data.description || null
+        // AIDEV-NOTE: order_number será gerado automaticamente pelo trigger generate_order_number_on_insert_standalone_period
       })
       .select()
       .single();

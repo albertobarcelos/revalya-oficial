@@ -195,6 +195,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   // Estado local para controlar o valor de entrada do campo Custo Unitário
   const [costPriceInput, setCostPriceInput] = React.useState<string>('');
   
+  // AIDEV-NOTE: Ref para evitar recarregamento desnecessário do modal
+  const lastLoadedServiceIdRef = React.useRef<string | null>(null);
+  
   // AIDEV-NOTE: Estados para edição em massa - usando interface tipada
   const [bulkEditData, setBulkEditData] = React.useState<BulkEditData>({
     // Configurações financeiras
@@ -260,13 +263,16 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     console.log('🔄 ContractServices: Detectada mudança nos serviços do formulário:', formServices.length);
     
     if (formServices.length > 0) {
-      // Garantir que cada serviço tenha o campo 'total' calculado
+      // Garantir que cada serviço tenha o campo 'total' calculado e preserve cost_price
       const servicesWithTotal = formServices.map(service => ({
         ...service,
+        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price explicitamente
+        cost_price: service.cost_price !== undefined ? service.cost_price : (service as any).cost_price || 0,
         total: service.total || (service.quantity || 1) * (service.unit_price || service.default_price || 0)
       }));
       
       console.log('✅ ContractServices: Carregando serviços no estado local:', servicesWithTotal);
+      console.log('🔍 ContractServices: Verificando cost_price nos serviços:', servicesWithTotal.map(s => ({ id: s.id, cost_price: s.cost_price })));
       setSelectedServices(servicesWithTotal);
     } else {
       console.log('📝 ContractServices: Nenhum serviço encontrado no formulário');
@@ -409,6 +415,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Função para salvar os dados dos impostos e financeiros
   // AIDEV-NOTE: Função para salvar configurações financeiras e de impostos apenas no estado local
+  // CORREÇÃO: Agora sincroniza imediatamente com o formulário para atualizar o resumo
   const handleSaveTaxes = async () => {
     try {
       // Encontrar o serviço que está sendo editado
@@ -427,7 +434,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       }
 
       // AIDEV-NOTE: Preparar dados das alterações para salvar no estado local
+      // CORREÇÃO: Incluir unit_price e cost_price se foram alterados no modal
       const serviceChanges: Partial<SelectedService> = {
+        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price do serviço atual se não foi alterado
+        cost_price: currentService.cost_price !== undefined ? currentService.cost_price : 0,
         // Incluir campos financeiros
         payment_method: financialData.payment_method,
         card_type: financialData.card_type,
@@ -459,15 +469,25 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       const updatedServices = [...selectedServices];
       updatedServices[serviceIndex] = {
         ...updatedServices[serviceIndex],
-        ...serviceChanges
+        ...serviceChanges,
+        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price do serviço atual se não foi alterado
+        cost_price: currentService.cost_price !== undefined ? currentService.cost_price : (updatedServices[serviceIndex].cost_price || 0),
+        // CORREÇÃO: Recalcular total se unit_price ou quantity mudaram
+        total: (updatedServices[serviceIndex].unit_price || 0) * (updatedServices[serviceIndex].quantity || 1)
       };
       
       setSelectedServices(updatedServices);
+      
+      // AIDEV-NOTE: CORREÇÃO CRÍTICA - Sincronizar imediatamente com o formulário
+      // Isso garante que o resumo seja atualizado em tempo real
+      isInternalUpdate.current = true;
+      form.setValue("services", updatedServices);
+      
       setShowTaxModal(false);
       setEditingServiceId("");
       
       // AIDEV-NOTE: Feedback visual de que as alterações foram salvas localmente
-      toast.success('Configurações salvas localmente. Clique em "Salvar" no contrato para confirmar as alterações.');
+      toast.success('Configurações salvas localmente. O resumo foi atualizado automaticamente.');
       
     } catch (error) {
       console.error('Erro ao salvar configurações financeiras:', error);
@@ -595,15 +615,23 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   );
   
   // Atualizar o formState quando os serviços selecionados mudarem
+  // AIDEV-NOTE: CORREÇÃO - Adicionado debounce para evitar loop infinito e melhorar performance
   React.useEffect(() => {
-    // Marcar como atualização interna para evitar loop infinito
-    isInternalUpdate.current = true;
+    // Se não há serviços selecionados, não fazer nada
+    if (selectedServices.length === 0) {
+      return;
+    }
     
-    // AIDEV-NOTE: Preservar dados de vencimento existentes ao sincronizar com o formulário
-    const currentFormServices = form.getValues('services') || [];
-    
-    // Mesclar dados existentes do formulário com selectedServices para preservar configurações
-    const mergedServices = selectedServices.map(selectedService => {
+    // AIDEV-NOTE: Debounce para evitar sincronização excessiva durante digitação
+    const timeoutId = setTimeout(() => {
+      // Marcar como atualização interna para evitar loop infinito
+      isInternalUpdate.current = true;
+      
+      // AIDEV-NOTE: Preservar dados de vencimento existentes ao sincronizar com o formulário
+      const currentFormServices = form.getValues('services') || [];
+      
+      // Mesclar dados existentes do formulário com selectedServices para preservar configurações
+      const mergedServices = selectedServices.map(selectedService => {
       const existingFormService = currentFormServices.find(fs => fs.id === selectedService.id);
       
       // AIDEV-NOTE: Priorizar alterações da edição em massa sobre dados existentes do formulário
@@ -617,6 +645,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         
         return {
           ...selectedService,
+          // AIDEV-NOTE: CORREÇÃO - Preservar cost_price e unit_price do selectedService
+          cost_price: selectedService.cost_price !== undefined ? selectedService.cost_price : existingFormService.cost_price,
+          unit_price: selectedService.unit_price !== undefined ? selectedService.unit_price : existingFormService.unit_price,
           // AIDEV-NOTE: Para dados de vencimento, priorizar selectedService (edição em massa) sobre formulário
           // Usar nullish coalescing (??) para preservar valores falsy válidos (0, false, etc.)
           due_type: selectedService.due_type ?? existingFormService.due_type,
@@ -634,16 +665,21 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         };
       }
       
-      return selectedService;
-    });
+        return selectedService;
+      });
+      
+      form.setValue("services", mergedServices);
+    }, 300); // AIDEV-NOTE: Debounce de 300ms para evitar sincronização excessiva
     
-    form.setValue("services", mergedServices);
+    // Cleanup do timeout para evitar vazamentos de memória
+    return () => clearTimeout(timeoutId);
   }, [selectedServices, form]);
 
   // AIDEV-NOTE: Sincronizar dueDateData com selectedServices quando campos de vencimento são alterados na edição normal
-  // CORREÇÃO: Adicionar controle para evitar sincronização durante edição ativa
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante edição ativa e carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId && !isEditingDueDateData) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && !isEditingDueDateData && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de vencimento
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -663,8 +699,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
    }, [dueDateData, editingServiceId, isEditingDueDateData]);
 
   // AIDEV-NOTE: Sincronizar billingData com selectedServices quando configuração de cobrança é alterada na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de cobrança
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -682,8 +720,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
    }, [billingData, editingServiceId]);
 
   // AIDEV-NOTE: Sincronizar financialData com selectedServices quando dados financeiros são alterados na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados financeiros
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -705,8 +745,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   }, [financialData, editingServiceId]);
 
   // AIDEV-NOTE: Sincronizar taxData com selectedServices quando dados de impostos são alterados na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de impostos
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -739,20 +781,28 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
 
   // AIDEV-NOTE: useEffect para carregar dados do serviço quando o modal de edição é aberto
   // Corrige o problema de reset do formulário para valores padrão
+  // CORREÇÃO: Agora carrega unit_price e cost_price corretamente
+  // CORREÇÃO CRÍTICA: Adicionado ref para evitar recarregamento desnecessário
   React.useEffect(() => {
-    if (editingServiceId) {
+    // AIDEV-NOTE: Evitar recarregamento se já carregamos este serviço e o modal ainda está aberto
+    if (editingServiceId && showTaxModal && lastLoadedServiceIdRef.current !== editingServiceId) {
       console.log('🔄 Carregando dados do serviço para edição:', editingServiceId);
       
       // Encontrar o serviço atual nos selectedServices
       const currentService = selectedServices.find(service => service.id === editingServiceId);
       
       if (currentService) {
-        console.log('✅ Serviço encontrado, carregando dados de vencimento:', currentService);
+        console.log('✅ Serviço encontrado, carregando todos os dados:', currentService);
+        
+        // AIDEV-NOTE: Carregar unit_price e cost_price - CORREÇÃO CRÍTICA
+        // Limpar estados de input para forçar recarregamento dos valores
+        setUnitPriceInput('');
+        setCostPriceInput('');
         
         // AIDEV-NOTE: Carregar dados de vencimento apenas se o serviço já possui dados salvos
         // Evita sobrescrever valores configurados pelo usuário com valores padrão
         // CORREÇÃO: Usar nullish coalescing (??) para preservar valores falsy válidos
-        if (currentService.due_type || currentService.due_value) {
+        if (currentService.due_type || currentService.due_value !== undefined) {
           setDueDateData({
             due_type: currentService.due_type ?? 'days_after_billing',
             due_value: currentService.due_value ?? 5,
@@ -792,7 +842,22 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           });
         }
         
+        // AIDEV-NOTE: Carregar configuração de cobrança
+        if (currentService.generate_billing !== undefined) {
+          setBillingData({
+            generate_billing: currentService.generate_billing
+          });
+        }
+        
+        // Marcar como carregado
+        lastLoadedServiceIdRef.current = editingServiceId;
+        
         console.log('📋 Dados carregados condicionalmente:', {
+          unit_price: currentService.unit_price,
+          cost_price: currentService.cost_price,
+          cost_price_undefined: currentService.cost_price === undefined,
+          cost_price_null: currentService.cost_price === null,
+          cost_price_zero: currentService.cost_price === 0,
           dueDateData: currentService.due_type ? {
             due_type: currentService.due_type,
             due_value: currentService.due_value,
@@ -802,8 +867,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       } else {
         console.log('⚠️ Serviço não encontrado nos selectedServices');
       }
+    } else if (!showTaxModal) {
+      // AIDEV-NOTE: Limpar ref quando o modal fecha
+      lastLoadedServiceIdRef.current = null;
     }
-  }, [editingServiceId]);
+  }, [editingServiceId, showTaxModal]); // AIDEV-NOTE: Removido selectedServices das dependências para evitar loop
    
   return (
     <div>
@@ -1033,6 +1101,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                             }
                             
                             // Atualiza o serviço com o valor numérico
+                            // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
+                            // A sincronização será feita pelo useEffect que monitora selectedServices
                             setSelectedServices(prev => 
                               prev.map(service => 
                                 service.id === editingServiceId 
@@ -1084,6 +1154,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                             const sanitizedValue = inputValue.replace(/[^0-9]/g, '');
                             const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);
                             
+                            // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
+                            // A sincronização será feita pelo useEffect que monitora selectedServices
                             setSelectedServices(prev => 
                               prev.map(service => 
                                 service.id === editingServiceId 
@@ -1117,8 +1189,12 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                             }
                             // Caso contrário, usa o valor do serviço
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
-                            const value = currentService?.cost_price ?? '';
-                            return value === 0 ? '' : value.toString();
+                            // AIDEV-NOTE: CORREÇÃO - Verificar se cost_price existe (não é undefined/null)
+                            // Se existir (mesmo que seja 0), mostrar o valor. Só mostrar vazio se realmente não existir
+                            if (currentService?.cost_price !== undefined && currentService?.cost_price !== null) {
+                              return currentService.cost_price.toString();
+                            }
+                            return '';
                           })()}
                           onChange={(e) => {
                             const inputValue = e.target.value;
@@ -1144,6 +1220,8 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                               }
                               
                               // Atualiza o serviço com o valor numérico
+                              // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
+                              // A sincronização será feita pelo useEffect que monitora selectedServices
                               setSelectedServices(prev => 
                                 prev.map(service => 
                                   service.id === editingServiceId 

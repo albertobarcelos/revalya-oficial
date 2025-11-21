@@ -175,16 +175,26 @@ const calculateTotals = (
 
   const tax = servicesTax + productsTax;
 
-  // AIDEV-NOTE: Usar custos reais da view se disponível, senão calcular por cost_percentage
+  // AIDEV-NOTE: Calcular custos baseado em cost_price dos serviços ou cost_percentage
+  // CORREÇÃO: Priorizar cost_price direto dos serviços quando disponível
   let costs: number;
   
   if (cost_price !== undefined) {
-    // ✅ Usar custos reais da view vw_contract_services_detailed
+    // ✅ Usar custos reais da view vw_contract_services_detailed (para contratos existentes salvos)
     costs = cost_price;
   } else {
-    // ✅ Calcular custos baseado em cost_percentage para contratos novos
+    // ✅ Calcular custos baseado em cost_price direto dos serviços ou cost_percentage
     const servicesCosts = services.reduce((sum, service) => {
       const quantity = service.quantity || 1;
+      
+      // AIDEV-NOTE: CORREÇÃO - Priorizar cost_price direto do serviço
+      if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+        // Usar cost_price direto multiplicado pela quantidade
+        const serviceCost = (service.cost_price || 0) * quantity;
+        return sum + serviceCost;
+      }
+      
+      // Fallback: calcular por cost_percentage se cost_price não estiver disponível
       const unitPrice = service.unit_price || service.default_price || 0;
       const costPercentage = service.cost_percentage || 0;
       const serviceTotal = quantity * unitPrice;
@@ -320,35 +330,84 @@ export function ContractFormProvider({
   const contractDiscount = form.watch('total_discount') || 0;
   
   // AIDEV-NOTE: Função para calcular custos híbridos (backend + local)
+  // CORREÇÃO: Agora calcula custos baseado em cost_price dos serviços quando disponível
   const calculateHybridCosts = useCallback((currentServices: any[]) => {
     if (!contractId || !contractCosts) {
-      // Para contratos novos, usar cost_percentage tradicional
-      return undefined;
+      // Para contratos novos, calcular custos diretamente dos serviços
+      // AIDEV-NOTE: CORREÇÃO - Calcular custos baseado em cost_price dos serviços
+      let totalLocalCosts = 0;
+      
+      currentServices.forEach(service => {
+        const quantity = service.quantity || 1;
+        
+        // Priorizar cost_price direto do serviço
+        if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+          totalLocalCosts += (service.cost_price || 0) * quantity;
+        } else {
+          // Fallback: calcular por cost_percentage
+          const unitPrice = service.unit_price || service.default_price || 0;
+          const costPercentage = service.cost_percentage || 0;
+          const serviceTotal = quantity * unitPrice;
+          const serviceCost = serviceTotal * (costPercentage / 100);
+          totalLocalCosts += serviceCost;
+        }
+      });
+      
+      return totalLocalCosts > 0 ? totalLocalCosts : undefined;
     }
 
-    // Para contratos existentes, combinar custos salvos + custos locais
-    let totalHybridCosts = 0;
+    // Para contratos existentes, combinar custos salvos + custos locais editados
+    let totalLocalCosts = 0;
+    let totalBackendCosts = contractCosts;
 
     currentServices.forEach(service => {
       const serviceId = service.service_id || service.id;
+      const quantity = service.quantity || 1;
       
-      if (serviceId && typeof serviceId === 'string' && serviceId.length > 10) {
-        // Serviço salvo no backend - usar custo real se disponível
-        // Os custos do backend já estão incluídos em contractCosts
-        // Não precisamos somar novamente aqui
+      // AIDEV-NOTE: CORREÇÃO - Verificar se o serviço tem cost_price editado localmente
+      if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+        // Serviço com cost_price editado - usar o valor editado
+        totalLocalCosts += (service.cost_price || 0) * quantity;
+      } else if (serviceId && typeof serviceId === 'string' && serviceId.length > 10) {
+        // Serviço salvo no backend sem edição local - custo já está em contractCosts
+        // Não adicionar novamente
       } else {
         // Serviço novo (local) - calcular custo usando cost_percentage
-        const quantity = service.quantity || 1;
         const unitPrice = service.unit_price || 0;
         const costPercentage = service.cost_percentage || 0;
         const serviceTotal = quantity * unitPrice;
         const serviceCost = serviceTotal * (costPercentage / 100);
-        totalHybridCosts += serviceCost;
+        totalLocalCosts += serviceCost;
       }
     });
 
-    // Retornar custos do backend + custos locais
-    return contractCosts + totalHybridCosts;
+    // AIDEV-NOTE: CORREÇÃO - Se há serviços com cost_price editado, recalcular todos os custos
+    // Caso contrário, usar custos do backend + custos locais de novos serviços
+    const hasEditedCostPrice = currentServices.some(s => 
+      s.cost_price !== undefined && s.cost_price !== null && s.cost_price > 0
+    );
+    
+    if (hasEditedCostPrice) {
+      // Recalcular todos os custos baseado nos cost_price dos serviços
+      let recalculatedCosts = 0;
+      currentServices.forEach(service => {
+        const quantity = service.quantity || 1;
+        if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+          recalculatedCosts += (service.cost_price || 0) * quantity;
+        } else {
+          // Para serviços sem cost_price, usar cost_percentage ou 0
+          const unitPrice = service.unit_price || service.default_price || 0;
+          const costPercentage = service.cost_percentage || 0;
+          const serviceTotal = quantity * unitPrice;
+          const serviceCost = serviceTotal * (costPercentage / 100);
+          recalculatedCosts += serviceCost;
+        }
+      });
+      return recalculatedCosts;
+    }
+
+    // Retornar custos do backend + custos locais de novos serviços
+    return totalBackendCosts + totalLocalCosts;
   }, [contractId, contractCosts]);
 
   useEffect(() => {
