@@ -203,8 +203,9 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
 
     setIsDeleting(true);
     try {
+      // AIDEV-NOTE: deleteContract é um objeto de mutação, usar mutateAsync
       for (const contractId of selectedContracts) {
-        await deleteContract(contractId);
+        await deleteContract.mutateAsync(contractId);
       }
       
       toast({
@@ -215,6 +216,9 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
       
       setSelectedContracts([]);
       setShowDeleteDialog(false);
+      
+      // AIDEV-NOTE: Forçar refresh da lista após exclusão
+      await refetch();
     } catch (error) {
       console.error('Erro ao excluir contratos:', error);
       toast({

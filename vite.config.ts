@@ -62,13 +62,14 @@ export default defineConfig(({ command, mode }) => {
     // Development server configuration
     server: {
       host: '127.0.0.1',
-      port: 8080,
-      strictPort: true, // Sempre usar 8080 em desenvolvimento
+      port: 8081,
+      strictPort: true, // Sempre usar 8081 em desenvolvimento
       open: true, // Open browser on server start
       cors: true,
       hmr: {
         protocol: 'ws',
         host: '127.0.0.1',
+        port: 8081,
       },
       // AIDEV-NOTE: Proxy removido - usando apenas Supabase
       // Não precisamos mais de proxy para /api pois tudo está no Supabase

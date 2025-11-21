@@ -1,11 +1,12 @@
 import React from "react";
-import { ArrowLeft, Save, FileText, CheckCircle, Sparkles, Hash } from "lucide-react";
+import { ArrowLeft, FileText, Sparkles, Hash, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface ContractFormHeaderProps {
   onBack?: () => void;
   title?: string;
+  subtitle?: string; // AIDEV-NOTE: Subtítulo customizado
   contractNumber?: string;
   mode?: "create" | "edit" | "view";
   className?: string;
@@ -14,6 +15,7 @@ interface ContractFormHeaderProps {
 export function ContractFormHeader({ 
   onBack, 
   title = "Novo Contrato",
+  subtitle, // AIDEV-NOTE: Subtítulo customizado
   contractNumber,
   mode = "create",
   className 
@@ -22,10 +24,22 @@ export function ContractFormHeader({
   const displayNumber = contractNumber || `${new Date().getFullYear()}${String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0')}`;
   
   const getTitle = () => {
+    // AIDEV-NOTE: Se title foi passado customizado, usar ele (para ordens de faturamento)
+    if (title && title !== "Novo Contrato") {
+      return title;
+    }
     return `Contrato de Serviço N° ${displayNumber}`;
   };
 
   const getSubtitle = () => {
+    // AIDEV-NOTE: Se subtitle foi fornecido customizado, usar ele (prioridade)
+    if (subtitle) {
+      return subtitle;
+    }
+    // AIDEV-NOTE: Se title foi customizado, usar subtítulo apropriado para ordem
+    if (title && title !== "Novo Contrato" && title.includes("Ordem")) {
+      return "Visualizando detalhes da ordem de faturamento";
+    }
     if (mode === "create") {
       return "Criando novo contrato de prestação de serviços";
     } else if (mode === "edit") {
@@ -42,10 +56,10 @@ export function ContractFormHeader({
       "border-b border-white/10",
       className
     )}>
-      {/* Efeito de brilho sutil */}
+      {/* AIDEV-NOTE: Efeito de brilho sutil (removido backdrop-blur que causava embaçamento) */}
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/3 to-white/8 animate-pulse" />
       
-      <div className="relative flex items-center justify-between p-4">
+      <div className="relative flex items-center justify-between p-4 z-10">
         <div className="flex items-center gap-3">
           {onBack && (
             <Button
@@ -59,8 +73,13 @@ export function ContractFormHeader({
           )}
           
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-              <FileText className="h-5 w-5 text-white" />
+            <div className="p-2 bg-white/10 rounded-lg">
+              {/* AIDEV-NOTE: Usar ícone de Receipt para ordens de faturamento */}
+              {title && title.includes("Ordem") ? (
+                <Receipt className="h-5 w-5 text-white" />
+              ) : (
+                <FileText className="h-5 w-5 text-white" />
+              )}
             </div>
             <div>
               <h1 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -75,12 +94,7 @@ export function ContractFormHeader({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full backdrop-blur-sm">
-            <CheckCircle className="h-3 w-3 text-success/70" />
-            <span className="text-xs text-white/90 font-medium">Sistema Ativo</span>
-          </div>
-        </div>
+        {/* AIDEV-NOTE: Removido badge "Sistema Ativo" conforme solicitado */}
       </div>
     </div>
   );

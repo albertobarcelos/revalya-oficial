@@ -228,6 +228,8 @@ export function useContractEdit(): UseContractEditReturn {
           quantity: service.quantity,
           unit_price: service.unit_price,
           default_price: service.default_price || service.unit_price,
+          // AIDEV-NOTE: CORREÇÃO - Incluir cost_price do banco de dados
+          cost_price: service.cost_price || 0,
           discount_percentage: service.discount_percentage,
           tax_rate: service.tax_rate,
           total_amount: service.total_amount,

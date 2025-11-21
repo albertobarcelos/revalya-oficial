@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 // UI: Tooltip para ícones discretos de status nos cards
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -31,9 +32,9 @@ import { useKanbanFilters } from '@/hooks/useKanbanFilters';
 import { KanbanFilters } from '@/components/billing/KanbanFilters';
 import { Layout } from '@/components/layout/Layout';
 import { useNavigate, useParams } from 'react-router-dom';
-import { NewContractForm } from '@/components/contracts/NewContractForm';
-import { MonthlyBillingDetails } from '@/components/billing/MonthlyBillingDetails';
+import { BillingOrderDetails } from '@/components/billing/BillingOrderDetails';
 import { CreateStandaloneBillingDialog } from '@/components/billing/CreateStandaloneBillingDialog';
+import { ContractFormSkeleton } from '@/components/contracts/ContractFormSkeleton';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { useTenantAccessGuard, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
@@ -51,6 +52,33 @@ import { insertChargeWithAuthContext, insertMultipleCharges } from '@/utils/char
 import { format, startOfDay, addMonths } from 'date-fns';
 
 type ContractStatus = 'Faturar Hoje' | 'Faturamento Pendente' | 'Faturados no Mês' | 'Contratos a Renovar';
+
+// AIDEV-NOTE: DialogContent customizado com sistema de scroll otimizado (mesmo padrão de Contracts.tsx)
+const CustomDialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] translate-x-[-50%] translate-y-[-50%] gap-0 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-2xl overflow-hidden flex flex-col",
+        className
+      )}
+      onOpenAutoFocus={(e) => {
+        // Previne o foco automático que pode causar conflito com aria-hidden
+        e.preventDefault();
+      }}
+      {...props}
+    >
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        {children}
+      </div>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+CustomDialogContent.displayName = "CustomDialogContent";
 
 // AIDEV-NOTE: Definição de colunas movida para dentro do componente para evitar duplicação
 
@@ -86,27 +114,28 @@ function KanbanCard({
   const isFaturados = columnId === 'faturados';
   const isRenovar = columnId === 'renovar';
   
-  // AIDEV-NOTE: Função para abrir modal de detalhes do contrato com proteção contra múltiplos cliques e validação de contract_id
-  // AIDEV-NOTE: Para faturamentos avulsos (contract_id NULL), não abre modal de contrato
+  // AIDEV-NOTE: Função para abrir modal de detalhes da ordem de faturamento
+  // Agora passa period_id (contract.id) ao invés de contract_id
   const handleViewDetails = useCallback(async () => {
     if (isClicking) return;
     
-    // AIDEV-NOTE: Validação defensiva para prevenir contract_id undefined
-    // AIDEV-NOTE: Faturamentos avulsos não têm contract_id, então não abrem modal de contrato
-    if (!contract.contract_id) {
-      // AIDEV-NOTE: Para faturamentos avulsos, não fazer nada ou mostrar toast
-      console.log('Faturamento avulso - não há contrato associado');
+    // AIDEV-NOTE: Validação para garantir que contract.id existe
+    if (!contract.id) {
+      console.error('❌ [KANBAN CARD] contract.id está vazio ou undefined');
       return;
     }
     
+    // AIDEV-NOTE: contract.id é o period_id (id do contract_billing_periods)
+    // Para faturamentos avulsos, também podemos exibir detalhes
     setIsClicking(true);
     try {
-      onViewDetails(contract.contract_id);
+      // AIDEV-NOTE: Passar period_id (contract.id) para exibir ordem de faturamento
+      onViewDetails(contract.id);
     } finally {
       // Reset após um pequeno delay
       setTimeout(() => setIsClicking(false), 500);
     }
-  }, [isClicking, onViewDetails, contract.contract_id, contract.id, contract.customer_name, contract.contract_number]);
+  }, [isClicking, onViewDetails, contract.id]);
   
   // AIDEV-NOTE: Função para lidar com mudança de seleção do checkbox
   // Agora usa contract.id (period_id) em vez de contract.contract_id
@@ -501,85 +530,83 @@ export default function FaturamentoKanban() {
     currentTenant: currentTenant?.name
   });
   const [activeContract, setActiveContract] = useState<KanbanContract | null>(null);
-  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null); // AIDEV-NOTE: ID do período (ordem de faturamento)
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
   const [isBilling, setIsBilling] = useState(false);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
-  const [contractMode, setContractMode] = useState<'view' | 'edit'>('view');
+  const [contractMode, setContractMode] = useState<'view' | 'edit' | 'create'>('view');
   const [isStandaloneBillingOpen, setIsStandaloneBillingOpen] = useState(false);
 
-  // AIDEV-NOTE: Abrir modal com segurança multi-tenant (define contexto + filtra tenant)
-  const handleViewDetails = useCallback(async (contractId: string) => {
+  // AIDEV-NOTE: Abrir modal com segurança multi-tenant para exibir ordem de faturamento
+  // Agora recebe period_id diretamente do card
+  // AIDEV-NOTE: Seguindo guia de segurança - não faz consultas diretas, apenas valida e abre modal
+  // O BillingOrderDetails usa useBillingOrder que já é seguro (useSecureTenantQuery)
+  const handleViewDetails = useCallback((periodId: string) => {
     // Previne múltiplos cliques rápidos
     if (isContractModalOpen) return;
-    // Guardas de segurança: requer acesso e tenant válido
+    
+    // AIDEV-NOTE: CAMADA 1 e 2 - Validação de acesso e tenant (conforme guia)
     if (!hasAccess || !currentTenant?.id) {
-      console.warn('Acesso negado ou tenant inválido ao abrir detalhes do contrato');
+      console.warn('🚫 [SECURITY] Acesso negado ou tenant inválido ao abrir detalhes');
+      toast({
+        title: "Erro de acesso",
+        description: "Não foi possível abrir os detalhes. Verifique suas permissões.",
+        variant: "destructive",
+      });
       return;
     }
 
-    try {
-      console.log('🔍 [MODAL DEBUG] Abrindo modal para contrato:', {
-        contractId,
-        tenantId: currentTenant.id,
-        tenantName: currentTenant.name,
-        hasAccess
+    // AIDEV-NOTE: CAMADA 5 - Validação crítica antes da operação (conforme guia)
+    if (!periodId || periodId.trim() === '') {
+      console.error('❌ [SECURITY] periodId está vazio ou inválido:', periodId);
+      toast({
+        title: "Erro de validação",
+        description: "ID do período inválido.",
+        variant: "destructive",
       });
-
-      // AIDEV-NOTE: Configura contexto de tenant para reforçar RLS em operações subsequentes
-      console.log('🔧 [MODAL DEBUG] Configurando contexto de tenant...');
-      await supabase.rpc('set_tenant_context_simple', { p_tenant_id: currentTenant.id });
-      console.log('✅ [MODAL DEBUG] Contexto de tenant configurado com sucesso');
-
-      // Buscar o status do contrato para determinar o mode, filtrando pelo tenant
-      console.log('🔍 [MODAL DEBUG] Buscando status do contrato...');
-      const { data: contract, error: contractError } = await supabase
-        .from('contracts')
-        .select('status, tenant_id')
-        .eq('id', contractId)
-        .eq('tenant_id', currentTenant.id)
-        .single();
-
-      if (contractError || !contract) {
-        console.error('❌ [MODAL DEBUG] Erro ao buscar status do contrato:', contractError);
-        // Usar mode padrão em caso de erro
-        setContractMode('view');
-      } else {
-        console.log('✅ [MODAL DEBUG] Status do contrato obtido:', {
-          status: contract.status,
-          tenant_id: contract.tenant_id,
-          contractId
-        });
-        // Determinar o mode baseado no status do contrato
-        const mode = (contract.status === 'ACTIVE') ? 'view' : 'edit';
-        setContractMode(mode);
-      }
-
-      console.log('🚀 [MODAL DEBUG] Abrindo modal...');
-      setSelectedContractId(contractId);
-      setIsContractModalOpen(true);
-      
-      // AIDEV-NOTE: Pequeno delay para garantir que o contexto seja aplicado antes do hook ser executado
-      setTimeout(() => {
-        console.log('✅ [MODAL DEBUG] Modal aberto com sucesso para contrato:', contractId);
-      }, 100);
-      
-    } catch (error) {
-      console.error('❌ [MODAL DEBUG] Erro ao abrir modal do contrato:', error);
-      // Usar mode padrão em caso de erro
-      setContractMode('view');
-      
-      setSelectedContractId(contractId);
-      setIsContractModalOpen(true);
+      return;
     }
-  }, [isContractModalOpen, hasAccess, currentTenant?.id, currentTenant?.name]);
 
-  // AIDEV-NOTE: Função para fechar modal de detalhes do contrato
+    // AIDEV-NOTE: Validação adicional - garantir que tenant_id não está vazio
+    if (!currentTenant.id || currentTenant.id.trim() === '') {
+      console.error('❌ [SECURITY] Tenant ID está vazio ou inválido');
+      toast({
+        title: "Erro de segurança",
+        description: "Tenant inválido. Tente fazer login novamente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // AIDEV-NOTE: Log de auditoria (conforme guia)
+    console.log(`🔍 [AUDIT] Abrindo detalhes da ordem - Tenant: ${currentTenant.name}, PeriodId: ${periodId}`);
+
+    // AIDEV-NOTE: Apenas armazenar period_id e abrir modal
+    // O BillingOrderDetails fará a busca segura via useBillingOrder (useSecureTenantQuery)
+    setSelectedPeriodId(periodId);
+    setIsContractModalOpen(true);
+    
+    console.log('✅ [MODAL DEBUG] Modal aberto para período:', periodId);
+  }, [isContractModalOpen, hasAccess, currentTenant, toast]);
+
+  // AIDEV-NOTE: Função para fechar modal de detalhes da ordem de faturamento
   const handleCloseModal = useCallback(() => {
-    console.log('Fechando modal de contrato');
+    console.log('Fechando modal de ordem de faturamento');
     setIsContractModalOpen(false);
-    setSelectedContractId(null);
+    setSelectedPeriodId(null);
+  }, []);
+
+  // AIDEV-NOTE: Handler para quando o formulário de contrato é salvo com sucesso
+  const handleContractFormSuccess = useCallback((contractId: string) => {
+    console.log('✅ [CONTRACT] Contrato salvo/atualizado:', contractId);
+    refreshData();
+    handleCloseModal();
+  }, [refreshData, handleCloseModal]);
+
+  // AIDEV-NOTE: Handler para solicitar edição do contrato
+  const handleEditContract = useCallback((contractId: string) => {
+    setContractMode('edit');
   }, []);
 
   // AIDEV-NOTE: Função para lidar com mudança de seleção de contratos
@@ -1178,23 +1205,32 @@ export default function FaturamentoKanban() {
           </DndContext>
         </div>
 
-        {/* Modal de detalhes de faturamento mensal */}
+        {/* AIDEV-NOTE: Modal de detalhes do contrato - mesmo design do dialog de criação */}
         <Dialog open={isContractModalOpen} onOpenChange={(open) => {
-          if (!open) {
-            handleCloseModal();
-          }
-        }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-            <DialogHeader className="sr-only">
-              <DialogTitle>Detalhes de Faturamento Mensal</DialogTitle>
-            </DialogHeader>
-            {selectedContractId && isContractModalOpen && (
-              <MonthlyBillingDetails
-                contractId={selectedContractId}
-                onClose={handleCloseModal}
-              />
-            )}
-          </DialogContent>
+          if (!open) handleCloseModal();
+          else setIsContractModalOpen(true);
+        }} modal>
+          <CustomDialogContent className="p-0 m-0 border-0">
+          <DialogPrimitive.Title className="sr-only">
+            Detalhes da Ordem de Faturamento
+          </DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Visualização dos detalhes da ordem de faturamento. Ordens faturadas estão congeladas e não refletem alterações no contrato.
+          </DialogPrimitive.Description>
+            {/* AIDEV-NOTE: Container otimizado para scroll com altura controlada */}
+             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+               {!selectedPeriodId ? (
+                 <div className="flex-1 overflow-y-auto p-6">
+                   <ContractFormSkeleton />
+                 </div>
+               ) : (
+                 <BillingOrderDetails 
+                   periodId={selectedPeriodId}
+                   onClose={handleCloseModal}
+                 />
+               )}
+             </div>
+          </CustomDialogContent>
         </Dialog>
 
         {/* AIDEV-NOTE: Modal de faturamento avulso */}
