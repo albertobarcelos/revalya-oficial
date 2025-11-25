@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { listFinancialSettings } from '@/services/financialSettingsService';
 import { listFinancialDocuments } from '@/services/financialDocumentsService';
 import { previewNextPayableEntryNumber } from '@/services/financialPayablesService';
+import { X } from 'lucide-react';
 
 export function CreatePayableModal({
   open,
@@ -34,10 +35,10 @@ export function CreatePayableModal({
   const [entryNumber, setEntryNumber] = useState('');
   const [category, setCategory] = useState('');
   const [documentId, setDocumentId] = useState('');
-  const [supplier, setSupplier] = useState('');
   const [description, setDescription] = useState('');
   const [repeat, setRepeat] = useState(false);
   const [paidConfirmed, setPaidConfirmed] = useState(false);
+  const [bankAccountId, setBankAccountId] = useState('');
 
   const categoriesQuery = useSecureTenantQuery(
     ['payables-categories', currentTenantId],
@@ -57,19 +58,42 @@ export function CreatePayableModal({
     { enabled: !!currentTenantId }
   );
 
+  const bankAccountsQuery = useSecureTenantQuery(
+    ['bank-acounts', currentTenantId],
+    async (supabase, tId) => {
+      const { data, error } = await supabase
+        .from('bank_acounts')
+        .select('id, bank, agency, count, type, tenant_id')
+        .eq('tenant_id', tId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
+    },
+    { enabled: !!currentTenantId }
+  );
+
   const reset = () => {
     setAmount(''); setDueDate(''); setIssueDate(new Date().toISOString().slice(0,10)); setEntryNumber('');
-    setCategory(''); setDocumentId(''); setSupplier(''); setDescription(''); setRepeat(false); setPaidConfirmed(false); setCreatedEntry(null); setTab('dados');
+    setCategory(''); setDocumentId(''); setDescription(''); setRepeat(false); setPaidConfirmed(false); setCreatedEntry(null); setTab('dados');
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="w-[95vw] max-w-none md:max-w-5xl max-h-[85vh] h-auto overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nova conta a pagar</DialogTitle>
-          <DialogDescription>Preencha os dados abaixo e salve.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col [&>button]:hidden">
+        <div className="flex items-center justify-between h-[55px] min-h-[55px] bg-[rgb(244,245,246)] px-6">
+          <DialogTitle className="text-[18px] font-normal leading-[18.48px] text-[rgb(0,0,0)]">Contas a Pagar</DialogTitle>
+          <DialogDescription className="sr-only">Criar nova conta a pagar</DialogDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 pb-6 overflow-y-auto">
           <div className="md:col-span-1">
             <Card>
               <CardHeader>
@@ -136,10 +160,16 @@ export function CreatePayableModal({
                   <div>
                     <Label>Categoria</Label>
                     <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
                         {categoriesQuery.data?.map((c: any) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          <SelectItem
+                            key={c.id}
+                            value={c.id}
+                            className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                          >
+                            {c.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -147,18 +177,38 @@ export function CreatePayableModal({
                   <div>
                     <Label>Tipo de documento</Label>
                     <Select value={documentId} onValueChange={setDocumentId}>
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
                         {documentsQuery.data?.map((d: any) => (
-                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                          <SelectItem
+                            key={d.id}
+                            value={d.id}
+                            className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                          >
+                            {d.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Fornecedor ou transportadora (opcional)</Label>
-                    <Input placeholder="Selecione ou digite para pesquisar" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+                    <Label>Conta bancária</Label>
+                    <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                      <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
+                        {bankAccountsQuery.data?.map((b: any) => (
+                          <SelectItem
+                            key={b.id}
+                            value={b.id}
+                            className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                          >
+                            {b.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                  
                   <div className="md:col-span-3">
                     <Label>Descrição (opcional)</Label>
                     <Input value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -190,8 +240,9 @@ export function CreatePayableModal({
                         category_id: category || null,
                         entry_number: (entryNumber && !entryNumber.startsWith('DES-')) ? entryNumber : undefined,
                         document_id: documentId || null,
-                        supplier_name: supplier || null,
+                        
                         repeat,
+                        bank_account_id: bankAccountId || null,
                       });
                       reset();
                     }}>Salvar e adicionar outro</Button>
@@ -209,8 +260,9 @@ export function CreatePayableModal({
                         category_id: category || null,
                         entry_number: (entryNumber && !entryNumber.startsWith('DES-')) ? entryNumber : undefined,
                         document_id: documentId || null,
-                        supplier_name: supplier || null,
+                        
                         repeat,
+                        bank_account_id: bankAccountId || null,
                       });
                       setCreatedEntry({ entry_number: entryNumber, due_date: dueDate, gross_amount: Number(amount) });
                     }}>Salvar informações</Button>

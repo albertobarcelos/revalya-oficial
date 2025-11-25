@@ -18,8 +18,7 @@ export interface PayableRow {
   payment_method: string | null;
   category_id: string | null;
   document_id: string | null;
-  supplier_id: string | null;
-  supplier_name: string | null;
+  bank_account_id: string | null;
   repeat: boolean;
   metadata: Record<string, any> | null;
   created_by?: string | null;
@@ -41,8 +40,7 @@ export interface PayableInsert {
   payment_method?: string | null;
   category_id?: string | null;
   document_id?: string | null;
-  supplier_id?: string | null;
-  supplier_name?: string | null;
+  bank_account_id?: string | null;
   repeat?: boolean;
   metadata?: Record<string, any> | null;
 }
@@ -88,8 +86,7 @@ export async function createPayable(payload: PayableInsert, client?: SupabaseCli
       payment_method: payload.payment_method ?? null,
       category_id: payload.category_id ?? null,
       document_id: payload.document_id ?? null,
-      supplier_id: payload.supplier_id ?? null,
-      supplier_name: payload.supplier_name ?? null,
+      bank_account_id: payload.bank_account_id ?? null,
       repeat: payload.repeat ?? false,
       metadata: payload.metadata ?? {},
     })
@@ -117,8 +114,7 @@ export async function updatePayable(id: string, patch: Partial<PayableInsert>, c
       payment_method: patch.payment_method,
       category_id: patch.category_id,
       document_id: patch.document_id,
-      supplier_id: patch.supplier_id,
-      supplier_name: patch.supplier_name,
+      bank_account_id: patch.bank_account_id,
       repeat: patch.repeat,
       metadata: patch.metadata,
     })

@@ -42,6 +42,7 @@ const ExamplesPage = lazy(() => import('../../pages/dashboard/examples'));
 const FaturamentoKanban = lazy(() => import('../../pages/FaturamentoKanban'));
 const Recebimentos = lazy(() => import('../../pages/Recebimentos'));
 const ContasAPagar = lazy(() => import('../../pages/ContasAPagar'));
+const BankStatement = lazy(() => import('../../pages/BankStatement'));
 const Reconciliation = lazy(() => import('../../pages/Reconciliation'));
 const ContractSettings = lazy(() => import('../../pages/ContractSettings'));
 const FinanceSettings = lazy(() => import('../../pages/FinanceSettings'));
@@ -128,6 +129,7 @@ export function TenantAutoLoginRouter() {
         <Route path="faturamento-kanban" element={<FaturamentoKanban />} />
         <Route path="recebimentos" element={<Recebimentos />} />
         <Route path="contas-a-pagar" element={<ContasAPagar />} />
+        <Route path="extrato-bancario" element={<BankStatement />} />
         <Route path="conciliacao" element={<Reconciliation />} />
         
         {/* ========== ROTAS DE COMUNICAÇÃO ========== */}

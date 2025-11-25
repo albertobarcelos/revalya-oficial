@@ -219,7 +219,7 @@ export default function Settings() {
                 </TabsTrigger>
                 <TabsTrigger value="configuracoes-financeiras" className="flex items-center gap-2">
                   <Banknote className="h-4 w-4" />
-                  Configurações Financeiras
+                  Financeiro
                 </TabsTrigger>
                 <TabsTrigger value="estoque" className="flex items-center gap-2">
                   <Warehouse className="h-4 w-4" />

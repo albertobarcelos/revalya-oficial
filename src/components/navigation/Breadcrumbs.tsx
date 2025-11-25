@@ -8,6 +8,7 @@ const routeNames: { [key: string]: string } = {
   'cobrancas': 'Cobranças',
   'recebimentos': 'Recebimentos',
   'contas-a-pagar': 'Contas a Pagar',
+  'extrato-bancario': 'Extrato Bancário',
   'notifications': 'Notificações',
   'settings': 'Configurações',
   'dashboard': 'Dashboard',

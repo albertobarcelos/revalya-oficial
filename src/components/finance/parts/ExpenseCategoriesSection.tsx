@@ -1,0 +1,162 @@
+import React, { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
+import { Banknote, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
+import { createFinancialSetting, deleteFinancialSetting, listFinancialSettings, type FinancialSettingType } from '@/services/financialSettingsService';
+
+type Props = { tenantId?: string | null };
+
+export function ExpenseCategoriesSection({ tenantId }: Props) {
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [expenseCategoryInput, setExpenseCategoryInput] = useState('');
+  const [expenseDre, setExpenseDre] = useState<'NONE'|'DEFAULT'|'SALES'|'ADMIN'|'FINANCIAL'|'MARKETING'|'PERSONAL'|'SOCIAL_CHARGES'|'OTHER'>('DEFAULT');
+
+  const query = useSecureTenantQuery(
+    ['financial-settings', tenantId, 'EXPENSE_CATEGORY'],
+    async (supabase, tId) => {
+      const data = await listFinancialSettings(tId, 'EXPENSE_CATEGORY', undefined, supabase);
+      const invalid = data.filter(item => item.tenant_id !== tId);
+      if (invalid.length) throw new Error('VIOLAÇÃO DE SEGURANÇA: registros de outro tenant');
+      return data;
+    },
+    { enabled: !!tenantId }
+  );
+
+  const createMutation = useSecureTenantMutation(
+    async (supabase, tId, payload: { name: string; dre?: string }) => {
+      const targetTenantId = tenantId || tId;
+      return await createFinancialSetting({ tenant_id: targetTenantId!, type: 'EXPENSE_CATEGORY', name: payload.name, dre_category: payload.dre as any }, supabase);
+    },
+    {
+      invalidateQueries: ['financial-settings'],
+      onSuccess: () => {
+        setExpenseCategoryInput('');
+        setExpenseDre('DEFAULT');
+        setShowCategoryForm(false);
+      },
+    }
+  );
+
+  const deleteMutation = useSecureTenantMutation(async (supabase, _tId, payload: { id: string }) => {
+    return await deleteFinancialSetting(payload.id, supabase);
+  }, { invalidateQueries: ['financial-settings'] });
+
+  const handleAdd = (type: FinancialSettingType, value: string) => {
+    const v = value.trim();
+    if (!v || type !== 'EXPENSE_CATEGORY') return;
+    createMutation.mutate({ name: v, dre: expenseDre } as any);
+  };
+
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate({ id });
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Banknote className="h-6 w-6 text-primary" />
+              <div>
+                <CardTitle>Categoria de Despesas</CardTitle>
+                <CardDescription>Gerencie as categorias de despesas para seu DRE</CardDescription>
+              </div>
+            </div>
+            <Dialog open={showCategoryForm} onOpenChange={setShowCategoryForm}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Nova Categoria
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Categoria de Despesa</DialogTitle>
+                  <DialogDescription>Defina a descrição e a categoria de agrupamento</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Descrição</Label>
+                    <Input className="mt-2" value={expenseCategoryInput} onChange={(e) => setExpenseCategoryInput(e.target.value)} placeholder="Ex.: Aluguel, Água, Energia" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Categoria para agrupar no DRE</Label>
+                    <Select value={expenseDre} onValueChange={(v) => setExpenseDre(v as any)}>
+                      <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Não exibir</SelectItem>
+                        <SelectItem value="DEFAULT">Despesas padrão</SelectItem>
+                        <SelectItem value="SALES">Despesas de vendas</SelectItem>
+                        <SelectItem value="ADMIN">Despesas administrativas</SelectItem>
+                        <SelectItem value="FINANCIAL">Despesas financeiras</SelectItem>
+                        <SelectItem value="MARKETING">Despesas com marketing</SelectItem>
+                        <SelectItem value="PERSONAL">Despesas pessoais</SelectItem>
+                        <SelectItem value="SOCIAL_CHARGES">Encargos sociais</SelectItem>
+                        <SelectItem value="OTHER">Outras despesas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowCategoryForm(false)}>Cancelar</Button>
+                  <Button disabled={!expenseCategoryInput.trim()} onClick={() => { handleAdd('EXPENSE_CATEGORY', expenseCategoryInput); }}>
+                    Salvar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Categorias Cadastradas</CardTitle>
+          <CardDescription>Lista de todas as categorias de despesas cadastradas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {query.isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2 text-muted-foreground">Carregando categorias...</span>
+            </div>
+          ) : (query.data?.length || 0) === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Banknote className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>Nenhuma categoria cadastrada</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {query.data?.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell>{c.name}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
