@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parse, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface RevenueTrendChartProps {
@@ -69,67 +69,28 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       return lastSixMonths;
     }
 
-    // Usar os dados dos últimos 6 meses
-    const limitedData = data.slice(-6);
-    
-    // Log para verificar os dados recebidos
-    console.log("RevenueTrendChart - Dados de pagamentos limitados:", limitedData);
-    console.log("RevenueTrendChart - Dados de vencimentos completos:", dueData);
-    
-    // Verificar se os arrays têm o mesmo comprimento
-    if (dueData && limitedData.length !== dueData.length) {
-      console.warn(`RevenueTrendChart - Diferença no número de meses: pagamentos=${limitedData.length}, vencimentos=${dueData.length}`);
+    // Montar faixa contínua dos últimos 6 meses a partir da data atual
+    const monthsRange: string[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(now, i);
+      monthsRange.push(format(d, 'MMM/yyyy', { locale: ptBR }));
     }
     
-    // Verificar especificamente os dados de março
-    const marchData = limitedData.find(item => item.month.toLowerCase().includes('mar/'));
-    const marchDueData = dueData?.find(item => item.month.toLowerCase().includes('mar/'));
-    
-    console.log("RevenueTrendChart - Dados de março nos arrays limitados (pagamentos):", marchData);
-    console.log("RevenueTrendChart - Dados de março nos arrays limitados (vencimentos):", marchDueData);
-    
-    // Criar um mapa de todos os meses disponíveis em ambos os arrays
-    const allMonths = new Set<string>();
-    limitedData.forEach(item => allMonths.add(item.month));
-    dueData?.forEach(item => allMonths.add(item.month));
-    
-    // Converter para array e ordenar cronologicamente
-    const sortedMonths = Array.from(allMonths).sort((a, b) => {
-      const dateA = new Date(a.replace('/', ' '));
-      const dateB = new Date(b.replace('/', ' '));
-      return dateA.getTime() - dateB.getTime();
-    });
-    
-    console.log("RevenueTrendChart - Todos os meses ordenados:", sortedMonths);
-    
-    // Pegar os últimos 6 meses
-    const finalMonths = sortedMonths.slice(-6);
-    console.log("RevenueTrendChart - Meses finais para o gráfico:", finalMonths);
-    
-    // Mapear os dados para cada mês
-    return finalMonths.map((month, index) => {
-      // Encontrar os dados correspondentes
-      const paymentItem = limitedData.find(item => item.month === month);
+    // Mapear os dados para cada mês da faixa contínua
+    return monthsRange.map((month, index) => {
+      const paymentItem = data.find(item => item.month === month);
       const dueItem = dueData?.find(item => item.month === month);
-      
-      // Extrair o nome do mês e o ano
       const [monthName, year] = month.split('/');
-      
-      // Formato a ser exibido: "Mai/25" por exemplo
       const displayMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1, 3)}/${year.slice(2)}`;
-      
-      // Garantir que os valores estão corretamente associados
       const resultado = {
         month: displayMonth,
         monthFull: month,
-        pagamentos: paymentItem?.revenue || 0, // Pagamentos recebidos
-        vencimentos: dueItem?.revenue || 0,    // Vencimentos esperados
+        pagamentos: paymentItem?.revenue || 0,
+        vencimentos: dueItem?.revenue || 0,
         diferenca: (dueItem?.revenue || 0) - (paymentItem?.revenue || 0)
       };
-      
-      // Log para verificar cada item processado
       console.log(`RevenueTrendChart - Item ${index} (${displayMonth}):`, resultado);
-      
       return resultado;
     });
   }, [data, dueData]);

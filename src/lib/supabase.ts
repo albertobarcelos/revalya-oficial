@@ -72,7 +72,7 @@ export const supabaseAdmin = supabaseServiceKey
 // =====================================================
 
 export const STORAGE_BUCKETS = {
-  AVATARS: 'avatars',
+  AVATARS: 'profile-avatars',
   DOCUMENTS: 'documents',
   CONTRACTS: 'contracts',
   REPORTS: 'reports',

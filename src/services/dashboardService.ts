@@ -35,6 +35,8 @@ export const dashboardService = {
       const startDate = dateRange?.from ? format(startOfDay(dateRange.from), 'yyyy-MM-dd') : null;
       const endDate = dateRange?.to ? format(endOfDay(dateRange.to), 'yyyy-MM-dd') : null;
       const today = format(new Date(), 'yyyy-MM-dd');
+      const startDateTs = dateRange?.from ? startOfDay(dateRange.from).toISOString() : null;
+      const endDateTs = dateRange?.to ? endOfDay(dateRange.to).toISOString() : null;
       
       // Data de início para dados de tendência (um ano completo para garantir cobertura adequada)
       const startOfCurrentYear = format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd');
@@ -131,16 +133,16 @@ export const dashboardService = {
           .from("customers")
           .select("created_at", { count: "exact" })
           .eq('tenant_id', tenantId)
-          .gte('created_at', startDate || '1970-01-01')
-          .lte('created_at', endDate || today),
+          .gte('created_at', startDateTs || '1970-01-01T00:00:00.000Z')
+          .lte('created_at', endDateTs || new Date().toISOString()),
           
         // 3. Buscar lista de novos clientes
         supabase
           .from("customers")
           .select("*")
           .eq('tenant_id', tenantId)
-          .gte('created_at', startDate || '1970-01-01')
-          .lte('created_at', endDate || today)
+          .gte('created_at', startDateTs || '1970-01-01T00:00:00.000Z')
+          .lte('created_at', endDateTs || new Date().toISOString())
           .order('created_at', { ascending: false }),
           
         // 4. Buscar contratos ativos para calcular o MRR e MRC
@@ -162,6 +164,7 @@ export const dashboardService = {
             status,
             data_pagamento,
             data_vencimento,
+            updated_at,
             tenant_id
           `)
           .eq('tenant_id', tenantId)
@@ -220,8 +223,8 @@ export const dashboardService = {
       }
 
       // Atualizar métricas com dados dos clientes
-      metrics.newCustomers = customersCountResult.count || 0;
       metrics.newCustomersList = newCustomersListResult.data || [];
+      metrics.newCustomers = (metrics.newCustomersList?.length || 0) || (customersCountResult.count || 0);
       
       // Agora vamos calcular o MRR e o MRC com base em contratos
       const contracts = contractsResult.data || [];
@@ -432,28 +435,33 @@ export const dashboardService = {
       
       // 1. RECEITA POR PAGAMENTO (pago efetivamente)
       const revenueByMonth: Record<string, number> = {};
-      
-      // Filtrar apenas cobranças PAGAS (status RECEIVED, RECEIVED_IN_CASH ou CONFIRMED)
-      const paidCharges = historicalCharges.filter(charge => 
-        (charge.status === "RECEIVED" || charge.status === "CONFIRMED") 
-        && charge.data_pagamento // Garantir que tem data de pagamento
-      );
-      
-      // Agrupar por mês de PAGAMENTO (não de vencimento)
+
+      const paidStatusesSet = new Set([
+        'RECEIVED',
+        'CONFIRMED',
+        'RECEIVED_IN_CASH',
+        'RECEIVED_PIX',
+        'RECEIVED_BOLETO',
+        'RECEIVED_CARD',
+        'PAID'
+      ]);
+
+      const paidCharges = historicalCharges.filter(charge => paidStatusesSet.has(charge.status));
+
       paidCharges.forEach(charge => {
-        if (charge.data_pagamento) {
-          const paymentDate = parseISO(charge.data_pagamento);
+        const paymentDateStr = charge.data_pagamento || charge.updated_at;
+        if (paymentDateStr) {
+          const paymentDate = parseISO(paymentDateStr);
           const month = format(paymentDate, 'MMM/yyyy', { locale: ptBR });
           revenueByMonth[month] = (revenueByMonth[month] || 0) + (charge.valor || 0);
         }
       });
       
-      // 2. RECEITA POR VENCIMENTO (quando deveria ser pago)
+      // 2. A RECEBER POR VENCIMENTO (apenas PENDING e OVERDUE)
       const revenueByDueDate: Record<string, number> = {};
       
-      // Considerar TODAS as cobranças com data de vencimento, independente do status
       historicalCharges.forEach(charge => {
-        if (charge.data_vencimento) {
+        if (charge.data_vencimento && (charge.status === 'PENDING' || charge.status === 'OVERDUE')) {
           const dueDate = parseISO(charge.data_vencimento);
           const month = format(dueDate, 'MMM/yyyy', { locale: ptBR });
           revenueByDueDate[month] = (revenueByDueDate[month] || 0) + (charge.valor || 0);
@@ -609,38 +617,103 @@ export const dashboardService = {
 
     const metrics = await this.getDashboardMetrics(tenantId, dateRange);
 
+    const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const pct = (v: number) => `${v.toFixed(1)}%`;
     const csvContent = [
-      "Métricas Financeiras",
-      `Período: ${dateRange?.from?.toLocaleDateString()} a ${dateRange?.to?.toLocaleDateString()}`,
-      "",
-      "Métrica,Valor",
-      `Valor total recebido,${metrics.totalPaid}`,
-      `Valor total pendente,${metrics.totalPending}`,
-      `Valor total vencido,${metrics.totalOverdue}`,
-      `Quantidade de cobranças recebidas,${metrics.paidCount}`,
-      `Quantidade de cobranças pendentes,${metrics.pendingCount}`,
-      `Quantidade de cobranças vencidas,${metrics.overdueCount}`,
-      `MRR (Receita Mensal Recorrente),${metrics.mrrTotal}`,
-      `MRC (Custo Mensal Recorrente),${metrics.mrcTotal}`,
-      `Valor líquido mensal,${metrics.netMonthlyValue}`,
-      `Crescimento de MRR (%),${metrics.mrrGrowth}`,
-      `Ticket médio,${metrics.avgTicket}`,
-      `Média de dias para receber,${metrics.avgDaysToReceive}`,
-      `Novos clientes,${metrics.newCustomers}`,
-      "",
-      "Receita mensal",
-      "Mês,Valor",
-      ...metrics.revenueByMonth.map(item => `${item.month},${item.revenue}`),
-      "",
-      "Inadimplência por tempo",
-      "Período (dias),Valor,Quantidade",
-      ...metrics.overdueByTime.map(item => `${item.period},${item.amount},${item.count}`),
-      "",
-      "Cobranças por método de pagamento",
-      "Método,Valor,Quantidade",
-      ...metrics.chargesByPaymentMethod.map(item => `${item.method},${item.amount},${item.count}`),
-    ].join("\n");
+      'Métricas Financeiras',
+      `Período: ${dateRange?.from?.toLocaleDateString('pt-BR')} a ${dateRange?.to?.toLocaleDateString('pt-BR')}`,
+      '',
+      'Métrica;Valor',
+      `Valor total recebido;${brl.format(metrics.totalPaid)}`,
+      `Valor total pendente;${brl.format(metrics.totalPending)}`,
+      `Valor total vencido;${brl.format(metrics.totalOverdue)}`,
+      `Quantidade de cobranças recebidas;${metrics.paidCount}`,
+      `Quantidade de cobranças pendentes;${metrics.pendingCount}`,
+      `Quantidade de cobranças vencidas;${metrics.overdueCount}`,
+      `MRR (Receita Mensal Recorrente);${brl.format(metrics.mrrTotal)}`,
+      `MRC (Custo Mensal Recorrente);${brl.format(metrics.mrcTotal)}`,
+      `Valor líquido mensal;${brl.format(metrics.netMonthlyValue)}`,
+      `Crescimento de MRR (%);${pct(metrics.mrrGrowth)}`,
+      `Ticket médio;${brl.format(metrics.avgTicket)}`,
+      `Média de dias para receber;${Number(metrics.avgDaysToReceive.toFixed(1))}`,
+      `Novos clientes;${metrics.newCustomers}`,
+      '',
+      'Receita mensal (pagamentos)',
+      'Mês;Valor',
+      ...metrics.revenueByMonth.map(item => `${item.month};${brl.format(item.revenue)}`),
+      '',
+      'A receber por mês (pendente/vencido)',
+      'Mês;Valor',
+      ...metrics.revenueByDueDate.map(item => `${item.month};${brl.format(item.revenue)}`),
+      '',
+      'Inadimplência por tempo',
+      'Período (dias);Valor;Quantidade',
+      ...metrics.overdueByTime.map(item => `${item.period};${brl.format(item.amount)};${item.count}`),
+      '',
+      'Cobranças por método de pagamento',
+      'Método;Valor;Quantidade',
+      ...metrics.chargesByPaymentMethod.map(item => `${item.method};${brl.format(item.amount)};${item.count}`),
+    ].join('\n');
 
-    return new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    return new Blob(['\ufeff', csvContent], { type: 'text/csv;charset=utf-8' });
+  },
+
+  async exportMetricsExcel(tenantId: string, dateRange?: DateRange): Promise<Blob> {
+    if (!tenantId) {
+      throw new Error('tenant_id é obrigatório para exportMetricsExcel');
+    }
+    const metrics = await this.getDashboardMetrics(tenantId, dateRange);
+    const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const pct = (v: number) => `${v.toFixed(1)}%`;
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" />
+      <style>
+        body{font-family:Segoe UI,Arial,sans-serif;color:#0f172a}
+        table{border-collapse:collapse;width:100%;margin-bottom:16px}
+        th,td{border:1px solid #e2e8f0;padding:8px;font-size:12px}
+        th{background:#f8fafc;text-align:left}
+        .section{font-weight:600;margin:12px 0}
+        .card{padding:8px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px}
+        .green{background:#ecfccb}
+        .orange{background:#ffedd5}
+        .red{background:#fee2e2}
+      </style></head><body>
+      <div class="section">Métricas Financeiras</div>
+      <div class="card">
+        <div>Período: ${esc(dateRange?.from?.toLocaleDateString('pt-BR') || '')} a ${esc(dateRange?.to?.toLocaleDateString('pt-BR') || '')}</div>
+      </div>
+      <table><thead><tr><th>Métrica</th><th>Valor</th></tr></thead><tbody>
+        <tr><td>Valor total recebido</td><td class="green">${brl.format(metrics.totalPaid)}</td></tr>
+        <tr><td>Valor total pendente</td><td class="orange">${brl.format(metrics.totalPending)}</td></tr>
+        <tr><td>Valor total vencido</td><td class="red">${brl.format(metrics.totalOverdue)}</td></tr>
+        <tr><td>Quantidade de cobranças recebidas</td><td>${metrics.paidCount}</td></tr>
+        <tr><td>Quantidade de cobranças pendentes</td><td>${metrics.pendingCount}</td></tr>
+        <tr><td>Quantidade de cobranças vencidas</td><td>${metrics.overdueCount}</td></tr>
+        <tr><td>MRR (Receita Mensal Recorrente)</td><td>${brl.format(metrics.mrrTotal)}</td></tr>
+        <tr><td>MRC (Custo Mensal Recorrente)</td><td>${brl.format(metrics.mrcTotal)}</td></tr>
+        <tr><td>Valor líquido mensal</td><td>${brl.format(metrics.netMonthlyValue)}</td></tr>
+        <tr><td>Crescimento de MRR (%)</td><td>${pct(metrics.mrrGrowth)}</td></tr>
+        <tr><td>Ticket médio</td><td>${brl.format(metrics.avgTicket)}</td></tr>
+        <tr><td>Média de dias para receber</td><td>${Number(metrics.avgDaysToReceive.toFixed(1))}</td></tr>
+        <tr><td>Novos clientes</td><td>${metrics.newCustomers}</td></tr>
+      </tbody></table>
+      <div class="section">Receita mensal (pagamentos)</div>
+      <table><thead><tr><th>Mês</th><th>Valor</th></tr></thead><tbody>
+      ${metrics.revenueByMonth.map(i=>`<tr><td>${esc(i.month)}</td><td>${brl.format(i.revenue)}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="section">A receber por mês (pendente/vencido)</div>
+      <table><thead><tr><th>Mês</th><th>Valor</th></tr></thead><tbody>
+      ${metrics.revenueByDueDate.map(i=>`<tr><td>${esc(i.month)}</td><td>${brl.format(i.revenue)}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="section">Inadimplência por tempo</div>
+      <table><thead><tr><th>Período (dias)</th><th>Valor</th><th>Quantidade</th></tr></thead><tbody>
+      ${metrics.overdueByTime.map(i=>`<tr><td>${esc(i.period)}</td><td>${brl.format(i.amount)}</td><td>${i.count}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="section">Cobranças por método de pagamento</div>
+      <table><thead><tr><th>Método</th><th>Valor</th><th>Quantidade</th></tr></thead><tbody>
+      ${metrics.chargesByPaymentMethod.map(i=>`<tr><td>${esc(i.method)}</td><td>${brl.format(i.amount)}</td><td>${i.count}</td></tr>`).join('')}
+      </tbody></table>
+      </body></html>`;
+    return new Blob([html], { type: 'application/vnd.ms-excel' });
   }
 };

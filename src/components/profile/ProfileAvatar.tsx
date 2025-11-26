@@ -1,19 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { logError, logDebug } from "@/lib/logger";
 import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ProfileAvatarProps {
   url?: string;
   onUpload?: (url: string) => void;
+  onRemove?: () => void;
 }
 
-export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
+export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // AIDEV-NOTE: Hook de segurança para obter tenant_id correto
   const { currentTenant } = useTenantAccessGuard();
@@ -54,6 +57,10 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
 
       if (!event.target.files || event.target.files.length === 0) {
         throw new Error('Você precisa selecionar uma imagem para fazer upload.');
+      }
+
+      if (!currentTenant?.id) {
+        throw new Error('Tenant não identificado. Aguarde o carregamento do contexto e tente novamente.');
       }
 
       // Primeiro obtém o usuário atual
@@ -114,6 +121,43 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
         filePath
       });
 
+      // Buscar avatar anterior para este usuário+tenant
+      const { data: existingAvatar } = await supabase
+        .from('user_avatars')
+        .select('file_path')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      const previousPath = existingAvatar?.file_path;
+
+      // Registrar/atualizar mapeamento em user_avatars (garante 1 registro por user+tenant)
+      const { error: mapError } = await supabase
+        .from('user_avatars')
+        .upsert({
+          user_id: user.id,
+          tenant_id: tenantId,
+          file_path: filePath,
+          file_type: file.type,
+          file_size: file.size,
+          uploaded_at: new Date().toISOString(),
+          is_active: true,
+        }, { onConflict: 'user_id,tenant_id' });
+
+      if (mapError) {
+        logError('Falha ao registrar user_avatars', 'ProfileAvatar', mapError);
+      }
+
+      // Remover arquivo anterior se mudou
+      if (previousPath && previousPath !== filePath) {
+        await supabase.storage
+          .from(STORAGE_BUCKETS.AVATARS)
+          .remove([previousPath]);
+      }
+      if (mapError) {
+        logError('Falha ao registrar user_avatars', 'ProfileAvatar', mapError);
+      }
+
       // Obtém uma URL assinada para exibição imediata
       const signedUrl = await getImageUrl(STORAGE_BUCKETS.AVATARS, filePath, 3600);
       logDebug('URL de exibição obtida (assinada/pública)', 'ProfileAvatar', { signedUrl });
@@ -144,52 +188,84 @@ export function ProfileAvatar({ url, onUpload }: ProfileAvatarProps) {
     }
   }
 
+  function openFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleRemove() {
+    try {
+      if (!url) {
+        setAvatarUrl(null);
+        onRemove?.();
+        return;
+      }
+      onRemove?.();
+      toast({
+        title: "Foto removida",
+        description: "Seu avatar foi removido.",
+      });
+      setAvatarUrl(null);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao remover",
+        description: error.message || "Ocorreu um erro ao remover a foto.",
+        variant: "destructive",
+      });
+    }
+  }
+
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="relative h-32 w-32">
-        <Avatar className="h-32 w-32">
-          <AvatarImage 
-            src={avatarUrl || undefined} 
-            className="object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.onerror = null;
-              target.src = '';
-            }}
-          />
-          <AvatarFallback className="text-2xl">
-            {uploading ? '...' : 'U'}
-          </AvatarFallback>
-        </Avatar>
-        <label
-          className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-          htmlFor="avatar"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-        </label>
-        <input
-          type="file"
-          id="avatar"
-          accept="image/*"
-          onChange={uploadAvatar}
-          disabled={uploading}
-          className="hidden"
-        />
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <div className="relative h-32 w-32 cursor-pointer">
+            <Avatar className="h-32 w-32">
+              <AvatarImage 
+                src={avatarUrl || undefined} 
+                className="object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = '';
+                }}
+              />
+              <AvatarFallback className="text-2xl">
+                {uploading ? '...' : 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+          </div>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={openFilePicker}>Trocar foto</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleRemove}>Remover foto</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={fileInputRef}
+        type="file"
+        id="avatar"
+        accept="image/*"
+        onChange={uploadAvatar}
+        disabled={uploading}
+        className="hidden"
+      />
       <div className="text-center">
         <p className="text-sm text-muted-foreground">
           {uploading ? 'Enviando...' : 'Clique no ícone para alterar sua foto'}

@@ -7,17 +7,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { supabase } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS } from '@/lib/supabase';
 import { Layout } from "@/components/layout/Layout";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import type { Profile } from "@/types/models/profile";
 import { logDebug, logError } from "@/lib/logger";
+import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
 
 export default function Profile() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<Partial<Profile>>({});
+  const { currentTenant } = useTenantAccessGuard();
 
   useEffect(() => {
     loadProfile();
@@ -51,6 +53,36 @@ export default function Profile() {
         } as Partial<Profile>;
         console.log("Dados do perfil carregados:", profileData);
         setProfile(profileData);
+
+        // Reconciliar mapeamento em user_avatars para avatares antigos
+        const filePath = profileData.avatar_url;
+        if (filePath && !filePath.startsWith('http') && currentTenant?.id) {
+          const { data: uaRow } = await supabase
+            .from('user_avatars')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('file_path', filePath)
+            .maybeSingle();
+
+          if (!uaRow) {
+            const { error: uaError } = await supabase
+              .from('user_avatars')
+              .upsert({
+                user_id: user.id,
+                tenant_id: currentTenant.id,
+                file_path: filePath,
+                file_type: 'image/*',
+                file_size: 0,
+                uploaded_at: new Date().toISOString(),
+                is_active: true,
+              }, { onConflict: 'user_id,tenant_id' });
+            if (uaError) {
+              logError('Falha ao reconciliar user_avatars', 'Profile', uaError);
+            } else {
+              logDebug('Reconciliado user_avatars para avatar existente', 'Profile', { filePath });
+            }
+          }
+        }
       } else {
         // Se o usuário não existe na tabela users, vamos criar um novo com dados básicos
         logDebug("Usuário não encontrado na tabela users, criando novo registro", "Profile");
@@ -128,6 +160,58 @@ export default function Profile() {
     }
   };
 
+  const handleAvatarRemove = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não encontrado");
+
+      const currentPath = profile.avatar_url || null;
+
+      if (currentPath) {
+        // Remove arquivo do Storage
+        await supabase.storage
+          .from(STORAGE_BUCKETS.AVATARS)
+          .remove([currentPath]);
+
+        // Remove mapeamento que libera SELECT no bucket
+        await supabase
+          .from('user_avatars')
+          .delete()
+          .match({ user_id: user.id, file_path: currentPath });
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          avatar_url: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile(prev => ({ 
+        ...prev, 
+        avatar_url: null,
+        updated_at: new Date().toISOString()
+      }));
+
+      toast({
+        title: "Sucesso",
+        description: "Foto de perfil removida com sucesso!",
+      });
+
+      await loadProfile();
+    } catch (error: any) {
+      logError("Erro ao remover avatar", "Profile", error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao remover foto de perfil",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Layout>
       <div className="container mx-auto py-6 space-y-6">
@@ -141,9 +225,10 @@ export default function Profile() {
           <CardContent>
             <div className="space-y-8">
               <div className="flex justify-center">
-                <ProfileAvatar 
+              <ProfileAvatar 
                   url={profile.avatar_url || undefined}
                   onUpload={handleAvatarUpload}
+                  onRemove={handleAvatarRemove}
                 />
               </div>
               <ProfileForm 

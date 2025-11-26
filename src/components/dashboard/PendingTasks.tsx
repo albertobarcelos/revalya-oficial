@@ -5,14 +5,32 @@ import { ptBR } from 'date-fns/locale';
 
 type Task = {
   id: string;
-  description: string;
-  due_date: string;
+  title?: string;
+  description?: string;
+  due_date?: string;
   status: string;
+  created_at?: string;
 };
 
 type PendingTasksProps = {
   tasks: Task[];
 };
+
+/**
+ * Formata o status da tarefa para português
+ */
+function formatTaskStatus(status: string): string {
+  switch (status) {
+    case 'pending':
+      return 'Pendente';
+    case 'in_progress':
+      return 'Em andamento';
+    case 'completed':
+      return 'Concluída';
+    default:
+      return status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  }
+}
 
 export function PendingTasks({ tasks }: PendingTasksProps) {
   return (
@@ -27,14 +45,16 @@ export function PendingTasks({ tasks }: PendingTasksProps) {
               <TableHead>Descrição</TableHead>
               <TableHead>Vencimento</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Criado em</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {tasks.map((task) => (
               <TableRow key={task.id}>
-                <TableCell>{task.description}</TableCell>
-                <TableCell>{format(new Date(task.due_date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
-                <TableCell>{task.status}</TableCell>
+                <TableCell>{task.title || task.description || '-'}</TableCell>
+                <TableCell>{task.due_date ? format(new Date(task.due_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
+                <TableCell>{formatTaskStatus(task.status)}</TableCell>
+                <TableCell className="text-right">{task.created_at ? new Date(task.created_at).toLocaleString('pt-BR') : '-'}</TableCell>
               </TableRow>
             ))}
           </TableBody>
