@@ -44,12 +44,24 @@ interface ContractBasicInfoProps {
   customers: any[];
   onClientCreated: (clientId: string) => void;
   isFieldLoading?: (fieldName: string) => boolean;
+  /** Se deve ocultar os campos de vigência (Vigência Inicial e Vigência Final) */
+  hideVigenceFields?: boolean;
+  /** Label customizado para o campo "Nº do Contrato" */
+  contractNumberLabel?: string;
+  /** Label customizado para o campo "Dia de Faturamento" */
+  billingDayLabel?: string;
+  /** Se deve usar calendário para "Previsão de Faturamento" em vez de campo numérico */
+  useBillingDatePicker?: boolean;
 }
 
 export function ContractBasicInfo({ 
   customers, 
   onClientCreated, 
-  isFieldLoading = () => false 
+  isFieldLoading = () => false,
+  hideVigenceFields = false,
+  contractNumberLabel,
+  billingDayLabel,
+  useBillingDatePicker = false
 }: ContractBasicInfoProps) {
   const form = useFormContext<ContractFormValues>();
   const { contractData, isLoadingContract } = useContractForm(); // AIDEV-NOTE: Acessar dados do contrato do contexto
@@ -57,6 +69,7 @@ export function ContractBasicInfo({
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [openInitialDatePicker, setOpenInitialDatePicker] = useState(false);
   const [openFinalDatePicker, setOpenFinalDatePicker] = useState(false);
+  const [openBillingDatePicker, setOpenBillingDatePicker] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   
   // Observar mudanças nas datas para validação em tempo real
@@ -232,7 +245,7 @@ export function ContractBasicInfo({
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center gap-1">
                   <FileText className="h-3.5 w-3.5" />
-                  Nº do Contrato
+                  {contractNumberLabel || "Nº do Contrato"}
                   {isFieldLoading("contract_number") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                 </FormLabel>
                 <div className="relative">
@@ -254,94 +267,263 @@ export function ContractBasicInfo({
           }}
         />
 
-        {/* Dia de Faturamento */}
+        {/* Dia de Faturamento / Previsão de Faturamento */}
         <FormField
           control={form.control}
           name="billing_day"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" />
-                Dia de Faturamento
-                {isFieldLoading("billing_day") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
-              </FormLabel>
-              <div className="relative">
-                <FieldSkeleton visible={isFieldLoading("billing_day")} />
-                <Input
-                  type="number"
-                  min={1}
-                  max={31}
-                  placeholder="Ex: 15"
-                  className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
-                  {...field}
-                  value={field.value || ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    field.onChange(value ? parseInt(value) : '');
-                  }}
-                />
-              </div>
-              <FormDescription className="text-xs text-center">
-                Dia do mês para vencimento
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            // AIDEV-NOTE: Converter billing_day (número) para Date quando usar date picker
+            const billingDate = useBillingDatePicker && field.value 
+              ? new Date(new Date().getFullYear(), new Date().getMonth(), field.value)
+              : null;
+            
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {billingDayLabel || (useBillingDatePicker ? "Previsão de Faturamento" : "Dia de Faturamento")}
+                  {isFieldLoading("billing_day") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("billing_day")} />
+                  {useBillingDatePicker ? (
+                    // AIDEV-NOTE: Calendário para escolher data completa
+                    <Popover open={openBillingDatePicker} onOpenChange={setOpenBillingDatePicker}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
+                              !billingDate && "text-muted-foreground",
+                              billingDate && "border-primary/30 bg-primary/5 hover:bg-primary/10"
+                            )}
+                            disabled={isFieldLoading("billing_day")}
+                            type="button"
+                          >
+                            <div className="flex flex-col items-start w-full">
+                              {billingDate ? (
+                                <span className="font-medium text-foreground text-sm">
+                                  {formatDate(billingDate, 'dd \'de\' MMMM \'de\' yyyy')}
+                                </span>
+                              ) : (
+                                <span>Selecione a data de faturamento</span>
+                              )}
+                            </div>
+                            <CalendarIcon className={cn(
+                              "ml-auto h-4 w-4 transition-colors flex-shrink-0",
+                              billingDate ? "text-primary" : "text-muted-foreground",
+                              "group-hover:text-primary"
+                            )} />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start">
+                        <div className="p-3">
+                          <div className="flex items-center justify-between px-2 pb-3 border-b border-border/30">
+                            <h4 className="font-medium text-sm text-foreground/90">Selecione a data de faturamento</h4>
+                            {billingDate && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                                onClick={() => {
+                                  field.onChange(null);
+                                  setOpenBillingDatePicker(false);
+                                }}
+                              >
+                                Limpar
+                              </Button>
+                            )}
+                          </div>
+                          <div className="relative z-10">
+                            <CalendarComponent
+                              mode="single"
+                              selected={billingDate || undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  // AIDEV-NOTE: Extrair apenas o dia do mês para manter compatibilidade com billing_day
+                                  const day = date.getDate();
+                                  field.onChange(day);
+                                  setOpenBillingDatePicker(false);
+                                }
+                              }}
+                              locale={locale}
+                              classNames={{
+                                months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                                month: "space-y-4",
+                                caption: "flex justify-center pt-1 relative items-center",
+                                caption_label: "text-sm font-medium",
+                                nav: "space-x-1 flex items-center",
+                                nav_button: cn(
+                                  "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors",
+                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                  "disabled:pointer-events-none disabled:opacity-50",
+                                  "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                                  "h-7 w-7"
+                                ),
+                                nav_button_previous: "absolute left-1",
+                                nav_button_next: "absolute right-1",
+                                table: "w-full border-collapse space-y-1",
+                                head_row: "flex",
+                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
+                                row: "flex w-full mt-2",
+                                cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                                day: cn(
+                                  "h-9 w-9 p-0 font-normal aria-selected:opacity-100 rounded-md",
+                                  "hover:bg-accent hover:text-accent-foreground hover:scale-105 transition-all duration-200",
+                                  "focus:bg-accent focus:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-primary/20",
+                                  "cursor-pointer select-none"
+                                ),
+                                day_range_end: "day-range-end",
+                                day_selected: cn(
+                                  "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                                  "focus:bg-primary focus:text-primary-foreground",
+                                  "shadow-md ring-2 ring-primary/20 scale-105"
+                                ),
+                                day_today: cn(
+                                  "bg-accent text-accent-foreground font-semibold",
+                                  "ring-2 ring-primary/30"
+                                ),
+                                day_outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+                                day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed hover:bg-transparent hover:text-muted-foreground hover:scale-100",
+                                day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                                day_hidden: "invisible",
+                              }}
+                              components={{
+                                IconLeft: ({ ...props }) => (
+                                  <ChevronLeft className="h-4 w-4" />
+                                ),
+                                IconRight: ({ ...props }) => (
+                                  <ChevronRight className="h-4 w-4" />
+                                )
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </PopoverContentModal>
+                    </Popover>
+                  ) : (
+                    // AIDEV-NOTE: Campo numérico tradicional (1-31)
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      placeholder="Ex: 15"
+                      className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
+                      {...field}
+                      value={field.value || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value ? parseInt(value) : '');
+                      }}
+                    />
+                  )}
+                </div>
+                <FormDescription className="text-xs text-center">
+                  {useBillingDatePicker 
+                    ? "Selecione a data prevista para faturamento"
+                    : "Dia do mês para vencimento"}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
       </div>
 
-      {/* Segunda linha: Tipo de Faturamento */}
+      {/* Segunda linha: Tipo de Faturamento ou Número de Parcelas */}
       <div className="grid grid-cols-1 gap-4">
-        <FormField
-          control={form.control}
-          name="billing_type"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel className="flex items-center gap-1">
-                <CreditCard className="h-3.5 w-3.5" />
-                Tipo de Faturamento
-                {isFieldLoading("billing_type") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
-              </FormLabel>
-              <div className="relative">
-                <FieldSkeleton visible={isFieldLoading("billing_type")} />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                  {[
-                    { value: "Mensal", label: "Mensal", icon: "📅", description: "Todo mês" },
-                    { value: "Trimestral", label: "Trimestral", icon: "📊", description: "A cada 3 meses" },
-                    { value: "Semestral", label: "Semestral", icon: "📈", description: "A cada 6 meses" },
-                    { value: "Anual", label: "Anual", icon: "🎯", description: "Uma vez por ano" },
-                    { value: "Único", label: "Único", icon: "💎", description: "Pagamento único" },
-                  ].map((option, index) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => field.onChange(option.value)}
-                      disabled={isFieldLoading("billing_type")}
-                      className={cn(
-                        "p-3 rounded-lg border-2 transition-all duration-200 text-left billing-type-card",
-                        "hover:scale-105 hover:shadow-md",
-                        field.value === option.value
-                          ? "border-primary bg-primary/10 shadow-md"
-                          : "border-border hover:border-primary/50 bg-card hover:bg-primary/5"
-                      )}
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{option.icon}</span>
-                        <span className="font-medium text-sm">{option.label}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </button>
-                  ))}
+        {hideVigenceFields ? (
+          // AIDEV-NOTE: Na Ordem de Serviço, mostra "Número de Parcelas" em vez de "Tipo de Faturamento"
+          <FormField
+            control={form.control}
+            name="installments"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Número de Parcelas
+                  {isFieldLoading("installments") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("installments")} />
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Ex: 1 (À Vista) ou 12 (12x)"
+                    className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
+                    {...field}
+                    value={field.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      field.onChange(value ? parseInt(value) : 1);
+                    }}
+                  />
                 </div>
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormDescription className="text-xs text-center">
+                  {field.value === 1 || !field.value 
+                    ? "À Vista (pagamento único)" 
+                    : `${field.value}x parcelas`}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : (
+          // AIDEV-NOTE: Na tela de Contratos, mantém "Tipo de Faturamento"
+          <FormField
+            control={form.control}
+            name="billing_type"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Tipo de Faturamento
+                  {isFieldLoading("billing_type") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("billing_type")} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                    {[
+                      { value: "Mensal", label: "Mensal", icon: "📅", description: "Todo mês" },
+                      { value: "Trimestral", label: "Trimestral", icon: "📊", description: "A cada 3 meses" },
+                      { value: "Semestral", label: "Semestral", icon: "📈", description: "A cada 6 meses" },
+                      { value: "Anual", label: "Anual", icon: "🎯", description: "Uma vez por ano" },
+                      { value: "Único", label: "Único", icon: "💎", description: "Pagamento único" },
+                    ].map((option, index) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => field.onChange(option.value)}
+                        disabled={isFieldLoading("billing_type")}
+                        className={cn(
+                          "p-3 rounded-lg border-2 transition-all duration-200 text-left billing-type-card",
+                          "hover:scale-105 hover:shadow-md",
+                          field.value === option.value
+                            ? "border-primary bg-primary/10 shadow-md"
+                            : "border-border hover:border-primary/50 bg-card hover:bg-primary/5"
+                        )}
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">{option.icon}</span>
+                          <span className="font-medium text-sm">{option.label}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
 
       {/* Terceira linha: Vigências */}
+      {!hideVigenceFields && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Vigência Inicial */}
         <FormField
@@ -744,6 +926,7 @@ export function ContractBasicInfo({
           }}
         />
       </div>
+      )}
     </div>
   );
 }

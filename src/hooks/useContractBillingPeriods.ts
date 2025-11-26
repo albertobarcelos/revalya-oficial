@@ -25,6 +25,7 @@ export interface ContractBillingPeriod {
   bill_date: string;
   status: 'PENDING' | 'BILLED' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'DUE_TODAY';
   billed_at?: string;
+  order_number?: string; // AIDEV-NOTE: Número sequencial da Ordem de Serviço (001, 002, ...)
   created_at: string;
   updated_at: string;
   manual_mark: boolean;

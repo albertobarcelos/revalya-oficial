@@ -11,7 +11,7 @@ import { ThemeConfig, LayoutConfig, PaginationConfig, ToastOptions } from './typ
  */
 export const defaultTheme: ThemeConfig = {
   colors: {
-    primary: '#3B82F6',
+    primary: '#3C006C', // AIDEV-NOTE: Atualizado para nova paleta roxa
     secondary: '#6B7280',
     success: '#10B981',
     warning: '#F59E0B',
