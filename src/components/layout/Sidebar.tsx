@@ -279,6 +279,7 @@ export default function Sidebar() {
       isSubmenu: true,
       children: [
               { icon: BarChart3, label: "Painel", path: `/${tenantSlug}/cobrancas` },
+              { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
               { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
               { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` }
             ]

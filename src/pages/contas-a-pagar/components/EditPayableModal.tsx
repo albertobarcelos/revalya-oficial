@@ -8,12 +8,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useState } from 'react';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { useCustomers } from '@/hooks/useCustomers';
 import { listFinancialSettings } from '@/services/financialSettingsService';
 import { listFinancialDocuments } from '@/services/financialDocumentsService';
 import { listFinancialLaunchs } from '@/services/financialLaunchsService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { X } from 'lucide-react';
 
 interface EditPayableModalProps {
   open: boolean;
@@ -33,11 +33,11 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
   const [entryNumber, setEntryNumber] = useState('');
   const [category, setCategory] = useState('');
   const [documentId, setDocumentId] = useState('');
-  const [supplier, setSupplier] = useState('');
-  const [supplierId, setSupplierId] = useState('');
+  
   const [description, setDescription] = useState('');
   const [repeat, setRepeat] = useState(false);
   const [paidConfirmed, setPaidConfirmed] = useState(false);
+  const [bankAccountId, setBankAccountId] = useState('');
 
   const [launchAmount, setLaunchAmount] = useState('');
   const [launchDate, setLaunchDate] = useState('');
@@ -53,8 +53,7 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
       setEntryNumber(entry.entry_number ?? '');
       setCategory(entry.category_id ?? '');
       setDocumentId(entry.document_id ?? '');
-      setSupplier(entry.supplier_name ?? '');
-      setSupplierId(entry.supplier_id ?? '');
+      
       setDescription(entry.description ?? '');
       setRepeat(!!entry.repeat);
       setPaidConfirmed(entry.status === 'PAID');
@@ -78,6 +77,19 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
     },
     { enabled: !!currentTenantId }
   );
+  const bankAccountsQuery = useSecureTenantQuery(
+    ['bank-acounts', currentTenantId],
+    async (supabase, tId) => {
+      const { data, error } = await supabase
+        .from('bank_acounts')
+        .select('id, bank, agency, count, type, tenant_id')
+        .eq('tenant_id', tId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank || '') }));
+    },
+    { enabled: !!currentTenantId }
+  );
 
   const launchTypesQuery = useSecureTenantQuery(
     ['payables-launch-types', currentTenantId],
@@ -88,7 +100,7 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
     { enabled: !!currentTenantId }
   );
 
-  const { customers } = useCustomers();
+  
 
   useEffect(() => {
     if (open && entry) {
@@ -103,6 +115,12 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
       setLaunches(normalized);
     }
   }, [open, entry]);
+
+  useEffect(() => {
+    if (entry) {
+      setBankAccountId(String((entry as any).bank_account_id || ''));
+    }
+  }, [entry]);
 
   const DadosConteudo = (
     <>
@@ -128,10 +146,16 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
         <div>
           <Label>Categoria</Label>
           <Select value={category} onValueChange={setCategory} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly}><SelectValue placeholder="Selecione ou digite para pesquisar" /></SelectTrigger>
-            <SelectContent>
+            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione ou digite para pesquisar" /></SelectTrigger>
+            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {categoriesQuery.data?.map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                <SelectItem
+                  key={c.id}
+                  value={c.id}
+                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                >
+                  {c.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -139,29 +163,38 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
         <div>
           <Label>Tipo de documento</Label>
           <Select value={documentId} onValueChange={setDocumentId} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly}><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent>
+            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {documentsQuery.data?.map((d: any) => (
-                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                <SelectItem
+                  key={d.id}
+                  value={d.id}
+                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                >
+                  {d.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label>Fornecedor ou transportadora (opcional)</Label>
-          <Select value={supplierId} onValueChange={(v) => {
-            setSupplierId(v);
-            const c = customers?.find((cust: any) => cust.id === v);
-            setSupplier(c?.name || '');
-          }} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly}><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent>
-              {customers?.map((c: any) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+          <Label>Conta bancária</Label>
+          <Select value={bankAccountId} onValueChange={setBankAccountId} disabled={!!readOnly}>
+            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
+              {bankAccountsQuery.data?.map((b: any) => (
+                <SelectItem
+                  key={b.id}
+                  value={b.id}
+                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                >
+                  {b.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
+        
         <div className="md:col-span-3">
           <Label>Descrição (opcional)</Label>
           <Input value={description} onChange={(e) => setDescription(e.target.value)} disabled={!!readOnly} />
@@ -194,8 +227,7 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
             category_id: category || null,
             entry_number: entryNumber || undefined,
             document_id: documentId || null,
-            supplier_id: supplierId || null,
-            supplier_name: supplier || null,
+            
             repeat,
           };
           if (paidConfirmed) {
@@ -212,6 +244,7 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
             };
             patch.metadata = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
           }
+          patch.bank_account_id = bankAccountId || null;
           onSave({ id: entry.id, patch });
         }}>Salvar alterações</Button>
       </div>
@@ -221,12 +254,21 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-none md:max-w-5xl max-h-[85vh] h-auto overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar conta a pagar</DialogTitle>
-          <DialogDescription>Atualize os dados da conta a pagar.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col [&>button]:hidden">
+        <div className="flex items-center justify-between h-[55px] min-h-[55px] bg-[rgb(244,245,246)] px-6">
+          <DialogTitle className="text-[18px] font-normal leading-[18.48px] text-[rgb(0,0,0)]">Contas a Pagar</DialogTitle>
+          <DialogDescription className="sr-only">Editar conta a pagar</DialogDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onOpenChange(false)}
+            className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Fechar</span>
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 pb-6 overflow-y-auto">
           <div className="md:col-span-1">
             <Card>
               <CardHeader>
@@ -284,10 +326,16 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
                       <div>
                         <Label>Tipo de lançamento</Label>
                         <Select value={launchType} onValueChange={setLaunchType}>
-                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
+                          <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
                             {launchTypesQuery.data?.map((lt: any) => (
-                              <SelectItem key={lt.id} value={lt.id}>{lt.name}</SelectItem>
+                              <SelectItem
+                                key={lt.id}
+                                value={lt.id}
+                                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                              >
+                                {lt.name}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

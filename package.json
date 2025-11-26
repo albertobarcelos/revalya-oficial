@@ -87,6 +87,7 @@
     "@types/uuid": "^10.0.0",
     "@types/validator": "^13.11.7",
     "apexcharts": "^4.5.0",
+    "bancos-brasileiros": "^6.2.109",
     "bcryptjs": "^2.4.3",
     "caniuse-lite": "^1.0.30001707",
     "class-variance-authority": "^0.7.1",
