@@ -122,37 +122,27 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
   return (
     <div className={cn("space-y-6", className)}>
       {/* AIDEV-NOTE: Grid principal de métricas - layout responsivo com 5 cards principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Pago para vencer */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Recebidos (Pagos/Confirmados) */}
         <MetricCard
-          title="Pago para vencer"
+          title="Recebidos"
           value={metrics.totalPaid}
           count={metrics.paidCount}
           icon={<Wallet className="h-5 w-5" />}
           color="green"
           delay={0}
         />
-        
-        {/* Pago para vencer (duplicado conforme layout original) */}
+
+        {/* A vencer (Pendentes no período) */}
         <MetricCard
-          title="Pago para vencer"
-          value={metrics.totalPaid}
-          count={metrics.paidCount}
-          icon={<DollarSign className="h-5 w-5" />}
+          title="A vencer"
+          value={metrics.totalPending}
+          count={metrics.pendingCount}
+          icon={<Clock className="h-5 w-5" />}
           color="yellow"
           delay={0.1}
         />
-        
-        {/* Pago para vencer (terceiro card) */}
-        <MetricCard
-          title="Pago para vencer"
-          value={metrics.totalPaid}
-          count={metrics.paidCount}
-          icon={<Target className="h-5 w-5" />}
-          color="yellow"
-          delay={0.2}
-        />
-        
+
         {/* Vencido */}
         <MetricCard
           title="Vencido"
@@ -160,18 +150,9 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           count={metrics.overdueCount}
           icon={<AlertTriangle className="h-5 w-5" />}
           color="red"
-          delay={0.3}
+          delay={0.2}
         />
-        
-        {/* Recebidos */}
-        <MetricCard
-          title="Recebidos"
-          value={metrics.totalReceivable}
-          count={metrics.paidCount}
-          icon={<TrendingUp className="h-5 w-5" />}
-          color="red"
-          delay={0.4}
-        />
+
       </div>
       
       {/* AIDEV-NOTE: Segunda linha de métricas - MRR e outras métricas importantes */}

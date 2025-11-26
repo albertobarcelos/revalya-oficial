@@ -81,8 +81,7 @@ export const dashboardService = {
         chargesByStatus: [
           { status: "RECEIVED", count: 0, amount: 0, charges: [] },
           { status: "PENDING", count: 0, amount: 0, charges: [] },
-          { status: "OVERDUE", count: 0, amount: 0, charges: [] },
-          { status: "CONFIRMED", count: 0, amount: 0, charges: [] }
+          { status: "OVERDUE", count: 0, amount: 0, charges: [] }
         ],
         chargesByPriority: [
           { priority: "high", count: 0, amount: 0 },
@@ -103,7 +102,8 @@ export const dashboardService = {
         customersCountResult, 
         newCustomersListResult,
         contractsResult,
-        historicalChargesResult
+        historicalChargesResult,
+        paymentsInRangeResult
       ] = await Promise.all([
         // 1. Buscar cobranças com dados do cliente
         supabase
@@ -115,9 +115,11 @@ export const dashboardService = {
             data_vencimento,
             data_pagamento,
             created_at,
+            updated_at,
             tipo,
             customer_id,
-            tenant_id
+            tenant_id,
+            customer:customers(name, company, cpf_cnpj)
           `)
           .eq('tenant_id', tenantId)
           .order('data_vencimento', { ascending: false })
@@ -165,6 +167,22 @@ export const dashboardService = {
           .eq('tenant_id', tenantId)
           .gte('data_vencimento', sixMonthsAgo)
           .order('data_vencimento', { ascending: true })
+          ,
+        // 6. Cobranças pagas no período por data_pagamento para calcular Dias p/ Receber
+        supabase
+          .from("charges")
+          .select(`
+            id,
+            valor,
+            status,
+            data_pagamento,
+            data_vencimento,
+            tenant_id
+          `)
+          .eq('tenant_id', tenantId)
+          .gte('data_pagamento', startDate || '1970-01-01')
+          .lte('data_pagamento', endDate || today)
+          .in('status', ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH','RECEIVED_PIX','RECEIVED_BOLETO','RECEIVED_CARD','PAID'])
       ]);
 
       // Verificar e processar resultados
@@ -173,6 +191,7 @@ export const dashboardService = {
       if (newCustomersListResult.error) throw newCustomersListResult.error;
       if (contractsResult.error) throw contractsResult.error;
       if (historicalChargesResult.error) throw historicalChargesResult.error;
+      if (paymentsInRangeResult.error) throw paymentsInRangeResult.error;
 
       // Validação de segurança - verificar se todos os dados pertencem ao tenant correto
       const invalidCharges = chargesResult.data?.filter(c => c.tenant_id !== tenantId);
@@ -193,6 +212,11 @@ export const dashboardService = {
       const invalidHistoricalCharges = historicalChargesResult.data?.filter(c => c.tenant_id !== tenantId);
       if (invalidHistoricalCharges?.length > 0) {
         throw new Error('Violação de segurança: historical charges de tenant incorreto detectadas');
+      }
+
+      const invalidPaymentsInRange = paymentsInRangeResult.data?.filter(c => c.tenant_id !== tenantId);
+      if (invalidPaymentsInRange?.length > 0) {
+        throw new Error('Violação de segurança: payments in range de tenant incorreto detectadas');
       }
 
       // Atualizar métricas com dados dos clientes
@@ -225,7 +249,7 @@ export const dashboardService = {
         "RECEIVED_IN_CASH": 0,
         "PENDING": 1,
         "OVERDUE": 2,
-        "CONFIRMED": 3
+        "CONFIRMED": 0
       };
       
       // Variáveis para cálculos de médias
@@ -245,8 +269,11 @@ export const dashboardService = {
         const status = charge.status || "";
         const prioridade = "medium"; // Default priority since column doesn't exist
         
-        // Verificar se é uma cobrança vencida (PENDING + data_vencimento < hoje)
-        const isOverdue = status === "PENDING" && charge.data_vencimento < today;
+        // Verificar se é uma cobrança vencida
+        // Regra: status OVERDUE explícito OU PENDING com data_vencimento < hoje
+        const isOverduePending = status === "PENDING" && charge.data_vencimento < today;
+        const isOverdueExplicit = status === "OVERDUE";
+        const isOverdue = isOverduePending || isOverdueExplicit;
         const effectiveStatus = isOverdue ? "OVERDUE" : status;
         
         // Debug detalhado para cobranças vencidas
@@ -283,14 +310,24 @@ export const dashboardService = {
         }
         
         // Incrementar contagens e valores por status
-        if (effectiveStatus === "RECEIVED" || effectiveStatus === "CONFIRMED") {
+        const paidStatuses = [
+          "RECEIVED",
+          "CONFIRMED",
+          "RECEIVED_IN_CASH",
+          "RECEIVED_PIX",
+          "RECEIVED_BOLETO",
+          "RECEIVED_CARD",
+          "PAID"
+        ];
+        if (paidStatuses.includes(status) || effectiveStatus === "RECEIVED" || effectiveStatus === "CONFIRMED") {
           metrics.totalPaid += valor;
           metrics.paidCount++;
           
-          // Calcular dias até receber
-          if (charge.data_pagamento && charge.data_vencimento) {
+          // Calcular dias até receber com fallback para updated_at quando data_pagamento ausente
+          const paymentDateStr = charge.data_pagamento || charge.updated_at || null;
+          if (paymentDateStr && charge.data_vencimento) {
             const daysToReceive = differenceInDays(
-              parseISO(charge.data_pagamento), 
+              parseISO(paymentDateStr),
               parseISO(charge.data_vencimento)
             );
             totalDaysToReceive += daysToReceive;
@@ -370,8 +407,22 @@ export const dashboardService = {
       // Calcular ticket médio
       metrics.avgTicket = totalTicketCount > 0 ? totalTicketValue / totalTicketCount : 0;
       
-      // Calcular média de dias para receber
-      metrics.avgDaysToReceive = countForDaysToReceive > 0 ? totalDaysToReceive / countForDaysToReceive : 0;
+      // Calcular média de dias para receber com base em data_pagamento no período, se disponível
+      const paymentsInRange = paymentsInRangeResult.data || [];
+      if (paymentsInRange.length > 0) {
+        let totalDaysRange = 0;
+        let countRange = 0;
+        paymentsInRange.forEach(charge => {
+          if (charge.data_pagamento && charge.data_vencimento) {
+            const days = differenceInDays(parseISO(charge.data_pagamento), parseISO(charge.data_vencimento));
+            totalDaysRange += days;
+            countRange++;
+          }
+        });
+        metrics.avgDaysToReceive = countRange > 0 ? totalDaysRange / countRange : 0;
+      } else {
+        metrics.avgDaysToReceive = countForDaysToReceive > 0 ? totalDaysToReceive / countForDaysToReceive : 0;
+      }
       
       // Calcular receita total a receber
       metrics.totalReceivable = metrics.totalPending + metrics.totalOverdue;
@@ -419,6 +470,27 @@ export const dashboardService = {
         month,
         revenue
       }));
+
+      // Calcular MRR Growth (variação percentual mês atual vs mês anterior) usando receita por pagamentos
+      try {
+        const now = new Date();
+        const currentMonthLabel = format(now, 'MMM/yyyy', { locale: ptBR });
+        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const previousMonthLabel = format(prev, 'MMM/yyyy', { locale: ptBR });
+
+        const currentRevenue = metrics.revenueByMonth.find(r => r.month === currentMonthLabel)?.revenue || 0;
+        const previousRevenue = metrics.revenueByMonth.find(r => r.month === previousMonthLabel)?.revenue || 0;
+
+        if (previousRevenue > 0) {
+          metrics.mrrGrowth = ((currentRevenue - previousRevenue) / previousRevenue) * 100;
+        } else {
+          // Se não há receita no mês anterior, definir crescimento como 0 para evitar divisão por zero
+          metrics.mrrGrowth = 0;
+        }
+      } catch (e) {
+        console.warn('Aviso ao calcular MRR Growth:', e);
+        metrics.mrrGrowth = 0;
+      }
       
       return metrics;
     } catch (error) {
@@ -477,11 +549,40 @@ export const dashboardService = {
         };
       }
       
-      // Processar cobranças
+      // Processar cobranças (Entradas)
       data?.forEach(charge => {
         if (charge.data_vencimento && cashFlow[charge.data_vencimento]) {
           // Soma o valor como entrada (inflow)
           cashFlow[charge.data_vencimento].inflow += Number(charge.valor || 0);
+        }
+      });
+
+      // Buscar contas a pagar para saídas
+      const { data: payables, error: payablesError } = await supabase
+        .from('financial_payables')
+        .select(`
+          net_amount,
+          due_date,
+          status,
+          tenant_id
+        `)
+        .eq('tenant_id', tenantId)
+        .lte('due_date', endDateStr)
+        .in('status', ['PENDING', 'OVERDUE'])
+        .order('due_date', { ascending: true });
+
+      if (payablesError) throw payablesError;
+
+      const invalidPayables = payables?.filter(p => p.tenant_id !== tenantId);
+      if (invalidPayables?.length > 0) {
+        throw new Error('Violação de segurança: payables data de tenant incorreto detectada');
+      }
+
+      // Processar contas a pagar (Saídas)
+      payables?.forEach(p => {
+        const dateStr = p.due_date;
+        if (dateStr && cashFlow[dateStr]) {
+          cashFlow[dateStr].outflow += Number(p.net_amount || 0);
         }
       });
       

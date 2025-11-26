@@ -92,7 +92,7 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
                   tickLine={false}
                   width={60}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={false} />
                 <Bar 
                   dataKey="amount" 
                   fill="#f43f5e" 

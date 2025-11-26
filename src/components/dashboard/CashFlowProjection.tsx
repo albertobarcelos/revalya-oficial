@@ -81,7 +81,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
       return 1000; // Valor padrão se não houver dados
     }
     
-    const values = filteredData.map(item => Math.max(item.inflow || 0, item.balance || 0))
+    const values = filteredData.map(item => Math.max(item.inflow || 0, item.outflow || 0, item.balance || 0))
       .filter(value => isFinite(value));
     
     return values.length > 0 ? Math.max(...values) : 1000;
@@ -99,6 +99,14 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
   }, [filteredData]);
   
   const yDomain = [minValue * 1.1, maxValue * 1.1]; // Adiciona 10% de margem
+  
+  // Dados para o gráfico com saída negativa para visualização abaixo do zero
+  const chartData = useMemo(() => {
+    return filteredData.map(item => ({
+      ...item,
+      outflowPlot: -Math.abs(item.outflow || 0)
+    }));
+  }, [filteredData]);
   
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -179,7 +187,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={filteredData}
+              data={chartData}
               margin={{
                 top: 15,
                 right: 15,
@@ -191,6 +199,10 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 <linearGradient id="colorInflow" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorOutflow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -231,6 +243,17 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorInflow)"
+                activeDot={{ r: 6, strokeWidth: 1 }}
+              />
+              
+              <Area
+                type="monotone"
+                dataKey="outflowPlot"
+                name="Saída"
+                stroke="#ef4444"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorOutflow)"
                 activeDot={{ r: 6, strokeWidth: 1 }}
               />
               
