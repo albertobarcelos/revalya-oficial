@@ -36,7 +36,7 @@ export function PendingTasks({ tasks }: PendingTasksProps) {
   return (
     <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
       <div className="p-4 border-b">
-        <h3 className="text-base font-medium">Tarefas Pendentes</h3>
+        <h3 className="text-base font-medium text-foreground">Tarefas Pendentes</h3>
       </div>
       <div className="p-0 max-h-[300px] overflow-auto">
         <Table>
@@ -51,9 +51,11 @@ export function PendingTasks({ tasks }: PendingTasksProps) {
           <TableBody>
             {tasks.map((task) => (
               <TableRow key={task.id}>
-                <TableCell>{task.title || task.description || '-'}</TableCell>
+                <TableCell className="text-foreground">{task.title || task.description || '-'}</TableCell>
                 <TableCell>{task.due_date ? format(new Date(task.due_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</TableCell>
-                <TableCell>{formatTaskStatus(task.status)}</TableCell>
+                <TableCell className={`font-medium ${styleForTaskStatus(task.status)}`}>
+                  {formatTaskStatus(task.status)}
+                </TableCell>
                 <TableCell className="text-right">{task.created_at ? new Date(task.created_at).toLocaleString('pt-BR') : '-'}</TableCell>
               </TableRow>
             ))}
@@ -62,4 +64,17 @@ export function PendingTasks({ tasks }: PendingTasksProps) {
       </div>
     </div>
   );
+}
+
+function styleForTaskStatus(status: string) {
+  switch (status) {
+    case 'completed':
+      return 'text-success';
+    case 'in_progress':
+      return 'text-warning';
+    case 'pending':
+      return 'text-warning';
+    default:
+      return 'text-foreground';
+  }
 }

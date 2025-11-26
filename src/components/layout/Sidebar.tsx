@@ -278,10 +278,18 @@ export default function Sidebar() {
       id: "financeiro",
       isSubmenu: true,
       children: [
-              { icon: BarChart3, label: "Painel", path: `/${tenantSlug}/cobrancas` },
-              { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
-              { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
-              { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` }
+              { icon: BarChart3, label: "Painel de Cobrança", path: `/${tenantSlug}/cobrancas` },
+              { 
+                icon: Activity, 
+                label: "Movimentações",
+                id: "produtos",
+                isSubmenu: true,
+                children: [
+                  { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
+                  { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
+                  { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` }
+                ]
+              },
             ]
     },
     { icon: CheckSquare, label: "Tarefas", path: `/${tenantSlug}/tasks` },
@@ -361,7 +369,7 @@ export default function Sidebar() {
                   <button
                     onClick={() => toggleSubmenu(link.id)}
                     className={cn(
-                      "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                      "group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                       {
                         "text-gray-400 hover:bg-white/5 hover:text-white": true,
                         "justify-center": isCollapsed
@@ -371,12 +379,12 @@ export default function Sidebar() {
                   >
                     <link.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-300 ease-in-out" />
                     {!isCollapsed && (
-                      <>
-                        <span className="flex-1 transition-all duration-300 ease-in-out opacity-100 whitespace-nowrap overflow-hidden">
+                      <div className="flex items-center gap-1">
+                        <span className="transition-all duration-300 ease-in-out opacity-100 whitespace-nowrap overflow-hidden text-left">
                           {link.label}
                         </span>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedMenus.includes(link.id) ? 'rotate-180' : ''}`} />
-                      </>
+                        <ChevronDown className={`h-4 w-4 transition-transform opacity-70 group-hover:opacity-100 ${expandedMenus.includes(link.id) ? 'rotate-180' : ''}`} />
+                      </div>
                     )}
                   </button>
                   
@@ -390,17 +398,19 @@ export default function Sidebar() {
                             <button
                               onClick={() => toggleSubmenu(child.id)}
                               className={cn(
-                                "w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                "group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                                 {
                                   "text-gray-400 hover:bg-white/5 hover:text-white": true,
                                 }
                               )}
                             >
                               <child.icon className="h-4 w-4 flex-shrink-0" />
-                              <span className="flex-1 text-left whitespace-nowrap overflow-hidden">
-                                {child.label}
-                              </span>
-                              <ChevronDown className={`h-3 w-3 transition-transform ${expandedMenus.includes(child.id) ? 'rotate-180' : ''}`} />
+                              <div className="flex items-center gap-1">
+                                <span className="text-left whitespace-nowrap overflow-hidden">
+                                  {child.label}
+                                </span>
+                                <ChevronDown className={`h-3 w-3 transition-transform opacity-70 group-hover:opacity-100 ${expandedMenus.includes(child.id) ? 'rotate-180' : ''}`} />
+                              </div>
                             </button>
                             
                             {/* Submenu aninhado */}
@@ -411,7 +421,7 @@ export default function Sidebar() {
                                     key={grandchild.path}
                                     to={grandchild.path}
                                     className={cn(
-                                      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                                       {
                                         "bg-white/10 text-white font-medium": location.pathname === grandchild.path,
                                         "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== grandchild.path,
@@ -433,7 +443,7 @@ export default function Sidebar() {
                             key={child.path}
                             to={child.path}
                             className={cn(
-                              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                               {
                                 "bg-white/10 text-white font-medium": location.pathname === child.path,
                                 "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== child.path,

@@ -34,31 +34,41 @@ export function DashboardMainContent({ metrics, cashFlowData, recentContracts, p
       </div>
 
       <Tabs defaultValue="receivables" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="receivables">Recebíveis</TabsTrigger>
-          <TabsTrigger value="overdue">Inadimplência</TabsTrigger>
-          <TabsTrigger value="customer">Clientes</TabsTrigger>
-          <TabsTrigger value="contracts">Contratos Recentes</TabsTrigger>
-          <TabsTrigger value="tasks">Tarefas Pendentes</TabsTrigger>
+        <TabsList className="mb-4 bg-transparent p-0">
+          <TabsTrigger value="receivables" className="rounded-none border-b-2 border-transparent py-2 text-muted-foreground data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none">Recebíveis</TabsTrigger>
+          <TabsTrigger value="overdue" className="rounded-none border-b-2 border-transparent py-2 text-muted-foreground data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none">Inadimplência</TabsTrigger>
+          <TabsTrigger value="customer" className="rounded-none border-b-2 border-transparent py-2 text-muted-foreground data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none">Clientes</TabsTrigger>
+          <TabsTrigger value="contracts" className="rounded-none border-b-2 border-transparent py-2 text-muted-foreground data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none">Contratos Recentes</TabsTrigger>
+          <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent py-2 text-muted-foreground data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent-foreground data-[state=active]:shadow-none">Tarefas Pendentes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="receivables" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <PaymentMethodChart data={metrics?.chargesByPaymentMethod || defaultPaymentMethods} />
             <div className="bg-card rounded-lg border shadow-sm p-6">
-              <h3 className="text-base font-medium mb-4">Cobranças por Status</h3>
+              <h3 className="text-base font-medium mb-4 text-foreground">Cobranças por Status</h3>
               <div className="space-y-4">
-                {(metrics?.chargesByStatus || defaultStatus).map((statusGroup: any) => (
-                  <div key={statusGroup.status} className="flex items-center justify-between p-3 bg-background rounded-md hover:bg-accent cursor-pointer transition-colors" onClick={() => onShowDetail(labelFor(statusGroup.status), statusGroup.charges)}>
-                    <div>
-                      <span className="text-sm font-medium">{labelFor(statusGroup.status)}</span>
-                      <p className="text-xs text-muted-foreground">{statusGroup.count} cobranças</p>
+                {(metrics?.chargesByStatus || defaultStatus).map((statusGroup: any) => {
+                  const styles = styleFor(statusGroup.status);
+                  return (
+                    <div
+                      key={statusGroup.status}
+                      className="flex items-center justify-between p-3 bg-card rounded-md border border-border hover:border-accent transition-colors cursor-pointer"
+                      onClick={() => onShowDetail(labelFor(statusGroup.status), statusGroup.charges)}
+                    >
+                      <div className="flex items-center">
+                        <div className={`mr-3 h-2 w-2 rounded-full ${styles.dot}`}></div>
+                        <div>
+                          <span className="text-sm font-medium text-foreground">{labelFor(statusGroup.status)}</span>
+                          <p className="text-xs text-muted-foreground">{statusGroup.count} cobranças</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-medium ${styles.amount}`}>{formatCurrency(statusGroup.amount)}</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-medium">{formatCurrency(statusGroup.amount)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -73,9 +83,19 @@ export function DashboardMainContent({ metrics, cashFlowData, recentContracts, p
                 <Table>
                   <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {metrics?.chargesByStatus.find((s: any) => s.status === 'OVERDUE')?.charges.sort((a: ChargeMinimal, b: ChargeMinimal) => (b.valor || 0) - (a.valor || 0)).slice(0,5).map((charge: ChargeMinimal) => (
-                      <TableRow key={charge.id}><TableCell className="font-medium">{charge.customer?.name || 'Cliente não identificado'}</TableCell><TableCell className="text-right">{formatCurrency(charge.valor)}</TableCell></TableRow>
-                    ))}
+                    {metrics?.chargesByStatus.find((s: any) => s.status === 'OVERDUE')?.charges
+                      .sort((a: ChargeMinimal, b: ChargeMinimal) => (b.valor || 0) - (a.valor || 0))
+                      .slice(0,5)
+                      .map((charge: ChargeMinimal) => (
+                        <TableRow key={charge.id}>
+                          <TableCell className="font-medium text-foreground">
+                            {charge.customer?.name || 'Cliente não identificado'}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-danger">
+                            {formatCurrency(charge.valor)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </div>
@@ -85,24 +105,24 @@ export function DashboardMainContent({ metrics, cashFlowData, recentContracts, p
 
         <TabsContent value="customer" className="space-y-4">
           <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-            <div className="p-4 border-b"><h3 className="text-base font-medium">Novos Clientes no Período</h3></div>
+            <div className="p-4 border-b"><h3 className="text-base font-medium text-foreground">Novos Clientes no Período</h3></div>
             <div className="p-0 max-h-[300px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead className="hidden md:table-cell">Empresa</TableHead>
-                    <TableHead className="hidden lg:table-cell">CPF/CNPJ</TableHead>
-                    <TableHead className="text-right">Criado em</TableHead>
+                    <TableHead className="text-foreground">Nome</TableHead>
+                    <TableHead className="hidden md:table-cell text-foreground">Empresa</TableHead>
+                    <TableHead className="hidden lg:table-cell text-foreground">CPF/CNPJ</TableHead>
+                    <TableHead className="text-right text-foreground">Criado em</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(metrics?.newCustomersList || []).slice(0, 20).map((c: CustomerMinimal) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name || '—'}</TableCell>
-                      <TableCell className="hidden md:table-cell">{c.company || '—'}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{c.cpf_cnpj || '—'}</TableCell>
-                      <TableCell className="text-right">{new Date(c.created_at).toLocaleString('pt-BR')}</TableCell>
+                      <TableCell className="font-medium text-foreground">{c.name || '—'}</TableCell>
+                      <TableCell className="hidden md:table-cell text-foreground">{c.company || '—'}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-foreground">{c.cpf_cnpj || '—'}</TableCell>
+                      <TableCell className="text-right text-foreground">{new Date(c.created_at).toLocaleString('pt-BR')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -129,6 +149,21 @@ function labelFor(status: string) {
   if (status === 'OVERDUE') return 'Vencidas';
   if (status === 'CONFIRMED') return 'Confirmadas';
   return status;
+}
+
+function styleFor(status: string) {
+  switch (status) {
+    case 'RECEIVED':
+      return { dot: 'bg-success', amount: 'text-success' };
+    case 'CONFIRMED':
+      return { dot: 'bg-success', amount: 'text-success' };
+    case 'PENDING':
+      return { dot: 'bg-warning', amount: 'text-warning' };
+    case 'OVERDUE':
+      return { dot: 'bg-danger', amount: 'text-danger' };
+    default:
+      return { dot: 'bg-muted', amount: 'text-foreground' };
+  }
 }
 
 const defaultMetrics = {

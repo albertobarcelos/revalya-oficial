@@ -74,11 +74,11 @@ export function PaginationFooter({
       <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
         <div className="flex items-center gap-1 sm:gap-2">
           <span>Mostrando</span>
-          <span className="font-medium text-foreground">
+          <span className="font-light text-foreground">
             {totalItems > 0 ? `${startItem}-${endItem}` : '0'}
           </span>
           <span>de</span>
-          <span className="font-medium text-foreground">{totalItems}</span>
+          <span className="font-light text-foreground">{totalItems}</span>
           <span>itens</span>
         </div>
         
@@ -105,9 +105,9 @@ export function PaginationFooter({
         {totals && (
           <div className="ml-auto mr-[60px] flex items-center gap-2">
             <span className="text-muted-foreground">Totais:</span>
-            <span className="w-[160px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.gross)}</span>
-            <span className="w-[160px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.paid)}</span>
-            <span className="w-[160px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.remaining)}</span>
+            <span className="w-[535px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.gross)}</span>
+            <span className="w-[150px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.paid)}</span>
+            <span className="w-[155px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.remaining)}</span>
           </div>
         )}
       </div>

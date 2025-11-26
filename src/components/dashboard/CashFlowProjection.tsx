@@ -111,8 +111,8 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white border rounded-lg shadow-lg p-3 dark:bg-gray-800">
-          <p className="font-medium text-gray-900 dark:text-white">{label}</p>
+        <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+          <p className="font-medium text-foreground">{label}</p>
           <p className="text-body text-emerald-600 font-medium mt-1 flex justify-between">
             <span>Entrada:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.inflow || 0)}</span>
           </p>
@@ -129,10 +129,10 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
   };
 
   return (
-    <Card className="shadow-md border border-gray-200 dark:border-gray-700">
+    <Card className="shadow-md bg-card border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-medium">
+          <CardTitle className="text-base font-medium text-foreground">
             Projeção de Fluxo de Caixa ({selectedPeriod} dias)
           </CardTitle>
           
@@ -168,15 +168,15 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
         {/* Resumo dos valores */}
         <div className="grid grid-cols-3 gap-4 mt-2 text-body">
           <div className="flex flex-col">
-            <span className="text-gray-500">Total a Receber</span>
+            <span className="text-muted-foreground">Total a Receber</span>
             <span className="font-medium text-emerald-600">{formatCurrency(totals.inflow)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-gray-500">Total de Saídas</span>
+            <span className="text-muted-foreground">Total de Saídas</span>
             <span className="font-medium text-red-500">{formatCurrency(totals.outflow)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-gray-500">Saldo Final</span>
+            <span className="text-muted-foreground">Saldo Final</span>
             <span className={`font-medium ${finalBalance >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
               {formatCurrency(finalBalance)}
             </span>
@@ -217,10 +217,11 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 axisLine={false}
                 interval="preserveStartEnd"
                 minTickGap={20}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
               />
               <YAxis
                 tickFormatter={(value) => formatCurrency(value, true)}
-                tick={{ fontSize: 11 }}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={65}
@@ -270,7 +271,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
               <Legend 
                 iconType="circle" 
                 iconSize={8}
-                wrapperStyle={{ fontSize: '12px', paddingTop: '5px' }}
+                wrapperStyle={{ fontSize: '12px', paddingTop: '5px', color: 'hsl(var(--foreground))' }}
               />
             </AreaChart>
           </ResponsiveContainer>

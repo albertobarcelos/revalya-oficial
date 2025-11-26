@@ -1,34 +1,28 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Filter, Plus, MoreVertical, Search, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
 import { getPayablesPaginated, type PayableFilters, type PayableResponse, markAsPaid as markPayableAsPaid, createPayable, updatePayable, type PayableRow } from '@/services/financialPayablesService';
 import { supabase } from '@/lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Database } from '@/types/database';
 import { useTenantAccessGuard, useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import { listFinancialDocuments } from '@/services/financialDocumentsService';
-import { listFinancialSettings } from '@/services/financialSettingsService';
-import { ActionsBar } from './contas-a-pagar/components/ActionsBar';
 import { AdvancedFilters } from './contas-a-pagar/components/AdvancedFilters';
 import { PayablesTable } from './contas-a-pagar/components/PayablesTable';
 import { CreatePayableModal } from './contas-a-pagar/components/CreatePayableModal';
 import { EditPayableModal } from './contas-a-pagar/components/EditPayableModal';
-import { FilterBar } from './contas-a-pagar/components/FilterBar';
 import type { PayablesFilters } from './contas-a-pagar/types/filters';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { motion } from 'framer-motion';
 
 type FinanceEntry = PayableRow;
 
@@ -51,20 +45,17 @@ const ContasAPagar: React.FC = () => {
     return { search: '', status: [], dateFrom: '', dateTo: '', page: 1 } as PayablesFilters;
   });
 
+  interface DateRangeValue { from?: Date; to?: Date }
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => {
+    const today = new Date();
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { from: first, to: last } as DateRangeValue;
+  });
+
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createModalTab, setCreateModalTab] = useState<'dados'|'lancamentos'|'historico'>('dados');
-  const [createdEntry, setCreatedEntry] = useState<FinanceEntry | null>(null);
-  const [entryAmount, setEntryAmount] = useState('');
-  const [entryDueDate, setEntryDueDate] = useState('');
-  const [entryIssueDate, setEntryIssueDate] = useState(() => new Date().toISOString().slice(0,10));
-  const [entryNumber, setEntryNumber] = useState('');
-  const [entryCategory, setEntryCategory] = useState('');
-  const [entryDocumentId, setEntryDocumentId] = useState('');
-  const [entrySupplier, setEntrySupplier] = useState('');
-  const [entryDescription, setEntryDescription] = useState('');
-  const [entryRepeat, setEntryRepeat] = useState(false);
-  const [entryPaidConfirmed, setEntryPaidConfirmed] = useState(false);
+  
 
   const queryKey = useMemo(
     () => [
@@ -116,23 +107,7 @@ const ContasAPagar: React.FC = () => {
     { enabled: !!currentTenant?.id && hasAccess }
   );
 
-  const categoriesQuery = useSecureTenantQuery(
-    ['payables-categories', currentTenant?.id],
-    async (supabase, tId) => {
-      const data = await listFinancialSettings(tId, 'EXPENSE_CATEGORY', { active: true }, supabase);
-      return data;
-    },
-    { enabled: !!currentTenant?.id && hasAccess }
-  );
-
-  const documentsQuery = useSecureTenantQuery(
-    ['payables-documents', currentTenant?.id],
-    async (supabase, tId) => {
-      const data = await listFinancialDocuments(tId, supabase);
-      return data;
-    },
-    { enabled: !!currentTenant?.id && hasAccess }
-  );
+  
 
   useEffect(() => {
     if (error) {
@@ -299,8 +274,7 @@ const ContasAPagar: React.FC = () => {
     await markAsPaidMutation.mutateAsync({ entryId });
     const entry = payables.find((p) => p.id === entryId);
     if (!entry) return;
-    const doc = documentsQuery.data?.find((d: any) => d.id === entry.document_id);
-    const typeId = doc?.settle_id ?? entry.document_id ?? '';
+    const typeId = entry.document_id ?? '';
     const prevMeta: any = entry.metadata || {};
     const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
     const newLaunch = {
@@ -313,17 +287,7 @@ const ContasAPagar: React.FC = () => {
     const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
     await updatePayableMutation.mutateAsync({ id: entryId, patch: { metadata: newMeta } });
   };
-  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  const getStatusBadge = (status: string) => {
-    const map = {
-      PENDING: { label: 'Pendente', variant: 'secondary' as const },
-      PAID: { label: 'Pago', variant: 'default' as const },
-      OVERDUE: { label: 'Vencido', variant: 'destructive' as const },
-      CANCELLED: { label: 'Cancelado', variant: 'outline' as const },
-    } as const;
-    const cfg = (map as any)[status] || map.PENDING;
-    return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
-  };
+  
 
   const createPayableAddAnotherMutation = useSecureTenantMutation(
     async (_supabase, tenantId, payload: {
@@ -346,8 +310,6 @@ const ContasAPagar: React.FC = () => {
     {
       invalidateQueries: ['contas-a-pagar'],
       onSuccess: () => {
-        setEntryAmount(''); setEntryDueDate(''); setEntryIssueDate(new Date().toISOString().slice(0,10)); setEntryNumber('');
-        setEntryCategory(''); setEntryDocumentId(''); setEntrySupplier(''); setEntryDescription(''); setEntryRepeat(false); setEntryPaidConfirmed(false);
         toast({ title: 'Salvo', description: 'Conta a pagar criada' });
       }
     }
@@ -373,9 +335,7 @@ const ContasAPagar: React.FC = () => {
     },
     {
       invalidateQueries: ['contas-a-pagar'],
-      onSuccess: (entry: any) => {
-        setCreatedEntry(entry);
-        setCreateModalTab('dados');
+      onSuccess: () => {
         toast({ title: 'Salvo', description: 'Conta a pagar criada' });
       }
     }
@@ -393,14 +353,7 @@ const ContasAPagar: React.FC = () => {
     };
   }, [currentTenant?.id, queryClient]);
 
-  /** Retorna indicador visual de situação: bola verde quando vencimento > hoje; caso contrário, badge padrão */
-  const renderStatusIndicator = (status: string) => {
-    if (status === 'PENDING') return <span className="inline-block w-3 h-3 rounded-full bg-green-500" />;
-    if (status === 'DUE_SOON') return <AlertCircle size={17} className="text-[rgb(255,177,51)]" />;
-    if (status === 'DUE_TODAY') return <span className="inline-block w-3 h-3 rounded-full bg-red-500" />;
-    if (status === 'OVERDUE') return <AlertTriangle size={17} className="text-[rgb(223,75,51)]" />;
-    return getStatusBadge(status);
-  };
+  
 
   const resetFilters = () => {
     setFilters({
@@ -442,206 +395,128 @@ const ContasAPagar: React.FC = () => {
 
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        {/* cabeçalho removido para posicionar botão na mesma altura do filtro */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
 
-        <Card className="border-none shadow-none bg-transparent">
-          <CardContent className="pt-0">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
-                <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Contas a Pagar</h2>
-                <div className="relative w-full md:w-80">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Busque por detalhes, número, nome, vencimento ou valor"
-                    className="pl-8 w-full h-9"
-                    value={filters.search}
-                    onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-                  />
+        <Card className="flex flex-col overflow-hidden">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>Contas a Pagar</CardTitle>
+                  <CardDescription>Gerencie e exporte despesas com filtros avançados</CardDescription>
                 </div>
-                <Button variant="link" onClick={() => setShowFilters((v) => !v)}>
-                  {showFilters ? 'Ocultar filtros' : 'Exibir filtros'}
-                </Button>
               </div>
               <div className="flex items-center gap-2">
-                <Button onClick={() => setShowCreateModal(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nova conta a pagar
+                <Button variant="outline" onClick={exportCsv} className="gap-2">
+                  <Download className="h-4 w-4" /> CSV
+                </Button>
+                <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+                  <Plus className="h-4 w-4" /> Nova
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Dialog open={showCreateModal} onOpenChange={(open) => { setShowCreateModal(open); if (!open) {
-          setEntryAmount(''); setEntryDueDate(''); setEntryIssueDate(new Date().toISOString().slice(0,10)); setEntryNumber('');
-          setEntryCategory(''); setEntryDocumentId(''); setEntrySupplier(''); setEntryDescription(''); setEntryRepeat(false); setEntryPaidConfirmed(false);
-          setCreateModalTab('dados'); setCreatedEntry(null);
-        } }}>
-          <DialogContent className="w-[95vw] max-w-none md:max-w-5xl h-[85vh] overflow-hidden">
-            <DialogHeader>
-              <DialogTitle>Nova conta a pagar</DialogTitle>
-              <DialogDescription>Preencha os dados abaixo e salve.</DialogDescription>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-1">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Nova conta a pagar</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
-                    <Button variant={createModalTab==='dados' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setCreateModalTab('dados')}>Dados gerais <span>›</span></Button>
-                    <Button variant={createModalTab==='lancamentos' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setCreateModalTab('lancamentos')} disabled={!createdEntry}>Lançamentos <span>›</span></Button>
-                    <Button variant={createModalTab==='historico' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setCreateModalTab('historico')} disabled={!createdEntry}>Histórico de alterações <span>›</span></Button>
-                    <Button variant="outline" className="w-full" onClick={() => setShowCreateModal(false)}>Voltar à listagem</Button>
-                    {createdEntry && (
-                      <div className="space-y-2 mt-2 text-sm">
-                        <div className="bg-muted px-3 py-2 rounded">{(createdEntry as any).entry_number}</div>
-                        <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                          <span>Vencimento</span>
-                          <span>{format(new Date((createdEntry as any).due_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
-                        </div>
-                        <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                          <span>Valor</span>
-                          <span>{formatCurrency((createdEntry as any).gross_amount || (createdEntry as any).net_amount || 0)}</span>
-                        </div>
-                        <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                          <span>Saldo</span>
-                          <span>{formatCurrency(Math.max(((createdEntry as any).net_amount || 0) - ((createdEntry as any).paid_amount || 0), 0))}</span>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+          </CardHeader>
+          <CardContent className="pt-0 p-0 flex-1 overflow-auto">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 items-end">
+              <div>
+                <Label htmlFor="search">Buscar</Label>
+                <div className="relative mt-2">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Busque por detalhes, número, nome, vencimento ou valor"
+                    value={filters.search}
+                    onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                    className="pl-8 w-full md:max-w-[300px]"
+                  />
+                </div>
               </div>
+
+              <div>
+                <Label>Status</Label>
+                <Select value={(() => {
+                  const s = filters.status || [];
+                  if (s.length === 0) return 'all' as any;
+                  if (s.length === 2 && s.includes('DUE_SOON') && s.includes('DUE_TODAY')) return 'DUE' as any;
+                  return (s[0] as any);
+                })()} onValueChange={(value) => setFilters((p) => ({
+                  ...p,
+                  status: value === 'all' ? [] : (value === 'DUE' ? ['DUE_SOON','DUE_TODAY'] : [value as any])
+                }))}>
+                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="PENDING">Pendente</SelectItem>
+                    <SelectItem value="PAID">Quitado</SelectItem>
+                    <SelectItem value="DUE">A Vencer</SelectItem>
+                    <SelectItem value="OVERDUE">Vencido</SelectItem>
+                    <SelectItem value="CANCELLED">Estornado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="md:col-span-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Dados gerais da conta a pagar</CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-[70vh] overflow-y-auto">
-                    {createdEntry && (
-                      <div className="mb-4 w-full rounded bg-emerald-600/10 text-emerald-700 px-4 py-2">Conta a pagar salva com sucesso.</div>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <Label>Valor</Label>
-                        <Input placeholder="R$ 0,00" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Data de vencimento</Label>
-                        <Input type="date" value={entryDueDate} onChange={(e) => setEntryDueDate(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Data de emissão</Label>
-                        <Input type="date" value={entryIssueDate} onChange={(e) => setEntryIssueDate(e.target.value)} />
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <div className="flex-1">
-                          <Label>Número</Label>
-                          <Input value={entryNumber} onChange={(e) => setEntryNumber(e.target.value)} disabled={!!createdEntry} />
-                        </div>
-                        <Button variant="link" onClick={() => setEntryNumber(`CP${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,'0')}${Date.now().toString().slice(-6)}`)}>Gerar número</Button>
-                      </div>
-                      <div>
-                        <Label>Categoria</Label>
-                        <Select value={entryCategory} onValueChange={setEntryCategory}>
-                          <SelectTrigger><SelectValue placeholder="Selecione ou digite para pesquisar" /></SelectTrigger>
-                          <SelectContent>
-                            {categoriesQuery.data?.map(c => (
-                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Tipo de documento</Label>
-                        <Select value={entryDocumentId} onValueChange={setEntryDocumentId}>
-                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent>
-                            {documentsQuery.data?.map(d => (
-                              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>Fornecedor ou transportadora (opcional)</Label>
-                        <Input placeholder="Selecione ou digite para pesquisar" value={entrySupplier} onChange={(e) => setEntrySupplier(e.target.value)} />
-                      </div>
-                      <div className="md:col-span-3">
-                        <Label>Descrição (opcional)</Label>
-                        <Input value={entryDescription} onChange={(e) => setEntryDescription(e.target.value)} />
-                      </div>
-                      <div className="md:col-span-3 space-y-3">
-                        <label className="flex items-center gap-2">
-                          <Checkbox checked={entryRepeat} onCheckedChange={(v) => setEntryRepeat(!!v)} />
-                          Esta conta a pagar irá se repetir
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <Checkbox checked={entryPaidConfirmed} onCheckedChange={(v) => setEntryPaidConfirmed(!!v)} />
-                          Pagamento confirmado
-                        </label>
-                      </div>
-                    </div>
-                    {createModalTab === 'dados' && (
-                    <div className="mt-6 flex justify-end gap-2">
-                      <Button variant="outline" onClick={async () => {
-                        if (!currentTenant?.id) return;
-                        const amount = Number(entryAmount || '0');
-                        createPayableAddAnotherMutation.mutate({
-                          description: entryDescription || currentTenant?.name || 'Conta a pagar',
-                          gross_amount: amount,
-                          net_amount: amount,
-                          due_date: entryDueDate || new Date().toISOString().slice(0,10),
-                          issue_date: entryIssueDate || new Date().toISOString().slice(0,10),
-                          status: entryPaidConfirmed ? 'PAID' : 'PENDING',
-                          payment_date: entryPaidConfirmed ? new Date().toISOString().slice(0,10) : null,
-                          paid_amount: entryPaidConfirmed ? amount : null,
-                          category_id: entryCategory || null,
-                          entry_number: entryNumber || undefined,
-                          document_id: entryDocumentId || null,
-                          supplier_name: entrySupplier || null,
-                          repeat: entryRepeat,
-                        });
-                      }}>Salvar e adicionar outro</Button>
-                      <Button onClick={async () => {
-                        if (!currentTenant?.id) return;
-                        const amount = Number(entryAmount || '0');
-                        createPayableSaveInfoMutation.mutate({
-                          description: entryDescription || currentTenant?.name || 'Conta a pagar',
-                          gross_amount: amount,
-                          net_amount: amount,
-                          due_date: entryDueDate || new Date().toISOString().slice(0,10),
-                          issue_date: entryIssueDate || new Date().toISOString().slice(0,10),
-                          status: entryPaidConfirmed ? 'PAID' : 'PENDING',
-                          payment_date: entryPaidConfirmed ? new Date().toISOString().slice(0,10) : null,
-                          paid_amount: entryPaidConfirmed ? amount : null,
-                          category_id: entryCategory || null,
-                          entry_number: entryNumber || undefined,
-                          document_id: entryDocumentId || null,
-                          supplier_name: entrySupplier || null,
-                          repeat: entryRepeat,
-                        });
-                      }}>Salvar informações</Button>
-                    </div>
-                    )}
-                    {createModalTab === 'lancamentos' && createdEntry && (
-                      <div className="mt-6">
-                        <p className="text-sm text-muted-foreground">Lançamentos vinculados à conta { (createdEntry as any).entry_number } serão exibidos aqui.</p>
-                      </div>
-                    )}
-                    {createModalTab === 'historico' && createdEntry && (
-                      <div className="mt-6">
-                        <p className="text-sm text-muted-foreground">Histórico de alterações da conta { (createdEntry as any).entry_number }.</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <Label>Período</Label>
+                <div className="mt-2 flex items-end gap-2 w-full md:max-w-[280px]">
+                  <DateRangePicker
+                    date={dateRange as any}
+                    onDateChange={(range: any) => {
+                      if (range?.from && range?.to) {
+                        setDateRange({ from: range.from, to: range.to } as any);
+                        const fromStr = range.from.toISOString().slice(0, 10);
+                        const toStr = range.to.toISOString().slice(0, 10);
+                        setFilters((prev) => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                      }
+                    }}
+                  />
+                  <Button variant="link" onClick={() => setShowFilters((v) => !v)}>
+                    {showFilters ? 'Ocultar filtros' : 'Exibir filtros'}
+                  </Button>
+                </div>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+
+            <Separator className="my-4" />
+
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <div className="border rounded-2xl">
+                <ScrollArea className="max-h-[60vh]">
+                  <PayablesTable
+                    payables={payables}
+                    selectedIds={selectedIds}
+                    allSelected={allSelected}
+                    toggleSelectAll={toggleSelectAll}
+                    toggleSelectOne={toggleSelectOne}
+                    markAsPaid={markAsPaid}
+                    onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
+                    onAfterReverse={() => queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] })}
+                  />
+                </ScrollArea>
+              </div>
+            )}
+
+          </CardContent>
+          <div className="flex-shrink-0">
+            <PaginationFooter
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              itemsPerPage={pagination.limit}
+              onPageChange={(page) => handlePageChange(page)}
+              onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
+              totals={totals}
+            />
+          </div>
+        </Card>
+
+        
 
         {showFilters && (
           <AdvancedFilters
@@ -652,37 +527,7 @@ const ContasAPagar: React.FC = () => {
           />
         )}
 
-        <Card>
-          <CardContent>
-            <ActionsBar selectedCount={selectedIds.length} onBulkMarkAsPaid={bulkMarkAsPaid} rightActions={<Button variant="outline" onClick={exportCsv}>Baixar planilha</Button>} />
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <PayablesTable
-                payables={payables}
-                selectedIds={selectedIds}
-                allSelected={allSelected}
-                toggleSelectAll={toggleSelectAll}
-                toggleSelectOne={toggleSelectOne}
-                markAsPaid={markAsPaid}
-                onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
-                onAfterReverse={() => queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] })}
-              />
-            )}
-          </CardContent>
-
-          <PaginationFooter
-            currentPage={pagination.page}
-            totalPages={pagination.totalPages}
-            totalItems={pagination.total}
-            itemsPerPage={pagination.limit}
-            onPageChange={(page) => handlePageChange(page)}
-            onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
-            totals={totals}
-          />
-        </Card>
+        
 
         <CreatePayableModal
           open={showCreateModal}
@@ -701,7 +546,7 @@ const ContasAPagar: React.FC = () => {
           onAddLaunchPatch={(variables) => appendLaunchMutation.mutate(variables)}
           readOnly={editReadOnly}
         />
-      </div>
+      </motion.div>
     </Layout>
   );
 };

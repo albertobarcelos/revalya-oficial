@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PaginationFooter } from '@/components/layout/PaginationFooter';
 import { useToast } from '@/components/ui/use-toast';
 import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { supabase } from '@/lib/supabase';
@@ -78,7 +79,7 @@ export default function BankStatement() {
       if (error) throw error;
       return (data || []).map((row: any) => ({
         id: row.id,
-        label: `${row.bank || 'Banco'} • Ag ${row.agency || '-'} • Conta ${row.count || '-'}`
+        label: `${row.bank || 'Banco'}`
       })) as BankAccountOption[];
     },
     { enabled: !!currentTenant?.id }
@@ -145,6 +146,22 @@ export default function BankStatement() {
   );
 
   const transactions = statementQuery.data || [];
+
+  // Paginação local (padrão Produtos)
+  const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const totalItems = transactions.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return transactions.slice(start, end);
+  }, [transactions, page, itemsPerPage]);
 
   const balanceQueryKey = useMemo(() => [
     'bank-statement-balance',
@@ -252,7 +269,7 @@ export default function BankStatement() {
     <Layout>
       {hasAccess ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
-          <Card>
+          <Card className="flex flex-col overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -272,12 +289,12 @@ export default function BankStatement() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <CardContent className="pt-0 p-0 flex-1 overflow-auto">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end px-6">
                 <div>
                   <label className="text-sm font-medium">Conta Bancária</label>
                   <Select value={selectedAccountId} onValueChange={(v) => setSelectedAccountId(v)}>
-                    <SelectTrigger className="mt-2">
+                    <SelectTrigger className="mt-2 w-full md:w-1/2 md:max-w-[240px]">
                       <SelectValue placeholder="Selecione a conta" />
                     </SelectTrigger>
                     <SelectContent>
@@ -288,7 +305,7 @@ export default function BankStatement() {
                   </Select>
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <label className="text-sm font-medium">Período</label>
                   <div className="mt-2">
                   <DateRangePicker
@@ -302,10 +319,10 @@ export default function BankStatement() {
                 </div>
               </div>
 
-                <div>
+                <div className="space-y-1">
                   <label className="text-sm font-medium">Tipo de Operação</label>
                   <Select value={operationType} onValueChange={(v) => setOperationType(v as OperationType)}>
-                    <SelectTrigger className="mt-2">
+                    <SelectTrigger className="mt-2 w-full md:w-1/2 md:max-w-[240px]">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -316,7 +333,7 @@ export default function BankStatement() {
                   </Select>
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <label className="text-sm font-medium">Saldo Atual</label>
                   <div className="mt-2 flex items-center gap-2">
                     {currentBalance >= 0 ? (
@@ -349,7 +366,7 @@ export default function BankStatement() {
                     </TableHeader>
                     <TableBody>
                       <AnimatePresence initial={false}>
-                        {transactions.map(t => (
+                        {paginatedTransactions.map(t => (
                           <motion.tr key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <TableCell>{new Date(t.date).toLocaleDateString('pt-BR')}</TableCell>
                             <TableCell>
@@ -373,6 +390,16 @@ export default function BankStatement() {
                 </ScrollArea>
               </div>
             </CardContent>
+            <div className="flex-shrink-0">
+              <PaginationFooter
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+            </div>
           </Card>
         </motion.div>
       ) : (

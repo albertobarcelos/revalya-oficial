@@ -7,7 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
 import { useAuthStore } from "@/store/authStore";
 import { useZustandAuth } from "@/hooks/useZustandAuth";
-import { AuthStatusIndicator } from "@/components/auth/AuthStatusIndicator";
+ 
 
 // Função de log segura que não expõe dados sensíveis
 const logDebug = (message: string, type: 'info' | 'error' | 'warning' = 'info') => {
@@ -57,29 +57,28 @@ function Login() {
   }, [authUser]);
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-background text-foreground">
       {/* Lado esquerdo - Logo e mensagem de boas-vindas */}
-      <div className="hidden lg:flex w-1/2 bg-[#0A1B2E] flex-col items-center justify-center p-12">
+      <div className="hidden lg:flex w-1/2 bg-background flex-col items-center justify-center p-12 border-r border-border">
         <div className="w-3/4 flex flex-col items-center">
           <img 
             src="/logos/LOGO-REVALYA123.png" 
             alt="Revalya Logo" 
             className="w-full mb-12"
           />
-          <h1 className="text-4xl font-bold text-branco-neve mb-6 text-center">
+          <h1 className="text-4xl font-bold text-foreground mb-6 text-center">
             Bem-vindo de volta!
           </h1>
           <p className="text-muted-foreground text-lg text-center">
-              Gerencie as <span className="text-primary font-semibold">cobranças</span> e mantenha seu negócio organizado com a plataforma mais completa do mercado.
+              Gerencie as <span className="text-accent font-semibold">cobranças</span> e mantenha seu negócio organizado com a plataforma mais completa do mercado.
             </p>
         </div>
       </div>
 
       {/* Lado direito - Formulário de login */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
-        <div className="w-full max-w-md space-y-8">
-          {/* Status de autenticação do Zustand usando o componente dedicado */}
-          <AuthStatusIndicator />
+        <div className="w-full max-w-md space-y-8 rounded-xl border border-border bg-card/60 shadow-sm p-8">
+          
           {/* Logo mobile */}
           <div className="lg:hidden flex justify-center mb-10 w-full">
             <img 
@@ -90,7 +89,7 @@ function Login() {
           </div>
 
           <div className="text-center mb-10">
-            <h2 className="text-2xl font-bold tracking-tight">
+            <h2 className="text-2xl font-bold tracking-tight text-accent">
               Acesse sua conta
             </h2>
             <p className="text-sm text-muted-foreground mt-2">
@@ -156,25 +155,25 @@ function Login() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-200">Email</Label>
               <Input
                 id="email"
                 type="email"
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-11"
+                className="h-11 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500 dark:border-slate-300 focus:border-accent"
                 required
               />
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
+                <Label htmlFor="password" className="text-slate-200">Senha</Label>
                 <button
                   type="button"
                   onClick={handleForgotPassword}
-                  className="text-sm text-primary hover:underline"
+                  className="text-sm text-accent hover:text-accent/90"
                 >
                   Esqueceu a senha?
                 </button>
@@ -185,12 +184,12 @@ function Login() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-11"
+                className="h-11 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500 dark:border-slate-300 focus:border-accent"
                 required
               />
             </div>
 
-            <Button type="submit" className="w-full h-11" disabled={loading}>
+            <Button type="submit" className="w-full h-11 bg-accent hover:bg-accent/90 text-white" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -202,26 +201,7 @@ function Login() {
             </Button>
           </form>
 
-          {import.meta.env.DEV && (
-            <div className="mt-6 pt-4 border-t border-muted">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full"
-                onClick={handleTestConnection}
-                disabled={isTestingConnection}
-              >
-                {isTestingConnection ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Testando conexão...
-                  </>
-                ) : (
-                  "Testar conexão com Supabase"
-                )}
-              </Button>
-            </div>
-          )}
+          
         </div>
       </div>
     </div>

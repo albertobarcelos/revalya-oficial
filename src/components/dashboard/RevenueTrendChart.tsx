@@ -189,7 +189,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       const isDeficit = valorEsperado > valorRecebido;
       
       return (
-        <div className="bg-white dark:bg-black border border-border rounded-xl p-4 shadow-lg">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-lg">
           <p className="text-heading-3 font-bold mb-2">{fullMonth}</p>
           
           <div className="space-y-2">
@@ -224,7 +224,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
   };
 
   return (
-    <Card className="col-span-2 overflow-hidden bg-blue-50/80 dark:bg-slate-900/80">
+    <Card className="col-span-2 overflow-hidden bg-card border">
       <CardHeader className="flex flex-row items-start justify-between pb-0">
         <div>
           <CardTitle className="text-heading-1 font-semibold">
@@ -295,6 +295,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   axisLine={false}
                   tickLine={false}
                   dy={10}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 
                 <YAxis 
@@ -303,6 +304,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   tickLine={false}
                   width={80}
                   domain={[0, maxValue]}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 
                 <Tooltip 
@@ -316,6 +318,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   height={36}
                   iconType="circle"
                   iconSize={8}
+                  wrapperStyle={{ color: 'hsl(var(--foreground))' }}
                   formatter={(value) => {
                     return <span className={value === "Vencimentos Esperados" ? "text-pink-500" : "text-blue-500"}>
                       {value}
@@ -361,7 +364,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
         
         {/* Seção de resumo - mostrar apenas mês atual */}
         <div className="grid grid-cols-2 gap-4 p-6 pt-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Recebido</div>
             <div className="text-heading-1 font-bold text-blue-500 tracking-tight">
               {formatCurrency(currentMonthData.pagamentos)}
@@ -371,7 +374,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
             </div>
           </div>
           
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Esperado</div>
             <div className="text-heading-1 font-bold text-pink-500 tracking-tight">
               {formatCurrency(currentMonthData.vencimentos)}

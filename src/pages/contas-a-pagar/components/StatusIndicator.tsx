@@ -10,11 +10,39 @@ export function StatusIndicator({ status }: { status: string }) {
     CANCELLED: 'Estornada',
   };
   const title = labelMap[status] || status;
-  if (status === 'PENDING') return <span title={title} aria-label={title} className="inline-block w-3 h-3 rounded-full bg-green-500" />;
-  if (status === 'DUE_SOON') return <AlertCircle title={title} aria-label={title} size={17} className="text-[rgb(255,177,51)]" />;
-  if (status === 'DUE_TODAY') return <AlertTriangle title={title} aria-label={title} size={17} className="text-[rgb(255,177,51)] inline-block align-middle outline outline-1 outline-[rgb(255,0,0)] outline-dashed" />;
-  if (status === 'OVERDUE') return <AlertTriangle title={title} aria-label={title} size={17} className="text-[rgb(223,75,51)] inline-block align-middle outline outline-1 outline-[rgb(255,0,0)] outline-dashed" />;
-  if (status === 'PAID') return <CheckCircle title={title} aria-label={title} size={17} className="text-[rgb(74,139,233)]" />;
-  if (status === 'CANCELLED') return <MinusCircle title={title} aria-label={title} size={17} className="text-gray-400" />;
+  if (status === 'PENDING') {
+    return (
+      <span
+        title={title}
+        aria-label={title}
+        className="inline-block align-middle w-[17px] h-[17px] leading-[17px] rounded-full bg-[rgb(31,181,133)] m-0 p-0"
+      />
+    );
+  }
+  if (status === 'DUE_SOON') return (
+    <span title={title} aria-label={title} className="inline-block align-middle">
+      <AlertCircle size={17} className="text-[rgb(255,177,51)]" />
+    </span>
+  );
+  if (status === 'DUE_TODAY') return (
+    <span title={title} aria-label={title} className="inline-block align-middle">
+      <AlertTriangle size={17} className="text-[rgb(255,177,51)]" />
+    </span>
+  );
+  if (status === 'OVERDUE') return (
+    <span title={title} aria-label={title} className="inline-block align-middle">
+      <AlertTriangle size={17} className="text-[rgb(223,75,51)]" />
+    </span>
+  );
+  if (status === 'PAID') return (
+    <span title={title} aria-label={title} className="inline-block align-middle">
+      <CheckCircle size={17} className="text-[rgb(74,139,233)]" />
+    </span>
+  );
+  if (status === 'CANCELLED') return (
+    <span title={title} aria-label={title} className="inline-block align-middle">
+      <MinusCircle size={17} className="text-gray-400" />
+    </span>
+  );
   return null;
 }

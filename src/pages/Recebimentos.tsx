@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DollarSign, Filter, Plus, Edit } from 'lucide-react';
+import { DollarSign, Filter, Plus, Edit, Download, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
@@ -14,6 +14,13 @@ import { Layout } from '@/components/layout/Layout';
 import { financeEntriesService, type FinanceEntryFilters, type FinanceEntryResponse } from '@/services/financeEntriesService';
 import type { Database } from '@/types/database';
 import { useTenantAccessGuard, useSecureTenantQuery, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Separator } from '@/components/ui/separator';
+import { motion, AnimatePresence } from 'framer-motion';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { PaginationFooter } from '@/components/layout/PaginationFooter';
 
 // AIDEV-NOTE: Tipo para entrada financeira baseado no banco de dados
 type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
@@ -84,6 +91,13 @@ const Recebimentos: React.FC = () => {
   });
   
   const { toast } = useToast();
+  const tableRef = useRef<HTMLDivElement | null>(null);
+
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>(() => {
+    const from = filters.dateFrom ? new Date(filters.dateFrom) : undefined;
+    const to = filters.dateTo ? new Date(filters.dateTo) : undefined;
+    return { from, to };
+  });
 
 
 
@@ -268,31 +282,66 @@ const Recebimentos: React.FC = () => {
     markAsPaidMutation.mutate({ entryId });
   };
 
+  const handleExportCSV = useCallback(() => {
+    const header = ['Descrição', 'Valor', 'Vencimento', 'Status', 'Data Pagamento'];
+    const rows = recebimentos.map((e) => [
+      e.description || '',
+      (e.amount || 0).toString(),
+      e.due_date ? new Date(e.due_date).toISOString().slice(0, 10) : '',
+      e.status || '',
+      e.payment_date ? new Date(e.payment_date).toISOString().slice(0, 10) : ''
+    ]);
+    const csv = [header, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `recebimentos_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    toast({ title: 'Exportado', description: 'CSV gerado com sucesso' });
+  }, [recebimentos, toast]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (!tableRef.current) return;
+    const canvas = await html2canvas(tableRef.current);
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth - 20;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.text('Recebimentos', 10, 10);
+    pdf.addImage(imgData, 'PNG', 10, 20, imgWidth, Math.min(imgHeight, pageHeight - 30));
+    pdf.save(`recebimentos_${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast({ title: 'Exportado', description: 'PDF gerado com sucesso' });
+  }, [toast]);
+
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Recebimentos</h1>
-            <p className="text-muted-foreground">
-              Gerencie seus recebimentos e controle financeiro
-            </p>
-          </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Recebimento
-          </Button>
-        </div>
-
-        <Card>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
+        <Card className="flex flex-col overflow-hidden">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle>Recebimentos</CardTitle>
+                  <CardDescription>Visualize e exporte recebimentos com filtros avançados</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                  <Download className="h-4 w-4" /> CSV
+                </Button>
+                <Button onClick={handleExportPDF} className="gap-2">
+                  <FileText className="h-4 w-4" /> PDF
+                </Button>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <CardContent className="pt-0 p-0 flex-1 overflow-auto">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 items-end">
               <div>
                 <Label htmlFor="search">Buscar</Label>
                 <Input
@@ -300,13 +349,14 @@ const Recebimentos: React.FC = () => {
                   placeholder="Descrição..."
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="mt-2 w-full md:max-w-[300px]"
                 />
               </div>
               
               <div>
                 <Label htmlFor="type">Tipo</Label>
                 <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -319,8 +369,8 @@ const Recebimentos: React.FC = () => {
               <div>
                 <Label htmlFor="status">Status</Label>
                 <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
+                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
+                    <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -333,170 +383,101 @@ const Recebimentos: React.FC = () => {
               </div>
 
               <div>
-                <Label htmlFor="dateFrom">Data Inicial</Label>
-                <Input
-                  id="dateFrom"
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="dateTo">Data Final</Label>
-                <Input
-                  id="dateTo"
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                />
-              </div>
-              
-              <div className="flex justify-end mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resetFilters}
-                >
-                  Limpar Filtros
-                </Button>
+                <Label>Período</Label>
+                <div className="mt-2 flex items-end gap-2 w-full md:max-w-[280px]">
+                  <DateRangePicker
+                    date={dateRange as any}
+                    onDateChange={(range: any) => {
+                      if (range?.from && range?.to) {
+                        setDateRange({ from: range.from, to: range.to });
+                        const fromStr = range.from.toISOString().slice(0, 10);
+                        const toStr = range.to.toISOString().slice(0, 10);
+                        setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                      }
+                    }}
+                  />
+                  
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              {filters.type === 'RECEIVABLE' ? 'Recebimentos' : 'Despesas'}
-            </CardTitle>
-            <CardDescription>
-              {pagination.total} {filters.type === 'RECEIVABLE' ? 'recebimento(s)' : 'despesa(s)'} encontrado(s) - Página {pagination.page} de {pagination.totalPages}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            <Separator className="my-4" />
+
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Data Pagamento</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recebimentos.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    recebimentos.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium">{entry.description}</TableCell>
-                        <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
-                        <TableCell>
-                          {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(entry.status)}</TableCell>
-                        <TableCell>
-                          {entry.payment_date 
-                            ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
-                            : '-'
-                          }
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {entry.status === 'PENDING' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => markAsPaid(entry.id)}
-                              >
-                                Marcar como Pago
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+              <div ref={tableRef} className="border rounded-2xl">
+                <ScrollArea className="max-h-[60vh]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Valor</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Data Pagamento</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-             )}
+                    </TableHeader>
+                    <TableBody>
+                      <AnimatePresence initial={false}>
+                        {recebimentos.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                              Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          recebimentos.map((entry) => (
+                            <motion.tr key={entry.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                              <TableCell className="font-medium">{entry.description}</TableCell>
+                              <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
+                              <TableCell>
+                                {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(entry.status)}</TableCell>
+                              <TableCell>
+                                {entry.payment_date
+                                  ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  {entry.status === 'PENDING' && (
+                                    <Button size="sm" variant="outline" onClick={() => markAsPaid(entry.id)}>
+                                      Marcar como Pago
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="ghost">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </motion.tr>
+                          ))
+                        )}
+                      </AnimatePresence>
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            )}
+
           </CardContent>
-          
-          {/* AIDEV-NOTE: Componente de paginação */}
-          {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} resultados
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page <= 1}
-                >
-                  Anterior
-                </Button>
-                
-                <div className="flex items-center space-x-1">
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.page <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.page >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = pagination.page - 2 + i;
-                    }
-                    
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={pagination.page === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handlePageChange(pageNum)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.totalPages}
-                >
-                  Próxima
-                </Button>
-              </div>
-            </div>
-          )}
+          <div className="flex-shrink-0">
+            <PaginationFooter
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.total}
+              itemsPerPage={pagination.limit}
+              onPageChange={(page) => handlePageChange(page)}
+              onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
+            />
+          </div>
         </Card>
-      </div>
+      </motion.div>
     </Layout>
   );
 };
