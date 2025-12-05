@@ -4,11 +4,12 @@ import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { logError, logDebug } from "@/lib/logger";
 import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
+import { useSecureTenantMutation } from "@/hooks/templates/useSecureTenantQuery";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ProfileAvatarProps {
   url?: string;
-  onUpload?: (url: string) => void;
+  onUpload?: (avatarId: string) => void;
   onRemove?: () => void;
 }
 
@@ -21,16 +22,93 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
   // AIDEV-NOTE: Hook de segurança para obter tenant_id correto
   const { currentTenant } = useTenantAccessGuard();
 
+  const upsertMapping = useSecureTenantMutation(
+    async (client, _tenantId, vars: { userId: string; tenantId: string; filePath: string; fileType: string; fileSize: number }) => {
+      const { data: existingActive } = await client
+        .from('user_avatars')
+        .select('id, file_path')
+        .eq('user_id', vars.userId)
+        .eq('tenant_id', vars.tenantId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      let previousPath = existingActive?.file_path || null;
+
+      if (existingActive?.id) {
+        const { error: updateError } = await client
+          .from('user_avatars')
+          .update({
+            file_path: vars.filePath,
+            file_type: vars.fileType,
+            file_size: vars.fileSize,
+            uploaded_at: new Date().toISOString(),
+            is_active: true,
+          })
+          .eq('id', existingActive.id);
+        if (updateError) throw updateError;
+        return { id: existingActive.id };
+      } else {
+        const { data: inserted, error: insertError } = await client
+          .from('user_avatars')
+          .insert({
+            user_id: vars.userId,
+            tenant_id: vars.tenantId,
+            file_path: vars.filePath,
+            file_type: vars.fileType,
+            file_size: vars.fileSize,
+            uploaded_at: new Date().toISOString(),
+            is_active: true,
+          })
+          .select('id')
+          .single();
+        if (insertError) throw insertError;
+        return { id: inserted.id };
+      }
+
+      if (previousPath && previousPath !== vars.filePath) {
+        await client.storage
+          .from(STORAGE_BUCKETS.AVATARS)
+          .remove([previousPath]);
+      }
+      return { id: existingActive?.id || null };
+    }
+  );
+
   useEffect(() => {
     if (url) {
       // Se a URL já for uma URL pública completa, usa ela diretamente
       if (url.startsWith('http')) {
         setAvatarUrl(url);
       } else {
-        downloadImage(url);
+        const isUuid = /^[0-9a-fA-F-]{36}$/.test(url);
+        if (isUuid && !currentTenant?.id) {
+          // Aguarda tenant carregar para resolver file_path
+          return;
+        }
+        if (isUuid && currentTenant?.id) {
+          (async () => {
+            try {
+              const { data: ua } = await supabase
+                .from('user_avatars')
+                .select('file_path')
+                .eq('id', url)
+                .eq('tenant_id', currentTenant.id)
+                .maybeSingle();
+              if (ua?.file_path) {
+                await downloadImage(ua.file_path);
+              } else {
+                setAvatarUrl('');
+              }
+            } catch (e) {
+              setAvatarUrl('');
+            }
+          })();
+        } else {
+          downloadImage(url);
+        }
       }
     }
-  }, [url]);
+  }, [url, currentTenant?.id]);
 
   /**
    * Baixa/resolve a URL de exibição do avatar pela chave do arquivo no Storage.
@@ -39,8 +117,13 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
    */
   async function downloadImage(path: string) {
     try {
-      const url = await getImageUrl(STORAGE_BUCKETS.AVATARS, path, 3600);
-      setAvatarUrl(url);
+      const primary = await supabase.storage
+        .from(STORAGE_BUCKETS.AVATARS)
+        .createSignedUrl(path, 3600);
+      if (primary.data?.signedUrl) {
+        setAvatarUrl(primary.data.signedUrl);
+        return;
+      }
     } catch (error) {
       logError('Erro ao obter URL da imagem', 'ProfileAvatar', error);
     }
@@ -121,42 +204,7 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
         filePath
       });
 
-      // Buscar avatar anterior para este usuário+tenant
-      const { data: existingAvatar } = await supabase
-        .from('user_avatars')
-        .select('file_path')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
-
-      const previousPath = existingAvatar?.file_path;
-
-      // Registrar/atualizar mapeamento em user_avatars (garante 1 registro por user+tenant)
-      const { error: mapError } = await supabase
-        .from('user_avatars')
-        .upsert({
-          user_id: user.id,
-          tenant_id: tenantId,
-          file_path: filePath,
-          file_type: file.type,
-          file_size: file.size,
-          uploaded_at: new Date().toISOString(),
-          is_active: true,
-        }, { onConflict: 'user_id,tenant_id' });
-
-      if (mapError) {
-        logError('Falha ao registrar user_avatars', 'ProfileAvatar', mapError);
-      }
-
-      // Remover arquivo anterior se mudou
-      if (previousPath && previousPath !== filePath) {
-        await supabase.storage
-          .from(STORAGE_BUCKETS.AVATARS)
-          .remove([previousPath]);
-      }
-      if (mapError) {
-        logError('Falha ao registrar user_avatars', 'ProfileAvatar', mapError);
-      }
+      const res = await upsertMapping.mutateAsync({ userId: user.id, tenantId, filePath, fileType: file.type, fileSize: file.size });
 
       // Obtém uma URL assinada para exibição imediata
       const signedUrl = await getImageUrl(STORAGE_BUCKETS.AVATARS, filePath, 3600);
@@ -164,7 +212,9 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
 
       // Atualiza a URL no estado e notifica o componente pai com a chave
       setAvatarUrl(signedUrl);
-      onUpload?.(filePath);
+      if (res?.id) {
+        onUpload?.(res.id);
+      }
       
       toast({
         title: "Sucesso",

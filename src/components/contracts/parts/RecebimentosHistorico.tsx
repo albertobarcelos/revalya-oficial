@@ -156,18 +156,22 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
     return statusLabels[status as keyof typeof statusLabels] || status;
   };
 
+  /**
+   * getStatusColor
+   * Mapeia o status para classes semânticas do tema (dark-mode friendly).
+   */
   const getStatusColor = (status: string) => {
     const statusColors = {
-      'PLANNED': 'bg-blue-100 text-blue-800 border-blue-200',
-      'BILLED': 'bg-cyan-100 text-cyan-800 border-cyan-200',
-      'LATE': 'bg-red-100 text-red-800 border-red-200',
-      'DUE_TODAY': 'bg-orange-200 text-orange-800 border-orange-200',
-      'PENDING': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'PAID': 'bg-green-100 text-green-800 border-green-200',
-      'OVERDUE': 'bg-red-100 text-red-800 border-red-200',
-      'CANCELLED': 'bg-gray-100 text-gray-800 border-gray-200'
-    };
-    return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+      PLANNED: 'bg-muted text-muted-foreground border-border',
+      BILLED: 'bg-primary/10 text-primary border-primary/20',
+      LATE: 'bg-danger/10 text-danger border-danger/20',
+      DUE_TODAY: 'bg-warning/10 text-warning border-warning/20',
+      PENDING: 'bg-warning/10 text-warning border-warning/20',
+      PAID: 'bg-success/10 text-success border-success/20',
+      OVERDUE: 'bg-danger/10 text-danger border-danger/20',
+      CANCELLED: 'bg-muted text-muted-foreground border-border'
+    } as Record<string, string>;
+    return statusColors[status] || 'bg-muted text-muted-foreground border-border';
   };
 
   const statistics = {
@@ -218,20 +222,18 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
     } else {
       // Mapeamento para finance_entries e dados mock
       const statusColors = {
-        // Status das previsões
-        'Previsão': 'bg-blue-100 text-blue-800 border-blue-200',
-        // Status dos recebimentos reais (finance_entries)
-        'PAID': 'bg-green-100 text-green-800 border-green-200',
-        'PENDING': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        'OVERDUE': 'bg-red-100 text-red-800 border-red-200',
-        'PARTIALLY_PAID': 'bg-orange-100 text-orange-800 border-orange-200',
-        'CANCELLED': 'bg-gray-100 text-gray-800 border-gray-200',
-        'REFUNDED': 'bg-purple-100 text-purple-800 border-purple-200',
+        Previsão: 'bg-muted text-muted-foreground border-border',
+        PAID: 'bg-success/10 text-success border-success/20',
+        PENDING: 'bg-warning/10 text-warning border-warning/20',
+        OVERDUE: 'bg-danger/10 text-danger border-danger/20',
+        PARTIALLY_PAID: 'bg-warning/10 text-warning border-warning/20',
+        CANCELLED: 'bg-muted text-muted-foreground border-border',
+        REFUNDED: 'bg-primary/10 text-primary border-primary/20',
         // Status antigos (compatibilidade)
-        'Pago': 'bg-green-100 text-green-800 border-green-200',
-        'Pendente': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        'Vencido': 'bg-red-100 text-red-800 border-red-200',
-      };
+        Pago: 'bg-success/10 text-success border-success/20',
+        Pendente: 'bg-warning/10 text-warning border-warning/20',
+        Vencido: 'bg-danger/10 text-danger border-danger/20',
+      } as Record<string, string>;
 
       // Traduzir status em inglês para português
       const statusTranslations = {
@@ -282,13 +284,13 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           {dataType === 'real' && (
-            <Badge variant="outline" className="bg-green-50 text-green-700">
+            <Badge variant="outline" className="bg-success/10 text-success border-success/20">
               {financeEntries.length} recebimentos
             </Badge>
           )}
 
           {dataType === 'real' && statistics.total > 0 && (
-            <Badge variant="outline" className="bg-gray-50 text-gray-700">
+            <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
               Total: {formatEntryCurrency(statistics.total)}
             </Badge>
           )}
@@ -297,8 +299,8 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
       
       {error && (
         <div className="px-6 pb-4">
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-700">
+          <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+            <p className="text-sm text-destructive">
               Erro ao carregar recebimentos: {error.message}
             </p>
           </div>
@@ -344,8 +346,8 @@ export const RecebimentosHistorico: React.FC<RecebimentosHistoricoProps> = ({
               <TableRow>
                 <TableCell colSpan={dataType === 'mock' ? 6 : 7} className="text-center py-8">
                   <div className="flex items-center justify-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="text-sm text-gray-500">Carregando...</span>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    <span className="text-sm text-muted-foreground">Carregando...</span>
                   </div>
                 </TableCell>
               </TableRow>

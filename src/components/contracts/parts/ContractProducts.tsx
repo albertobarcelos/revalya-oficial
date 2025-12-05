@@ -446,15 +446,15 @@ export function ContractProducts({ products }: ContractProductsProps) {
                             <Calculator className="h-4 w-4" />
                             <span>Impostos e Retenções</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer">
+                          <DropdownMenuItem className="gap-2 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer">
                             <Copy className="h-4 w-4" />
                             <span>Duplicar</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 
-                            className="text-destructive gap-2 focus:text-destructive hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer" 
+                            className="text-destructive gap-2 focus:text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer" 
                             onClick={() => handleRemoveProduct(product.id)}
-                          >
+                          > 
                             <Trash2 className="h-4 w-4" />
                             <span>Remover</span>
                           </DropdownMenuItem>
@@ -1377,7 +1377,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Tributos Municipais</h4>
                     <div className="flex justify-between text-sm">
                       <span>ISS (Imposto Sobre Serviços):</span>
@@ -1385,7 +1385,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <div className="flex justify-between text-sm font-medium">
                       <span>Total Aproximado de Tributos:</span>
                       <span className="text-primary dark:text-primary">
@@ -1403,7 +1403,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                   </div>
                   
                   {/* Informações Adicionais */}
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Informações Importantes</h4>
                     <div className="text-xs text-primary/80 dark:text-primary/80 space-y-1">
                       <p>• Os valores apresentados são aproximados e podem variar conforme a legislação vigente.</p>
@@ -1413,7 +1413,7 @@ export function ContractProducts({ products }: ContractProductsProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <p className="text-xs text-primary/70 dark:text-primary/70">
                       <strong>Fonte:</strong> Receita Federal do Brasil e legislação tributária vigente.<br/>
                       Esta informação tem caráter meramente educativo e informativo.

@@ -78,7 +78,7 @@ export function DashboardMainContent({ metrics, cashFlowData, recentContracts, p
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <OverdueByTimeChart data={metrics?.overdueByTime || defaultOverdue} />
             <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-              <div className="p-4 border-b"><h3 className="text-base font-medium">Maiores Inadimplências</h3></div>
+              <div className="p-4 border-b"><h3 className="text-base font-medium text-foreground">Maiores Inadimplências</h3></div>
               <div className="p-0 max-h-[250px] overflow-auto">
                 <Table>
                   <TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>

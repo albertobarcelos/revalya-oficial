@@ -112,18 +112,18 @@ export function ProductSearchInput({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full justify-between text-input text-foreground border-[0.8px] border-[#b9b9b9] focus:border-black rounded-[1.2px]",
+            "w-full justify-between bg-background text-foreground border border-input focus:ring-2 focus:ring-primary focus:border-primary rounded-lg",
             height === 'default' ? "h-10 px-3 py-2" : "h-[25px] px-2 py-0",
-            !selectedProduct && "text-muted-foreground",
+            !selectedProduct && "text-foreground",
             className
           )}
           disabled={disabled}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Package className="h-3 w-3 shrink-0 opacity-50" />
-            <span className="truncate text-input">{displayValue}</span>
+            <Package className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm text-foreground">{displayValue}</span>
           </div>
-          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[400px] p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>

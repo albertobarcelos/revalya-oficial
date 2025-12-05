@@ -227,7 +227,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
     <Card className="col-span-2 overflow-hidden bg-card border">
       <CardHeader className="flex flex-row items-start justify-between pb-0">
         <div>
-          <CardTitle className="text-heading-1 font-semibold">
+          <CardTitle className="text-heading-1 font-semibold text-foreground">
             Tendência de Receita
           </CardTitle>
           <p className="text-sm text-muted-foreground">
