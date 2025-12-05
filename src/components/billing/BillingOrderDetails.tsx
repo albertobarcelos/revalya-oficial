@@ -1,5 +1,10 @@
 import React, { useMemo } from 'react';
 import { useBillingOrder, type BillingOrder } from '@/hooks/useBillingOrder';
+import { useStandaloneBilling } from '@/hooks/useStandaloneBilling';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { formatCurrency } from '@/lib/utils';
 import { ContractForm } from '@/components/contracts/ContractForm';
 import { ContractFormConfig } from '@/components/contracts/types/ContractFormConfig';
 import { ContractFormSkeleton } from '@/components/contracts/ContractFormSkeleton';
@@ -19,7 +24,10 @@ interface BillingOrderDetailsProps {
  * - Se ordem está pendente (isFrozen = false): mostra dados dinâmicos do contrato
  */
 export function BillingOrderDetails({ periodId, onClose }: BillingOrderDetailsProps) {
-  const { data: order, isLoading, error } = useBillingOrder({ periodId });
+  const standalone = useStandaloneBilling();
+  const standaloneQuery = standalone.usePeriod(periodId);
+  const isStandalone = !!standaloneQuery.data;
+  const { data: order, isLoading, error } = useBillingOrder({ periodId, enabled: !isStandalone });
 
   // AIDEV-NOTE: Configuração do ContractForm adaptada para ordem de faturamento
   const config: ContractFormConfig = useMemo(() => {
@@ -105,10 +113,68 @@ export function BillingOrderDetails({ periodId, onClose }: BillingOrderDetailsPr
     };
   }, [order, onClose]);
 
-  if (isLoading) {
+  if (isLoading || standaloneQuery.isLoading) {
     return (
       <div className="h-full">
         <ContractFormSkeleton />
+      </div>
+    );
+  }
+
+  if (isStandalone && standaloneQuery.data) {
+    const period = standaloneQuery.data;
+    const items = period.items || [];
+    const total = items.reduce((sum, it: any) => sum + (it.total_price || (it.quantity || 0) * (it.unit_price || 0)), 0);
+
+    return (
+      <div className="h-full flex flex-col">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold">Faturamento Avulso</h2>
+          <div className="mt-2 flex items-center gap-2">
+            {period.order_number ? (
+              <Badge variant="outline">OS {period.order_number}</Badge>
+            ) : null}
+            <Badge variant="secondary">{period.status}</Badge>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Resumo</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p><span className="font-medium">Cliente:</span> {period.customer?.name || '—'}</p>
+              <p><span className="font-medium">Faturamento:</span> {format(new Date(period.bill_date), 'dd/MM/yyyy')}</p>
+              <p><span className="font-medium">Vencimento:</span> {format(new Date(period.due_date), 'dd/MM/yyyy')}</p>
+              <p><span className="font-medium">Método:</span> {period.payment_method || '—'}</p>
+              <p><span className="font-medium">Total Previsto:</span> {formatCurrency(total)}</p>
+              {period.amount_billed ? (
+                <p><span className="font-medium">Total Faturado:</span> {formatCurrency(period.amount_billed)}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Itens</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum item.</p>
+              ) : (
+                items.map((it: any) => (
+                  <div key={it.id} className="flex justify-between border rounded-lg p-3">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm">{it.product?.name || it.service?.name || it.description || 'Item'}</span>
+                      <span className="text-xs text-muted-foreground">Qtd {it.quantity} × {formatCurrency(it.unit_price)}</span>
+                    </div>
+                    <div className="font-medium">{formatCurrency((it.total_price ?? (it.quantity || 0) * (it.unit_price || 0)))}</div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

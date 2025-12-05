@@ -39,10 +39,10 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
       className="space-y-6"
     >
       {/* Resumo Financeiro */}
-      <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/80">
+      <Card className="border border-border shadow-sm bg-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-primary to-primary/80 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Calculator className="h-4 w-4 text-white" />
             </div>
             Resumo Financeiro
@@ -55,7 +55,7 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
                 <TrendingUp className="h-4 w-4" />
                 Subtotal
               </span>
-              <span className="font-medium">{formatCurrency(totalValues.subtotal)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(totalValues.subtotal)}</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -63,7 +63,7 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
                 <DollarSign className="h-4 w-4" />
                 Custos
               </span>
-              <span className="font-medium text-orange-600">
+              <span className="font-medium text-destructive">
                 {formatCurrency(totalValues.costs)}
               </span>
             </div>
@@ -73,7 +73,7 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
                 <Percent className="h-4 w-4" />
                 Descontos
               </span>
-              <span className="font-medium text-green-600">
+              <span className="font-medium text-foreground">
                 -{formatCurrency(totalValues.discount)}
               </span>
             </div>
@@ -83,7 +83,7 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
                 <Receipt className="h-4 w-4" />
                 Impostos
               </span>
-              <span className="font-medium">{formatCurrency(totalValues.tax)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(totalValues.tax)}</span>
             </div>
             
             <Separator />
@@ -100,10 +100,10 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
           </div>
           
           {/* Margem de Lucro */}
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+          <div className="mt-4 p-3 bg-muted/40 rounded-lg border border-border/40">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Margem de Lucro</span>
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Badge variant="secondary">
                 {totalValues.subtotal > 0 
                   ? `${(((totalValues.subtotal - totalValues.costs) / totalValues.subtotal) * 100).toFixed(1)}%`
                   : '0%'

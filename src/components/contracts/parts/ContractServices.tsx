@@ -891,7 +891,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
               variant="outline" 
               size="sm"
               onClick={handleBulkEdit}
-              className="gap-1 border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-400 transition-all duration-200"
+              className="gap-1 border border-border bg-card text-foreground hover:bg-accent transition-all duration-200"
             >
               <Calculator className="h-3.5 w-3.5" />
               Editar em Massa ({selectedServiceIds.length})
@@ -983,14 +983,14 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           <span>Impostos e Retenções</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          className="gap-2 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                          className="gap-2 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                         >
                           <Copy className="h-4 w-4" />
                           <span>Duplicar</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
-                          className="text-destructive gap-2 focus:text-destructive hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer" 
+                          className="text-destructive gap-2 focus:text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer" 
                           onClick={() => handleRemoveService(service.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1890,7 +1890,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Tributos Municipais</h4>
                     <div className="flex justify-between text-sm">
                       <span>ISS (Imposto Sobre Serviços):</span>
@@ -1898,7 +1898,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <div className="flex justify-between text-sm font-medium">
                       <span>Total Aproximado de Tributos:</span>
                       <span className="text-primary dark:text-primary">
@@ -1916,7 +1916,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   </div>
                   
                   {/* Informações Adicionais */}
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Informações Importantes</h4>
             <div className="text-xs text-primary/80 dark:text-primary/80 space-y-1">
                       <p>• Os valores apresentados são aproximados e podem variar conforme a legislação vigente.</p>
@@ -1926,7 +1926,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <p className="text-xs text-primary/70 dark:text-primary/70">
                       <strong>Fonte:</strong> Receita Federal do Brasil e legislação tributária vigente.<br/>
                       Esta informação tem caráter meramente educativo e informativo.

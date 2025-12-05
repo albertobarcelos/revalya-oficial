@@ -24,6 +24,7 @@ import { PaginationFooter } from '@/components/layout/PaginationFooter';
 
 // AIDEV-NOTE: Tipo para entrada financeira baseado no banco de dados
 type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
+type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
 
 // AIDEV-NOTE: Interface para filtros de busca
 interface RecebimentosFilters {
@@ -98,6 +99,66 @@ const Recebimentos: React.FC = () => {
     const to = filters.dateTo ? new Date(filters.dateTo) : undefined;
     return { from, to };
   });
+
+  const bankAccountsQuery = useSecureTenantQuery(
+    ['bank-acounts', currentTenant?.id],
+    async (supabase, tId) => {
+      await supabase.rpc('set_tenant_context_simple', { p_tenant_id: tId });
+      const { data, error } = await supabase
+        .from('bank_acounts')
+        .select('id, bank, agency, count, type, tenant_id')
+        .eq('tenant_id', tId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
+    },
+    { enabled: !!currentTenant?.id }
+  );
+
+  const bankLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (bankAccountsQuery.data || []).forEach((b: any) => m.set(b.id, b.label));
+    return m;
+  }, [bankAccountsQuery.data]);
+
+  const [selectingEntryId, setSelectingEntryId] = useState<string | null>(null);
+
+  const associateBankAccountMutation = useSecureTenantMutation(
+    async (supabase, tenantId, { entryId, bankAccountId }: { entryId: string; bankAccountId: string }) => {
+      const entry = recebimentos.find(r => r.id === entryId);
+      if (!entry || entry.tenant_id !== tenantId) {
+        throw new Error('Operação não autorizada');
+      }
+      const patch: FinanceEntryUpdate = { bank_account_id: bankAccountId };
+      const updated = await financeEntriesService.updateEntry(entryId, patch);
+      const amount = Number((entry as any).paid_amount ?? (entry as any).net_amount ?? (entry as any).amount ?? 0);
+      const opDate = (entry as any).payment_date ?? new Date().toISOString();
+      const { error } = await supabase
+        .from('bank_operation_history')
+        .insert({
+          tenant_id: tenantId,
+          bank_acount_id: bankAccountId,
+          operation_type: 'CREDIT',
+          amount: amount,
+          operation_date: opDate,
+          description: entry.description ?? 'Recebimento',
+          document_reference: (entry as any).document_id ?? null,
+          category: null,
+        });
+      if (error) throw error;
+      return updated;
+    },
+    {
+      onSuccess: () => {
+        setSelectingEntryId(null);
+        toast({ title: 'Conta associada', description: 'A conta bancária foi vinculada ao recebimento.' });
+      },
+      onError: (error) => {
+        toast({ title: 'Erro', description: error.message || 'Falha ao associar conta', variant: 'destructive' });
+      },
+      invalidateQueries: ['recebimentos']
+    }
+  );
 
 
 
@@ -283,12 +344,13 @@ const Recebimentos: React.FC = () => {
   };
 
   const handleExportCSV = useCallback(() => {
-    const header = ['Descrição', 'Valor', 'Vencimento', 'Status', 'Data Pagamento'];
+    const header = ['Descrição', 'Valor', 'Vencimento', 'Status', 'Conta', 'Data Pagamento'];
     const rows = recebimentos.map((e) => [
       e.description || '',
       (e.amount || 0).toString(),
       e.due_date ? new Date(e.due_date).toISOString().slice(0, 10) : '',
       e.status || '',
+      e.bank_account_id ? (bankLabelById.get(String(e.bank_account_id)) || String(e.bank_account_id)) : '',
       e.payment_date ? new Date(e.payment_date).toISOString().slice(0, 10) : ''
     ]);
     const csv = [header, ...rows]
@@ -417,6 +479,7 @@ const Recebimentos: React.FC = () => {
                         <TableHead>Valor</TableHead>
                         <TableHead>Vencimento</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Conta</TableHead>
                         <TableHead>Data Pagamento</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
@@ -438,6 +501,28 @@ const Recebimentos: React.FC = () => {
                                 {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
                               </TableCell>
                               <TableCell>{getStatusBadge(entry.status)}</TableCell>
+                              <TableCell>
+                                {entry.bank_account_id ? (
+                                  bankLabelById.get(String(entry.bank_account_id)) || '-'
+                                ) : (
+                                  selectingEntryId === entry.id ? (
+                                    <Select onValueChange={(value) => associateBankAccountMutation.mutate({ entryId: entry.id, bankAccountId: value })}>
+                                      <SelectTrigger className="h-9 w-[220px]">
+                                        <SelectValue placeholder={bankAccountsQuery.isLoading ? 'Carregando...' : 'Selecione a conta'} />
+                                      </SelectTrigger>
+                                      <SelectContent className="w-[300px] max-h-[300px]">
+                                        {(bankAccountsQuery.data || []).map((b: any) => (
+                                          <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Button size="sm" variant="outline" onClick={() => setSelectingEntryId(entry.id)} disabled={bankAccountsQuery.isLoading}>
+                                      Associar Conta
+                                    </Button>
+                                  )
+                                )}
+                              </TableCell>
                               <TableCell>
                                 {entry.payment_date
                                   ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })

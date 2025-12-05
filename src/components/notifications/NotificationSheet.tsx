@@ -81,8 +81,8 @@ export function NotificationSheet() {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <button className="p-2 rounded-lg hover:bg-accent relative">
-          <Bell size={20} />
+        <button className="p-2 rounded-lg border border-border bg-card text-foreground hover:bg-accent relative">
+          <Bell size={20} className="text-foreground" />
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
@@ -93,7 +93,7 @@ export function NotificationSheet() {
           )}
         </button>
       </SheetTrigger>
-      <SheetContent>
+      <SheetContent className="bg-background border border-border">
         <SheetHeader>
           <div className="flex items-center justify-between">
             <SheetTitle>Notificações</SheetTitle>
@@ -119,7 +119,7 @@ export function NotificationSheet() {
               unreadNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className="p-4 rounded-lg border bg-primary/5 relative cursor-pointer"
+                  className="p-4 rounded-lg border border-border bg-card relative cursor-pointer"
                   onClick={() => markAsRead(notification.id)}
                 >
                   <div className="flex justify-between items-start mb-2">

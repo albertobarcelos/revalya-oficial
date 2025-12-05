@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { Layout } from "@/components/layout/Layout";
-import { Loader2, Users, Zap, BrainCircuit, Package, Warehouse, Banknote } from "lucide-react";
+import { Loader2, Users, Zap, BrainCircuit, Package, Warehouse, Banknote, FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { whatsappService } from "@/services/whatsappService";
@@ -14,6 +14,8 @@ import { CobrancaInteligente } from "@/components/cobranca-inteligente/CobrancaI
 import { FinanceSettingsEmbedded } from "./FinanceSettings";
 import { ProductCategoriesManager } from "@/components/products/ProductCategoriesManager";
 import { StorageLocationManager } from "@/components/estoque/StorageLocationManager";
+import { ContractModelsManager } from "@/components/contracts/ContractModelsManager";
+import { ContractContactsManager } from "@/components/contracts/ContractContactsManager";
 import { logService } from "@/services/logService";
 import { CanalIntegration } from "@/components/canais/CanalIntegration";
 import { IntegrationServices } from "@/components/integracoes/IntegrationServices";
@@ -38,6 +40,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("usuarios");
   const [activeEstoqueSubTab, setActiveEstoqueSubTab] = useState("categorias");
+  const [activeContratosSubTab, setActiveContratosSubTab] = useState("modelos");
   
   const [isSaving, setIsSaving] = useState(false);
   
@@ -225,6 +228,10 @@ export default function Settings() {
                   <Warehouse className="h-4 w-4" />
                   Estoque
                 </TabsTrigger>
+                <TabsTrigger value="contratos" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Contratos
+                </TabsTrigger>
               </TabsList>
             </div>
             
@@ -282,6 +289,29 @@ export default function Settings() {
                   
                   <TabsContent value="local-estoque" className="space-y-4 mt-2">
                     <StorageLocationManager />
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+
+              <TabsContent value="contratos" className="space-y-4 mt-2 h-full">
+                <Tabs value={activeContratosSubTab} onValueChange={setActiveContratosSubTab} className="space-y-4">
+                  <TabsList>
+                    <TabsTrigger value="modelos" className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Modelos
+                    </TabsTrigger>
+                    <TabsTrigger value="contatos" className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Contatos
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="modelos" className="space-y-4 mt-2">
+                    <ContractModelsManager />
+                  </TabsContent>
+                  
+                  <TabsContent value="contatos" className="space-y-4 mt-2">
+                    <ContractContactsManager />
                   </TabsContent>
                 </Tabs>
               </TabsContent>

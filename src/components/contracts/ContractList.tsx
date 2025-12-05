@@ -237,7 +237,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
         <CardHeader className="pb-3 flex-shrink-0 w-full flex flex-row items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-foreground h-4 w-4" />
               <Input
                 placeholder="Buscar contratos..."
                 value={searchTerm}
@@ -245,14 +245,14 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="pl-10 w-80"
+                className="pl-10 w-80 text-foreground"
               />
             </div>
             <Select value={statusFilter} onValueChange={(value) => {
               setStatusFilter(value);
               setCurrentPage(1);
             }}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40 text-foreground">
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
@@ -309,46 +309,47 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                     <TableHead className="w-[80px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="text-foreground">
                   {contracts?.map((contract: Contract) => (
-                    <TableRow key={contract.id}>
-                      <TableCell>
+                    <TableRow key={contract.id} className="text-foreground" >
+                      <TableCell >
                         <Checkbox 
+                          className="text-foreground"
                           checked={selectedContracts.includes(contract.id)}
                           onCheckedChange={(checked) => handleSelect(contract.id, checked as boolean)}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-foreground">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-muted-foreground" />
                           {contract.contract_number}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-foreground">
                         <div className="flex items-center">
                           <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
                           {contract.customers?.name}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-foreground">
                         <ContractStatusDropdown 
                           contractId={contract.id}
                           currentStatus={contract.status}
                         />
                       </TableCell>
-                      <TableCell>{renderStageBadge(contract.stage)}</TableCell>
-                      <TableCell className="text-right font-medium">
+                      <TableCell className="text-foreground">{renderStageBadge(contract.stage)}</TableCell>
+                      <TableCell className="text-right font-medium text-foreground">
                         {formatCurrency(contract.total_amount - (contract.total_discount || 0))}
                       </TableCell>
-                      <TableCell>{getBillingTypeLabel(contract.billing_type)}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-foreground">{getBillingTypeLabel(contract.billing_type)}</TableCell>
+                      <TableCell className="text-foreground">
                         <div className="flex items-center">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
                           {format(parseISO(contract.initial_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
+                      <TableCell className="text-foreground">
+                        <div className="flex items-center text-foreground">
                           <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
                           {format(parseISO(contract.final_date), "dd/MM/yyyy", { locale: ptBR })}
                         </div>
@@ -364,7 +365,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                           }}
                           className="h-8 w-8"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-4 w-4 text-foreground" />
                         </Button>
                       </TableCell>
                     </TableRow>

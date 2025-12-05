@@ -25,8 +25,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useStandaloneBilling, type CreateStandaloneBillingData } from '@/hooks/useStandaloneBilling';
-import { useCustomers } from '@/hooks/useCustomers';
+import { useCustomers, type Customer } from '@/hooks/useCustomers';
 import { ProductSearchInput } from '@/components/products/ProductSearchInput';
+import { ServiceSearchInput } from '@/components/services/ServiceSearchInput';
 import { useSecureProducts, type Product } from '@/hooks/useSecureProducts';
 import { useServices, type Service } from '@/hooks/useServices';
 import { useStorageLocations } from '@/hooks/useStorageLocations';
@@ -34,6 +35,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { format, addDays } from 'date-fns';
 import { useToast } from '@/components/ui/use-toast';
 import { formatCurrency } from '@/lib/utils';
+import { ClientSearch } from '@/components/contracts/parts/ClientSearch';
+import { ClientCreation } from '@/components/contracts/parts/ClientCreation';
 
 interface CreateStandaloneBillingDialogProps {
   isOpen: boolean;
@@ -51,6 +54,13 @@ interface BillingItem {
   description?: string;
   product?: Product;
   service?: Service;
+  kind?: 'product' | 'service';
+  payment_method?: 'BOLETO' | 'PIX' | 'CREDIT_CARD' | 'CASH';
+  item_due_date?: Date;
+  card_type?: 'credit' | 'credit_recurring';
+  billing_type?: 'Único' | 'Mensal' | 'Trimestral' | 'Semestral' | 'Anual';
+  recurrence_frequency?: string;
+  installments?: number;
 }
 
 type Step = 'customer' | 'items' | 'payment' | 'review';
@@ -76,11 +86,16 @@ export function CreateStandaloneBillingDialog({
   const [description, setDescription] = useState<string>('');
   const [items, setItems] = useState<BillingItem[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showClientSearch, setShowClientSearch] = useState(false);
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [selectedCustomerOverride, setSelectedCustomerOverride] = useState<Customer | null>(null);
+  const [showAddItemChooser, setShowAddItemChooser] = useState(false);
+  const [assocOpen, setAssocOpen] = useState<Record<string, boolean>>({});
 
   // AIDEV-NOTE: Cliente selecionado
   const selectedCustomer = useMemo(() => {
-    return customers.find(c => c.id === selectedCustomerId) || null;
-  }, [customers, selectedCustomerId]);
+    return selectedCustomerOverride || customers.find(c => c.id === selectedCustomerId) || null;
+  }, [customers, selectedCustomerId, selectedCustomerOverride]);
 
   // AIDEV-NOTE: Calcular total
   const totalAmount = useMemo(() => {
@@ -108,11 +123,12 @@ export function CreateStandaloneBillingDialog({
   }, [handleClose]);
 
   // AIDEV-NOTE: Adicionar item
-  const handleAddItem = useCallback(() => {
+  const handleAddItem = useCallback((kind: 'product' | 'service') => {
     setItems(prev => [...prev, {
       id: `temp-${Date.now()}`,
       quantity: 1,
-      unit_price: 0
+      unit_price: 0,
+      kind
     }]);
   }, []);
 
@@ -167,15 +183,17 @@ export function CreateStandaloneBillingDialog({
       if (!billDate) {
         newErrors.billDate = 'Data de faturamento é obrigatória';
       }
-      if (!dueDate) {
-        newErrors.dueDate = 'Data de vencimento é obrigatória';
-      }
-      if (dueDate < billDate) {
-        newErrors.dueDate = 'Data de vencimento deve ser posterior à data de faturamento';
-      }
-      if (!paymentMethod) {
-        newErrors.paymentMethod = 'Método de pagamento é obrigatório';
-      }
+      // Validação leve opcional por item quando associação aberta
+      items.forEach((item, index) => {
+        if (assocOpen[item.id]) {
+          if (!item.payment_method) {
+            newErrors[`item_${index}_payment_method`] = 'Meio de pagamento é obrigatório';
+          }
+          if (!item.item_due_date) {
+            newErrors[`item_${index}_due_date`] = 'Data de vencimento do item é obrigatória';
+          }
+        }
+      });
     }
 
     setErrors(newErrors);
@@ -205,19 +223,27 @@ export function CreateStandaloneBillingDialog({
   }, [currentStep]);
 
   // AIDEV-NOTE: Submeter formulário
+  // Objetivo: garantir que os valores escolhidos no modal (por item)
+  // sejam refletidos no período avulso. Se o usuário não associar
+  // pagamento por item, usa-se os valores globais.
   const handleSubmit = useCallback(async () => {
     if (!validateStep('review')) {
       return;
     }
 
     try {
+      // AIDEV-NOTE: Derivar método de pagamento efetivo a partir dos itens
+      const derivedPaymentMethod = (items.find(i => i.payment_method)?.payment_method || paymentMethod) as string;
+      // AIDEV-NOTE: Derivar vencimento efetivo a partir dos itens
+      const derivedDueDate = (items.find(i => i.item_due_date)?.item_due_date || dueDate) as Date;
+
       const billingData: CreateStandaloneBillingData = {
         tenant_id: '', // Será preenchido pelo hook
         customer_id: selectedCustomerId,
         contract_id: null, // Opcional: pode buscar contrato do cliente depois
         bill_date: format(billDate, 'yyyy-MM-dd'),
-        due_date: format(dueDate, 'yyyy-MM-dd'),
-        payment_method: paymentMethod,
+        due_date: format(derivedDueDate, 'yyyy-MM-dd'),
+        payment_method: derivedPaymentMethod,
         description: description || undefined,
         items: items.map(item => ({
           product_id: item.product_id,
@@ -232,10 +258,11 @@ export function CreateStandaloneBillingDialog({
       await create(billingData);
       handleClose();
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
       toast({
         title: 'Erro ao criar faturamento',
-        description: error?.message || 'Erro desconhecido',
+        description: message,
         variant: 'destructive',
       });
     }
@@ -310,21 +337,14 @@ export function CreateStandaloneBillingDialog({
               >
                 <div className="space-y-2">
                   <Label htmlFor="customer">Cliente *</Label>
-                  <Select
-                    value={selectedCustomerId}
-                    onValueChange={setSelectedCustomerId}
-                  >
-                    <SelectTrigger id="customer">
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map(customer => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.name} {customer.company ? `- ${customer.company}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="customer"
+                    readOnly
+                    value={selectedCustomer ? selectedCustomer.name : ''}
+                    placeholder="Selecione um cliente"
+                    onClick={() => setShowClientSearch(true)}
+                    className="cursor-pointer"
+                  />
                   {errors.customer && (
                     <p className="text-sm text-red-500">{errors.customer}</p>
                   )}
@@ -341,6 +361,31 @@ export function CreateStandaloneBillingDialog({
                     )}
                   </div>
                 )}
+
+                <ClientSearch
+                  open={showClientSearch}
+                  onOpenChange={setShowClientSearch}
+                  clients={[]}
+                  onClientSelect={(client) => {
+                    setSelectedCustomerId(client.id as string);
+                    setSelectedCustomerOverride(client as Customer);
+                    setShowClientSearch(false);
+                  }}
+                  onCreateClient={() => {
+                    setShowClientSearch(false);
+                    setShowCreateClient(true);
+                  }}
+                />
+
+                <ClientCreation
+                  open={showCreateClient}
+                  onOpenChange={setShowCreateClient}
+                  onClientCreated={(clientData) => {
+                    setSelectedCustomerId(clientData.id);
+                    setSelectedCustomerOverride(clientData);
+                    setShowCreateClient(false);
+                  }}
+                />
               </motion.div>
             )}
 
@@ -358,7 +403,7 @@ export function CreateStandaloneBillingDialog({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={handleAddItem}
+                    onClick={() => setShowAddItemChooser(true)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Adicionar Item
@@ -385,48 +430,43 @@ export function CreateStandaloneBillingDialog({
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Produto</Label>
-                          <ProductSearchInput
-                            value={item.product_id}
-                            onValueChange={(productId, product) => {
-                              handleUpdateItem(item.id, {
-                                product_id: productId || undefined,
-                                product,
-                                service_id: undefined,
-                                service: undefined
-                              });
-                            }}
-                            placeholder="Buscar produto..."
-                          />
-                        </div>
+                        {item.kind === 'product' && (
+                          <div className="space-y-2">
+                            <Label>Produto</Label>
+                            <ProductSearchInput
+                              value={item.product_id}
+                              onValueChange={(productId, product) => {
+                                handleUpdateItem(item.id, {
+                                  product_id: productId || undefined,
+                                  product,
+                                  service_id: undefined,
+                                  service: undefined,
+                                  unit_price: product?.unit_price ?? 0
+                                });
+                              }}
+                              placeholder="Buscar produto..."
+                            />
+                          </div>
+                        )}
 
-                        <div className="space-y-2">
-                          <Label>Serviço</Label>
-                          <Select
-                            value={item.service_id || ''}
-                            onValueChange={(serviceId) => {
-                              const service = services.find(s => s.id === serviceId);
-                              handleUpdateItem(item.id, {
-                                service_id: serviceId || undefined,
-                                service,
-                                product_id: undefined,
-                                product: undefined
-                              });
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um serviço" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {services.map(service => (
-                                <SelectItem key={service.id} value={service.id}>
-                                  {service.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {item.kind === 'service' && (
+                          <div className="space-y-2">
+                            <Label>Serviço</Label>
+                            <ServiceSearchInput
+                              value={item.service_id}
+                              onValueChange={(serviceId, service) => {
+                                handleUpdateItem(item.id, {
+                                  service_id: serviceId || undefined,
+                                  service: service || undefined,
+                                  product_id: undefined,
+                                  product: undefined,
+                                  unit_price: (service?.default_price ?? service?.price ?? 0)
+                                });
+                              }}
+                              placeholder="Buscar serviço..."
+                            />
+                          </div>
+                        )}
                       </div>
 
                       {item.product_id && (
@@ -472,12 +512,22 @@ export function CreateStandaloneBillingDialog({
                         <div className="space-y-2">
                           <Label>Preço Unitário *</Label>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.unit_price || ''}
+                            type="text"
+                            inputMode="decimal"
+                            value={formatCurrency(item.unit_price || 0)}
                             onChange={(e) => {
-                              handleUpdateItem(item.id, { unit_price: parseFloat(e.target.value) || 0 });
+                              const raw = e.target.value;
+                              const clean = raw.replace(/[^\d,.-]/g, '');
+                              let numeric = 0;
+                              if (clean.includes(',')) {
+                                const parts = clean.split(',');
+                                const integerPart = parts[0].replace(/\./g, '');
+                                const decimalPart = (parts[1] || '').replace(/[^\d]/g, '').slice(0, 2);
+                                numeric = parseFloat(`${integerPart}.${decimalPart}`) || 0;
+                              } else {
+                                numeric = parseFloat(clean.replace(/\./g, '')) || 0;
+                              }
+                              handleUpdateItem(item.id, { unit_price: numeric });
                             }}
                           />
                           {errors[`item_${index}_price`] && (
@@ -516,71 +566,231 @@ export function CreateStandaloneBillingDialog({
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
-                className="space-y-4"
+                className="space-y-6"
               >
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Data de Faturamento *</Label>
-                    <DatePicker
-                      date={billDate}
-                      onDateChange={(date) => {
-                        if (date) {
-                          setBillDate(date);
-                          if (date > dueDate) {
-                            setDueDate(addDays(date, 7));
-                          }
-                        }
-                      }}
-                    />
-                    {errors.billDate && (
-                      <p className="text-sm text-red-500">{errors.billDate}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Data de Vencimento *</Label>
-                    <DatePicker
-                      date={dueDate}
-                      onDateChange={(date) => {
-                        if (date) setDueDate(date);
-                      }}
-                      minDate={billDate}
-                    />
-                    {errors.dueDate && (
-                      <p className="text-sm text-red-500">{errors.dueDate}</p>
-                    )}
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label>Método de Pagamento *</Label>
-                  <Select
-                    value={paymentMethod}
-                    onValueChange={setPaymentMethod}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="BOLETO">Boleto</SelectItem>
-                      <SelectItem value="PIX">PIX</SelectItem>
-                      <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
-                      <SelectItem value="CASH">Dinheiro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.paymentMethod && (
-                    <p className="text-sm text-red-500">{errors.paymentMethod}</p>
+                  <Label>Data de Faturamento *</Label>
+                  <DatePicker
+                    date={billDate}
+                    setDate={(date) => {
+                      setBillDate(date);
+                    }}
+                  />
+                  {errors.billDate && (
+                    <p className="text-sm text-red-500">{errors.billDate}</p>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descrição do faturamento avulso..."
-                    rows={3}
-                  />
+                <div className="space-y-3">
+                  {items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum item adicionado.</p>
+                  ) : (
+                    items.map((item, index) => (
+                      <div key={item.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{item.product?.name || item.service?.name || 'Item'}</span>
+                            <span className="text-xs text-muted-foreground">{formatCurrency(item.unit_price)}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAssocOpen(prev => ({ ...prev, [item.id]: !prev[item.id] }))
+                              if (!assocOpen[item.id]) {
+                                handleUpdateItem(item.id, { billing_type: 'Único' })
+                              }
+                            }}
+                          >
+                            Associar Pagamento
+                          </Button>
+                        </div>
+
+                        {assocOpen[item.id] && (
+                          <>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                              <Label>Descrição</Label>
+                              <Textarea
+                                value={item.description || ''}
+                                onChange={(e) => handleUpdateItem(item.id, { description: e.target.value })}
+                                rows={1}
+                                placeholder="Descrição do pagamento do item"
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Meio de Pagamento</Label>
+                              <Select
+                                value={item.payment_method || ''}
+                                onValueChange={(val) => {
+                                  const pm = val as BillingItem['payment_method'];
+                                  const updates: Partial<BillingItem> = { payment_method: pm, billing_type: 'Único' };
+                                  if (pm !== 'CREDIT_CARD') {
+                                    updates.card_type = undefined;
+                                    updates.recurrence_frequency = undefined;
+                                    updates.installments = undefined;
+                                  } else {
+                                    if (!item.card_type) {
+                                      updates.card_type = 'credit';
+                                    }
+                                  }
+                                  handleUpdateItem(item.id, updates);
+                                }}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
+                                  <SelectItem value="PIX">PIX</SelectItem>
+                                  <SelectItem value="BOLETO">Boleto Bancário</SelectItem>
+                                  <SelectItem value="CASH">Dinheiro</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {errors[`item_${index}_payment_method`] && (
+                                <p className="text-xs text-red-500">{errors[`item_${index}_payment_method`]}</p>
+                              )}
+
+                              {item.payment_method === 'CREDIT_CARD' && (
+                                <div className="space-y-2">
+                                  <Label>Tipo de Cartão</Label>
+                                  <Select
+                                    value={item.card_type || ''}
+                                    onValueChange={(val) => {
+                                      const ct = val as BillingItem['card_type'];
+                                      const updates: Partial<BillingItem> = { card_type: ct };
+                                      if (ct === 'credit_recurring') {
+                                        updates.billing_type = 'Mensal';
+                                        updates.recurrence_frequency = 'Mensal';
+                                        updates.installments = 1;
+                                      } else if (ct === 'credit') {
+                                        updates.billing_type = 'Único';
+                                        updates.recurrence_frequency = '';
+                                        updates.installments = (item.installments && item.installments > 0) ? item.installments : 2;
+                                      }
+                                      handleUpdateItem(item.id, updates);
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="credit">Crédito</SelectItem>
+                                      <SelectItem value="credit_recurring">Crédito Recorrente</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <Label>Tipo de Faturamento</Label>
+                                <Select
+                                  value={item.billing_type || ''}
+                                  onValueChange={(val) => {
+                                    const bt = val as BillingItem['billing_type'];
+                                    const updates: Partial<BillingItem> = { billing_type: bt };
+                                    if (item.payment_method === 'BOLETO' && ['Mensal', 'Trimestral', 'Semestral', 'Anual'].includes(bt)) {
+                                      updates.recurrence_frequency = bt;
+                                    } else if (['Mensal', 'Trimestral', 'Semestral', 'Anual'].includes(bt)) {
+                                      updates.recurrence_frequency = undefined;
+                                    } else if (bt === 'Único') {
+                                      updates.recurrence_frequency = '';
+                                    }
+                                    handleUpdateItem(item.id, updates);
+                                  }}
+                                  disabled={item.payment_method === 'CREDIT_CARD'}
+                                >
+                                  <SelectTrigger className={item.payment_method === 'CREDIT_CARD' ? 'opacity-50' : ''}>
+                                    <SelectValue placeholder={
+                                      item.payment_method === 'CREDIT_CARD' && item.card_type === 'credit_recurring'
+                                        ? 'Recorrente (Mensal) - Automático'
+                                        : item.payment_method === 'CREDIT_CARD' && item.card_type === 'credit'
+                                          ? 'Único - Automático'
+                                          : 'Selecione'
+                                    } />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Único">Único</SelectItem>
+                                    <SelectItem value="Mensal">Mensal</SelectItem>
+                                    <SelectItem value="Trimestral">Trimestral</SelectItem>
+                                    <SelectItem value="Semestral">Semestral</SelectItem>
+                                    <SelectItem value="Anual">Anual</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Data de Vencimento</Label>
+                              <DatePicker
+                                date={item.item_due_date || undefined}
+                                setDate={(date) => {
+                                  handleUpdateItem(item.id, { item_due_date: date });
+                                }}
+                                minDate={billDate}
+                              />
+                              {errors[`item_${index}_due_date`] && (
+                                <p className="text-xs text-red-500">{errors[`item_${index}_due_date`]}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 mt-3">
+
+                            {(item.payment_method &&
+                              (item.billing_type === 'Mensal' || item.billing_type === 'Trimestral' || item.billing_type === 'Semestral' || item.billing_type === 'Anual') &&
+                              item.card_type !== 'credit_recurring' &&
+                              !(item.payment_method === 'CREDIT_CARD' && item.card_type === 'credit') &&
+                              item.payment_method !== 'BOLETO') ? (
+                              <div className="space-y-2">
+                                <Label>Frequência de Cobrança</Label>
+                                <Select
+                                  value={item.recurrence_frequency || ''}
+                                  onValueChange={(val) => handleUpdateItem(item.id, { recurrence_frequency: val })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a frequência" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Mensal">Mensal</SelectItem>
+                                    <SelectItem value="Trimestral">Trimestral</SelectItem>
+                                    <SelectItem value="Semestral">Semestral</SelectItem>
+                                    <SelectItem value="Anual">Anual</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : null}
+
+                            {((item.payment_method === 'CREDIT_CARD' && item.card_type === 'credit') ||
+                              (item.payment_method === 'BOLETO' && item.billing_type === 'Único') ||
+                              (item.payment_method &&
+                                item.payment_method !== 'CREDIT_CARD' &&
+                                item.payment_method !== 'BOLETO' &&
+                                item.billing_type &&
+                                item.billing_type !== 'Único')) ? (
+                              <div className="space-y-2">
+                                <Label>Número de Parcelas</Label>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={12}
+                                  value={item.installments || ''}
+                                  onChange={(e) =>
+                                    handleUpdateItem(item.id, {
+                                      installments: parseInt(e.target.value) || 0,
+                                    })
+                                  }
+                                  placeholder="Ex: 3"
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </motion.div>
             )}
@@ -625,13 +835,46 @@ export function CreateStandaloneBillingDialog({
 
                   <div className="p-4 border rounded-lg">
                     <h3 className="font-medium mb-2">Pagamento</h3>
-                    <div className="space-y-1 text-sm">
+                    <div className="space-y-2 text-sm">
                       <p><span className="font-medium">Data de Faturamento:</span> {format(billDate, 'dd/MM/yyyy')}</p>
-                      <p><span className="font-medium">Data de Vencimento:</span> {format(dueDate, 'dd/MM/yyyy')}</p>
-                      <p><span className="font-medium">Método:</span> {paymentMethod}</p>
-                      {description && (
-                        <p><span className="font-medium">Descrição:</span> {description}</p>
-                      )}
+                      {items.map((item, index) => {
+                        const methodLabels: Record<string, string> = {
+                          CREDIT_CARD: 'Cartão de Crédito',
+                          PIX: 'PIX',
+                          BOLETO: 'Boleto Bancário',
+                          CASH: 'Dinheiro'
+                        };
+                        const cardLabels: Record<string, string> = {
+                          credit: 'Crédito',
+                          credit_recurring: 'Crédito Recorrente'
+                        } as const;
+                        const itemName = item.product?.name || item.service?.name || `Item ${index + 1}`;
+                        const methodKey = item.payment_method ?? (paymentMethod as string);
+                        const due = item.item_due_date || dueDate;
+                        const installments = item.installments;
+                        const billing = item.billing_type || 'Único';
+                        const frequency = item.recurrence_frequency || '';
+                        return (
+                          <div key={item.id} className="rounded-lg bg-gray-50 p-3">
+                            <p className="font-medium">{itemName}</p>
+                            <p><span className="font-medium">Método:</span> {methodKey ? (methodLabels[methodKey] ?? String(methodKey)) : '—'}</p>
+                            {item.payment_method === 'CREDIT_CARD' && (
+                              <p><span className="font-medium">Tipo de Cartão:</span> {item.card_type ? cardLabels[item.card_type] || item.card_type : '—'}</p>
+                            )}
+                            <p><span className="font-medium">Tipo de Faturamento:</span> {billing}</p>
+                            {frequency && (
+                              <p><span className="font-medium">Frequência:</span> {frequency}</p>
+                            )}
+                            {installments && installments > 0 && (
+                              <p><span className="font-medium">Parcelas:</span> {installments}x</p>
+                            )}
+                            <p><span className="font-medium">Vencimento:</span> {due ? format(due, 'dd/MM/yyyy') : '—'}</p>
+                            {item.description && (
+                              <p><span className="font-medium">Descrição:</span> {item.description}</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -673,6 +916,19 @@ export function CreateStandaloneBillingDialog({
             )}
           </div>
         </div>
+        <Dialog open={showAddItemChooser} onOpenChange={setShowAddItemChooser}>
+          <DialogContent className="max-w-md">
+            <DialogTitle>Adicionar Item</DialogTitle>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <Button variant="outline" onClick={() => { handleAddItem('product'); setShowAddItemChooser(false); }}>
+                Produto
+              </Button>
+              <Button variant="outline" onClick={() => { handleAddItem('service'); setShowAddItemChooser(false); }}>
+                Serviço
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

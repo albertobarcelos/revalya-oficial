@@ -16,7 +16,7 @@ export function HeaderControls({ dateRange, onDateChange, onExportCsv, onExportE
     <div className="flex items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-1">
+          <Button variant="outline" className="gap-1 border border-border bg-card text-foreground hover:bg-accent">
             <Download className="h-3.5 w-3.5" />
             <span className="hidden sm:inline text-sm">Exportar</span>
           </Button>
