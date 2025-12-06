@@ -60,6 +60,7 @@ import { Layout } from '@/components/layout/Layout';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { formatCurrency } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { deleteService } from '@/services/servicesService';
 
 // Componente de Edição Reutilizável
 import { EditModal } from '@/components/shared/EditModal';
@@ -187,10 +188,26 @@ export default function ServicesPage() {
     );
   }
   
-  // 🗑️ HANDLER PARA EXCLUSÃO
+  /**
+   * Exclui um serviço de forma segura respeitando multi-tenant (RLS)
+   * - Configura o contexto de tenant no banco
+   * - Chama a exclusão validando `tenant_id`
+   */
   const handleDeleteService = async (service: Service) => {
     try {
-      await deleteService(service.id);
+      if (!currentTenant?.id) {
+        toast({
+          title: "Tenant inválido",
+          description: "Não foi possível identificar o tenant atual.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await supabase.rpc('set_tenant_context_simple', { p_tenant_id: currentTenant.id });
+
+      await deleteService(service.id, currentTenant.id);
+
       toast({
         title: "Serviço excluído",
         description: `O serviço "${service.name}" foi excluído com sucesso.`,

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { IMaskInput } from 'react-imask';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -194,6 +195,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Estado local para controlar o valor de entrada do campo Custo Unitário
   const [costPriceInput, setCostPriceInput] = React.useState<string>('');
+  // Estados de rascunho para alterações dentro do modal (não aplicadas imediatamente)
+  const [draftUnitPrice, setDraftUnitPrice] = React.useState<number | null>(null);
+  const [quantityInput, setQuantityInput] = React.useState<string>('');
+  const [draftQuantity, setDraftQuantity] = React.useState<number | null>(null);
+  const [draftCostPrice, setDraftCostPrice] = React.useState<number | null>(null);
   
   // AIDEV-NOTE: Ref para evitar recarregamento desnecessário do modal
   const lastLoadedServiceIdRef = React.useRef<string | null>(null);
@@ -434,10 +440,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       }
 
       // AIDEV-NOTE: Preparar dados das alterações para salvar no estado local
-      // CORREÇÃO: Incluir unit_price e cost_price se foram alterados no modal
+      // Inclui unit_price, quantity e cost_price caso existam rascunhos
       const serviceChanges: Partial<SelectedService> = {
-        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price do serviço atual se não foi alterado
-        cost_price: currentService.cost_price !== undefined ? currentService.cost_price : 0,
+        unit_price: (draftUnitPrice ?? currentService.unit_price ?? currentService.default_price ?? 0),
+        quantity: (draftQuantity ?? currentService.quantity ?? 1),
+        cost_price: (draftCostPrice ?? (currentService.cost_price !== undefined ? currentService.cost_price : 0)),
         // Incluir campos financeiros
         payment_method: financialData.payment_method,
         card_type: financialData.card_type,
@@ -470,10 +477,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       updatedServices[serviceIndex] = {
         ...updatedServices[serviceIndex],
         ...serviceChanges,
-        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price do serviço atual se não foi alterado
-        cost_price: currentService.cost_price !== undefined ? currentService.cost_price : (updatedServices[serviceIndex].cost_price || 0),
-        // CORREÇÃO: Recalcular total se unit_price ou quantity mudaram
-        total: (updatedServices[serviceIndex].unit_price || 0) * (updatedServices[serviceIndex].quantity || 1)
+        total: (serviceChanges.unit_price || 0) * (serviceChanges.quantity || 1)
       };
       
       setSelectedServices(updatedServices);
@@ -485,6 +489,13 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       
       setShowTaxModal(false);
       setEditingServiceId("");
+      // Limpar rascunhos ao confirmar
+      setUnitPriceInput('');
+      setCostPriceInput('');
+      setQuantityInput('');
+      setDraftUnitPrice(null);
+      setDraftQuantity(null);
+      setDraftCostPrice(null);
       
       // AIDEV-NOTE: Feedback visual de que as alterações foram salvas localmente
       toast.success('Configurações salvas localmente. O resumo foi atualizado automaticamente.');
@@ -794,10 +805,22 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       if (currentService) {
         console.log('✅ Serviço encontrado, carregando todos os dados:', currentService);
         
-        // AIDEV-NOTE: Carregar unit_price e cost_price - CORREÇÃO CRÍTICA
-        // Limpar estados de input para forçar recarregamento dos valores
+        // AIDEV-NOTE: Carregar unit_price, quantity e cost_price em rascunho
+        // Limpar estados de input e inicializar rascunhos com valores atuais do serviço
         setUnitPriceInput('');
         setCostPriceInput('');
+        setQuantityInput('');
+        setDraftUnitPrice(
+          typeof currentService.unit_price === 'number'
+            ? currentService.unit_price
+            : (typeof currentService.default_price === 'number' ? currentService.default_price : null)
+        );
+        setDraftQuantity(typeof currentService.quantity === 'number' ? currentService.quantity : 1);
+        setDraftCostPrice(
+          currentService.cost_price !== undefined && currentService.cost_price !== null
+            ? currentService.cost_price
+            : null
+        );
         
         // AIDEV-NOTE: Carregar dados de vencimento apenas se o serviço já possui dados salvos
         // Evita sobrescrever valores configurados pelo usuário com valores padrão
@@ -1063,71 +1086,52 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     {/* Campo de Valor Unitário */}
                     <div className="space-y-2">
                       <Label htmlFor="unitPrice" className="text-sm font-medium">Valor Unitário</Label>
-                      <Input 
+                      <IMaskInput
                         id="unitPrice"
-                        type="text"
-                        inputMode="decimal"
+                        mask={Number}
+                        scale={2}
+                        thousandsSeparator={'.'}
+                        radix={','}
+                        mapToRadix={['.']}
+                        padFractionalZeros={true}
+                        normalizeZeros={true}
+                        signed={false}
+                        prefix={'R$ '}
                         value={(() => {
-                          // Se há um valor no estado local de input, usa ele (durante digitação)
                           if (unitPriceInput !== '') {
                             return unitPriceInput;
                           }
-                          // Caso contrário, usa o valor do serviço
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          const value = currentService?.unit_price ?? currentService?.default_price ?? '';
-                          return value === 0 ? '' : value.toString();
+                          const value = draftUnitPrice ?? currentService?.unit_price ?? currentService?.default_price ?? '';
+                          if (value === '' || value === 0) return '';
+                          return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
                         })()}
-                        onChange={(e) => {
-                          const inputValue = e.target.value;
-                          
-                          // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
-                          const allowedCharsRegex = /^[0-9.,]*$/;
-                          
-                          // Se o valor contém apenas caracteres permitidos, aceita a entrada
-                          if (allowedCharsRegex.test(inputValue)) {
-                            // Atualiza o estado local para preservar a formatação durante digitação
-                            setUnitPriceInput(inputValue);
-                            
-                            // Converte para número apenas para cálculos internos
-                            let numericValue = 0;
-                            if (inputValue.trim() !== '') {
-                              // Normaliza: substitui vírgula por ponto, remove pontos extras
-                              const normalizedValue = inputValue
-                                .replace(',', '.')
-                                .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
-                              
-                              const parsed = parseFloat(normalizedValue);
-                              numericValue = isNaN(parsed) ? 0 : parsed;
-                            }
-                            
-                            // Atualiza o serviço com o valor numérico
-                            // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
-                            // A sincronização será feita pelo useEffect que monitora selectedServices
-                            setSelectedServices(prev => 
-                              prev.map(service => 
-                                service.id === editingServiceId 
-                                  ? { 
-                                      ...service, 
-                                      unit_price: numericValue,
-                                      total: numericValue * (service.quantity || 1)
-                                    }
-                                  : service
-                              )
-                            );
-                          }
-                          // Se contém caracteres inválidos, ignora a entrada
+                        unmask={false}
+                        onAccept={(masked) => {
+                          const inputValue = String(masked);
+                          setUnitPriceInput(inputValue);
+                          const numericValue = (() => {
+                            const onlyNumbers = inputValue.replace(/[^0-9,]/g, '');
+                            if (!onlyNumbers) return 0;
+                            const normalized = onlyNumbers.replace(',', '.');
+                            const parsed = parseFloat(normalized);
+                            return isNaN(parsed) ? 0 : parsed;
+                          })();
+                          setDraftUnitPrice(numericValue);
                         }}
-                        onBlur={() => {
-                          // Quando o usuário sai do campo, limpa o estado local
-                          setUnitPriceInput('');
-                        }}
+                        onBlur={() => setUnitPriceInput('')}
                         onFocus={() => {
-                          // Quando o usuário entra no campo, inicializa o estado local
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          const value = currentService?.unit_price ?? currentService?.default_price ?? '';
-                          setUnitPriceInput(value === 0 ? '' : value.toString());
+                          const baseValue =
+                            draftUnitPrice ?? currentService?.unit_price ?? currentService?.default_price ?? null;
+                          const formatted = typeof baseValue === 'number' && baseValue > 0
+                            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseValue)
+                            : '';
+                          setUnitPriceInput(formatted);
+                          setDraftUnitPrice(typeof baseValue === 'number' ? baseValue : null);
                         }}
-                        placeholder="Ex: 1500,00 ou 1500.00"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="R$ 1.500,00"
                       />
                       <p className="text-xs text-muted-foreground">
                         Valor cobrado por unidade do serviço
@@ -1144,29 +1148,24 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           type="text"
                           inputMode="numeric"
                           value={(() => {
+                            if (quantityInput !== '') return quantityInput;
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
                             const value = currentService?.quantity ?? '';
                             return value === 0 ? '' : value.toString();
                           })()}
                           onChange={(e) => {
                             const inputValue = e.target.value;
-                            // Permite apenas números inteiros
                             const sanitizedValue = inputValue.replace(/[^0-9]/g, '');
-                            const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);
-                            
-                            // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
-                            // A sincronização será feita pelo useEffect que monitora selectedServices
-                            setSelectedServices(prev => 
-                              prev.map(service => 
-                                service.id === editingServiceId 
-                                  ? { 
-                                      ...service, 
-                                      quantity: isNaN(newValue) ? 1 : Math.max(1, newValue),
-                                      total: (service.unit_price || service.default_price || 0) * (isNaN(newValue) ? 1 : Math.max(1, newValue))
-                                    }
-                                  : service
-                              )
-                            );
+                            setQuantityInput(sanitizedValue);
+                            const newValue = sanitizedValue === '' ? null : parseInt(sanitizedValue);
+                            setDraftQuantity(newValue && !isNaN(newValue) ? Math.max(1, newValue) : null);
+                          }}
+                          onBlur={() => setQuantityInput('')}
+                          onFocus={() => {
+                            const currentService = selectedServices.find(s => s.id === editingServiceId);
+                            const value = currentService?.quantity ?? 1;
+                            setQuantityInput(value === 0 ? '' : value.toString());
+                            setDraftQuantity(typeof value === 'number' ? value : null);
                           }}
                           placeholder="Ex: 2"
                         />
@@ -1178,74 +1177,51 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       {/* Campo de Preço de Custo */}
                       <div className="space-y-2">
                         <Label htmlFor="costPrice" className="text-sm font-medium">Custo Unitário</Label>
-                        <Input 
+                        <IMaskInput
                           id="costPrice"
-                          type="text"
-                          inputMode="decimal"
+                          mask={Number}
+                          scale={2}
+                          thousandsSeparator={'.'}
+                          radix={','}
+                          mapToRadix={['.']}
+                          padFractionalZeros={true}
+                          normalizeZeros={true}
+                          signed={false}
+                          prefix={'R$ '}
                           value={(() => {
-                            // Se há um valor no estado local de input, usa ele (durante digitação)
                             if (costPriceInput !== '') {
                               return costPriceInput;
                             }
-                            // Caso contrário, usa o valor do serviço
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
-                            // AIDEV-NOTE: CORREÇÃO - Verificar se cost_price existe (não é undefined/null)
-                            // Se existir (mesmo que seja 0), mostrar o valor. Só mostrar vazio se realmente não existir
-                            if (currentService?.cost_price !== undefined && currentService?.cost_price !== null) {
-                              return currentService.cost_price.toString();
-                            }
-                            return '';
+                            const value = draftCostPrice ?? currentService?.cost_price;
+                            if (value === undefined || value === null || value === 0) return '';
+                            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
                           })()}
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            
-                            // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
-                            const allowedCharsRegex = /^[0-9.,]*$/;
-                            
-                            // Se o valor contém apenas caracteres permitidos, aceita a entrada
-                            if (allowedCharsRegex.test(inputValue)) {
-                              // Atualiza o estado local para preservar a formatação durante digitação
-                              setCostPriceInput(inputValue);
-                              
-                              // Converte para número apenas para cálculos internos
-                              let numericValue = 0;
-                              if (inputValue.trim() !== '') {
-                                // Normaliza: substitui vírgula por ponto, remove pontos extras
-                                const normalizedValue = inputValue
-                                  .replace(',', '.')
-                                  .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
-                                
-                                const parsed = parseFloat(normalizedValue);
-                                numericValue = isNaN(parsed) ? 0 : parsed;
-                              }
-                              
-                              // Atualiza o serviço com o valor numérico
-                              // AIDEV-NOTE: CORREÇÃO - Removido form.setValue do onChange para evitar loop infinito
-                              // A sincronização será feita pelo useEffect que monitora selectedServices
-                              setSelectedServices(prev => 
-                                prev.map(service => 
-                                  service.id === editingServiceId 
-                                    ? { 
-                                        ...service, 
-                                        cost_price: numericValue
-                                      }
-                                    : service
-                                )
-                              );
-                            }
-                            // Se contém caracteres inválidos, ignora a entrada
+                          unmask={false}
+                          onAccept={(masked) => {
+                            const inputValue = String(masked);
+                            setCostPriceInput(inputValue);
+                            const numericValue = (() => {
+                              const onlyNumbers = inputValue.replace(/[^0-9,]/g, '');
+                              if (!onlyNumbers) return 0;
+                              const normalized = onlyNumbers.replace(',', '.');
+                              const parsed = parseFloat(normalized);
+                              return isNaN(parsed) ? 0 : parsed;
+                            })();
+                            setDraftCostPrice(numericValue);
                           }}
-                          onBlur={() => {
-                            // Quando o usuário sai do campo, limpa o estado local
-                            setCostPriceInput('');
-                          }}
+                          onBlur={() => setCostPriceInput('')}
                           onFocus={() => {
-                            // Quando o usuário entra no campo, inicializa o estado local
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
-                            const value = currentService?.cost_price ?? '';
-                            setCostPriceInput(value === 0 ? '' : value.toString());
+                            const baseValue = draftCostPrice ?? currentService?.cost_price ?? null;
+                            const formatted = typeof baseValue === 'number' && baseValue > 0
+                              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseValue)
+                              : '';
+                            setCostPriceInput(formatted);
+                            setDraftCostPrice(typeof baseValue === 'number' ? baseValue : null);
                           }}
-                          placeholder="Ex: 800,00 ou 800.00"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          placeholder="R$ 800,00"
                         />
                         <p className="text-xs text-muted-foreground">
                           Custo interno do serviço (opcional)
@@ -1261,7 +1237,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       <span className="text-lg font-semibold text-primary">
                         {(() => {
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          return formatCurrency(currentService?.total || 0);
+                          const unit = draftUnitPrice ?? (currentService?.unit_price || currentService?.default_price || 0);
+                          const qty = draftQuantity ?? (currentService?.quantity || 1);
+                          return formatCurrency(unit * qty);
                         })()}
                       </span>
                     </div>
@@ -1940,7 +1918,15 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button 
               variant="outline" 
-              onClick={() => setShowTaxModal(false)}
+              onClick={() => {
+                setUnitPriceInput('');
+                setCostPriceInput('');
+                setQuantityInput('');
+                setDraftUnitPrice(null);
+                setDraftQuantity(null);
+                setDraftCostPrice(null);
+                setShowTaxModal(false);
+              }}
               className="border-border/50"
             >
               Cancelar
