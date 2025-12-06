@@ -228,7 +228,8 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
             name,
             company,
             email,
-            phone
+            phone,
+            cpf_cnpj
           )
         `)
         .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO

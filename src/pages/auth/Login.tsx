@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, Shield } from "lucide-react";
+import { Loader2, AlertCircle, Shield, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
 import { useAuthStore } from "@/store/authStore";
@@ -38,6 +38,7 @@ function Login() {
     handleTestConnection,
     handleForgotPassword
   } = useLoginHandler();
+  const [showPassword, setShowPassword] = useState(false);
   
   // Obtendo estado global de autenticação do Zustand
   const { 
@@ -178,15 +179,29 @@ function Login() {
                   Esqueceu a senha?
                 </button>
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-11 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500 dark:border-slate-300 focus:border-accent"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-11 pr-10 dark:bg-white dark:text-slate-900 dark:placeholder:text-slate-500 dark:border-slate-300 focus:border-accent"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-accent"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full h-11 bg-accent hover:bg-accent/90 text-white" disabled={loading}>

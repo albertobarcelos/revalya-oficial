@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, Eye, Building2, Calendar, FileText, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
 import { ContractStatusDropdown } from "./ContractStatusDropdown";
 
 interface ContractListProps {
@@ -299,6 +299,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                     <TableHead><Checkbox checked={selectedContracts.length === contracts.length} onCheckedChange={handleSelectAll} /></TableHead>
                     <TableHead>Número</TableHead>
                     <TableHead>Cliente</TableHead>
+                    <TableHead>CNPJ</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Valor</TableHead>
@@ -330,6 +331,9 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                           <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
                           {contract.customers?.name}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-foreground">
+                        {formatCpfCnpj(contract.customers?.cpf_cnpj)}
                       </TableCell>
                       <TableCell className="text-foreground">
                         <ContractStatusDropdown 

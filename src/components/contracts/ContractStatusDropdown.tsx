@@ -80,7 +80,7 @@ export function ContractStatusDropdown({
       onValueChange={handleStatusChange}
       disabled={disabled || updateContractStatusMutation.isPending}
     >
-      <SelectTrigger className="h-6 w-auto min-w-[100px] border-0 bg-transparent p-0 hover:bg-muted/50 focus:ring-0 focus:ring-offset-0">
+      <SelectTrigger className="h-6 w-fit border-0 bg-transparent p-0 hover:bg-muted/50 focus:ring-0 focus:ring-offset-0 justify-start gap-1">
         <Badge 
           variant={currentStatus === "DRAFT" ? "outline" : "default"}
           className={currentDisplay.className}

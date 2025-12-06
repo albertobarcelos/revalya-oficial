@@ -213,7 +213,20 @@ export default function ServicesPage() {
         description: `O serviço "${service.name}" foi excluído com sucesso.`,
       });
       refresh();
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as Record<string, unknown>;
+      const code = typeof err.code === 'string' ? err.code : undefined;
+      const message = typeof err.message === 'string' ? err.message : '';
+
+      if (code === '23503' || message.includes('referenced from table "contract_services"')) {
+        toast({
+          title: 'Serviço em uso',
+          description: 'Este serviço está sendo utilizado e não pode ser excluído.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       toast({
         title: "Erro ao excluir",
         description: "Não foi possível excluir o serviço. Tente novamente.",

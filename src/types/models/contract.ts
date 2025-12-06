@@ -30,6 +30,7 @@ export type Contract = {
     company?: string;
     email?: string;
     phone?: string;
+    cpf_cnpj?: string | number;
   };
   
   stage?: {

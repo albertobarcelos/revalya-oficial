@@ -951,6 +951,10 @@ export function ContractFormActions({
         errorMessage = "Erro no formato das datas. Verifique se as datas estão corretas.";
       } else if (error?.message?.includes('violates foreign key constraint')) {
         errorMessage = "Erro de referência. Verifique se o cliente selecionado é válido.";
+      } else if (error?.message?.includes('idx_contract_billing_periods_order_number_tenant')) {
+        errorMessage = "Conflito de Ordem de Serviço: já existe uma OS com este número. Tente salvar novamente.";
+      } else if (error?.message?.includes('idx_standalone_billing_periods_order_number_tenant')) {
+        errorMessage = "Conflito de Ordem de Serviço (avulso): já existe uma OS com este número. Tente salvar novamente.";
       } else if (error?.message?.includes('duplicate key value')) {
         errorMessage = "Já existe um contrato com este número. Use um número diferente.";
       } else if (error?.message?.includes('Usuário não autenticado')) {
