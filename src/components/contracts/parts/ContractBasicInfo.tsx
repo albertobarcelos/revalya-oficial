@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, parseISO, Locale } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { pt } from 'date-fns/locale';
-import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText, Paperclip } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,6 +39,8 @@ import { ClientCreation } from "./ClientCreation";
 import { ContractFormValues } from "../schema/ContractFormSchema";
 import { FieldSkeleton } from "./FieldSkeleton";
 import { useContractForm } from "../form/ContractFormProvider";
+import { EditClientDialog } from "@/components/clients/EditClientDialog";
+import type { Customer } from "@/types/database";
 
 interface ContractBasicInfoProps {
   customers: any[];
@@ -70,7 +72,8 @@ export function ContractBasicInfo({
   const [openInitialDatePicker, setOpenInitialDatePicker] = useState(false);
   const [openFinalDatePicker, setOpenFinalDatePicker] = useState(false);
   const [openBillingDatePicker, setOpenBillingDatePicker] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [selectedClient, setSelectedClient] = useState<Customer | null>(null);
+  const [showEditClient, setShowEditClient] = useState(false);
   
   // Observar mudanças nas datas para validação em tempo real
   const initialDate = useWatch({ control: form.control, name: 'initial_date' });
@@ -132,7 +135,7 @@ export function ContractBasicInfo({
     }
     
     // Procura o cliente no array customers (para casos onde o cliente está na primeira página)
-    const foundClient = customers.find(c => c.id === customerId);
+    const foundClient = customers.find(c => c.id === customerId) as Customer | undefined;
     if (foundClient) {
       console.log('✅ Cliente encontrado no array customers:', foundClient);
       setSelectedClient(foundClient);
@@ -181,7 +184,7 @@ export function ContractBasicInfo({
                     placeholder="Selecione um cliente"
                     value={selectedClient?.name || ""}
                     readOnly
-                    className="cursor-pointer bg-background/50 border-border/50 transition-colors pr-8"
+                    className="cursor-pointer bg-background/50 border-border/50 transition-colors pr-16"
                     onClick={() => setShowClientSearch(true)}
                     disabled={isFieldLoading("customer_id")}
                   />
@@ -203,6 +206,18 @@ export function ContractBasicInfo({
                   >
                     <Search className="h-4 w-4" />
                   </Button>
+                  {selectedClient?.id && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-8 top-0 h-full aspect-square text-muted-foreground hover:text-primary"
+                      onClick={() => setShowEditClient(true)}
+                      disabled={isFieldLoading("customer_id")}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <FormMessage />
                 
@@ -231,6 +246,17 @@ export function ContractBasicInfo({
                     form.setValue("customer_id", clientData.id);
                   }}
                 />
+                {selectedClient && (
+                  <EditClientDialog
+                    customer={selectedClient}
+                    open={showEditClient}
+                    onOpenChange={setShowEditClient}
+                    onSuccess={() => {
+                      // Após edição, manter o cliente selecionado e fechar o modal
+                      setShowEditClient(false);
+                    }}
+                  />
+                )}
               </FormItem>
             );
           }}
