@@ -340,6 +340,9 @@ interface KanbanColumnProps {
   selectedContracts?: Set<string>;
   onSelectionChange?: (periodId: string, selected: boolean) => void;
   showCheckboxes?: boolean;
+  itemsPerPage?: number;
+  onLoadMore?: (columnId: string) => void;
+  hasMore?: boolean;
 }
 
 /**
@@ -356,7 +359,10 @@ function KanbanColumn({
   onViewDetails, 
   selectedContracts = new Set(), 
   onSelectionChange, 
-  showCheckboxes = false 
+  showCheckboxes = false,
+  itemsPerPage = 10,
+  onLoadMore,
+  hasMore = false
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: columnId });
   
@@ -414,15 +420,17 @@ function KanbanColumn({
   
   return (
     <div className={cn(
-      "flex flex-col h-full rounded-xl overflow-hidden min-h-[500px]",
+      "flex flex-col rounded-xl overflow-hidden",
       "border transition-all duration-200",
       "hover:shadow-sm",
       styles.borderColor,
       styles.bgColor,
-      isOver && "ring-1 ring-blue-600/20 bg-blue-50/30"
+      isOver && "ring-1 ring-blue-600/20 bg-blue-50/30",
+      // Altura fixa - ocupa 100% do container pai
+      "h-full min-h-0 max-h-full"
     )}>
       {/* Header clean com acento sutil de cor por coluna */}
-      <div className={cn("relative overflow-hidden", styles.headerBg)}>
+      <div className={cn("relative overflow-hidden flex-shrink-0", styles.headerBg)}>
         {/* Barra sutil de acento de cor indicando a coluna (2px) */}
         <div className={cn("absolute left-0 top-0 h-full w-[2px]", accents.bar)} aria-hidden="true" />
         <div className="relative flex items-center justify-between p-3 border-b border-gray-100">
@@ -451,17 +459,25 @@ function KanbanColumn({
         </div>
       </div>
       
-      {/* Área de drop com scroll customizado */}
+      {/* Área de drop com scroll customizado - altura fixa */}
       <div 
         ref={setNodeRef}
         className={cn(
-          "flex-1 p-3 space-y-3 overflow-y-auto",
+          "flex-1 p-3 space-y-3 overflow-y-auto overflow-x-hidden",
+          "min-h-0",
           "scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent",
           "hover:scrollbar-thumb-gray-400"
         )}
+        onScroll={(e) => {
+          const target = e.currentTarget;
+          // AIDEV-NOTE: Carregar mais itens quando o usuário chega perto do final do scroll (80%)
+          if (onLoadMore && hasMore && target.scrollTop + target.clientHeight >= target.scrollHeight * 0.8) {
+            onLoadMore(columnId);
+          }
+        }}
       >
-        <SortableContext items={contracts.map(c => c.id)} strategy={verticalListSortingStrategy}>
-          {contracts.map((contract) => (
+        <SortableContext items={contracts.slice(0, itemsPerPage).map(c => c.id)} strategy={verticalListSortingStrategy}>
+          {contracts.slice(0, itemsPerPage).map((contract) => (
             <SortableItem key={contract.id} id={contract.id} disabled={false} useHandle={true}>
               <KanbanCard 
                 contract={contract} 
@@ -486,6 +502,14 @@ function KanbanColumn({
               <p className="text-xs text-gray-400">
                 Os contratos aparecerão aqui
               </p>
+            </div>
+          )}
+          
+          {/* AIDEV-NOTE: Indicador de carregamento de mais itens */}
+          {hasMore && contracts.length > itemsPerPage && (
+            <div className="text-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+              <p className="text-xs text-muted-foreground mt-2">Carregando mais...</p>
             </div>
           )}
         </SortableContext>
@@ -537,6 +561,22 @@ export default function FaturamentoKanban() {
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const [contractMode, setContractMode] = useState<'view' | 'edit' | 'create'>('view');
   const [isStandaloneBillingOpen, setIsStandaloneBillingOpen] = useState(false);
+  
+  // AIDEV-NOTE: Estado de paginação por coluna para evitar carregar todos os cards de uma vez
+  const [itemsPerColumn, setItemsPerColumn] = useState<Record<string, number>>({
+    'faturar-hoje': 10,
+    'pendente': 10,
+    'faturados': 10,
+    'renovar': 10
+  });
+  
+  // AIDEV-NOTE: Função para carregar mais itens em uma coluna específica
+  const handleLoadMore = useCallback((columnId: string) => {
+    setItemsPerColumn(prev => ({
+      ...prev,
+      [columnId]: (prev[columnId] || 10) + 10
+    }));
+  }, []);
 
   // AIDEV-NOTE: Abrir modal com segurança multi-tenant para exibir ordem de faturamento
   // Agora recebe period_id diretamente do card
@@ -1128,8 +1168,8 @@ export default function FaturamentoKanban() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gray-50">
-        <div className="p-6">
+      <div className="flex flex-col h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] bg-gray-50 overflow-hidden min-h-0">
+        <div className="flex-shrink-0 p-4 md:p-6 pb-4">
           <div className="mb-6">
             {/* Filtros com botão integrado */}
             <KanbanFilters
@@ -1171,13 +1211,14 @@ export default function FaturamentoKanban() {
             )}
           </div>
 
-          <DndContext
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={handleDragCancel}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-6">
+          <div className="flex-1 min-h-0 overflow-hidden px-2 md:px-4 pb-4 md:pb-6 flex flex-col">
+            <DndContext
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 h-full min-h-0 auto-rows-fr">
               {columns.map(column => {
                 // Usar dados filtrados se houver filtros ativos
                 const columnContracts = hasActiveFilters 
@@ -1196,17 +1237,21 @@ export default function FaturamentoKanban() {
                     selectedContracts={selectedContracts}
                     onSelectionChange={handleSelectionChange}
                     showCheckboxes={showCheckboxes}
+                    itemsPerPage={itemsPerColumn[column.id] || 10}
+                    onLoadMore={handleLoadMore}
+                    hasMore={columnContracts.length > (itemsPerColumn[column.id] || 10)}
                   />
                 );
               })}
-            </div>
-          
-            <DragOverlay>
-              {activeContract ? (
-                <KanbanCard contract={activeContract} isDragging onViewDetails={handleViewDetails} />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+              </div>
+            
+              <DragOverlay>
+                {activeContract ? (
+                  <KanbanCard contract={activeContract} isDragging onViewDetails={handleViewDetails} />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          </div>
         </div>
 
         {/* AIDEV-NOTE: Modal de detalhes do contrato - mesmo design do dialog de criação */}

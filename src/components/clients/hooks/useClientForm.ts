@@ -26,9 +26,6 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
   
   // AIDEV-NOTE: Converter CPF/CNPJ para string, pois pode vir como número do banco
   const cpfCnpjValue = customer.cpf_cnpj ? String(customer.cpf_cnpj) : '';
-  console.log('Inicializando useClientForm com CPF/CNPJ:', cpfCnpjValue);
-  console.log('Dados do cliente recebidos:', customer);
-  console.log('Tipo original do CPF/CNPJ:', typeof customer.cpf_cnpj);
   
   const [formData, setFormData] = useState<CustomerFormData>(() => {
     initializedRef.current = true;

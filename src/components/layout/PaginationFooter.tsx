@@ -18,7 +18,7 @@ interface PaginationFooterProps {
 }
 
 // AIDEV-NOTE: Opções de itens por página disponíveis
-const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ITEMS_PER_PAGE_OPTIONS = [25, 50, 100];
 
 // AIDEV-NOTE: Componente de paginação fixa com controles responsivos
 export function PaginationFooter({
