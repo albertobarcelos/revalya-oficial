@@ -89,6 +89,20 @@ export default function PortalSelectionPage() {
     return !supabaseLoading && isInitialized && hasLoaded && !isLoading;
   }, [supabaseLoading, isInitialized, hasLoaded, isLoading]);
 
+  // AIDEV-NOTE: Forçar tema escuro na página de seleção de portal
+  // Garante que a tela de portal sempre esteja em modo escuro
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.add('dark');
+    root.classList.remove('light');
+    
+    // Cleanup: quando sair da página, o ThemeProvider vai restaurar o tema
+    return () => {
+      // Não removemos a classe aqui para evitar flicker
+      // O ThemeProvider vai gerenciar o tema quando navegar para outra página
+    };
+  }, []);
+
   // Debounce para estabilizar a transição visual (evita 'piscar')
   const [stableReady, setStableReady] = useState(false);
   useEffect(() => {

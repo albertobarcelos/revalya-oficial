@@ -243,7 +243,6 @@ export function ContractFormProvider({
   const { data: contractData, isLoading: isLoadingContract, error: contractError, loadContract } = useContractEdit();
 
   // AIDEV-NOTE: Hook para buscar custos reais de contratos existentes
-  console.log('🔍 [DEBUG] ContractFormProvider - contractId:', contractId);
   const { totalCosts: contractCosts, isLoading: isLoadingCosts } = useContractCosts(contractId);
 
   // Sempre edição quando houver um contrato selecionado
@@ -289,32 +288,32 @@ export function ContractFormProvider({
     });
 
     form.setValue('services', updatedServices);
-    console.log('🔄 Alterações pendentes aplicadas:', Object.keys(pendingServiceChanges).length);
   }, [form, pendingServiceChanges]);
 
   // 🚀 CARREGAMENTO OTIMIZADO: Carregar dados do contrato quando contractId mudar
   useEffect(() => {
     if (contractId && isEditMode && loadedContractRef.current !== contractId && !isLoadingRef.current) {
-      console.log('🔄 ContractFormProvider: Carregando contrato ID:', contractId);
       isLoadingRef.current = true;
       
       loadContract(contractId, form).then(() => {
         loadedContractRef.current = contractId;
         isLoadingRef.current = false;
-        console.log('✅ ContractFormProvider: Contrato carregado, dados do formulário:', form.getValues());
-        const services = form.getValues('services');
-        console.log('📋 ContractFormProvider: Serviços no formulário após carregamento:', services?.length || 0, services);
       }).catch((error) => {
-        console.error('❌ ContractFormProvider: Erro ao carregar contrato:', error);
+        console.error('❌ Erro ao carregar contrato:', error);
         loadedContractRef.current = null;
         isLoadingRef.current = false;
       });
-    } else if (!contractId) {
-      // Limpar estado quando não há contrato selecionado
-      loadedContractRef.current = null;
-      isLoadingRef.current = false;
+    } else if (!contractId && loadedContractRef.current) {
+      // Limpar estado apenas após um delay para evitar "piscar" ao fechar dialog
+      // Isso permite que o dialog feche suavemente antes de limpar o estado
+      const timeoutId = setTimeout(() => {
+        loadedContractRef.current = null;
+        isLoadingRef.current = false;
+      }, 200);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [contractId, isEditMode]); // Dependências mínimas
+  }, [contractId, isEditMode, form, loadContract]); // Dependências mínimas
 
   // Exibir erro se houver problema no carregamento
   useEffect(() => {
@@ -417,15 +416,6 @@ export function ContractFormProvider({
     // AIDEV-NOTE: Calcular custos híbridos para contratos existentes
     const hybridCosts = calculateHybridCosts(services || []);
     
-    console.log('🔍 [DEBUG] Custos híbridos:', {
-      contractId,
-      contractCosts,
-      hybridCosts,
-      servicesCount: services?.length || 0,
-      hasContractId: !!contractId,
-      hasContractCosts: !!contractCosts
-    });
-    
     // AIDEV-NOTE: Incluir desconto do contrato e custos híbridos no cálculo dos totais
     const newTotals = calculateTotals(services || [], products || [], contractDiscount, hybridCosts);
     setTotalValues(newTotals);
@@ -436,8 +426,6 @@ export function ContractFormProvider({
     form.setValue('total_tax', newTotals.tax);
     
     const itemsCount = (services?.length || 0) + (products?.length || 0);
-    const costsSource = hybridCosts !== undefined ? 'custos híbridos (backend + local)' : 'cost_percentage';
-    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos', 'com desconto do contrato:', contractDiscount, 'usando', costsSource);
   }, [services, products, contractDiscount, contractId, contractCosts, form, calculateHybridCosts]);
 
   // Detectar mudanças no formulário

@@ -188,14 +188,6 @@ export function ContractBasicInfo({
                     onClick={() => setShowClientSearch(true)}
                     disabled={isFieldLoading("customer_id")}
                   />
-                  {/* AIDEV-NOTE: Debug do selectedClient */}
-                  {console.log('🎯 Campo Cliente - Debug:', {
-                    selectedClient,
-                    selectedClientName: selectedClient?.name,
-                    customerId,
-                    contractCustomer: contractData?.customer,
-                    displayValue: selectedClient?.name || ""
-                  })}
                   <Button
                     type="button"
                     variant="ghost"

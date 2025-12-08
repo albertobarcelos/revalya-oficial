@@ -47,6 +47,20 @@ function Login() {
   } = useZustandAuth();
   const authError = useAuthStore(state => state.error);
 
+  // AIDEV-NOTE: Forçar tema escuro na página de login
+  // Garante que a tela de login sempre esteja em modo escuro
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.add('dark');
+    root.classList.remove('light');
+    
+    // Cleanup: quando sair da página, o ThemeProvider vai restaurar o tema
+    return () => {
+      // Não removemos a classe aqui para evitar flicker
+      // O ThemeProvider vai gerenciar o tema quando navegar para outra página
+    };
+  }, []);
+
   // Log de montagem do componente
   useEffect(() => {
     logDebug('Componente Login montado');

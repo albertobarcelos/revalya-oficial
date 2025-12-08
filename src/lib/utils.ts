@@ -86,6 +86,30 @@ export function formatCpfCnpj(value: unknown): string {
   return numericValue;
 }
 
+/**
+ * Normaliza CPF/CNPJ removendo pontuação
+ * @param value - CPF ou CNPJ com ou sem formatação
+ * @returns String apenas com números
+ */
+export function normalizeCpfCnpj(value: unknown): string {
+  if (!value) {
+    return "";
+  }
+  
+  // Converte para string se for número
+  let stringValue: string;
+  if (typeof value === 'number') {
+    stringValue = value.toString();
+  } else if (typeof value === 'string') {
+    stringValue = value.trim();
+  } else {
+    return "";
+  }
+  
+  // Remove todos os caracteres não numéricos
+  return stringValue.replace(/\D/g, '');
+}
+
 // AIDEV-NOTE: Corrigido problema de timezone - usar parseISO para strings de data
 export function formatDate(dateString: string, formatString: string = "dd/MM/yyyy") {
   if (!dateString) return '-';
