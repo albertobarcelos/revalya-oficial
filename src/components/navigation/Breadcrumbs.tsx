@@ -48,7 +48,7 @@ export function Breadcrumbs() {
         to={homePath}
         className="flex items-center hover:text-foreground transition-colors"
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4 text-primary" />
       </Link>
       {filteredPathnames.map((value, index) => {
         const last = index === filteredPathnames.length - 1;

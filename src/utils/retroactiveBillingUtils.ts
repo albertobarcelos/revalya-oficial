@@ -60,12 +60,19 @@ interface CreatePeriodParams {
  * @returns true se o contrato for retroativo
  */
 export function isRetroactiveContract(
-  initialDate: string | Date, 
+  initialDateOrContract: string | Date | Contract,
   currentDate: Date = new Date()
 ): boolean {
+  let initialDate: string | Date;
+  if (typeof initialDateOrContract === 'object' && initialDateOrContract) {
+    const maybeContract = initialDateOrContract as any;
+    initialDate = (maybeContract.initial_date ?? maybeContract.start_date) as string | Date;
+  } else {
+    initialDate = initialDateOrContract as string | Date;
+  }
+
   const contractStart = typeof initialDate === 'string' ? new Date(initialDate) : initialDate;
   const currentMonthStart = startOfMonth(currentDate);
-  
   return isBefore(contractStart, currentMonthStart);
 }
 
@@ -238,6 +245,26 @@ export function calculateRetroactiveBillingPeriods(
   }
   
   return periods;
+}
+
+export function canApplyRetroactiveLogic(contract: Contract): boolean {
+  return contract.status === 'ACTIVE';
+}
+
+export function calculateRetroactiveStats(periods: BillingPeriod[], contract: Contract) {
+  const totalAmount = periods.reduce((sum, p) => sum + (p.amount || 0), 0);
+  return {
+    periods_count: periods.length,
+    total_amount: totalAmount,
+    billing_type: contract.billing_type,
+    first_bill_date: periods[0]?.bill_date ?? null
+  };
+}
+
+export function logRetroactiveLogicApplication(contract: Contract, periods: BillingPeriod[], stats: any) {
+  void contract;
+  void periods;
+  void stats;
 }
 
 /**

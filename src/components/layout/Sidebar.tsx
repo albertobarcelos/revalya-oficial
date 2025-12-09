@@ -364,7 +364,6 @@ export default function Sidebar() {
 
   const settingsLinks = [
     { icon: Settings, label: "Configurações", path: `/${tenantSlug}/configuracoes` },
-    { icon: Settings, label: "Config. Contratos", path: `/${tenantSlug}/contratos-config` },
   ];
 
   const handlePortalSelection = () => {

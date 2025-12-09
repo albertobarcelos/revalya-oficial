@@ -538,7 +538,7 @@ export default function Tasks() {
   return (
     <Layout>
       <div className="h-full w-full overflow-hidden flex flex-col p-6">
-        <h1 className="text-2xl font-bold mb-6">Gerenciamento de Tarefas - {currentTenant?.name}</h1>
+        <h1 className="text-2xl font-bold mb-6">Gerenciamento de Tarefas</h1>
         
         <div className="flex justify-between items-center mb-6">
           <div className="flex flex-wrap gap-2">

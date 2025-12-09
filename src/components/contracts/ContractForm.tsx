@@ -215,10 +215,6 @@ function ContractFormContentInternal({
       case 'recebimentos':
         return (
           <div>
-            <h2 className="font-medium flex items-center gap-2 mb-4">
-              <CreditCard className="h-4 w-4 text-primary" />
-              Faturamentos & Recebimentos
-            </h2>
             <RecebimentosHistorico 
               recebimentos={[]} 
               onNovoRecebimento={() => {}} 

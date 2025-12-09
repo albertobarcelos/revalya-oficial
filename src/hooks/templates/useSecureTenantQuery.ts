@@ -117,37 +117,68 @@ export function useSecureTenantMutation<TData, TVariables>(
   const securityMiddleware = new SecurityMiddleware({ supabaseClient: supabase });
 
   return useMutation({
+    /**
+     * Executa a mutação com re-tentativas automáticas em caso de conflito de `order_number` (erro 23505).
+     * AIDEV-NOTE: Essa camada protege operações de criação que dependem de triggers que geram `order_number`.
+     */
     mutationFn: async (variables: TVariables) => {
       // 🛡️ VALIDAÇÃO CRÍTICA ANTES DE QUALQUER MUTAÇÃO
       if (!currentTenant?.id) {
         throw new Error('❌ ERRO CRÍTICO: Tentativa de mutação sem tenant definido!');
       }
-      
       if (!currentTenant.active) {
         throw new Error('❌ ERRO: Tentativa de mutação em tenant inativo');
       }
-      
+
       throttledTenantGuard('mutation_audit', `✏️ [AUDIT] Mutação para tenant: ${currentTenant.name} (${currentTenant.id})`);
-      
+
       // AIDEV-NOTE: Obter ID do usuário atual para contexto
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || null;
-      
-      // AIDEV-NOTE: Configurar contexto de tenant no banco ANTES da operação (com user_id para RLS)
-      const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id, userId);
-      
-      if (!contextApplied) {
-        throw new Error('❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados');
+
+      // Função auxiliar para identificar conflito de número de OS
+      const isOrderNumberConflict = (error: any) => {
+        const msg = String(error?.message || '').toLowerCase();
+        const code = String((error?.code || '')).toLowerCase();
+        return (
+          code === '23505' || msg.includes('duplicate key')
+        ) && (
+          msg.includes('order_number') ||
+          msg.includes('idx_contract_billing_periods_order_number_tenant') ||
+          msg.includes('idx_standalone_billing_periods_order_number_tenant')
+        );
+      };
+
+      // AIDEV-NOTE: Re-tentativas com backoff leve para resolver corridas ocasionais
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        // Configurar contexto por tentativa
+        const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id, userId);
+        if (!contextApplied) {
+          throw new Error('❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados');
+        }
+
+        try {
+          const result = await mutationFn(supabase, currentTenant.id, variables);
+          // Limpar contexto após sucesso
+          await securityMiddleware.clearTenantContext();
+          return result;
+        } catch (error: any) {
+          // Limpar contexto antes de decidir sobre retry
+          await securityMiddleware.clearTenantContext();
+
+          if (isOrderNumberConflict(error) && attempt < MAX_ATTEMPTS) {
+            // Backoff incremental 80ms, 160ms
+            const delayMs = 80 * attempt;
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            continue; // tentar novamente
+          }
+          throw error;
+        }
       }
-      
-      try {
-        // Executar a mutação com o contexto configurado
-        const result = await mutationFn(supabase, currentTenant.id, variables);
-        return result;
-      } finally {
-        // AIDEV-NOTE: Limpar contexto após a operação para segurança
-        await securityMiddleware.clearTenantContext();
-      }
+
+      // Fallback (não deve chegar aqui)
+      throw new Error('Falha inesperada na mutação após múltiplas tentativas');
     },
     
     onSuccess: (data) => {
