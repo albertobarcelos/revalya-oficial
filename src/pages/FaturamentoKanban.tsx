@@ -67,6 +67,7 @@ export default function FaturamentoKanban() {
 
   // AIDEV-NOTE: Hook de modais
   const {
+    isStandalone: selectedIsStandalone,
     isContractModalOpen,
     selectedPeriodId,
     isStandaloneBillingOpen,
@@ -289,7 +290,11 @@ export default function FaturamentoKanban() {
                   <ContractFormSkeleton />
                 </div>
               ) : (
-                <BillingOrderDetails periodId={selectedPeriodId} onClose={closeDetailsModal} />
+                <BillingOrderDetails 
+                  periodId={selectedPeriodId} 
+                  isStandalone={selectedIsStandalone}
+                  onClose={closeDetailsModal} 
+                />
               )}
             </div>
           </BillingDialogContent>

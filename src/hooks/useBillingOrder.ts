@@ -2,6 +2,42 @@ import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 
+// AIDEV-NOTE: Tipos de erro específicos para melhor tratamento
+export type BillingOrderErrorType = 
+  | 'PERIOD_NOT_FOUND'
+  | 'CONTRACT_NOT_FOUND'
+  | 'CUSTOMER_NOT_FOUND'
+  | 'STANDALONE_PERIOD'
+  | 'PERMISSION_DENIED'
+  | 'NETWORK_ERROR'
+  | 'UNKNOWN_ERROR';
+
+/**
+ * AIDEV-NOTE: Interface para erro de ordem de faturamento
+ * Permite tratamento específico de diferentes tipos de erro
+ */
+export interface BillingOrderError {
+  type: BillingOrderErrorType;
+  message: string;
+  details?: string;
+  canRetry: boolean;
+}
+
+/**
+ * AIDEV-NOTE: Função auxiliar para criar erro tipado
+ */
+export const createBillingOrderError = (
+  type: BillingOrderErrorType,
+  message: string,
+  details?: string,
+  canRetry: boolean = true
+): BillingOrderError => ({
+  type,
+  message,
+  details,
+  canRetry,
+});
+
 /**
  * AIDEV-NOTE: Interface para ordem de faturamento
  * Representa uma ordem que pode estar em contract_billings (faturada) 
@@ -67,6 +103,8 @@ export interface BillingOrderItem {
 interface UseBillingOrderParams {
   periodId: string;
   enabled?: boolean;
+  /** Se true, não faz fallback para standalone_billing_periods quando não encontrar em contract_billing_periods */
+  skipStandaloneFallback?: boolean;
 }
 
 /**
@@ -75,52 +113,174 @@ interface UseBillingOrderParams {
  * Lógica:
  * - Se período está BILLED → busca contract_billings (dados congelados)
  * - Se período está PENDING → busca dados do contrato (dinâmico)
+ * 
+ * REFATORAÇÃO: Agora aceita skipStandaloneFallback para evitar busca desnecessária
+ * quando já sabemos que não é standalone
  */
-export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderParams) {
+export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallback = false }: UseBillingOrderParams) {
   return useSecureTenantQuery(
     ['billing_order', periodId],
     async (supabase, tenantId) => {
-      // AIDEV-NOTE: Configurar contexto de tenant
-      await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId 
-      });
-
-      // AIDEV-NOTE: Buscar período de faturamento primeiro
-      const { data: period, error: periodError } = await supabase
+      // AIDEV-NOTE: Buscar período de faturamento diretamente
+      // A RLS policy foi corrigida para suportar fallback via auth.uid()
+      // AIDEV-NOTE: Melhorado tratamento de erro para lidar com HTTP 400 (pode ser RLS ou período não existe)
+      let period: any = null;
+      let periodError: any = null;
+      
+      // AIDEV-NOTE: Primeira tentativa de busca
+      const firstAttempt = await supabase
         .from('contract_billing_periods')
         .select('*')
         .eq('id', periodId)
         .eq('tenant_id', tenantId)
-        .single();
+        .maybeSingle();
+      
+      period = firstAttempt.data;
+      periodError = firstAttempt.error;
 
-      if (periodError || !period) {
+      // AIDEV-NOTE: Verificar se o erro é um erro "não encontrado" ou erro de RLS (400)
+      // Códigos de erro do PostgREST:
+      // - PGRST116: No rows returned (não encontrado) - não é erro crítico
+      // - HTTP 400: Bad Request (pode ser RLS bloqueando ou query inválida)
+      // - Outros: erros críticos que devem ser propagados
+      const isNotFoundError = periodError?.code === 'PGRST116';
+      const isBadRequestError = periodError && 
+        (periodError.message?.includes('400') || 
+         periodError.message?.includes('Bad Request') ||
+         (periodError as any)?.status === 400);
+      
+      // AIDEV-NOTE: Se skipStandaloneFallback está ativo e houve erro 400, tentar novamente uma vez
+      // Erro 400 pode ser RLS bloqueando temporariamente
+      if (skipStandaloneFallback && !period && isBadRequestError && !isNotFoundError) {
+        console.log('[useBillingOrder] Erro 400 detectado com skipStandaloneFallback, tentando novamente...', {
+          periodId,
+          tenantId,
+        });
+        
+        // AIDEV-NOTE: Segunda tentativa - pode ser problema temporário de RLS
+        const retryAttempt = await supabase
+          .from('contract_billing_periods')
+          .select('*')
+          .eq('id', periodId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+        
+        if (retryAttempt.data) {
+          period = retryAttempt.data;
+          periodError = null; // Limpar erro se encontrou na segunda tentativa
+          console.log('[useBillingOrder] Período encontrado na segunda tentativa');
+        } else {
+          periodError = retryAttempt.error;
+        }
+      }
+      
+      // AIDEV-NOTE: Se skipStandaloneFallback está ativo, não tentar standalone
+      // Isso é usado quando já sabemos que não é standalone (ex: isStandalone=false do Kanban)
+      if (skipStandaloneFallback) {
+        // AIDEV-NOTE: Se não encontrou após todas as tentativas, lançar erro
+        if (!period) {
+          // AIDEV-NOTE: Log detalhado para debug (seguindo guia de auditoria)
+          console.warn('[useBillingOrder] Período não encontrado com skipStandaloneFallback=true:', {
+            periodId,
+            tenantId,
+            errorCode: periodError?.code,
+            errorMessage: periodError?.message,
+            isNotFoundError,
+            isBadRequestError,
+          });
+          
+          // AIDEV-NOTE: Verificar se foi um erro crítico ou apenas "não encontrado"
+          if (periodError && !isNotFoundError && !isBadRequestError) {
+            // AIDEV-NOTE: Erro crítico (não 400 ou PGRST116), propagar
+            const error = createBillingOrderError(
+              'PERIOD_NOT_FOUND',
+              'Erro ao buscar período de faturamento',
+              periodError.message || 'Erro desconhecido ao buscar período',
+              true
+            );
+            throw error;
+          }
+          // AIDEV-NOTE: Erro "não encontrado" ou 400 persistente - período pode ter sido deletado ou movido
+          const error = createBillingOrderError(
+            'PERIOD_NOT_FOUND',
+            'Período de faturamento não encontrado',
+            periodError 
+              ? `Período não encontrado em contract_billing_periods. Erro: ${periodError.message || periodError.code || 'Desconhecido'}`
+              : 'Período não encontrado em contract_billing_periods. Pode ter sido deletado ou movido.',
+            true
+          );
+          throw error;
+        }
+        // AIDEV-NOTE: Se encontrou, continuar normalmente (não entrar no bloco de fallback)
+      }
+
+      // AIDEV-NOTE: Se não encontrou período OU houve erro "não encontrado" ou 400, tentar standalone
+      // Erro 400 pode ocorrer quando o período não existe na tabela ou RLS bloqueia
+      // Só fazer fallback se skipStandaloneFallback não estiver ativo
+      const shouldTryStandalone = !skipStandaloneFallback && (!period || isNotFoundError || isBadRequestError);
+
+      if (shouldTryStandalone) {
         // AIDEV-NOTE: Pode ser um faturamento avulso (standalone_billing_periods)
-        const { data: standalonePeriod } = await supabase
+        const { data: standalonePeriod, error: standaloneError } = await supabase
           .from('standalone_billing_periods')
           .select('*')
           .eq('id', periodId)
           .eq('tenant_id', tenantId)
-          .single();
+          .maybeSingle(); // AIDEV-NOTE: maybeSingle não gera erro se não encontrar
 
-        if (!standalonePeriod) {
-          throw new Error(`Período de faturamento não encontrado: ${periodError?.message || 'Período não existe'}`);
+        if (standaloneError && standaloneError.code !== 'PGRST116') {
+          // AIDEV-NOTE: Se houve erro ao buscar standalone (exceto "não encontrado"), logar mas continuar
+          console.warn('[useBillingOrder] Erro ao buscar standalone:', standaloneError);
         }
 
-        // AIDEV-NOTE: Se for standalone, retornar dados específicos
-        // Por enquanto, vamos tratar como erro pois o componente espera contract_id
-        throw new Error('Faturamento avulso não suportado neste contexto');
+        if (standalonePeriod) {
+          // AIDEV-NOTE: Se for standalone, retornar null para que o componente
+          // use o hook useStandalonePeriod ao invés de lançar erro
+          // O componente BillingOrderDetails já trata este caso corretamente
+          return null;
+        }
+
+        // AIDEV-NOTE: Período não encontrado em nenhuma tabela
+        // Só lançar erro se realmente não encontrou em nenhuma das duas tabelas
+        // E se não foi um erro "não encontrado" esperado
+        if (periodError && !isNotFoundError && !isBadRequestError) {
+          // AIDEV-NOTE: Se foi um erro crítico (não 400 ou PGRST116), propagar
+          const error = createBillingOrderError(
+            'PERIOD_NOT_FOUND',
+            'Erro ao buscar período de faturamento',
+            periodError.message || 'Erro desconhecido ao buscar período',
+            true
+          );
+          throw error;
+        }
+
+        // AIDEV-NOTE: Período realmente não encontrado em nenhuma tabela
+        const error = createBillingOrderError(
+          'PERIOD_NOT_FOUND',
+          'Período de faturamento não encontrado',
+          'Período não encontrado em contract_billing_periods nem standalone_billing_periods',
+          true
+        );
+        throw error;
       }
 
       // AIDEV-NOTE: Buscar dados do contrato separadamente (mais confiável que relacionamentos aninhados)
+      // AIDEV-NOTE: Removido payment_method pois não existe na tabela contracts, está em contract_services
       const { data: contract, error: contractError } = await supabase
         .from('contracts')
-        .select('id, contract_number, customer_id, installments, payment_method')
+        .select('id, contract_number, customer_id, installments')
         .eq('id', period.contract_id)
         .eq('tenant_id', tenantId)
         .single();
 
       if (contractError || !contract) {
-        throw new Error(`Contrato não encontrado: ${contractError?.message || 'Contrato não existe'}`);
+        const error = createBillingOrderError(
+          'CONTRACT_NOT_FOUND',
+          'Contrato não encontrado',
+          contractError?.message || 'O contrato associado a este período não existe',
+          false
+        );
+        throw error;
       }
 
       // AIDEV-NOTE: Buscar dados do cliente separadamente
@@ -132,15 +292,34 @@ export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderPar
         .single();
 
       if (customerError || !customer) {
-        throw new Error(`Cliente não encontrado: ${customerError?.message || 'Cliente não existe'}`);
+        const error = createBillingOrderError(
+          'CUSTOMER_NOT_FOUND',
+          'Cliente não encontrado',
+          customerError?.message || 'O cliente associado a este contrato não existe',
+          false
+        );
+        throw error;
       }
+
+      // AIDEV-NOTE: Buscar payment_method dos serviços do contrato (primeiro serviço ativo)
+      const { data: firstService } = await supabase
+        .from('contract_services')
+        .select('payment_method')
+        .eq('contract_id', period.contract_id)
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      const contractPaymentMethod = firstService?.payment_method || 'Boleto';
 
       // AIDEV-NOTE: Combinar dados do período, contrato e cliente
       const periodWithContract = {
         ...period,
         contracts: {
           ...contract,
-          customers: customer
+          customers: customer,
+          payment_method: contractPaymentMethod // AIDEV-NOTE: payment_method vem dos serviços
         }
       };
 
@@ -175,13 +354,13 @@ export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderPar
 
         if (billing) {
           // AIDEV-NOTE: Calcular totais dos itens
-          const serviceItems = (billing.items || []).filter((item: any) => item.contract_service_id);
-          const productItems = (billing.items || []).filter((item: any) => !item.contract_service_id);
+          const billingServiceItems = (billing.items || []).filter((item: any) => item.contract_service_id);
+          const billingProductItems = (billing.items || []).filter((item: any) => !item.contract_service_id);
           
-          const totalServices = serviceItems.reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
-          const totalProducts = productItems.reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
-          const totalDiscounts = (billing.items || []).reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
-          const totalTaxes = (billing.items || []).reduce((sum: number, item: any) => sum + (item.tax_amount || 0), 0);
+          const billingTotalServices = billingServiceItems.reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+          const billingTotalProducts = billingProductItems.reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0);
+          const billingTotalDiscounts = (billing.items || []).reduce((sum: number, item: any) => sum + (item.discount_amount || 0), 0);
+          const billingTotalTaxes = (billing.items || []).reduce((sum: number, item: any) => sum + (item.tax_amount || 0), 0);
           
           // AIDEV-NOTE: Retornar ordem congelada de contract_billings
           return {
@@ -198,10 +377,10 @@ export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderPar
             order_number: periodWithContract.order_number || 'N/A', // AIDEV-NOTE: Número sequencial da Ordem de Serviço
             amount_planned: periodWithContract.amount_planned || 0,
             amount_billed: periodWithContract.amount_billed || billing.net_amount,
-            total_services,
-            total_products,
-            total_discounts: billing.discount_amount || totalDiscounts,
-            total_taxes: billing.tax_amount || totalTaxes,
+            total_services: billingTotalServices,
+            total_products: billingTotalProducts,
+            total_discounts: billing.discount_amount || billingTotalDiscounts,
+            total_taxes: billing.tax_amount || billingTotalTaxes,
             reimbursable_expenses: 0, // AIDEV-NOTE: Por enquanto não temos despesas reembolsáveis
             installment_number: billing.installment_number,
             total_installments: billing.total_installments,
@@ -290,10 +469,10 @@ export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderPar
 
       const items = [...serviceItems, ...productItems];
       const totalAmount = items.reduce((sum, item) => sum + item.total_amount, 0);
-      const totalServices = serviceItems.reduce((sum, item) => sum + item.total_amount, 0);
-      const totalProducts = productItems.reduce((sum, item) => sum + item.total_amount, 0);
-      const totalDiscounts = items.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
-      const totalTaxes = items.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
+      const pendingTotalServices = serviceItems.reduce((sum, item) => sum + item.total_amount, 0);
+      const pendingTotalProducts = productItems.reduce((sum, item) => sum + item.total_amount, 0);
+      const pendingTotalDiscounts = items.reduce((sum, item) => sum + (item.discount_amount || 0), 0);
+      const pendingTotalTaxes = items.reduce((sum, item) => sum + (item.tax_amount || 0), 0);
 
       return {
         period_id: periodWithContract.id,
@@ -308,10 +487,10 @@ export function useBillingOrder({ periodId, enabled = true }: UseBillingOrderPar
         order_number: periodWithContract.order_number || 'N/A', // AIDEV-NOTE: Número sequencial da Ordem de Serviço
         amount_planned: periodWithContract.amount_planned || totalAmount,
         amount_billed: periodWithContract.amount_billed,
-        total_services,
-        total_products,
-        total_discounts,
-        total_taxes,
+        total_services: pendingTotalServices,
+        total_products: pendingTotalProducts,
+        total_discounts: pendingTotalDiscounts,
+        total_taxes: pendingTotalTaxes,
         reimbursable_expenses: 0, // AIDEV-NOTE: Por enquanto não temos despesas reembolsáveis
         installment_number: periodWithContract.contracts.installments ? 1 : undefined,
         total_installments: periodWithContract.contracts.installments,

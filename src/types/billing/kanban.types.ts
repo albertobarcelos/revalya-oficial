@@ -47,7 +47,7 @@ export interface KanbanCardProps {
   contract: KanbanContract;
   isDragging?: boolean;
   columnId?: KanbanColumnId;
-  onViewDetails: (periodId: string) => void;
+  onViewDetails: (periodId: string, isStandalone?: boolean) => void;
   dragHandleProps?: Record<string, unknown>;
   isSelected?: boolean;
   onSelectionChange?: (periodId: string, selected: boolean) => void;
@@ -63,7 +63,7 @@ export interface KanbanColumnProps {
   columnId: KanbanColumnId;
   icon: React.ReactNode;
   badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline';
-  onViewDetails: (periodId: string) => void;
+  onViewDetails: (periodId: string, isStandalone?: boolean) => void;
   selectedContracts?: Set<string>;
   onSelectionChange?: (periodId: string, selected: boolean) => void;
   showCheckboxes?: boolean;
@@ -132,4 +132,6 @@ export interface KanbanModalState {
   selectedPeriodId: string | null;
   contractMode: 'view' | 'edit' | 'create';
   isStandaloneBillingOpen: boolean;
+  /** Indica se o período selecionado é um faturamento avulso (standalone) */
+  isStandalone?: boolean;
 }
