@@ -81,7 +81,7 @@ export function NotificationSheet() {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <button className="p-2 rounded-lg border border-border bg-card text-foreground hover:bg-accent relative">
+        <button className="p-2 rounded-lg text-foreground hover:text-primary focus:outline-none relative">
           <Bell size={20} className="text-foreground" />
           {unreadCount > 0 && (
             <Badge

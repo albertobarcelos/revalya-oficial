@@ -412,6 +412,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                                 <ContractStatusDropdown 
                                   contractId={contract.id}
                                   currentStatus={contract.status}
+                                  contractNumber={contract.contract_number}
                                 />
                               </div>
                             </div>
@@ -432,6 +433,7 @@ export function ContractList({ onCreateContract, onViewContract, onEditContract 
                           <ContractStatusDropdown 
                             contractId={contract.id}
                             currentStatus={contract.status}
+                            contractNumber={contract.contract_number}
                           />
                         </TableCell>
                         <TableCell className="hidden md:table-cell py-1">

@@ -74,6 +74,8 @@ export function ContractBasicInfo({
   const [openBillingDatePicker, setOpenBillingDatePicker] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Customer | null>(null);
   const [showEditClient, setShowEditClient] = useState(false);
+  const [initialDateInput, setInitialDateInput] = useState<string>("");
+  const [finalDateInput, setFinalDateInput] = useState<string>("");
   
   // Observar mudanças nas datas para validação em tempo real
   const initialDate = useWatch({ control: form.control, name: 'initial_date' });
@@ -97,6 +99,33 @@ export function ContractBasicInfo({
   // Configuração de localização e funções auxiliares
   const locale: Locale = ptBR || pt;
   
+  // AIDEV-NOTE: Mantém o valor textual dos campos de data sincronizado com o estado do formulário
+  useEffect(() => {
+    if (initialDate) {
+      try {
+        const d = typeof initialDate === 'string' ? new Date(initialDate) : initialDate as Date;
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          setInitialDateInput(format(d, 'dd/MM/yyyy', { locale: ptBR }));
+        }
+      } catch {}
+    } else {
+      setInitialDateInput("");
+    }
+  }, [initialDate]);
+  
+  useEffect(() => {
+    if (finalDate) {
+      try {
+        const d = typeof finalDate === 'string' ? new Date(finalDate) : finalDate as Date;
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          setFinalDateInput(format(d, 'dd/MM/yyyy', { locale: ptBR }));
+        }
+      } catch {}
+    } else {
+      setFinalDateInput("");
+    }
+  }, [finalDate]);
+  
   const getMinDate = () => new Date();
 
   // Função para formatar a data de forma amigável
@@ -107,6 +136,30 @@ export function ContractBasicInfo({
     // Se for string, usar parseISO para evitar problemas de timezone
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     return format(dateObj, formatStr, { locale: ptBR });
+  };
+
+  /**
+   * Formata uma entrada livre em máscara de data brasileira (dd/mm/aaaa).
+   */
+  const formatInputToDateMask = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 8);
+    const d = digits.slice(0, 2);
+    const m = digits.slice(2, 4);
+    const y = digits.slice(4, 8);
+    let out = d;
+    if (m) out = `${out}/${m}`;
+    if (y) out = `${out}/${y}`;
+    return out;
+  };
+
+  /**
+   * Converte uma string no formato dd/mm/aaaa para Date válida.
+   */
+  const parseMaskedDate = (value: string): Date | null => {
+    const [dd, mm, yyyy] = value.split('/');
+    if (!dd || !mm || !yyyy) return null;
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
   };
 
   // AIDEV-NOTE: Efeito para sincronizar cliente selecionado quando customer_id mudar
@@ -560,41 +613,55 @@ export function ContractBasicInfo({
                 <div className="relative">
                   <FieldSkeleton visible={isFieldLoading("initial_date")} />
                   <Popover open={openInitialDatePicker} onOpenChange={setOpenInitialDatePicker}>
-                    <PopoverTrigger asChild>
+                    <div className={cn(
+                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      isError ? 'border-destructive' : 'border-input'
+                    )}>
                       <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
-                            !field.value && "text-muted-foreground",
-                            field.value && "border-primary/30 bg-primary/5 hover:bg-primary/10",
-                            isError ? "border-destructive" : "hover:border-primary/50"
-                          )}
-                          disabled={isFieldLoading("initial_date")}
-                          type="button"
-                        >
-                          <div className="flex flex-col items-start w-full">
-                            {field.value ? (
-                              <>
-                                <span className="font-medium text-foreground text-sm">
-                                  {formatDate(field.value, 'dd \'de\' MMMM \'de\' yyyy, EEEE')}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-0.5">
-                                  {isTodayDate(new Date(field.value)) ? 'Hoje' : 'Data de início do contrato'}
-                                </span>
-                              </>
-                            ) : (
-                              <span>Selecione a vigência inicial</span>
-                            )}
-                          </div>
-                          <CalendarIcon className={cn(
-                            "ml-auto h-4 w-4 transition-colors flex-shrink-0",
-                            field.value ? "text-primary" : "text-muted-foreground",
-                            isError ? "text-destructive" : "group-hover:text-primary"
-                          )} />
-                        </Button>
+                        <Input
+                          placeholder="dd/mm/aaaa"
+                          value={initialDateInput}
+                          onChange={(e) => {
+                            const masked = formatInputToDateMask(e.target.value);
+                            setInitialDateInput(masked);
+                            if (masked.length === 10) {
+                              const parsed = parseMaskedDate(masked);
+                              if (parsed) {
+                                form.clearErrors('initial_date');
+                                field.onChange(parsed);
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const [dd, mm, yyyy] = v.split('/');
+                            const parsed = (dd && mm && yyyy) ? new Date(Number(yyyy), Number(mm) - 1, Number(dd)) : null;
+                            if (parsed && parsed instanceof Date && !isNaN(parsed.getTime())) {
+                              form.clearErrors('initial_date');
+                              field.onChange(parsed);
+                              setInitialDateInput(format(parsed, 'dd/MM/yyyy', { locale: ptBR }));
+                            } else if (v.length > 0) {
+                              form.setError('initial_date', { type: 'manual', message: 'Selecione uma vigência inicial válida' });
+                            }
+                          }}
+                          inputMode="numeric"
+                          maxLength={10}
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 px-3"
+                          disabled={isFieldLoading('initial_date')}
+                        />
                       </FormControl>
-                    </PopoverTrigger>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          disabled={isFieldLoading('initial_date')}
+                          aria-label="Abrir calendário"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </div>
                     <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start" onInteractOutside={(e) => {
                       // Impede que o popover feche ao interagir com o calendário ou botões de atalho
                       const target = e.target as HTMLElement;
@@ -630,6 +697,7 @@ export function ContractBasicInfo({
                             onSelect={(date) => {
                               if (date) {
                                 field.onChange(date);
+                                setInitialDateInput(format(date, 'dd/MM/yyyy', { locale: ptBR }));
                                 setOpenInitialDatePicker(false);
                                 
                                 // Se houver data final e for anterior à nova data inicial, limpa a data final
@@ -700,6 +768,7 @@ export function ContractBasicInfo({
                               const today = getMinDate();
                               form.setValue('initial_date', today);
                               form.trigger('initial_date');
+                              setInitialDateInput(format(today, 'dd/MM/yyyy', { locale: ptBR }));
                               setOpenInitialDatePicker(false);
                             }}
                           >
@@ -741,44 +810,64 @@ export function ContractBasicInfo({
                 <div className="relative">
                   <FieldSkeleton visible={isFieldLoading("final_date")} />
                   <Popover open={openFinalDatePicker} onOpenChange={setOpenFinalDatePicker}>
-                    <PopoverTrigger asChild>
+                    <div className={cn(
+                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      isError ? 'border-destructive' : 'border-input',
+                      !initialDate ? 'opacity-70 cursor-not-allowed' : ''
+                    )}>
                       <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
-                            !field.value && "text-muted-foreground",
-                            field.value && "border-primary/30 bg-primary/5 hover:bg-primary/10",
-                            isError ? "border-destructive" : "hover:border-primary/50",
-                            !initialDate ? "opacity-70 cursor-not-allowed" : ""
-                          )}
-                          disabled={isFieldLoading("final_date") || !initialDate}
-                          type="button"
-                        >
-                          <div className="flex flex-col items-start w-full">
-                            {field.value ? (
-                              <>
-                                <span className="font-medium text-foreground text-sm">
-                                  {formatDate(field.value, 'dd \'de\' MMMM \'de\' yyyy, EEEE')}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-0.5">
-                                  Data de término do contrato
-                                </span>
-                              </>
-                            ) : (
-                              <span>
-                                {initialDate ? 'Selecione a vigência final' : 'Primeiro selecione a vigência inicial'}
-                              </span>
-                            )}
-                          </div>
-                          <CalendarIcon className={cn(
-                            "ml-auto h-4 w-4 transition-colors flex-shrink-0",
-                            field.value ? "text-primary" : "text-muted-foreground",
-                            isError ? "text-destructive" : "group-hover:text-primary"
-                          )} />
-                        </Button>
+                        <Input
+                          placeholder="dd/mm/aaaa"
+                          value={finalDateInput}
+                          onChange={(e) => {
+                            const masked = formatInputToDateMask(e.target.value);
+                            setFinalDateInput(masked);
+                            if (masked.length === 10) {
+                              const parsed = parseMaskedDate(masked);
+                              if (parsed) {
+                                if (initialDate && isBefore(parsed, new Date(initialDate))) {
+                                  form.setError('final_date', { type: 'manual', message: 'A data final deve ser posterior à data inicial' });
+                                } else {
+                                  form.clearErrors('final_date');
+                                  field.onChange(parsed);
+                                }
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const [dd, mm, yyyy] = v.split('/');
+                            const parsed = (dd && mm && yyyy) ? new Date(Number(yyyy), Number(mm) - 1, Number(dd)) : null;
+                            if (parsed && parsed instanceof Date && !isNaN(parsed.getTime())) {
+                              if (initialDate && isBefore(parsed, new Date(initialDate))) {
+                                form.setError('final_date', { type: 'manual', message: 'A data final deve ser posterior à data inicial' });
+                                return;
+                              }
+                              form.clearErrors('final_date');
+                              field.onChange(parsed);
+                              setFinalDateInput(format(parsed, 'dd/MM/yyyy', { locale: ptBR }));
+                            } else if (v.length > 0) {
+                              form.setError('final_date', { type: 'manual', message: 'Selecione uma vigência final válida' });
+                            }
+                          }}
+                          inputMode="numeric"
+                          maxLength={10}
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 px-3"
+                          disabled={isFieldLoading('final_date') || !initialDate}
+                        />
                       </FormControl>
-                    </PopoverTrigger>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          disabled={isFieldLoading('final_date') || !initialDate}
+                          aria-label="Abrir calendário"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </div>
                     <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start" onInteractOutside={(e) => {
                       // Impede que o popover feche ao interagir com o calendário ou botões de atalho
                       const target = e.target as HTMLElement;
@@ -821,6 +910,7 @@ export function ContractBasicInfo({
                             onSelect={(date) => {
                               if (date) {
                                 field.onChange(date);
+                                setFinalDateInput(format(date, 'dd/MM/yyyy', { locale: ptBR }));
                                 setOpenFinalDatePicker(false);
                               }
                             }}
@@ -899,6 +989,7 @@ export function ContractBasicInfo({
                                     const endDate = addDays(start, 30);
                                     form.setValue('final_date', endDate);
                                     form.trigger('final_date');
+                                    setFinalDateInput(format(endDate, 'dd/MM/yyyy', { locale: ptBR }));
                                     setOpenFinalDatePicker(false);
                                   } else {
                                     toast.error('Selecione uma vigência inicial válida antes de usar o atalho.');
@@ -918,6 +1009,7 @@ export function ContractBasicInfo({
                                     const endDate = addDays(start, 365);
                                     form.setValue('final_date', endDate);
                                     form.trigger('final_date');
+                                    setFinalDateInput(format(endDate, 'dd/MM/yyyy', { locale: ptBR }));
                                     setOpenFinalDatePicker(false);
                                   } else {
                                     toast.error('Selecione uma vigência inicial válida antes de usar o atalho.');

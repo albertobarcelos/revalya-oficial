@@ -297,17 +297,6 @@ const contractBaseSchema = z.object({
     .default([]),
 }).refine(
   (data) => {
-    // Validar que pelo menos um serviço ou produto foi adicionado
-    const hasServices = data.services && data.services.length > 0;
-    const hasProducts = data.products && data.products.length > 0;
-    return hasServices || hasProducts;
-  },
-  {
-    message: "Adicione pelo menos um serviço ou produto ao contrato",
-    path: ["services"],
-  }
-).refine(
-  (data) => {
     if (!data.initial_date || !data.final_date) return true;
     return isAfter(new Date(data.final_date), new Date(data.initial_date));
   },

@@ -16,23 +16,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from '@/lib/supabase';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 interface ContractSuspendButtonProps {
   contractId: string;
   contractNumber: string;
   onSuccess?: () => void;
   className?: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }
 
 export function ContractSuspendButton({ 
   contractId, 
   contractNumber, 
   onSuccess, 
-  className = "" 
+  className = "",
+  isOpen: controlledOpen,
+  onOpenChange,
+  hideTrigger = false
 }: ContractSuspendButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
+  const setIsOpen = onOpenChange ?? setInternalOpen;
   const [suspensionReason, setSuspensionReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { currentTenant } = useTenantAccessGuard();
 
   const handleSuspendContract = async () => {
     if (!suspensionReason.trim()) {
@@ -47,7 +57,11 @@ export function ContractSuspendButton({
       const { data: suspendedStage, error: stageError } = await supabase
         .from('contract_stages')
         .select('id')
+        .eq('tenant_id', currentTenant?.id)
         .eq('code', 'SUSPENDED')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (stageError) {
@@ -61,9 +75,11 @@ export function ContractSuspendButton({
         const { data: newStage, error: createError } = await supabase
           .from('contract_stages')
           .insert({
+            tenant_id: currentTenant?.id,
             code: 'SUSPENDED',
             name: 'Suspenso',
-            description: 'Contrato suspenso temporariamente'
+            description: 'Contrato suspenso temporariamente',
+            is_active: true
           })
           .select('id')
           .single();
@@ -115,17 +131,19 @@ export function ContractSuspendButton({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          title={className?.includes('flex-col') ? 'Suspender Contrato' : undefined}
-          className={`gap-2 ${className}`}
-        >
-          <Pause className="h-4 w-4" />
-          {className?.includes('flex-col') ? null : 'Suspender Contrato'}
-        </Button>
-      </AlertDialogTrigger>
+      {hideTrigger ? null : (
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            title={className?.includes('flex-col') ? 'Suspender Contrato' : undefined}
+            className={`gap-2 ${className}`}
+          >
+            <Pause className="h-4 w-4" />
+            {className?.includes('flex-col') ? null : 'Suspender Contrato'}
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent className="max-w-md z-[9999]">
         <AlertDialogHeader>
           <div className="flex items-center gap-2">

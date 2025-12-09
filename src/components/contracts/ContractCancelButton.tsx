@@ -25,24 +25,38 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from '@/lib/supabase';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 interface ContractCancelButtonProps {
   contractId: string;
   contractNumber: string;
   onSuccess?: () => void;
   className?: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }
 
 export function ContractCancelButton({ 
   contractId, 
   contractNumber, 
   onSuccess, 
-  className = "" 
+  className = "",
+  isOpen: controlledOpen,
+  onOpenChange,
+  hideTrigger = false
 }: ContractCancelButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen ?? internalOpen;
+  const setIsOpen = onOpenChange ?? setInternalOpen;
   const [cancellationReason, setCancellationReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { currentTenant } = useTenantAccessGuard();
 
+  /**
+   * Cancela o contrato alterando o estágio para CANCELED
+   * Faz lookup de estágio por tenant e cria caso não exista
+   */
   const handleCancelContract = async () => {
     if (!cancellationReason.trim()) {
       toast.error("Por favor, informe o motivo do cancelamento");
@@ -56,7 +70,11 @@ export function ContractCancelButton({
       const { data: canceledStage, error: stageError } = await supabase
         .from('contract_stages')
         .select('id')
+        .eq('tenant_id', currentTenant?.id)
         .eq('code', 'CANCELED')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (stageError) {
@@ -70,9 +88,11 @@ export function ContractCancelButton({
         const { data: newStage, error: createError } = await supabase
           .from('contract_stages')
           .insert({
+            tenant_id: currentTenant?.id,
             code: 'CANCELED',
             name: 'Cancelado',
-            description: 'Contrato cancelado'
+            description: 'Contrato cancelado',
+            is_active: true
           })
           .select('id')
           .single();
@@ -124,17 +144,19 @@ export function ContractCancelButton({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-      <AlertDialogTrigger asChild>
-        <Button
-          variant="destructive"
-          size="sm"
-          title={className?.includes('flex-col') ? 'Cancelar Contrato' : undefined}
-          className={`gap-2 ${className}`}
-        >
-          <Ban className="h-4 w-4" />
-          {className?.includes('flex-col') ? null : 'Cancelar Contrato'}
-        </Button>
-      </AlertDialogTrigger>
+      {hideTrigger ? null : (
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="destructive"
+            size="sm"
+            title={className?.includes('flex-col') ? 'Cancelar Contrato' : undefined}
+            className={`gap-2 ${className}`}
+          >
+            <Ban className="h-4 w-4" />
+            {className?.includes('flex-col') ? null : 'Cancelar Contrato'}
+          </Button>
+        </AlertDialogTrigger>
+      )}
       <AlertDialogContent className="max-w-md z-[9999]">
         <AlertDialogHeader>
           <div className="flex items-center gap-2">
