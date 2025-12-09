@@ -10,14 +10,13 @@ export function useContractFormLogic(config: ContractFormConfig) {
   const getInitialTab = useCallback(() => {
     const enabledTabs = config.enabledTabs || {};
     
-    // Ordem de prioridade para seleção da aba inicial
+    // AIDEV-NOTE: Ordem de prioridade para seleção da aba inicial
+    // Abas "descontos" e "impostos" removidas
     const tabPriority = [
       'servico',
       'produtos',
-      'descontos',
       'departamentos',
       'observacoes',
-      'impostos',
       'recebimentos'
     ];
     
@@ -57,15 +56,14 @@ export function useContractFormLogic(config: ContractFormConfig) {
 
   /**
    * AIDEV-NOTE: Lista de abas habilitadas
+   * Abas "descontos" e "impostos" removidas
    */
   const enabledTabsList = useMemo(() => {
     const tabs = [
       { id: 'servico', label: 'Serviço' },
       { id: 'produtos', label: 'Produtos' },
-      { id: 'descontos', label: 'Descontos' },
       { id: 'departamentos', label: 'Depto' },
       { id: 'observacoes', label: 'Notas' },
-      { id: 'impostos', label: 'Impostos' },
       { id: 'recebimentos', label: 'Historico' }
     ];
     
@@ -116,10 +114,8 @@ export function useContractFormLogic(config: ContractFormConfig) {
     const defaultLabels: Record<string, string> = {
       servico: 'Serviço',
       produtos: 'Produtos',
-      descontos: 'Descontos',
       departamentos: 'Depto',
       observacoes: 'Notas',
-      impostos: 'Impostos',
       recebimentos: 'Historico'
     };
     

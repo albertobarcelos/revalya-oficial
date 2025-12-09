@@ -3,17 +3,15 @@ import { FormProvider } from 'react-hook-form';
 import { ContractFormProvider, useContractForm } from './form/ContractFormProvider';
 import { ContractLoadingManager } from './form/ContractLoadingManager';
 import { ContractFormActions } from './form/ContractFormActions';
-import { CancelButton } from './form/CancelButton';
 import { ContractCancelButton } from './ContractCancelButton';
 import { ContractSuspendButton } from './ContractSuspendButton';
-import { ContractActivateButton } from './ContractActivateButton';
 import { ContractFormHeader } from './parts/ContractFormHeader';
 import { ContractBasicInfo } from './parts/ContractBasicInfo';
 import { ContractSidebar } from './parts/ContractSidebar';
-import { ContractServices } from './parts/ContractServices';
-import { ContractProducts } from './parts/ContractProducts';
-import { ContractDiscounts } from './parts/ContractDiscounts';
-import { ContractTaxes } from './parts/ContractTaxes';
+// AIDEV-NOTE: Import da nova estrutura refatorada
+import { ContractServices } from '@/features/contracts/components/ContractServices';
+// AIDEV-NOTE: Import da nova estrutura refatorada
+import { ContractProducts } from '@/features/contracts/components/ContractProducts';
 import { ContractAttachments } from './parts/ContractAttachments';
 import { RecebimentosHistorico } from './parts/RecebimentosHistorico';
 import { useContractFormLogic } from './hooks/useContractFormLogic';
@@ -24,10 +22,8 @@ import { useSecureProducts } from '@/hooks/useSecureProducts';
 import { 
   FileText, 
   Package, 
-  Percent, 
   Building2, 
   MessageSquare,
-  Calculator,
   CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -52,14 +48,13 @@ const getNavButtonClass = (isActive: boolean) =>
 
 /**
  * AIDEV-NOTE: Mapeamento de ícones para as abas
+ * Abas "descontos" e "impostos" removidas
  */
 const tabIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   servico: FileText,
   produtos: Package,
-  descontos: Percent,
   departamentos: Building2,
   observacoes: MessageSquare,
-  impostos: Calculator,
   recebimentos: CreditCard
 };
 
@@ -116,26 +111,7 @@ function ContractFormContentInternal({
         return <ContractServices form={form} contractId={config.contractId} />;
       
       case 'produtos':
-        return (
-          <div>
-            <h2 className="font-medium flex items-center gap-2 mb-4">
-              <Package className="h-4 w-4 text-primary" />
-              Produtos do Contrato
-            </h2>
-            <ContractProducts products={products || []} />
-          </div>
-        );
-      
-      case 'descontos':
-        return (
-          <div>
-            <h2 className="font-medium flex items-center gap-2 mb-4">
-              <Percent className="h-4 w-4 text-primary" />
-              Descontos
-            </h2>
-            <ContractDiscounts />
-          </div>
-        );
+        return <ContractProducts products={products || []} />;
       
       case 'departamentos':
         return (
@@ -151,17 +127,6 @@ function ContractFormContentInternal({
                 <p className="text-xs text-muted-foreground/60">Em breve você poderá organizar contratos por departamentos</p>
               </div>
             </div>
-          </div>
-        );
-      
-      case 'impostos':
-        return (
-          <div>
-            <h2 className="font-medium flex items-center gap-2 mb-4">
-              <Calculator className="h-4 w-4 text-primary" />
-              Impostos e Retenções
-            </h2>
-            <ContractTaxes />
           </div>
         );
       
@@ -248,7 +213,7 @@ function ContractFormContentInternal({
         )}
         
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* AIDEV-NOTE: Sidebar de navegação */}
+          {/* AIDEV-NOTE: Sidebar de navegação - layout simplificado e centralizado */}
           {logic.showSidebar && (
             <div className="w-[90px] bg-card shadow-md flex flex-col items-center border-r border-border/30 flex-shrink-0">
               {/* Botão de Salvar/Editar no topo */}
@@ -261,12 +226,9 @@ function ContractFormContentInternal({
                 />
               </div>
               
-              {/* AIDEV-NOTE: Área de rolagem otimizada para a navegação */}
-              <div className={cn(
-                'flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent hover:scrollbar-thumb-muted-foreground/40 px-1.5 py-2',
-                logic.isModal && 'max-h-[calc(100vh-400px)]'
-              )}>
-                <nav className="space-y-3">
+              {/* AIDEV-NOTE: Navegação centralizada sem scroll */}
+              <div className="flex-1 flex flex-col justify-center px-1.5">
+                <nav className="space-y-2">
                   {logic.enabledTabsList.map((tab) => {
                     const Icon = tabIcons[tab.id] || FileText;
                     return (
@@ -285,61 +247,40 @@ function ContractFormContentInternal({
                 </nav>
               </div>
               
-              {/* AIDEV-NOTE: Seção inferior com ações e botão cancelar */}
-              <div className="flex-shrink-0 w-full min-h-[200px]">
-                {/* Ações do contrato (Ativar/Suspender/Cancelar) - só em modo view/edit */}
-                {config.mode !== 'create' && config.contractId && (
-                  <div className="px-1.5 py-2 border-t border-border/20">
-                    <div className="text-center mb-2">
-                      <span className="text-[7px] text-muted-foreground font-medium uppercase tracking-wide">
-                        Ações
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <ContractActivateButton
-                        contractId={config.contractId}
-                        contractNumber={form.watch('contract_number') || 'N/A'}
-                        contractStatus={form.watch('status')}
-                        onSuccess={() => {
-                          toast.success('Contrato ativado com sucesso!');
-                          config.callbacks?.onSuccess?.(config.contractId!);
-                        }}
-                        className="!w-16 !h-10 !p-1.5 text-[8px] flex flex-col items-center justify-center bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-all duration-200 rounded-md"
-                      />
-                      
-                      <ContractSuspendButton
-                        contractId={config.contractId}
-                        contractNumber={form.watch('contract_number') || 'N/A'}
-                        contractStatus={form.watch('status')}
-                        onSuccess={() => {
-                          toast.success('Contrato suspenso com sucesso!');
-                          config.callbacks?.onSuccess?.(config.contractId!);
-                        }}
-                        className="!w-16 !h-10 !p-1.5 text-[8px] flex flex-col items-center justify-center bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 transition-all duration-200 rounded-md"
-                      />
-                      
-                      <ContractCancelButton
-                        contractId={config.contractId}
-                        contractNumber={form.watch('contract_number') || 'N/A'}
-                        onSuccess={() => {
-                          toast.success('Contrato cancelado com sucesso!');
-                          config.callbacks?.onSuccess?.(config.contractId!);
-                        }}
-                        className="!w-16 !h-10 !p-1.5 text-[8px] flex flex-col items-center justify-center bg-destructive/10 border-destructive/20 text-destructive hover:bg-destructive/20 transition-all duration-200 rounded-md"
-                      />
-                    </div>
+              {/* AIDEV-NOTE: Seção inferior apenas com ações do contrato - centralizada */}
+              {config.mode !== 'create' && config.contractId && (
+                <div className="flex-shrink-0 w-full py-3 border-t border-border/20">
+                  <div className="text-center mb-2">
+                    <span className="text-[7px] text-muted-foreground font-medium uppercase tracking-wide">
+                      Ações
+                    </span>
                   </div>
-                )}
-                
-                {/* Botão de Cancelar na parte inferior */}
-                <div className="p-2 border-t border-border/20 w-full flex justify-center">
-                  <CancelButton 
-                    onClick={config.callbacks?.onCancel || (() => {})}
-                    className="hover:bg-destructive/10 hover:text-destructive !h-8 !w-16 !text-[8px]"
-                  />
+                  
+                  {/* AIDEV-NOTE: Botões centralizados */}
+                  <div className="flex flex-col items-center space-y-1.5">
+                    <ContractSuspendButton
+                      contractId={config.contractId}
+                      contractNumber={form.watch('contract_number') || 'N/A'}
+                      contractStatus={form.watch('status')}
+                      onSuccess={() => {
+                        toast.success('Contrato suspenso com sucesso!');
+                        config.callbacks?.onSuccess?.(config.contractId!);
+                      }}
+                      className="!w-16 !h-10 !p-1.5 text-[8px] flex flex-col items-center justify-center bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 transition-all duration-200 rounded-md"
+                    />
+                    
+                    <ContractCancelButton
+                      contractId={config.contractId}
+                      contractNumber={form.watch('contract_number') || 'N/A'}
+                      onSuccess={() => {
+                        toast.success('Contrato cancelado com sucesso!');
+                        config.callbacks?.onSuccess?.(config.contractId!);
+                      }}
+                      className="!w-16 !h-10 !p-1.5 text-[8px] flex flex-col items-center justify-center bg-destructive/10 border-destructive/20 text-destructive hover:bg-destructive/20 transition-all duration-200 rounded-md"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
           
