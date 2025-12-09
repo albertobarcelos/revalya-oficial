@@ -14,6 +14,7 @@ const getInitialState = (): KanbanModalState => ({
   selectedPeriodId: null,
   contractMode: 'view',
   isStandaloneBillingOpen: false,
+  isStandalone: undefined,
 });
 
 /**
@@ -29,9 +30,10 @@ export function useKanbanModals() {
    * Abre modal de detalhes da ordem de faturamento com validações de segurança
    *
    * @param periodId - ID do período de faturamento
+   * @param isStandalone - Indica se é um faturamento avulso (standalone)
    */
   const openDetailsModal = useCallback(
-    (periodId: string) => {
+    (periodId: string, isStandalone?: boolean) => {
       // Previne múltiplos cliques rápidos
       if (modalState.isContractModalOpen) return;
 
@@ -70,17 +72,18 @@ export function useKanbanModals() {
 
       // AIDEV-NOTE: Log de auditoria (conforme guia)
       console.log(
-        `🔍 [AUDIT] Abrindo detalhes da ordem - Tenant: ${currentTenant.name}, PeriodId: ${periodId}`
+        `🔍 [AUDIT] Abrindo detalhes da ordem - Tenant: ${currentTenant.name}, PeriodId: ${periodId}, IsStandalone: ${isStandalone}`
       );
 
       setModalState((prev) => ({
         ...prev,
         selectedPeriodId: periodId,
+        isStandalone: isStandalone,
         isContractModalOpen: true,
         contractMode: 'view',
       }));
 
-      console.log('✅ [MODAL DEBUG] Modal aberto para período:', periodId);
+      console.log('✅ [MODAL DEBUG] Modal aberto para período:', periodId, 'isStandalone:', isStandalone);
     },
     [modalState.isContractModalOpen, hasAccess, currentTenant]
   );
@@ -94,6 +97,7 @@ export function useKanbanModals() {
       ...prev,
       isContractModalOpen: false,
       selectedPeriodId: null,
+      isStandalone: undefined,
     }));
   }, []);
 
@@ -142,6 +146,7 @@ export function useKanbanModals() {
     selectedPeriodId: modalState.selectedPeriodId,
     contractMode: modalState.contractMode,
     isStandaloneBillingOpen: modalState.isStandaloneBillingOpen,
+    isStandalone: modalState.isStandalone,
 
     // Ações
     openDetailsModal,

@@ -1,7 +1,8 @@
 // AIDEV-NOTE: Card de contrato dentro do Kanban de Faturamento
 // Design clean: fundo branco, bordas discretas, menos sombra e sem gradientes
+// Cada card representa uma "Ordem de Faturamento" (período de faturamento)
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,28 @@ import {
   DollarSign,
   Loader2,
   AlertCircle,
-  Sparkles,
   Clock,
   CheckCircle2,
   Inbox,
   RotateCcw,
+  Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getColumnAccentClasses, CARD_STYLES } from '@/utils/billing/kanbanColumnConfig';
 import type { KanbanCardProps } from '@/types/billing/kanban.types';
+
+// AIDEV-NOTE: Regex para validação de UUID v4
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Valida se uma string é um UUID válido
+ * @param id - String a ser validada
+ * @returns true se for um UUID válido
+ */
+const isValidUUID = (id: string | undefined | null): boolean => {
+  if (!id || typeof id !== 'string') return false;
+  return UUID_REGEX.test(id);
+};
 
 /**
  * KanbanCard
@@ -49,35 +63,63 @@ export function KanbanCard({
 
   const accents = getColumnAccentClasses(columnId);
 
+  // AIDEV-NOTE: Usar period_id (alias) ou id - ambos representam o ID do período de faturamento
+  const periodId = contract.period_id || contract.id;
+
+  // AIDEV-NOTE: Validação do periodId usando useMemo para evitar recálculos
+  const isValidPeriodId = useMemo(() => isValidUUID(periodId), [periodId]);
+
+  // AIDEV-NOTE: Label acessível para o botão
+  const buttonAriaLabel = useMemo(() => {
+    const customerName = contract.customer_name || 'Cliente';
+    const orderType = contract.is_standalone ? 'faturamento avulso' : 'ordem de faturamento';
+    return `Ver detalhes da ${orderType} de ${customerName}`;
+  }, [contract.customer_name, contract.is_standalone]);
+
   // AIDEV-NOTE: Função para abrir modal de detalhes da ordem de faturamento
-  // Agora passa period_id (contract.id) ao invés de contract_id
+  // Usa period_id que é o ID do contract_billing_periods ou standalone_billing_periods
   const handleViewDetails = useCallback(async () => {
+    // Previne múltiplos cliques
     if (isClicking) return;
 
-    // AIDEV-NOTE: Validação para garantir que contract.id existe
-    if (!contract.id) {
-      console.error('❌ [KANBAN CARD] contract.id está vazio ou undefined');
+    // AIDEV-NOTE: Validação CAMADA 1 - Verificar se periodId existe
+    if (!periodId) {
+      console.error('❌ [KANBAN CARD] periodId está vazio ou undefined');
       return;
     }
 
-    // AIDEV-NOTE: contract.id é o period_id (id do contract_billing_periods)
+    // AIDEV-NOTE: Validação CAMADA 2 - Verificar formato UUID válido
+    if (!isValidPeriodId) {
+      console.error('❌ [KANBAN CARD] periodId não é um UUID válido:', periodId);
+      return;
+    }
+
+    // AIDEV-NOTE: Log para debugging com nomenclatura clara
+    console.log('🔍 [KANBAN CARD] Abrindo detalhes:', {
+      periodId,
+      contractId: contract.contract_id,
+      isStandalone: contract.is_standalone,
+      customerName: contract.customer_name,
+    });
+
     setIsClicking(true);
     try {
-      onViewDetails(contract.id);
+      // AIDEV-NOTE: Passar isStandalone para evitar busca desnecessária em ambas as tabelas
+      onViewDetails(periodId, contract.is_standalone);
     } finally {
-      // Reset após um pequeno delay
+      // Reset após um pequeno delay para evitar cliques duplicados
       setTimeout(() => setIsClicking(false), 500);
     }
-  }, [isClicking, onViewDetails, contract.id]);
+  }, [isClicking, onViewDetails, periodId, isValidPeriodId, contract.contract_id, contract.is_standalone, contract.customer_name]);
 
   // AIDEV-NOTE: Função para lidar com mudança de seleção do checkbox
   const handleSelectionChange = useCallback(
     (checked: boolean) => {
-      if (onSelectionChange) {
-        onSelectionChange(contract.id, checked);
+      if (onSelectionChange && periodId) {
+        onSelectionChange(periodId, checked);
       }
     },
-    [onSelectionChange, contract.id]
+    [onSelectionChange, periodId]
   );
 
   return (
@@ -134,9 +176,11 @@ export function KanbanCard({
           >
             <div className="flex items-center space-x-2">
               <span className={cn('font-semibold text-xs', CARD_STYLES.textPrimary)}>
-                {contract.contract_id
-                  ? `#${contract.contract_id.slice(-8)}`
-                  : contract.contract_number || 'Avulso'}
+                {contract.order_number
+                  ? `OS N° ${contract.order_number}`
+                  : contract.contract_id
+                    ? `#${contract.contract_id.slice(-8)}`
+                    : contract.contract_number || 'Avulso'}
               </span>
             </div>
             {/* Badge de status — agora discreto, somente ícone com tooltip */}
@@ -182,31 +226,36 @@ export function KanbanCard({
             </div>
           </div>
 
-          {/* Botão de ação */}
+          {/* AIDEV-NOTE: Botão de ação com acessibilidade melhorada */}
           <Button
             size="sm"
             variant="ghost"
             className={cn(
               'w-full mt-3 font-medium transition-all duration-200',
               'hover:bg-gray-50',
-              CARD_STYLES.textPrimary
+              'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+              CARD_STYLES.textPrimary,
+              !isValidPeriodId && 'opacity-50 cursor-not-allowed'
             )}
-            disabled={isClicking}
+            disabled={isClicking || !isValidPeriodId}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
               handleViewDetails();
             }}
+            aria-label={buttonAriaLabel}
+            aria-busy={isClicking}
+            aria-disabled={!isValidPeriodId}
           >
             {isClicking ? (
               <>
-                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                Carregando...
+                <Loader2 className="h-3 w-3 mr-2 animate-spin" aria-hidden="true" />
+                <span>Carregando...</span>
               </>
             ) : (
               <>
-                <Sparkles className="h-3 w-3 mr-2" />
-                Ver Detalhes
+                <Eye className="h-3 w-3 mr-2" aria-hidden="true" />
+                <span>Ver Detalhes</span>
               </>
             )}
           </Button>

@@ -434,6 +434,7 @@ export function ContractForm({ config }: { config: ContractFormConfig }) {
       onCancel={mergedConfig.callbacks?.onCancel || (() => {})}
       onFormChange={mergedConfig.callbacks?.onFormChange}
       onEditRequest={mergedConfig.callbacks?.onEditRequest}
+      initialData={mergedConfig.initialData}
     >
       <ContractLoadingManager contractId={mergedConfig.contractId}>
         <ContractFormContentInternal

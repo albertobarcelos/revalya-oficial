@@ -98,6 +98,8 @@ interface ContractFormProviderProps {
   onCancel: () => void;
   onFormChange?: (hasChanges: boolean) => void;
   onEditRequest?: (contractId: string) => void;
+  /** Dados pré-carregados para popular o formulário quando não há contractId (ex: standalone billing) */
+  initialData?: Partial<ContractFormValues>;
   children: React.ReactNode;
 }
 
@@ -222,6 +224,7 @@ export function ContractFormProvider({
   onCancel,
   onFormChange,
   onEditRequest,
+  initialData,
   children
 }: ContractFormProviderProps) {
   // Estados do formulário
@@ -252,6 +255,8 @@ export function ContractFormProvider({
   // Ref para evitar recarregamentos desnecessários
   const loadedContractRef = useRef<string | null>(null);
   const isLoadingRef = useRef<boolean>(false);
+  // AIDEV-NOTE: Ref para rastrear se initialData já foi aplicado (evitar reaplicações)
+  const appliedInitialDataRef = useRef<string | null>(null);
 
   // Configuração do formulário
   const form = useForm<ContractFormValues>({
@@ -314,6 +319,28 @@ export function ContractFormProvider({
       return () => clearTimeout(timeoutId);
     }
   }, [contractId, isEditMode, form, loadContract]); // Dependências mínimas
+
+  // AIDEV-NOTE: Aplicar initialData quando não há contractId (ex: standalone billing)
+  useEffect(() => {
+    if (!contractId && initialData && Object.keys(initialData).length > 0) {
+      // AIDEV-NOTE: Criar uma chave única baseada no conteúdo do initialData para evitar reaplicações
+      const initialDataKey = JSON.stringify(initialData);
+      
+      // AIDEV-NOTE: Só aplicar se ainda não foi aplicado ou se mudou
+      if (appliedInitialDataRef.current !== initialDataKey) {
+        console.log('📝 Aplicando initialData ao formulário:', initialData);
+        // AIDEV-NOTE: Usar reset para aplicar todos os dados de uma vez
+        form.reset({
+          ...form.getValues(), // Manter valores atuais
+          ...initialData, // Sobrescrever com initialData
+        });
+        appliedInitialDataRef.current = initialDataKey;
+      }
+    } else if (contractId) {
+      // AIDEV-NOTE: Limpar ref quando há contractId (dados vêm do contrato)
+      appliedInitialDataRef.current = null;
+    }
+  }, [contractId, initialData, form]);
 
   // Exibir erro se houver problema no carregamento
   useEffect(() => {

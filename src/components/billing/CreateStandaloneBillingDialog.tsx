@@ -91,6 +91,8 @@ export function CreateStandaloneBillingDialog({
   const [selectedCustomerOverride, setSelectedCustomerOverride] = useState<Customer | null>(null);
   const [showAddItemChooser, setShowAddItemChooser] = useState(false);
   const [assocOpen, setAssocOpen] = useState<Record<string, boolean>>({});
+  // AIDEV-NOTE: Estado para controlar valores de input de preço enquanto estão sendo editados
+  const [priceInputValues, setPriceInputValues] = useState<Record<string, string>>({});
 
   // AIDEV-NOTE: Cliente selecionado
   const selectedCustomer = useMemo(() => {
@@ -102,6 +104,46 @@ export function CreateStandaloneBillingDialog({
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   }, [items]);
 
+  // AIDEV-NOTE: Função auxiliar para parsear valor monetário de entrada do usuário
+  const parseCurrencyInput = useCallback((value: string): number => {
+    // Remove tudo exceto dígitos, vírgula e ponto
+    const clean = value.replace(/[^\d,.-]/g, '');
+    
+    if (!clean || clean === '' || clean === '-') {
+      return 0;
+    }
+    
+    // Se tem vírgula, trata como decimal brasileiro
+    if (clean.includes(',')) {
+      const parts = clean.split(',');
+      const integerPart = parts[0].replace(/\./g, '').replace(/-/g, '');
+      const decimalPart = (parts[1] || '').replace(/[^\d]/g, '').slice(0, 2);
+      const numeric = parseFloat(`${integerPart}.${decimalPart}`) || 0;
+      return numeric;
+    }
+    
+    // Se tem ponto, pode ser decimal americano ou separador de milhar
+    if (clean.includes('.')) {
+      const parts = clean.split('.');
+      // Se a última parte tem 2 dígitos, provavelmente é decimal
+      if (parts[parts.length - 1].length <= 2 && parts.length === 2) {
+        return parseFloat(clean.replace(/\./g, '').replace(/,/g, '.')) || 0;
+      }
+      // Caso contrário, remove pontos (separadores de milhar)
+      return parseFloat(clean.replace(/\./g, '')) || 0;
+    }
+    
+    // Apenas números
+    return parseFloat(clean) || 0;
+  }, []);
+
+  // AIDEV-NOTE: Função auxiliar para formatar valor para exibição no input
+  const formatCurrencyInput = useCallback((value: number): string => {
+    if (value === 0) return '';
+    // Formata com 2 casas decimais, usando vírgula como separador decimal
+    return value.toFixed(2).replace('.', ',');
+  }, []);
+
   // AIDEV-NOTE: Resetar formulário ao fechar
   const handleClose = useCallback(() => {
     setCurrentStep('customer');
@@ -112,6 +154,7 @@ export function CreateStandaloneBillingDialog({
     setDescription('');
     setItems([]);
     setErrors({});
+    setPriceInputValues({});
     onClose();
   }, [onClose]);
 
@@ -436,13 +479,21 @@ export function CreateStandaloneBillingDialog({
                             <ProductSearchInput
                               value={item.product_id}
                               onValueChange={(productId, product) => {
+                                const newPrice = product?.unit_price ?? 0;
                                 handleUpdateItem(item.id, {
                                   product_id: productId || undefined,
                                   product,
                                   service_id: undefined,
                                   service: undefined,
-                                  unit_price: product?.unit_price ?? 0
+                                  unit_price: newPrice
                                 });
+                                // AIDEV-NOTE: Atualiza o estado local do input quando o preço é definido automaticamente
+                                if (newPrice > 0) {
+                                  setPriceInputValues(prev => ({
+                                    ...prev,
+                                    [item.id]: formatCurrencyInput(newPrice)
+                                  }));
+                                }
                               }}
                               placeholder="Buscar produto..."
                             />
@@ -455,13 +506,21 @@ export function CreateStandaloneBillingDialog({
                             <ServiceSearchInput
                               value={item.service_id}
                               onValueChange={(serviceId, service) => {
+                                const newPrice = (service?.default_price ?? service?.price ?? 0);
                                 handleUpdateItem(item.id, {
                                   service_id: serviceId || undefined,
                                   service: service || undefined,
                                   product_id: undefined,
                                   product: undefined,
-                                  unit_price: (service?.default_price ?? service?.price ?? 0)
+                                  unit_price: newPrice
                                 });
+                                // AIDEV-NOTE: Atualiza o estado local do input quando o preço é definido automaticamente
+                                if (newPrice > 0) {
+                                  setPriceInputValues(prev => ({
+                                    ...prev,
+                                    [item.id]: formatCurrencyInput(newPrice)
+                                  }));
+                                }
                               }}
                               placeholder="Buscar serviço..."
                             />
@@ -514,20 +573,50 @@ export function CreateStandaloneBillingDialog({
                           <Input
                             type="text"
                             inputMode="decimal"
-                            value={formatCurrency(item.unit_price || 0)}
+                            placeholder="0,00"
+                            value={priceInputValues[item.id] !== undefined 
+                              ? priceInputValues[item.id]
+                              : item.unit_price > 0 
+                                ? formatCurrencyInput(item.unit_price)
+                                : ''
+                            }
                             onChange={(e) => {
-                              const raw = e.target.value;
-                              const clean = raw.replace(/[^\d,.-]/g, '');
-                              let numeric = 0;
-                              if (clean.includes(',')) {
-                                const parts = clean.split(',');
-                                const integerPart = parts[0].replace(/\./g, '');
-                                const decimalPart = (parts[1] || '').replace(/[^\d]/g, '').slice(0, 2);
-                                numeric = parseFloat(`${integerPart}.${decimalPart}`) || 0;
-                              } else {
-                                numeric = parseFloat(clean.replace(/\./g, '')) || 0;
-                              }
+                              const inputValue = e.target.value;
+                              // Permite digitação livre enquanto está editando
+                              setPriceInputValues(prev => ({
+                                ...prev,
+                                [item.id]: inputValue
+                              }));
+                              
+                              // Parse e atualiza o valor numérico
+                              const numeric = parseCurrencyInput(inputValue);
                               handleUpdateItem(item.id, { unit_price: numeric });
+                            }}
+                            onFocus={(e) => {
+                              // Quando foca, mostra o valor numérico formatado se não houver valor no estado local
+                              if (priceInputValues[item.id] === undefined && item.unit_price > 0) {
+                                setPriceInputValues(prev => ({
+                                  ...prev,
+                                  [item.id]: formatCurrencyInput(item.unit_price)
+                                }));
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Quando perde o foco, formata o valor e limpa o estado local se necessário
+                              const numeric = parseCurrencyInput(e.target.value);
+                              if (numeric > 0) {
+                                setPriceInputValues(prev => ({
+                                  ...prev,
+                                  [item.id]: formatCurrencyInput(numeric)
+                                }));
+                              } else {
+                                // Remove do estado local se for zero
+                                setPriceInputValues(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[item.id];
+                                  return newState;
+                                });
+                              }
                             }}
                           />
                           {errors[`item_${index}_price`] && (
