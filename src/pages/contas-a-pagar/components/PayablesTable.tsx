@@ -37,7 +37,7 @@ export function PayablesTable({
   return (
     <>
     <Table>
-      <TableHeader>
+      <TableHeader className="sticky top-0 bg-background z-10">
         <TableRow>
           <TableHead className="checkbox-column text-[12px] font-bold leading-[17.1429px] text-[#555] align-middle text-left w-[30px] min-w-[30px] max-w-[30px] pl-2 pr-0 py-2 cursor-pointer">
             <Checkbox checked={allSelected} onCheckedChange={(v) => toggleSelectAll(!!v)} />

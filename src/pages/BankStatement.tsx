@@ -1,19 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
 import { useToast } from '@/components/ui/use-toast';
 import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
-import { Download, FileText, Landmark, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Download, FileText, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -39,12 +38,45 @@ interface BankAccountOption {
 export default function BankStatement() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const { toast } = useToast();
+  const iconContainerRef = useRef<HTMLDivElement | null>(null);
+  const [iconHtml, setIconHtml] = useState<string>('');
 
   useEffect(() => {
     if (currentTenant?.id) {
       try { console.log(`[AUDIT] Página de Extrato acessada - Tenant: ${currentTenant.id}`); } catch {}
     }
   }, [currentTenant?.id]);
+
+  // Ícone: usar o SVG de Recebimentos
+
+  useEffect(() => {
+    let active = true;
+    fetch('/images/recebimentos/data-report-animate.svg')
+      .then((r) => r.text())
+      .then((text) => {
+        if (!active) return;
+        setIconHtml(text);
+      })
+      .catch(() => {
+        setIconHtml('');
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const headerSvg = document.querySelector('.header-icon svg') as SVGElement | null;
+    if (headerSvg) {
+      headerSvg.setAttribute('width', '24');
+      headerSvg.setAttribute('height', '24');
+      headerSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+    const emptySvg = document.querySelector('.empty-icon svg') as SVGElement | null;
+    if (emptySvg) {
+      emptySvg.setAttribute('width', '100%');
+      emptySvg.removeAttribute('height');
+      emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }, [iconHtml]);
 
   /**
    * Valida se uma string é um UUID v4
@@ -268,18 +300,68 @@ export default function BankStatement() {
   return (
     <Layout>
       {hasAccess ? (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
-          <Card className="flex flex-col overflow-hidden">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
+          <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Landmark className="h-5 w-5 text-primary" />
+              <div className="flex flex-wrap items-end justify-between gap-4 md:gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end flex-1 min-w-0">
                   <div>
-                    <CardTitle>Extrato Bancário</CardTitle>
-                    <CardDescription>Visualize e exporte movimentações financeiras com filtros avançados</CardDescription>
+                    <label className="text-sm font-medium">Conta Bancária</label>
+                    <Select value={selectedAccountId} onValueChange={(v) => setSelectedAccountId(v)}>
+                      <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                        <SelectValue placeholder="Selecione a conta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map(acc => (
+                          <SelectItem key={acc.id} value={acc.id}>{acc.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Período</label>
+                    <div className="mt-2 w-full md:w-[240px]">
+                      <DateRangePicker
+                        date={dateRange as any}
+                        onDateChange={(range: any) => {
+                          if (range?.from && range?.to) {
+                            setDateRange({ from: range.from, to: range.to } as DateRangeValue);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Tipo de Operação</label>
+                    <Select value={operationType} onValueChange={(v) => setOperationType(v as OperationType)}>
+                      <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Todos</SelectItem>
+                        <SelectItem value="DEBIT">Débitos</SelectItem>
+                        <SelectItem value="CREDIT">Créditos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Saldo Atual</label>
+                    <div className="mt-2 flex items-center gap-2">
+                      {currentBalance >= 0 ? (
+                        <ArrowUpCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <ArrowDownCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className={`text-lg font-semibold ${currentBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        {formatCurrency(Math.abs(currentBalance))}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end">
                   <Button variant="outline" onClick={handleExportCSV} className="gap-2">
                     <Download className="h-4 w-4" /> CSV
                   </Button>
@@ -289,117 +371,76 @@ export default function BankStatement() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0 p-0 flex-1 overflow-auto">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end px-6">
-                <div>
-                  <label className="text-sm font-medium">Conta Bancária</label>
-                  <Select value={selectedAccountId} onValueChange={(v) => setSelectedAccountId(v)}>
-                    <SelectTrigger className="mt-2 w-full md:w-1/2 md:max-w-[240px]">
-                      <SelectValue placeholder="Selecione a conta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map(acc => (
-                        <SelectItem key={acc.id} value={acc.id}>{acc.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
+              <Separator className="my-2" />
 
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Período</label>
-                  <div className="mt-2">
-                  <DateRangePicker
-                    date={dateRange as any}
-                    onDateChange={(range: any) => {
-                      if (range?.from && range?.to) {
-                        setDateRange({ from: range.from, to: range.to } as DateRangeValue);
-                      }
-                    }}
-                  />
+              {statementQuery.isLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-              </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Tipo de Operação</label>
-                  <Select value={operationType} onValueChange={(v) => setOperationType(v as OperationType)}>
-                    <SelectTrigger className="mt-2 w-full md:w-1/2 md:max-w-[240px]">
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Todos</SelectItem>
-                      <SelectItem value="DEBIT">Débitos</SelectItem>
-                      <SelectItem value="CREDIT">Créditos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">Saldo Atual</label>
-                  <div className="mt-2 flex items-center gap-2">
-                    {currentBalance >= 0 ? (
-                      <ArrowUpCircle className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <ArrowDownCircle className="h-4 w-4 text-red-600" />
-                    )}
-                    <span className={`text-lg font-semibold ${currentBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                      {formatCurrency(Math.abs(currentBalance))}
-                    </span>
+              ) : totalItems === 0 ? (
+                <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-12 px-4 rounded-md border empty-icon">
+                  {iconHtml ? (
+                    <div dangerouslySetInnerHTML={{ __html: iconHtml }} className="mb-4 w-[260px] md:w-[320px] mx-auto" />
+                  ) : null}
+                  <div className="text-center text-muted-foreground">
+                    <p className="text-body font-medium">Nenhuma movimentação encontrada</p>
                   </div>
                 </div>
-              </div>
-
-              <Separator className="my-4" />
-
-              <div ref={tableRef} className="border rounded-2xl">
-                <ScrollArea className="max-h-[60vh]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Data</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Conta</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead>Método</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <AnimatePresence initial={false}>
-                        {paginatedTransactions.map(t => (
-                          <motion.tr key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <TableCell>{new Date(t.date).toLocaleDateString('pt-BR')}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {t.kind === 'CREDIT' ? <ArrowUpCircle className="h-4 w-4 text-green-600" /> : <ArrowDownCircle className="h-4 w-4 text-red-600" />}
-                                <Badge variant={t.kind === 'CREDIT' ? 'secondary' : 'destructive'}>
-                                  {t.kind === 'CREDIT' ? 'Crédito' : 'Débito'}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell className={`text-right ${t.kind === 'CREDIT' ? 'text-green-700' : t.kind === 'DEBIT' ? 'text-red-700' : ''}`}>{formatCurrency(t.value)}</TableCell>
-                            <TableCell>{t.description || '-'}</TableCell>
-                            <TableCell>{t.account_label || '-'}</TableCell>
-                            <TableCell>{t.category || '-'}</TableCell>
-                            <TableCell>{t.payment_method || '-'}</TableCell>
-                          </motion.tr>
-                        ))}
-                      </AnimatePresence>
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </div>
+              ) : (
+                <div ref={tableRef} className="rounded-md border flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Conta</TableHead>
+                          <TableHead>Categoria</TableHead>
+                          <TableHead>Método</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <AnimatePresence initial={false}>
+                          {paginatedTransactions.map(t => (
+                            <motion.tr key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                              <TableCell>{new Date(t.date).toLocaleDateString('pt-BR')}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {t.kind === 'CREDIT' ? <ArrowUpCircle className="h-4 w-4 text-green-600" /> : <ArrowDownCircle className="h-4 w-4 text-red-600" />}
+                                  <Badge variant={t.kind === 'CREDIT' ? 'secondary' : 'destructive'}>
+                                    {t.kind === 'CREDIT' ? 'Crédito' : 'Débito'}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className={`text-right ${t.kind === 'CREDIT' ? 'text-green-700' : t.kind === 'DEBIT' ? 'text-red-700' : ''}`}>{formatCurrency(t.value)}</TableCell>
+                              <TableCell>{t.description || '-'}</TableCell>
+                              <TableCell>{t.account_label || '-'}</TableCell>
+                              <TableCell>{t.category || '-'}</TableCell>
+                              <TableCell>{t.payment_method || '-'}</TableCell>
+                            </motion.tr>
+                          ))}
+                        </AnimatePresence>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
             </CardContent>
-            <div className="flex-shrink-0">
-              <PaginationFooter
-                currentPage={page}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                onPageChange={setPage}
-                onItemsPerPageChange={setItemsPerPage}
-              />
-            </div>
+            {totalItems > 0 && (
+              <div className="flex-shrink-0">
+                <PaginationFooter
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                />
+              </div>
+            )}
           </Card>
         </motion.div>
       ) : (

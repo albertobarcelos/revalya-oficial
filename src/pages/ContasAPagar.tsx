@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,7 +20,6 @@ import { EditPayableModal } from './contas-a-pagar/components/EditPayableModal';
 import type { PayablesFilters } from './contas-a-pagar/types/filters';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { motion } from 'framer-motion';
 
@@ -55,6 +54,7 @@ const ContasAPagar: React.FC = () => {
 
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [iconHtml, setIconHtml] = useState<string>('');
   
 
   const queryKey = useMemo(
@@ -129,6 +129,27 @@ const ContasAPagar: React.FC = () => {
       });
     }
   }, [payablesData]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/images/contas_a_pagar/manage-money-animate.svg')
+      .then((r) => r.text())
+      .then((text) => {
+        if (!active) return;
+        setIconHtml(text);
+      })
+      .catch(() => setIconHtml(''));
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const emptySvg = document.querySelector('.empty-icon svg') as SVGElement | null;
+    if (emptySvg) {
+      emptySvg.setAttribute('width', '100%');
+      emptySvg.removeAttribute('height');
+      emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }, [iconHtml]);
 
   const payables = (payablesData?.data || []) as FinanceEntry[];
   const totals = payables.reduce(
@@ -395,19 +416,76 @@ const ContasAPagar: React.FC = () => {
 
   return (
     <Layout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
 
-        <Card className="flex flex-col overflow-hidden">
+        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-primary" />
+            <div className="flex flex-wrap items-end justify-between gap-4 md:gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end flex-1 min-w-0">
                 <div>
-                  <CardTitle>Contas a Pagar</CardTitle>
-                  <CardDescription>Gerencie e exporte despesas com filtros avançados</CardDescription>
+                  <Label htmlFor="search">Buscar</Label>
+                  <div className="relative mt-2">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search"
+                      placeholder="Busque por detalhes, número, nome, vencimento ou valor"
+                      value={filters.search}
+                      onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                      className="pl-8 h-9 w-full md:w-[240px]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Status</Label>
+                  <Select value={(() => {
+                    const s = filters.status || [];
+                    if (s.length === 0) return 'all' as any;
+                    if (s.length === 2 && s.includes('DUE_SOON') && s.includes('DUE_TODAY')) return 'DUE' as any;
+                    return (s[0] as any);
+                  })()} onValueChange={(value) => setFilters((p) => ({
+                    ...p,
+                    status: value === 'all' ? [] : (value === 'DUE' ? ['DUE_SOON','DUE_TODAY'] : [value as any])
+                  }))}>
+                    <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                      <SelectValue placeholder="Selecione o status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="PENDING">Pendente</SelectItem>
+                      <SelectItem value="PAID">Quitado</SelectItem>
+                      <SelectItem value="DUE">A Vencer</SelectItem>
+                      <SelectItem value="OVERDUE">Vencido</SelectItem>
+                      <SelectItem value="CANCELLED">Estornado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Período</Label>
+                  <div className="mt-2 w-full md:w-[240px]">
+                    <DateRangePicker
+                      date={dateRange as any}
+                      onDateChange={(range: any) => {
+                        if (range?.from && range?.to) {
+                          setDateRange({ from: range.from, to: range.to } as any);
+                          const fromStr = range.from.toISOString().slice(0, 10);
+                          const toStr = range.to.toISOString().slice(0, 10);
+                          setFilters((prev) => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Totais</Label>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    R$ {totals?.remaining?.toFixed(2).replace('.', ',')}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end">
                 <Button variant="outline" onClick={exportCsv} className="gap-2">
                   <Download className="h-4 w-4" /> CSV
                 </Button>
@@ -417,77 +495,27 @@ const ContasAPagar: React.FC = () => {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0 p-0 flex-1 overflow-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 items-end">
-              <div>
-                <Label htmlFor="search">Buscar</Label>
-                <div className="relative mt-2">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder="Busque por detalhes, número, nome, vencimento ou valor"
-                    value={filters.search}
-                    onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-                    className="pl-8 w-full md:max-w-[300px]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label>Status</Label>
-                <Select value={(() => {
-                  const s = filters.status || [];
-                  if (s.length === 0) return 'all' as any;
-                  if (s.length === 2 && s.includes('DUE_SOON') && s.includes('DUE_TODAY')) return 'DUE' as any;
-                  return (s[0] as any);
-                })()} onValueChange={(value) => setFilters((p) => ({
-                  ...p,
-                  status: value === 'all' ? [] : (value === 'DUE' ? ['DUE_SOON','DUE_TODAY'] : [value as any])
-                }))}>
-                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
-                    <SelectValue placeholder="Selecione o status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="PENDING">Pendente</SelectItem>
-                    <SelectItem value="PAID">Quitado</SelectItem>
-                    <SelectItem value="DUE">A Vencer</SelectItem>
-                    <SelectItem value="OVERDUE">Vencido</SelectItem>
-                    <SelectItem value="CANCELLED">Estornado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="md:col-span-2">
-                <Label>Período</Label>
-                <div className="mt-2 flex items-end gap-2 w-full md:max-w-[280px]">
-                  <DateRangePicker
-                    date={dateRange as any}
-                    onDateChange={(range: any) => {
-                      if (range?.from && range?.to) {
-                        setDateRange({ from: range.from, to: range.to } as any);
-                        const fromStr = range.from.toISOString().slice(0, 10);
-                        const toStr = range.to.toISOString().slice(0, 10);
-                        setFilters((prev) => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
-                      }
-                    }}
-                  />
-                  <Button variant="link" onClick={() => setShowFilters((v) => !v)}>
-                    {showFilters ? 'Ocultar filtros' : 'Exibir filtros'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <Separator className="my-4" />
+          <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
+            <Separator className="my-2" />
 
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
+            ) : payables.length === 0 ? (
+              <div className="rounded-md border flex-1 flex flex-col min-h-0 empty-icon">
+                <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-12 px-4">
+                  {iconHtml ? (
+                    <div dangerouslySetInnerHTML={{ __html: iconHtml }} className="mb-4 w-[260px] md:w-[320px] mx-auto" />
+                  ) : null}
+                  <div className="text-center text-muted-foreground">
+                    <p className="text-body font-medium">Nenhuma conta a pagar encontrada</p>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div className="border rounded-2xl">
-                <ScrollArea className="max-h-[60vh]">
+              <div className="rounded-md border flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
                   <PayablesTable
                     payables={payables}
                     selectedIds={selectedIds}
@@ -498,22 +526,24 @@ const ContasAPagar: React.FC = () => {
                     onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
                     onAfterReverse={() => queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] })}
                   />
-                </ScrollArea>
+                </div>
               </div>
             )}
 
           </CardContent>
-          <div className="flex-shrink-0">
-            <PaginationFooter
-              currentPage={pagination.page}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.total}
-              itemsPerPage={pagination.limit}
-              onPageChange={(page) => handlePageChange(page)}
-              onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
-              totals={totals}
-            />
-          </div>
+          {!isLoading && pagination.total > 0 && (
+            <div className="flex-shrink-0">
+              <PaginationFooter
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.total}
+                itemsPerPage={pagination.limit}
+                onPageChange={(page) => handlePageChange(page)}
+                onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
+                totals={totals}
+              />
+            </div>
+          )}
         </Card>
 
         

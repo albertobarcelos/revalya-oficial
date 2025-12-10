@@ -14,7 +14,6 @@ import { Layout } from '@/components/layout/Layout';
 import { financeEntriesService, type FinanceEntryFilters, type FinanceEntryResponse } from '@/services/financeEntriesService';
 import type { Database } from '@/types/database';
 import { useTenantAccessGuard, useSecureTenantQuery, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Separator } from '@/components/ui/separator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +33,7 @@ interface RecebimentosFilters {
   dateTo: string;
   type: string;
   page: number;
+  limit: number;
 }
 
 // AIDEV-NOTE: Interface para dados de paginação
@@ -87,18 +87,54 @@ const Recebimentos: React.FC = () => {
       dateFrom: firstDayOfMonth,
       dateTo: lastDayOfMonth,
       type: 'RECEIVABLE',
-      page: 1
+      page: 1,
+      limit: 25
     };
   });
   
   const { toast } = useToast();
   const tableRef = useRef<HTMLDivElement | null>(null);
+  const [iconHtml, setIconHtml] = useState<string>('');
 
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>(() => {
     const from = filters.dateFrom ? new Date(filters.dateFrom) : undefined;
     const to = filters.dateTo ? new Date(filters.dateTo) : undefined;
     return { from, to };
   });
+
+  useEffect(() => {
+    const linkId = 'finance-icon-css';
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement('link');
+      link.id = linkId;
+      link.rel = 'stylesheet';
+      link.href = '/images/Extrato_bancario/finance-styles.css';
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/images/Extrato_bancario/finance-not-css.svg')
+      .then((r) => r.text())
+      .then((text) => {
+        if (!active) return;
+        setIconHtml(text);
+      })
+      .catch(() => {
+        setIconHtml('');
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const emptySvg = document.querySelector('.empty-icon #freepik_stories-finance') as SVGElement | null;
+    if (emptySvg) {
+      emptySvg.setAttribute('width', '100%');
+      emptySvg.removeAttribute('height');
+      emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }, [iconHtml]);
 
   const bankAccountsQuery = useSecureTenantQuery(
     ['bank-acounts', currentTenant?.id],
@@ -171,8 +207,9 @@ const Recebimentos: React.FC = () => {
     filters.dateFrom,
     filters.dateTo,
     filters.type,
-    filters.page
-  ], [currentTenant?.id, filters.search, filters.status, filters.dateFrom, filters.dateTo, filters.type, filters.page]);
+    filters.page,
+    filters.limit
+  ], [currentTenant?.id, filters.search, filters.status, filters.dateFrom, filters.dateTo, filters.type, filters.page, filters.limit]);
   
   // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT (CAMADA 2)
   const { data: recebimentosData, isLoading, error } = useSecureTenantQuery(
@@ -191,7 +228,7 @@ const Recebimentos: React.FC = () => {
         tenant_id: tenantId, // 🔒 SEMPRE incluir tenant_id
         type: filters.type === 'RECEIVABLE' ? 'RECEIVABLE' : 'PAYABLE',
         page: filters.page,
-        limit: 15
+        limit: filters.limit
       };
 
       if (filters.search) {
@@ -271,7 +308,8 @@ const Recebimentos: React.FC = () => {
       dateFrom: firstDayOfMonth,
       dateTo: lastDayOfMonth,
       type: 'RECEIVABLE',
-      page: 1
+      page: 1,
+      limit: 25
     });
   };
 
@@ -381,57 +419,39 @@ const Recebimentos: React.FC = () => {
 
   return (
     <Layout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-6 space-y-4">
-        <Card className="flex flex-col overflow-hidden">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-primary" />
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
+        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-col md:flex-row md:items-end space-y-3 md:space-y-0 md:space-x-4 flex-1">
                 <div>
-                  <CardTitle>Recebimentos</CardTitle>
-                  <CardDescription>Visualize e exporte recebimentos com filtros avançados</CardDescription>
+                  <Label htmlFor="search">Buscar</Label>
+                  <Input
+                    id="search"
+                    placeholder="Descrição..."
+                    value={filters.search}
+                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="mt-1 w-full md:w-80 h-9"
+                  />
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
-                  <Download className="h-4 w-4" /> CSV
-                </Button>
-                <Button onClick={handleExportPDF} className="gap-2">
-                  <FileText className="h-4 w-4" /> PDF
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 p-0 flex-1 overflow-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 items-end">
-              <div>
-                <Label htmlFor="search">Buscar</Label>
-                <Input
-                  id="search"
-                  placeholder="Descrição..."
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="mt-2 w-full md:max-w-[300px]"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="type">Tipo</Label>
-                <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
+                
+                <div>
+                  <Label htmlFor="type">Tipo</Label>
+                  <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
+                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="RECEIVABLE">Recebimentos</SelectItem>
                     <SelectItem value="PAYABLE">Despesas</SelectItem>
                   </SelectContent>
-                </Select>
-              </div>
+                  </Select>
+                </div>
 
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger className="mt-2 w-full md:max-w-[240px]">
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
                     <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -441,59 +461,71 @@ const Recebimentos: React.FC = () => {
                     <SelectItem value="OVERDUE">Vencido</SelectItem>
                     <SelectItem value="CANCELLED">Cancelado</SelectItem>
                   </SelectContent>
-                </Select>
-              </div>
+                  </Select>
+                </div>
 
-              <div>
-                <Label>Período</Label>
-                <div className="mt-2 flex items-end gap-2 w-full md:max-w-[280px]">
-                  <DateRangePicker
-                    date={dateRange as any}
-                    onDateChange={(range: any) => {
-                      if (range?.from && range?.to) {
-                        setDateRange({ from: range.from, to: range.to });
-                        const fromStr = range.from.toISOString().slice(0, 10);
-                        const toStr = range.to.toISOString().slice(0, 10);
-                        setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
-                      }
-                    }}
-                  />
-                  
+                <div>
+                  <Label>Período</Label>
+                  <div className="mt-1 flex items-end gap-2 w-full md:w-80">
+                    <DateRangePicker
+                      date={dateRange as any}
+                      onDateChange={(range: any) => {
+                        if (range?.from && range?.to) {
+                          setDateRange({ from: range.from, to: range.to });
+                          const fromStr = range.from.toISOString().slice(0, 10);
+                          const toStr = range.to.toISOString().slice(0, 10);
+                          setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                        }
+                      }}
+                    />
+                    
+                  </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2 self-end">
+                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                  <Download className="h-4 w-4" /> CSV
+                </Button>
+                <Button onClick={handleExportPDF} className="gap-2">
+                  <FileText className="h-4 w-4" /> PDF
+                </Button>
+              </div>
             </div>
-
-            <Separator className="my-4" />
+          </CardHeader>
+          <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
 
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : (
-              <div ref={tableRef} className="border rounded-2xl">
-                <ScrollArea className="max-h-[60vh]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Vencimento</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Conta</TableHead>
-                        <TableHead>Data Pagamento</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <AnimatePresence initial={false}>
-                        {recebimentos.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                              Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          recebimentos.map((entry) => (
+              <div ref={tableRef} className="rounded-md border flex-1 flex flex-col min-h-0">
+                {recebimentos.length === 0 ? (
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-12 px-4 empty-icon">
+                    {iconHtml ? (
+                      <div dangerouslySetInnerHTML={{ __html: iconHtml }} className="mb-4 w-[260px] md:w-[320px] mx-auto" />
+                    ) : null}
+                    <div className="text-center text-muted-foreground">
+                      <p className="text-body font-medium">Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Conta</TableHead>
+                          <TableHead>Data Pagamento</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <AnimatePresence initial={false}>
+                          {recebimentos.map((entry) => (
                             <motion.tr key={entry.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                               <TableCell className="font-medium">{entry.description}</TableCell>
                               <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
@@ -541,26 +573,28 @@ const Recebimentos: React.FC = () => {
                                 </div>
                               </TableCell>
                             </motion.tr>
-                          ))
-                        )}
-                      </AnimatePresence>
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                          ))}
+                        </AnimatePresence>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </div>
             )}
 
           </CardContent>
-          <div className="flex-shrink-0">
-            <PaginationFooter
-              currentPage={pagination.page}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.total}
-              itemsPerPage={pagination.limit}
-              onPageChange={(page) => handlePageChange(page)}
-              onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
-            />
-          </div>
+          {!isLoading && pagination.total > 0 && (
+            <div className="flex-shrink-0 border-t">
+              <PaginationFooter
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.total}
+                itemsPerPage={pagination.limit}
+                onPageChange={(page) => handlePageChange(page)}
+                onItemsPerPageChange={(perPage) => setFilters((prev) => ({ ...prev, limit: perPage, page: 1 }))}
+              />
+            </div>
+          )}
         </Card>
       </motion.div>
     </Layout>
