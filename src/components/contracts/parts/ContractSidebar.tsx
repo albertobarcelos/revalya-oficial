@@ -168,19 +168,19 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
             </div>
           </div>
           
-          {/* Margem de Lucro */}
+          {/* AIDEV-NOTE: Margem de Lucro - Lucro = Total Final - Custos */}
           <div className="mt-4 p-3 bg-muted/40 rounded-lg border border-border/40">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Margem de Lucro</span>
               <Badge variant="secondary">
-                {totalValues.subtotal > 0 
-                  ? `${(((totalValues.subtotal - totalValues.costs) / totalValues.subtotal) * 100).toFixed(1)}%`
+                {totalValues.total > 0 
+                  ? `${(((totalValues.total - totalValues.costs) / totalValues.total) * 100).toFixed(1)}%`
                   : '0%'
                 }
               </Badge>
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Lucro: {formatCurrency(totalValues.subtotal - totalValues.costs)}
+              Lucro: {formatCurrency(totalValues.total - totalValues.costs)}
             </div>
           </div>
         </CardContent>
