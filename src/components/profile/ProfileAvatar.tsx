@@ -1,131 +1,87 @@
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { logError, logDebug } from "@/lib/logger";
 import { useTenantAccessGuard } from "@/hooks/useTenantAccessGuard";
-import { useSecureTenantMutation } from "@/hooks/templates/useSecureTenantQuery";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface ProfileAvatarProps {
   url?: string;
-  onUpload?: (avatarId: string) => void;
+  onUpload?: (filePath: string) => void; // Agora apenas notifica sobre o upload, não salva no banco
   onRemove?: () => void;
+  pendingAvatarPath?: string | null; // Avatar pendente de salvar
 }
 
-export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
+export function ProfileAvatar({ url, onUpload, onRemove, pendingAvatarPath }: ProfileAvatarProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // AIDEV-NOTE: Ref para armazenar URL de upload recente (evita sobrescrita pelo useEffect)
+  const recentUploadRef = useRef<string | null>(null);
   
   // AIDEV-NOTE: Hook de segurança para obter tenant_id correto
   const { currentTenant } = useTenantAccessGuard();
 
-  const upsertMapping = useSecureTenantMutation(
-    async (client, _tenantId, vars: { userId: string; tenantId: string; filePath: string; fileType: string; fileSize: number }) => {
-      const { data: existingActive } = await client
-        .from('user_avatars')
-        .select('id, file_path')
-        .eq('user_id', vars.userId)
-        .eq('tenant_id', vars.tenantId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      let previousPath = existingActive?.file_path || null;
-
-      if (existingActive?.id) {
-        const { error: updateError } = await client
-          .from('user_avatars')
-          .update({
-            file_path: vars.filePath,
-            file_type: vars.fileType,
-            file_size: vars.fileSize,
-            uploaded_at: new Date().toISOString(),
-            is_active: true,
-          })
-          .eq('id', existingActive.id);
-        if (updateError) throw updateError;
-        return { id: existingActive.id };
-      } else {
-        const { data: inserted, error: insertError } = await client
-          .from('user_avatars')
-          .insert({
-            user_id: vars.userId,
-            tenant_id: vars.tenantId,
-            file_path: vars.filePath,
-            file_type: vars.fileType,
-            file_size: vars.fileSize,
-            uploaded_at: new Date().toISOString(),
-            is_active: true,
-          })
-          .select('id')
-          .single();
-        if (insertError) throw insertError;
-        return { id: inserted.id };
-      }
-
-      if (previousPath && previousPath !== vars.filePath) {
-        await client.storage
-          .from(STORAGE_BUCKETS.AVATARS)
-          .remove([previousPath]);
-      }
-      return { id: existingActive?.id || null };
-    }
-  );
-
   useEffect(() => {
+    // AIDEV-NOTE: Se há uma URL de upload recente no ref, usa ela e não sobrescreve
+    if (recentUploadRef.current) {
+      logDebug('Usando URL de upload recente do ref', { context: 'ProfileAvatar', url: recentUploadRef.current });
+      setAvatarUrl(recentUploadRef.current);
+      return;
+    }
+    
+    // Prioriza avatar pendente (recém enviado mas não salvo)
+    if (pendingAvatarPath) {
+      downloadImage(pendingAvatarPath);
+      return;
+    }
+    
     if (url) {
       // Se a URL já for uma URL pública completa, usa ela diretamente
       if (url.startsWith('http')) {
         setAvatarUrl(url);
       } else {
-        const isUuid = /^[0-9a-fA-F-]{36}$/.test(url);
-        if (isUuid && !currentTenant?.id) {
-          // Aguarda tenant carregar para resolver file_path
-          return;
-        }
-        if (isUuid && currentTenant?.id) {
-          (async () => {
-            try {
-              const { data: ua } = await supabase
-                .from('user_avatars')
-                .select('file_path')
-                .eq('id', url)
-                .eq('tenant_id', currentTenant.id)
-                .maybeSingle();
-              if (ua?.file_path) {
-                await downloadImage(ua.file_path);
-              } else {
-                setAvatarUrl('');
-              }
-            } catch (e) {
-              setAvatarUrl('');
-            }
-          })();
-        } else {
-          downloadImage(url);
-        }
+        // avatar_url agora é diretamente o caminho do arquivo no storage
+        downloadImage(url);
       }
+    } else {
+      setAvatarUrl(null);
     }
-  }, [url, currentTenant?.id]);
+  }, [url, pendingAvatarPath]);
 
   /**
-   * Baixa/resolve a URL de exibição do avatar pela chave do arquivo no Storage.
-   * Comentário de nível de função: usa URL assinada para funcionar com buckets privados
-   * e faz fallback para URL pública automaticamente.
+   * Obtém a URL pública do avatar no Storage.
+   * AIDEV-NOTE: Bucket profile-avatars é público, então usa URL pública diretamente.
    */
-  async function downloadImage(path: string) {
+  function downloadImage(path: string) {
     try {
-      const primary = await supabase.storage
-        .from(STORAGE_BUCKETS.AVATARS)
-        .createSignedUrl(path, 3600);
-      if (primary.data?.signedUrl) {
-        setAvatarUrl(primary.data.signedUrl);
+      if (!path || path.trim() === '') {
+        setAvatarUrl(null);
         return;
       }
+
+      // AIDEV-NOTE: Bucket público - usa URL pública diretamente (mais rápido e confiável)
+      const { data } = supabase.storage
+        .from(STORAGE_BUCKETS.AVATARS)
+        .getPublicUrl(path);
+
+      if (data?.publicUrl) {
+        logDebug('URL pública obtida', { context: 'ProfileAvatar', publicUrl: data.publicUrl });
+        setAvatarUrl(data.publicUrl);
+        return;
+      }
+
+      logError('Erro ao obter URL pública', { 
+        context: 'ProfileAvatar', 
+        path,
+        message: 'Não foi possível obter URL pública'
+      });
+      setAvatarUrl(null);
     } catch (error) {
-      logError('Erro ao obter URL da imagem', 'ProfileAvatar', error);
+      logError('Erro ao obter URL da imagem', { context: 'ProfileAvatar', error, path });
+      setAvatarUrl(null);
     }
   }
 
@@ -149,7 +105,7 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
       // Primeiro obtém o usuário atual
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
-        logError('Erro ao obter usuário', 'ProfileAvatar', userError);
+        logError('Erro ao obter usuário', { context: 'ProfileAvatar', error: userError });
         throw userError;
       }
       if (!user) throw new Error('Usuário não encontrado');
@@ -166,6 +122,34 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
         throw new Error('A imagem deve ter no máximo 2MB.');
       }
 
+      // AIDEV-NOTE: Valida e define o content-type correto baseado na extensão
+      const mimeTypes: Record<string, string> = {
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif'
+      };
+      const contentType = mimeTypes[fileExt] || file.type;
+
+      // AIDEV-NOTE: Valida que o content-type é realmente uma imagem
+      if (!contentType.startsWith('image/')) {
+        throw new Error('O arquivo selecionado não é uma imagem válida.');
+      }
+
+      logDebug('Arquivo selecionado', { 
+        context: 'ProfileAvatar',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        resolvedContentType: contentType
+      });
+
+      // AIDEV-NOTE: Preview imediato usando URL.createObjectURL
+      // Isso permite que a imagem apareça imediatamente no front antes do upload
+      const previewUrl = URL.createObjectURL(file);
+      setAvatarUrl(previewUrl);
+      logDebug('Preview imediato criado', { context: 'ProfileAvatar' });
+
       // AIDEV-NOTE: Gera nome e caminho seguindo o padrão de contract-attachments
       // Padrão: {tenant_id}/{user_id}/{nome_unico}.{ext}
       const tenantId = currentTenant?.id || 'default';
@@ -173,24 +157,29 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
       const fileName = `avatar_${timestamp}.${fileExt}`;
       const filePath = `${tenantId}/${user.id}/${fileName}`;
 
-      logDebug('Iniciando upload do arquivo', 'ProfileAvatar', { 
+      logDebug('Iniciando upload do arquivo', { 
+        context: 'ProfileAvatar',
         fileName,
         fileSize: file.size,
-        fileType: file.type,
+        contentType,
         bucket: STORAGE_BUCKETS.AVATARS
       });
 
-      // Faz o upload do arquivo seguindo o mesmo padrão de opções do contract-attachments
+      // AIDEV-NOTE: Faz o upload com content-type explícito baseado na extensão
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKETS.AVATARS)
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: false, // AIDEV-NOTE: manter consistência com contract-attachments
-          contentType: file.type // Define explicitamente o MIME da imagem
+          upsert: false,
+          contentType: contentType // Define explicitamente o MIME da imagem
         });
 
       if (uploadError) {
-        logError('Erro no upload para o storage', 'ProfileAvatar', { 
+        // Limpa o preview em caso de erro
+        URL.revokeObjectURL(previewUrl);
+        setAvatarUrl(null);
+        logError('Erro no upload para o storage', { 
+          context: 'ProfileAvatar',
           error: uploadError,
           fileName,
           fileSize: file.size,
@@ -199,29 +188,62 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
         throw uploadError;
       }
 
-      logDebug('Upload concluído com sucesso', 'ProfileAvatar', { 
+      logDebug('Upload concluído com sucesso', { 
+        context: 'ProfileAvatar',
         uploadData,
         filePath
       });
 
-      const res = await upsertMapping.mutateAsync({ userId: user.id, tenantId, filePath, fileType: file.type, fileSize: file.size });
+      // AIDEV-NOTE: Busca avatar anterior para remover do storage
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('avatar_url')
+          .eq('id', currentUser.id)
+          .maybeSingle();
 
-      // Obtém uma URL assinada para exibição imediata
-      const signedUrl = await getImageUrl(STORAGE_BUCKETS.AVATARS, filePath, 3600);
-      logDebug('URL de exibição obtida (assinada/pública)', 'ProfileAvatar', { signedUrl });
-
-      // Atualiza a URL no estado e notifica o componente pai com a chave
-      setAvatarUrl(signedUrl);
-      if (res?.id) {
-        onUpload?.(res.id);
+        // Remove arquivo anterior se existir e for diferente do novo
+        if (userData?.avatar_url && userData.avatar_url !== filePath && !userData.avatar_url.startsWith('http')) {
+          try {
+            await supabase.storage
+              .from(STORAGE_BUCKETS.AVATARS)
+              .remove([userData.avatar_url]);
+            logDebug('Arquivo anterior removido', { context: 'ProfileAvatar', path: userData.avatar_url });
+          } catch (removeError) {
+            // Não falha o upload se não conseguir remover o anterior
+            logError('Erro ao remover arquivo anterior', { context: 'ProfileAvatar', error: removeError });
+          }
+        }
       }
+
+      // AIDEV-NOTE: Bucket público - usa URL pública diretamente
+      const { data: publicUrlData } = supabase.storage
+        .from(STORAGE_BUCKETS.AVATARS)
+        .getPublicUrl(filePath);
+      
+      const publicUrl = publicUrlData?.publicUrl || '';
+      logDebug('URL pública obtida após upload', { context: 'ProfileAvatar', publicUrl });
+
+      // Limpa o preview temporário APÓS obter a URL pública
+      URL.revokeObjectURL(previewUrl);
+
+      // AIDEV-NOTE: Armazena no ref para evitar que o useEffect sobrescreva
+      // O ref persiste entre re-renders e não dispara o useEffect
+      recentUploadRef.current = publicUrl;
+      setAvatarUrl(publicUrl);
+      
+      // Notifica o componente pai com o caminho do arquivo
+      // O salvamento no banco acontecerá quando o usuário clicar em "Salvar"
+      onUpload?.(filePath);
       
       toast({
-        title: "Sucesso",
-        description: "Foto de perfil atualizada com sucesso!",
+        title: "Upload concluído",
+        description: "Foto enviada com sucesso! Clique em 'Salvar Alterações' para confirmar.",
       });
     } catch (error: any) {
-      logError('Erro ao fazer upload', 'ProfileAvatar', {
+      logError('Erro ao fazer upload', {
+        context: 'ProfileAvatar',
         error: error.message,
         errorCode: error.code,
         errorDetails: error.details,
@@ -233,6 +255,9 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
         description: error.message || "Ocorreu um erro ao fazer upload da imagem.",
         variant: "destructive",
       });
+      // Garante que o preview seja limpo em caso de erro
+      recentUploadRef.current = null;
+      setAvatarUrl(null);
     } finally {
       setUploading(false);
     }
@@ -244,17 +269,14 @@ export function ProfileAvatar({ url, onUpload, onRemove }: ProfileAvatarProps) {
 
   async function handleRemove() {
     try {
-      if (!url) {
-        setAvatarUrl(null);
-        onRemove?.();
-        return;
-      }
+      // Limpa o ref e estado local de upload
+      recentUploadRef.current = null;
+      setAvatarUrl(null);
       onRemove?.();
       toast({
         title: "Foto removida",
         description: "Seu avatar foi removido.",
       });
-      setAvatarUrl(null);
     } catch (error: any) {
       toast({
         title: "Erro ao remover",

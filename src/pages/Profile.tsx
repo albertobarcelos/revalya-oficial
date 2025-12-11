@@ -20,6 +20,7 @@ export default function Profile() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<Partial<Profile>>({});
+  const [pendingAvatarPath, setPendingAvatarPath] = useState<string | null>(null); // Avatar pendente de salvar
   const { currentTenant, hasAccess, accessError } = useTenantAccessGuard();
 
   const profileQuery = useSecureTenantQuery(
@@ -33,28 +34,16 @@ export default function Profile() {
         .eq('id', user.id)
         .maybeSingle();
       if (error) throw error;
-      let avatarDisplayPath: string | null = null;
-      const rawAvatar = (data as Profile)?.avatar_url as string | null;
-      if (rawAvatar) {
-        const isUuid = /^[0-9a-fA-F-]{36}$/.test(rawAvatar);
-        if (isUuid) {
-          const { data: ua } = await client
-            .from('user_avatars')
-            .select('file_path')
-            .eq('id', rawAvatar)
-            .eq('user_id', user.id)
-            .eq('tenant_id', tenantId)
-            .maybeSingle();
-          avatarDisplayPath = ua?.file_path || null;
-        } else {
-          avatarDisplayPath = rawAvatar;
-        }
-      }
+      
+      // AIDEV-NOTE: avatar_url agora é diretamente o caminho do arquivo (TEXT)
+      const avatarDisplayPath = (data as Profile)?.avatar_url as string | null;
+      
       const profileData = {
         ...data,
         email: user.email || data?.email,
         company_name: (data as any)?.metadata?.company_name ?? null,
-      } as Partial<Profile>;
+        metadata: (data as any)?.metadata,
+      } as Partial<Profile & { metadata?: any }>;
       return { user, profileData, avatarDisplayPath };
     },
     { enabled: hasAccess && !!currentTenant?.id, staleTime: 5 * 60 * 1000 }
@@ -78,7 +67,7 @@ export default function Profile() {
         user_role: 'USER' as any,
         active: true,
         preferences: {},
-        metadata: { company_name: null } as any,
+        // metadata será inserido diretamente no banco, não faz parte do tipo Profile
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -88,60 +77,14 @@ export default function Profile() {
           profileQuery.refetch();
         },
         onError: (err: Error) => {
-          logError("Erro ao criar usuário", "Profile", err);
+          logError("Erro ao criar usuário", { context: "Profile", error: err });
           toast({ title: "Erro", description: err.message || "Erro ao criar perfil", variant: "destructive" });
         }
       });
     }
   }, [profileQuery.isLoading, profileQuery.data, currentTenant?.id]);
 
-  const reconcileAvatarMapping = useSecureTenantMutation(
-    async (client, tenantId, vars: { userId: string; filePath: string }) => {
-      const { data: existingActive } = await client
-        .from('user_avatars')
-        .select('id, file_path')
-        .eq('user_id', vars.userId)
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (existingActive?.id) {
-        const { error } = await client
-          .from('user_avatars')
-          .update({
-            file_path: vars.filePath,
-            file_type: 'image/*',
-            file_size: 0,
-            uploaded_at: new Date().toISOString(),
-            is_active: true,
-          })
-          .eq('id', existingActive.id);
-        if (error) throw error;
-      } else {
-        const { error } = await client
-          .from('user_avatars')
-          .insert({
-            user_id: vars.userId,
-            tenant_id: tenantId,
-            file_path: vars.filePath,
-            file_type: 'image/*',
-            file_size: 0,
-            uploaded_at: new Date().toISOString(),
-            is_active: true,
-          });
-        if (error) throw error;
-      }
-      return true;
-    }
-  );
-
-  useEffect(() => {
-    const fp = profileQuery.data?.avatarDisplayPath;
-    const userId = profileQuery.data?.user?.id;
-    if (fp && !fp.startsWith('http') && currentTenant?.id && userId) {
-      reconcileAvatarMapping.mutate({ userId, filePath: fp });
-    }
-  }, [profileQuery.data, currentTenant?.id]);
+  // AIDEV-NOTE: Removida lógica de reconciliação - não é mais necessária
 
   const createUserIfMissing = useSecureTenantMutation(
     async (client, tenantId, newUser: Partial<Profile>) => {
@@ -154,18 +97,38 @@ export default function Profile() {
   );
 
   const updateAvatar = useSecureTenantMutation(
-    async (client, tenantId, avatarId: string) => {
+    async (client, tenantId, filePath: string) => {
       const { data: { user } } = await client.auth.getUser();
       if (!user) throw new Error("Usuário não encontrado");
+
+      // AIDEV-NOTE: Antes de atualizar, remover o avatar antigo do storage, se existir
+      const { data: currentProfile } = await client
+        .from('users')
+        .select('avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      if (currentProfile?.avatar_url && currentProfile.avatar_url !== filePath && !currentProfile.avatar_url.startsWith('http')) {
+        try {
+          await client.storage
+            .from(STORAGE_BUCKETS.AVATARS)
+            .remove([currentProfile.avatar_url]);
+          logDebug('Avatar anterior removido do storage', { context: 'Profile', path: currentProfile.avatar_url });
+        } catch (removeError) {
+          // Não falha a atualização se não conseguir remover o anterior
+          logError('Erro ao remover avatar anterior do storage', { context: 'Profile', error: removeError });
+        }
+      }
+
       const { error } = await client
         .from('users')
         .update({ 
-          avatar_url: avatarId,
+          avatar_url: filePath,  // AIDEV-NOTE: Agora armazena diretamente o caminho do arquivo
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
       if (error) throw error;
-      return avatarId;
+      return filePath;
     },
     {
       onSuccess: () => {
@@ -173,50 +136,41 @@ export default function Profile() {
         profileQuery.refetch();
       },
       onError: (err: Error) => {
-        logError("Erro ao atualizar avatar", "Profile", err);
+        logError("Erro ao atualizar avatar", { context: "Profile", error: err });
         toast({ title: "Erro", description: err.message || "Erro ao atualizar foto de perfil", variant: "destructive" });
       }
     }
   );
 
-  const handleAvatarUpload = async (avatarId: string) => {
-    try {
-      await updateAvatar.mutateAsync(avatarId);
-      setProfile(prev => ({ 
-        ...prev, 
-        avatar_url: avatarId,
-        updated_at: new Date().toISOString()
-      }));
-    } catch (error: any) {
-      logError("Erro ao atualizar avatar", "Profile", error);
-      toast({ title: "Erro", description: error.message || "Erro ao atualizar foto de perfil", variant: "destructive" });
-    }
+  // AIDEV-NOTE: Agora apenas armazena o caminho pendente, não salva no banco imediatamente
+  const handleAvatarUpload = (filePath: string) => {
+    setPendingAvatarPath(filePath);
+    setProfile(prev => ({ 
+      ...prev, 
+      avatar_url: filePath, // Atualiza apenas no estado local
+    }));
   };
 
   const removeAvatar = useSecureTenantMutation(
     async (client, tenantId) => {
       const { data: { user } } = await client.auth.getUser();
       if (!user) throw new Error("Usuário não encontrado");
-      const currentAvatarId = profile.avatar_url || null;
-      if (currentAvatarId && /^[0-9a-fA-F-]{36}$/.test(currentAvatarId)) {
-        const { data: ua } = await client
-          .from('user_avatars')
-          .select('id, file_path')
-          .eq('id', currentAvatarId)
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (ua?.file_path) {
+      
+      // AIDEV-NOTE: Remove arquivo do storage se existir
+      const currentAvatarPath = profile.avatar_url || null;
+      if (currentAvatarPath && !currentAvatarPath.startsWith('http')) {
+        try {
           await client.storage
             .from(STORAGE_BUCKETS.AVATARS)
-            .remove([ua.file_path]);
-        }
-        if (ua?.id) {
-          await client
-            .from('user_avatars')
-            .delete()
-            .eq('id', ua.id);
+            .remove([currentAvatarPath]);
+          logDebug('Arquivo de avatar removido do storage', { context: 'Profile', path: currentAvatarPath });
+        } catch (removeError) {
+          // Não falha a remoção se não conseguir remover do storage
+            logError('Erro ao remover arquivo do storage', { context: 'Profile', error: removeError });
         }
       }
+      
+      // Remove referência na tabela users
       const { error } = await client
         .from('users')
         .update({ 
@@ -233,7 +187,7 @@ export default function Profile() {
         profileQuery.refetch();
       },
       onError: (err: Error) => {
-        logError("Erro ao remover avatar", "Profile", err);
+        logError("Erro ao remover avatar", { context: "Profile", error: err });
         toast({ title: "Erro", description: err.message || "Erro ao remover foto de perfil", variant: "destructive" });
       }
     }
@@ -247,9 +201,17 @@ export default function Profile() {
         avatar_url: null,
         updated_at: new Date().toISOString()
       }));
-    } catch (error: never) {
-      logError("Erro ao remover avatar", "Profile", error);
-      toast({ title: "Erro", description: error.message || "Erro ao remover foto de perfil", variant: "destructive" });
+      setPendingAvatarPath(null); // Limpa o pendente ao remover
+      
+      // AIDEV-NOTE: Dispara evento customizado para atualizar Sidebar
+      window.dispatchEvent(new CustomEvent('profile-avatar-updated', {
+        detail: { avatarPath: null }
+      }));
+      logDebug('Evento de remoção de avatar disparado', { context: 'Profile' });
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logError("Erro ao remover avatar", { context: "Profile", error: err });
+      toast({ title: "Erro", description: err.message || "Erro ao remover foto de perfil", variant: "destructive" });
     }
   };
 
@@ -285,11 +247,30 @@ export default function Profile() {
                   url={profileQuery.data?.avatarDisplayPath || undefined}
                   onUpload={handleAvatarUpload}
                   onRemove={handleAvatarRemove}
+                  pendingAvatarPath={pendingAvatarPath}
                 />
               </div>
               <ProfileForm 
                 profile={profile}
                 onSave={async (updatedProfile) => {
+                  // AIDEV-NOTE: Se há avatar pendente, salva no banco junto com os outros dados
+                  if (pendingAvatarPath) {
+                    try {
+                      await updateAvatar.mutateAsync(pendingAvatarPath);
+                      setPendingAvatarPath(null); // Limpa o pendente após salvar
+                      
+                      // AIDEV-NOTE: Dispara evento customizado para atualizar Sidebar
+                      window.dispatchEvent(new CustomEvent('profile-avatar-updated', {
+                        detail: { avatarPath: pendingAvatarPath }
+                      }));
+                      logDebug('Evento de atualização de avatar disparado', { context: 'Profile' });
+                    } catch (error: unknown) {
+                      const err = error instanceof Error ? error : new Error(String(error));
+                      logError("Erro ao salvar avatar", { context: "Profile", error: err });
+                      toast({ title: "Erro", description: "Erro ao salvar foto de perfil", variant: "destructive" });
+                      throw err; // Propaga o erro para não salvar os outros dados
+                    }
+                  }
                   setProfile(prev => ({ ...prev, ...updatedProfile }));
                   await profileQuery.refetch();
                 }}
