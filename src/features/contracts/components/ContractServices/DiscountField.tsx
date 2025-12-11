@@ -39,11 +39,16 @@ export function DiscountField({
 }: DiscountFieldProps) {
   // AIDEV-NOTE: Estado local para controle do input - evita problemas de digitação
   const [inputValue, setInputValue] = useState('');
+  // AIDEV-NOTE: Flag para indicar que o usuário está digitando - evita reset do input
+  const [isUserTyping, setIsUserTyping] = useState(false);
   
   // AIDEV-NOTE: CORREÇÃO - Sincronizar valor externo com input local
-  // Agora sincroniza quando discount_percentage, discount_amount ou discount_type mudam
+  // Só sincroniza quando o usuário NÃO está digitando (evita reset durante digitação)
   // IMPORTANTE: Isso garante que ao carregar um serviço para edição, o desconto seja exibido corretamente
   useEffect(() => {
+    // AIDEV-NOTE: Não sincronizar enquanto o usuário está digitando
+    if (isUserTyping) return;
+    
     if (discountData.discount_type === 'percentage') {
       const value = discountData.discount_percentage || 0;
       // AIDEV-NOTE: Sempre atualizar o input, mesmo se for 0, para garantir sincronização
@@ -53,10 +58,11 @@ export function DiscountField({
       // AIDEV-NOTE: Formatar valor fixo com vírgula para exibição brasileira
       setInputValue(value > 0 ? value.toFixed(2).replace('.', ',') : '');
     }
-  }, [discountData.discount_type, discountData.discount_percentage, discountData.discount_amount]); // AIDEV-NOTE: Sincronizar quando qualquer valor de desconto mudar
+  }, [discountData.discount_type, discountData.discount_percentage, discountData.discount_amount, isUserTyping]); // AIDEV-NOTE: Sincronizar quando qualquer valor de desconto mudar
 
   // Handler para mudança de tipo de desconto
   const handleTypeChange = (value: DiscountType) => {
+    setIsUserTyping(false); // Reset flag ao mudar tipo
     setInputValue('');
     onDiscountChange({ 
       discount_type: value, 
@@ -64,6 +70,16 @@ export function DiscountField({
       discount_percentage: 0,
       discount_amount: 0
     });
+  };
+
+  // AIDEV-NOTE: Handler para início de digitação (focus)
+  const handleFocus = () => {
+    setIsUserTyping(true);
+  };
+
+  // AIDEV-NOTE: Handler para fim de digitação (blur)
+  const handleBlur = () => {
+    setIsUserTyping(false);
   };
 
   // Handler para mudança de valor percentual
@@ -140,39 +156,51 @@ export function DiscountField({
         </Label>
         
         {discountData.discount_type === 'percentage' ? (
-          <Input 
-            id="discountValue"
-            type="number"
-            min={0}
-            max={100}
-            step="0.01"
-            value={inputValue}
-            onChange={handlePercentageChange}
-            onBlur={(e) => {
-              // AIDEV-NOTE: Validação adicional ao sair do campo
-              const value = parseFloat(e.target.value) || 0;
-              if (value > 100) {
-                setInputValue('100');
-                onDiscountChange({ 
-                  discount_percentage: 100,
-                  discount_value: 100,
-                  discount_amount: 0
-                });
-              }
-            }}
-            placeholder="Ex: 10"
-            disabled={disabled}
-          />
+          <div className="relative">
+            <Input 
+              id="discountValue"
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={inputValue}
+              onChange={handlePercentageChange}
+              onFocus={handleFocus}
+              onBlur={(e) => {
+                handleBlur();
+                // AIDEV-NOTE: Validação adicional ao sair do campo
+                const value = parseFloat(e.target.value) || 0;
+                if (value > 100) {
+                  setInputValue('100');
+                  onDiscountChange({ 
+                    discount_percentage: 100,
+                    discount_value: 100,
+                    discount_amount: 0
+                  });
+                }
+              }}
+              placeholder="Ex: 10"
+              disabled={disabled}
+              className="text-center pr-8"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+          </div>
         ) : (
-          <Input
-            id="discountValue"
-            type="text"
-            inputMode="decimal"
-            value={inputValue}
-            onChange={handleAmountChange}
-            placeholder="Ex: 100,00"
-            disabled={disabled}
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
+            <Input
+              id="discountValue"
+              type="text"
+              inputMode="decimal"
+              value={inputValue}
+              onChange={handleAmountChange}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              placeholder="0,00"
+              disabled={disabled}
+              className="text-center pl-10"
+            />
+          </div>
         )}
         
         <p className="text-xs text-muted-foreground">
