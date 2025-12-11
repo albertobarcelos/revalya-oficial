@@ -29,8 +29,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 
 import { ContractFormValues } from "../schema/ContractFormSchema";
-import { ContractServices } from "./ContractServices";
-import { ContractProducts } from "./ContractProducts";
+// AIDEV-NOTE: Import da nova estrutura refatorada
+import { ContractServices } from '@/features/contracts/components/ContractServices';
+// AIDEV-NOTE: Import da nova estrutura refatorada
+import { ContractProducts } from '@/features/contracts/components/ContractProducts';
 import { ContractDiscounts } from "./ContractDiscounts";
 
 interface ContractTabsProps {

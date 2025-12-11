@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard, Plus, Tags } from 'lucide-react';
+import { Search, Filter, X, Calendar, DollarSign, FileText, Plus, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,9 +24,6 @@ interface KanbanFiltersProps {
   onFilterChange: (filters: KanbanFilters) => void;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
-  // AIDEV-NOTE: Novas props para integrar ação de seleção de faturamento no mesmo componente
-  onToggleSelectionMode?: () => void;
-  isSelectionMode?: boolean;
   isLoading?: boolean;
   // AIDEV-NOTE: Prop para abrir modal de faturamento avulso
   onOpenStandaloneBilling?: () => void;
@@ -49,8 +46,6 @@ export function KanbanFilters({
   onFilterChange,
   onClearFilters,
   hasActiveFilters,
-  onToggleSelectionMode,
-  isSelectionMode = false,
   isLoading = false,
   onOpenStandaloneBilling
 }: KanbanFiltersProps) {
@@ -129,19 +124,6 @@ export function KanbanFilters({
                 <Plus className="h-4 w-4" />
                 <span className="hidden sm:inline">Faturamento Avulso</span>
                 <span className="sm:hidden">Avulso</span>
-              </Button>
-            )}
-
-            {/* AIDEV-NOTE: Botão integrado de seleção para faturar */}
-            {onToggleSelectionMode && (
-              <Button
-                variant="outline"
-                onClick={onToggleSelectionMode}
-                disabled={isLoading}
-                className="flex items-center space-x-2"
-              >
-                <CreditCard className="h-4 w-4" />
-                <span>{isSelectionMode ? 'Cancelar Seleção' : 'Faturar'}</span>
               </Button>
             )}
           </div>

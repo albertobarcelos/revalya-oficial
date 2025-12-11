@@ -263,15 +263,18 @@ export function useBillingKanban() {
       }
 
       // AIDEV-NOTE: Buscar order_number em lote para períodos standalone que não têm
+      // AIDEV-NOTE: Agora usa a tabela unificada contract_billing_periods com is_standalone=true
       if (standalonePeriodsNeedingOrderNumber.length > 0) {
         console.log(`🔍 [DEBUG] Buscando order_number para ${standalonePeriodsNeedingOrderNumber.length} períodos standalone...`);
         
         try {
+          // AIDEV-NOTE: Buscar na tabela unificada contract_billing_periods
           const { data: standalonePeriodsWithOrderNumber, error: standaloneOrderNumberError } = await supabase
-            .from('standalone_billing_periods')
+            .from('contract_billing_periods')
             .select('id, order_number')
             .in('id', standalonePeriodsNeedingOrderNumber)
-            .eq('tenant_id', tenantId);
+            .eq('tenant_id', tenantId)
+            .eq('is_standalone', true); // AIDEV-NOTE: Filtrar apenas standalone
 
           if (!standaloneOrderNumberError && standalonePeriodsWithOrderNumber) {
             // AIDEV-NOTE: Atualizar contracts com order_number encontrado

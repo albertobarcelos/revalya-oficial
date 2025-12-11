@@ -429,11 +429,11 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
       return data
     },
     {
+      // AIDEV-NOTE: CORREÇÃO - Removido toast duplicado
+      // O toast de sucesso já é exibido em ContractFormActions.tsx
+      // Não há necessidade de exibir outro toast aqui
       onSuccess: () => {
-        toast({
-          title: "Sucesso!",
-          description: "Contrato atualizado com sucesso!",
-        })
+        // Toast removido - já exibido em ContractFormActions.tsx
       },
       // AIDEV-NOTE: Invalidar cache do kanban de faturamento quando contrato é atualizado
       // Mudanças no contrato podem afetar sua posição ou dados no kanban

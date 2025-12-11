@@ -138,15 +138,14 @@ export function useContractsBackgroundRefresh(forceRefreshContracts: () => Promi
 
   /**
    * Recarrega a lista de contratos após salvar um contrato
-   * Mostra feedback discreto ao usuário
+   * AIDEV-NOTE: CORREÇÃO - Removido toast de atualização
+   * O toast de sucesso já é exibido em ContractFormActions.tsx
+   * Não há necessidade de mostrar outro toast verde ao atualizar a lista
    */
   const refreshAfterSave = useCallback(async (isCreate: boolean = false) => {
-    const message = isCreate 
-      ? 'Novo contrato adicionado à lista' 
-      : 'Contrato atualizado na lista';
-    
-    await executeVisibleRefresh(forceRefreshContracts, message);
-  }, [executeVisibleRefresh, forceRefreshContracts]);
+    // AIDEV-NOTE: Usar refresh silencioso para não exibir toast desnecessário
+    await executeSilentRefresh(forceRefreshContracts);
+  }, [executeSilentRefresh, forceRefreshContracts]);
 
   /**
    * Recarrega a lista de contratos silenciosamente

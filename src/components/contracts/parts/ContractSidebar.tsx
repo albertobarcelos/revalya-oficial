@@ -14,7 +14,9 @@ import {
   Calculator,
   TrendingUp,
   Percent,
-  Receipt
+  Receipt,
+  Package,
+  Briefcase
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -25,6 +27,16 @@ interface ContractSidebarProps {
     tax: number;
     costs: number;
     total: number;
+    // Detalhamento por tipo
+    services?: {
+      subtotal: number;
+      discount: number;
+      costs: number;
+    };
+    products?: {
+      subtotal: number;
+      discount: number;
+    };
   };
   onBilling?: () => void;
   contractId?: string;
@@ -50,31 +62,88 @@ export function ContractSidebar({ totalValues, onBilling, contractId }: Contract
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
+            {/* AIDEV-NOTE: Seção de Serviços */}
+            {totalValues.services && totalValues.services.subtotal > 0 && (
+              <>
+                <div className="p-2.5 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Serviços</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="font-medium">{formatCurrency(totalValues.services.subtotal)}</span>
+                    </div>
+                    {totalValues.services.discount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Descontos</span>
+                        <span className="font-medium text-orange-600">-{formatCurrency(totalValues.services.discount)}</span>
+                      </div>
+                    )}
+                    {totalValues.services.costs > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Custos</span>
+                        <span className="font-medium text-destructive">{formatCurrency(totalValues.services.costs)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {/* AIDEV-NOTE: Seção de Produtos */}
+            {totalValues.products && totalValues.products.subtotal > 0 && (
+              <>
+                <div className="p-2.5 bg-purple-50/50 dark:bg-purple-950/20 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Produtos</span>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="font-medium">{formatCurrency(totalValues.products.subtotal)}</span>
+                    </div>
+                    {totalValues.products.discount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Descontos</span>
+                        <span className="font-medium text-orange-600">-{formatCurrency(totalValues.products.discount)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            <Separator />
+            
+            {/* AIDEV-NOTE: Resumo Geral */}
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
-                Subtotal
+                Subtotal Geral
               </span>
               <span className="font-medium text-foreground">{formatCurrency(totalValues.subtotal)}</span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Custos
+                <Percent className="h-4 w-4" />
+                Descontos Totais
               </span>
-              <span className="font-medium text-destructive">
-                {formatCurrency(totalValues.costs)}
+              <span className="font-medium text-orange-600">
+                -{formatCurrency(totalValues.discount)}
               </span>
             </div>
             
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground flex items-center gap-2">
-                <Percent className="h-4 w-4" />
-                Descontos
+                <DollarSign className="h-4 w-4" />
+                Custos Totais
               </span>
-              <span className="font-medium text-foreground">
-                -{formatCurrency(totalValues.discount)}
+              <span className="font-medium text-destructive">
+                {formatCurrency(totalValues.costs)}
               </span>
             </div>
             

@@ -614,7 +614,7 @@ export function ContractBasicInfo({
                   <FieldSkeleton visible={isFieldLoading("initial_date")} />
                   <Popover open={openInitialDatePicker} onOpenChange={setOpenInitialDatePicker}>
                     <div className={cn(
-                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      'grid grid-cols-[1fr_48px] items-center w-full rounded-md border mt-1',
                       isError ? 'border-destructive' : 'border-input'
                     )}>
                       <FormControl>
@@ -654,11 +654,11 @@ export function ContractBasicInfo({
                         <Button
                           type="button"
                           variant="ghost"
-                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          className="h-9 w-12 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
                           disabled={isFieldLoading('initial_date')}
                           aria-label="Abrir calendário"
                         >
-                          <CalendarIcon className="h-4 w-4" />
+                          <CalendarIcon className="h-6 w-6" />
                         </Button>
                       </PopoverTrigger>
                     </div>
@@ -811,7 +811,7 @@ export function ContractBasicInfo({
                   <FieldSkeleton visible={isFieldLoading("final_date")} />
                   <Popover open={openFinalDatePicker} onOpenChange={setOpenFinalDatePicker}>
                     <div className={cn(
-                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      'grid grid-cols-[1fr_48px] items-center w-full rounded-md border mt-1',
                       isError ? 'border-destructive' : 'border-input',
                       !initialDate ? 'opacity-70 cursor-not-allowed' : ''
                     )}>
@@ -860,11 +860,11 @@ export function ContractBasicInfo({
                         <Button
                           type="button"
                           variant="ghost"
-                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          className="h-9 w-12 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
                           disabled={isFieldLoading('final_date') || !initialDate}
                           aria-label="Abrir calendário"
                         >
-                          <CalendarIcon className="h-4 w-4" />
+                          <CalendarIcon className="h-6 w-6" />
                         </Button>
                       </PopoverTrigger>
                     </div>

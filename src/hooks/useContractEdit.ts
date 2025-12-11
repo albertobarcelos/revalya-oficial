@@ -231,6 +231,7 @@ export function useContractEdit(): UseContractEditReturn {
           // AIDEV-NOTE: CORREÇÃO - Incluir cost_price do banco de dados
           cost_price: service.cost_price || 0,
           discount_percentage: service.discount_percentage,
+          discount_amount: service.discount_amount || 0, // AIDEV-NOTE: CORREÇÃO - Incluir discount_amount do banco
           tax_rate: service.tax_rate,
           total_amount: service.total_amount,
           total: service.total_amount || (service.quantity * service.unit_price), // Garantir campo 'total'
@@ -285,6 +286,7 @@ export function useContractEdit(): UseContractEditReturn {
           quantity: product.quantity,
           unit_price: product.unit_price,
           discount_percentage: product.discount_percentage,
+          discount_amount: product.discount_amount || 0, // AIDEV-NOTE: CORREÇÃO - Incluir discount_amount do banco
           tax_rate: product.tax_rate,
           total_amount: product.total_amount,
           total: product.total_amount || (product.quantity * product.unit_price), // Garantir campo 'total'
