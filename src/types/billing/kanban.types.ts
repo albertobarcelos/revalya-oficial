@@ -45,10 +45,8 @@ export const COLUMN_TO_STATUS: Record<KanbanColumnId, ContractStatus> = {
  */
 export interface KanbanCardProps {
   contract: KanbanContract;
-  isDragging?: boolean;
   columnId?: KanbanColumnId;
   onViewDetails: (periodId: string, isStandalone?: boolean) => void;
-  dragHandleProps?: Record<string, unknown>;
   isSelected?: boolean;
   onSelectionChange?: (periodId: string, selected: boolean) => void;
   showCheckbox?: boolean;
@@ -70,6 +68,8 @@ export interface KanbanColumnProps {
   itemsPerPage?: number;
   onLoadMore?: (columnId: string) => void;
   hasMore?: boolean;
+  /** Componente opcional para renderizar no rodapé da coluna */
+  footer?: React.ReactNode;
 }
 
 /**

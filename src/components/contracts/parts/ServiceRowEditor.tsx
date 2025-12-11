@@ -56,12 +56,19 @@ export function ServiceRowEditor({ service, onSave, onCancel }: ServiceRowEditor
   const calculateTotal = () => {
     const quantity = Number(editedService.quantity) || 0;
     const unitPrice = Number(editedService.unit_price) || 0;
-    const discountPercentage = Number(editedService.discount_percentage) || 0;
+    let discountPercentage = Number(editedService.discount_percentage) || 0;
     const discountAmount = Number(editedService.discount_amount) || 0;
     const taxRate = Number(editedService.tax_rate) || 0;
     
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // Se o valor for <= 1, está em decimal, usar diretamente
+    // Se o valor for > 1, está em percentual (dados antigos), converter para decimal
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
     const subtotal = quantity * unitPrice;
-    const discount = (subtotal * discountPercentage / 100) + discountAmount;
+    const discount = (subtotal * discountPercentage) + discountAmount; // AIDEV-NOTE: Usar decimal diretamente (não dividir por 100)
     const totalAfterDiscount = Math.max(0, subtotal - discount);
     const taxAmount = totalAfterDiscount * (taxRate / 100);
     const total = totalAfterDiscount + taxAmount;

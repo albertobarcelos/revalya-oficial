@@ -86,7 +86,13 @@ export function ServiceTable({
       return formatCurrency(service.discount_amount);
     }
     if (service.discount_percentage && service.discount_percentage > 0) {
-      return `${service.discount_percentage}%`;
+      // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+      // Converter para percentual para exibição (0.10 * 100 = 10%)
+      // Se o valor for > 1, já está em percentual (compatibilidade com dados antigos)
+      const percentage = service.discount_percentage > 1 
+        ? service.discount_percentage 
+        : service.discount_percentage * 100;
+      return `${percentage.toFixed(2).replace(/\.?0+$/, '')}%`;
     }
     return null;
   };

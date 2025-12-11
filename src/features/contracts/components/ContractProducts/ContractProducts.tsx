@@ -230,14 +230,23 @@ export function ContractProducts({ products }: ContractProductsProps) {
       });
       
       // Carregar dados de desconto
-      const discountPercentage = product.discount_percentage || 0;
+      // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+      // O formulário espera como percentual (10), então converter para exibição
+      let discountPercentage = product.discount_percentage || 0;
       const discountAmount = product.discount_amount || 0;
+      
+      // AIDEV-NOTE: Se discount_percentage está como decimal (<= 1), converter para percentual para exibição
+      // Se está como percentual (> 1), usar diretamente (compatibilidade com dados antigos)
+      if (discountPercentage > 0 && discountPercentage <= 1) {
+        discountPercentage = discountPercentage * 100; // Converter 0.10 para 10
+      }
+      
       const discountType = discountPercentage > 0 ? 'percentage' : (discountAmount > 0 ? 'fixed' : 'percentage');
       
       setDiscountData({
         discount_type: discountType,
         discount_value: discountType === 'percentage' ? discountPercentage : discountAmount,
-        discount_percentage: discountPercentage,
+        discount_percentage: discountPercentage, // AIDEV-NOTE: Percentual para exibição (10)
         discount_amount: discountAmount
       });
     }
@@ -266,6 +275,22 @@ export function ContractProducts({ products }: ContractProductsProps) {
       
       // Calcular total com desconto
       const subtotal = calculateSubtotal(product.unit_price, product.quantity);
+      
+      // AIDEV-NOTE: Validação de desconto antes de calcular
+      if (discountData.discount_type === 'percentage') {
+        const percentage = discountData.discount_percentage || 0;
+        if (percentage > 100) {
+          toast.error('O desconto percentual não pode ser maior que 100%');
+          return;
+        }
+      } else {
+        const fixedAmount = discountData.discount_amount || 0;
+        if (fixedAmount > subtotal) {
+          toast.error(`O desconto fixo (${formatCurrency(fixedAmount)}) não pode ser maior que o subtotal (${formatCurrency(subtotal)})`);
+          return;
+        }
+      }
+      
       let discount = 0;
       if (discountData.discount_type === 'percentage') {
         discount = calculateDiscount(subtotal, 'percentage', discountData.discount_percentage);
@@ -273,10 +298,20 @@ export function ContractProducts({ products }: ContractProductsProps) {
         discount = calculateDiscount(subtotal, 'fixed', discountData.discount_amount);
       }
       
+      // AIDEV-NOTE: CORREÇÃO - Converter desconto percentual para decimal antes de salvar
+      // O banco espera discount_percentage como decimal (0.10 para 10%), não como percentual (10)
+      let discountPercentage = 0;
+      if (discountData.discount_type === 'percentage') {
+        const percentageValue = discountData.discount_percentage || 0;
+        // Se o valor for > 1, está em percentual (10), converter para decimal (0.10)
+        // Se o valor for <= 1, já está em decimal (0.10), usar diretamente
+        discountPercentage = percentageValue > 1 ? percentageValue / 100 : percentageValue;
+      }
+      
       // Preparar produto atualizado
       const updatedProduct: SelectedProduct = {
         ...product,
-        discount_percentage: discountData.discount_type === 'percentage' ? discountData.discount_percentage : 0,
+        discount_percentage: discountPercentage, // AIDEV-NOTE: Usar decimal (0.10 para 10%)
         discount_amount: discountData.discount_type === 'fixed' ? discountData.discount_amount : 0,
         total_amount: Math.max(0, subtotal - discount),
         payment_method: mappedPaymentMethod,
@@ -577,7 +612,8 @@ export function ContractProducts({ products }: ContractProductsProps) {
                         id="quantity"
                         type="text"
                         inputMode="numeric"
-                        value={currentProduct?.quantity ?? ''}
+                        className="text-center"
+                        value={currentProduct?.quantity?.toString() ?? '1'}
                         onChange={(e) => {
                           const sanitizedValue = e.target.value.replace(/[^0-9]/g, '');
                           const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);

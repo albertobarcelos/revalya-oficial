@@ -10,9 +10,9 @@ import type { SelectedService } from '../types';
 import { parseCurrencyInput, parseIntegerInput } from '../utils';
 
 interface DraftState {
-  unitPrice: { input: string; draft: number | null };
-  costPrice: { input: string; draft: number | null };
-  quantity: { input: string; draft: number | null };
+  unitPrice: { input: string | null; draft: number | null };
+  costPrice: { input: string | null; draft: number | null };
+  quantity: { input: string | null; draft: number | null };
 }
 
 interface UseDraftInputsReturn {
@@ -45,9 +45,9 @@ interface UseDraftInputsReturn {
 }
 
 const DEFAULT_DRAFT_STATE: DraftState = {
-  unitPrice: { input: '', draft: null },
-  costPrice: { input: '', draft: null },
-  quantity: { input: '', draft: null }
+  unitPrice: { input: null, draft: null },
+  costPrice: { input: null, draft: null },
+  quantity: { input: null, draft: null }
 };
 
 /**
@@ -153,35 +153,117 @@ export function useDraftInputs(): UseDraftInputsReturn {
 
   // === QUANTITY ===
   const handleQuantityChange = useCallback((value: string) => {
+    // AIDEV-NOTE: CORREÇÃO - Permitir campo vazio para edição
+    // Remover apenas caracteres não numéricos, mas permitir string vazia
     const sanitizedValue = value.replace(/[^0-9]/g, '');
-    const newValue = sanitizedValue === '' ? null : parseIntegerInput(sanitizedValue, 1);
+    
+    // Se estiver vazio, permitir (não forçar valor mínimo ainda)
+    if (sanitizedValue === '') {
+      setDraftState(prev => ({
+        ...prev,
+        quantity: { 
+          input: '', 
+          draft: null 
+        }
+      }));
+      return;
+    }
+    
+    // Se tiver valor, parsear e garantir mínimo de 1
+    const newValue = parseIntegerInput(sanitizedValue, 1);
     
     setDraftState(prev => ({
       ...prev,
       quantity: { 
         input: sanitizedValue, 
-        draft: newValue && !isNaN(newValue) ? Math.max(1, newValue) : null 
+        draft: !isNaN(newValue) ? Math.max(1, newValue) : null 
       }
     }));
   }, []);
 
   const handleQuantityBlur = useCallback(() => {
-    setDraftState(prev => ({
-      ...prev,
-      quantity: { ...prev.quantity, input: '' }
-    }));
+    // AIDEV-NOTE: CORREÇÃO - Validar valor no blur, mas manter o que foi digitado
+    // Se o campo estiver vazio ou inválido, usar valor padrão de 1
+    setDraftState(prev => {
+      const currentDraft = prev.quantity.draft;
+      const currentInput = prev.quantity.input;
+      
+      // Se não há draft e o input está vazio ou null, usar padrão 1
+      if (currentDraft === null && (currentInput === '' || currentInput === null)) {
+        return {
+          ...prev,
+          quantity: { 
+            input: '1', 
+            draft: 1 
+          }
+        };
+      }
+      
+      // Se há draft válido, manter
+      if (currentDraft !== null && currentDraft >= 1) {
+        return {
+          ...prev,
+          quantity: { 
+            input: currentDraft.toString(), 
+            draft: currentDraft 
+          }
+        };
+      }
+      
+      // Se o input tem valor mas o draft é inválido, tentar parsear
+      if (currentInput !== '' && currentInput !== null) {
+        const parsed = parseIntegerInput(currentInput, 1);
+        const validValue = Math.max(1, parsed);
+        return {
+          ...prev,
+          quantity: { 
+            input: validValue.toString(), 
+            draft: validValue 
+          }
+        };
+      }
+      
+      // Fallback: usar 1
+      return {
+        ...prev,
+        quantity: { 
+          input: '1', 
+          draft: 1 
+        }
+      };
+    });
   }, []);
 
   const handleQuantityFocus = useCallback((currentService: SelectedService | undefined) => {
-    const value = currentService?.quantity ?? 1;
-    
-    setDraftState(prev => ({
-      ...prev,
-      quantity: { 
-        input: value === 0 ? '' : value.toString(), 
-        draft: typeof value === 'number' ? value : null 
+    // AIDEV-NOTE: CORREÇÃO - Preservar o draft atual se existir
+    // Só usar o valor do serviço se não houver draft sendo editado
+    setDraftState(prev => {
+      // Se já há um input sendo editado (não null), manter
+      if (prev.quantity.input !== null) {
+        return prev;
       }
-    }));
+      
+      // Se há um draft válido, usar ele
+      if (prev.quantity.draft !== null && prev.quantity.draft >= 1) {
+        return {
+          ...prev,
+          quantity: { 
+            input: prev.quantity.draft.toString(), 
+            draft: prev.quantity.draft 
+          }
+        };
+      }
+      
+      // Caso contrário, usar o valor do serviço
+      const value = currentService?.quantity ?? 1;
+      return {
+        ...prev,
+        quantity: { 
+          input: value === 0 ? '' : value.toString(), 
+          draft: typeof value === 'number' ? value : 1 
+        }
+      };
+    });
   }, []);
 
   // === GETTERS ===
@@ -209,19 +291,19 @@ export function useDraftInputs(): UseDraftInputsReturn {
   const loadFromService = useCallback((service: SelectedService) => {
     setDraftState({
       unitPrice: {
-        input: '',
+        input: null,
         draft: typeof service.unit_price === 'number'
           ? service.unit_price
           : (typeof service.default_price === 'number' ? service.default_price : null)
       },
       costPrice: {
-        input: '',
+        input: null,
         draft: service.cost_price !== undefined && service.cost_price !== null
           ? service.cost_price
           : null
       },
       quantity: {
-        input: '',
+        input: null,
         draft: typeof service.quantity === 'number' ? service.quantity : 1
       }
     });

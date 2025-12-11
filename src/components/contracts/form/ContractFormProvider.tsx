@@ -146,12 +146,18 @@ const calculateTotals = (
     
     // Verificar se tem desconto fixo ou percentual
     const discountAmount = (service as any).discount_amount || 0;
-    const discountPercentage = service.discount_percentage || 0;
+    let discountPercentage = service.discount_percentage || 0;
     
-    // Priorizar desconto fixo se existir, senão calcular por percentual
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // Se o valor for > 1, está em percentual (dados antigos), converter para decimal
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
+    // Priorizar desconto fixo se existir, senão calcular por percentual (usar decimal diretamente)
     const serviceDiscount = discountAmount > 0 
       ? discountAmount 
-      : serviceTotal * (discountPercentage / 100);
+      : serviceTotal * discountPercentage; // AIDEV-NOTE: Usar decimal diretamente (não dividir por 100)
     
     return sum + serviceDiscount;
   }, 0);
@@ -164,12 +170,18 @@ const calculateTotals = (
     
     // Verificar se tem desconto fixo ou percentual
     const discountAmount = (product as any).discount_amount || 0;
-    const discountPercentage = product.discount_percentage || 0;
+    let discountPercentage = product.discount_percentage || 0;
     
-    // Priorizar desconto fixo se existir, senão calcular por percentual
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // Se o valor for > 1, está em percentual (dados antigos), converter para decimal
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
+    // Priorizar desconto fixo se existir, senão calcular por percentual (usar decimal diretamente)
     const productDiscount = discountAmount > 0 
       ? discountAmount 
-      : productTotal * (discountPercentage / 100);
+      : productTotal * discountPercentage; // AIDEV-NOTE: Usar decimal diretamente (não dividir por 100)
     
     return sum + productDiscount;
   }, 0);
@@ -182,9 +194,20 @@ const calculateTotals = (
     const quantity = service.quantity || 1;
     const unitPrice = service.unit_price || service.default_price || 0;
     const taxRate = service.tax_rate || 0;
-    const discountPercentage = service.discount_percentage || 0;
+    let discountPercentage = service.discount_percentage || 0;
+    const discountAmount = (service as any).discount_amount || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
     const serviceTotal = quantity * unitPrice;
-    const afterDiscount = serviceTotal - (serviceTotal * (discountPercentage / 100));
+    // AIDEV-NOTE: Calcular desconto (fixo ou percentual) e aplicar ao total
+    const discount = discountAmount > 0 
+      ? discountAmount 
+      : serviceTotal * discountPercentage; // Usar decimal diretamente
+    const afterDiscount = serviceTotal - discount;
     const serviceTax = afterDiscount * (taxRate / 100);
     return sum + serviceTax;
   }, 0);
@@ -194,9 +217,20 @@ const calculateTotals = (
     const quantity = product.quantity || 1;
     const unitPrice = product.price || product.unit_price || 0;
     const taxRate = product.tax_rate || 0;
-    const discountPercentage = product.discount_percentage || 0;
+    let discountPercentage = product.discount_percentage || 0;
+    const discountAmount = (product as any).discount_amount || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
     const productTotal = quantity * unitPrice;
-    const afterDiscount = productTotal - (productTotal * (discountPercentage / 100));
+    // AIDEV-NOTE: Calcular desconto (fixo ou percentual) e aplicar ao total
+    const discount = discountAmount > 0 
+      ? discountAmount 
+      : productTotal * discountPercentage; // Usar decimal diretamente
+    const afterDiscount = productTotal - discount;
     const productTax = afterDiscount * (taxRate / 100);
     return sum + productTax;
   }, 0);

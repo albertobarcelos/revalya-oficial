@@ -115,15 +115,37 @@ export function useServiceFormData(): UseServiceFormDataReturn {
     }
 
     // Carregar dados de desconto
-    const discountPercentage = service.discount_percentage || 0;
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // O formulário espera como percentual (10), então converter para exibição
+    let discountPercentage = service.discount_percentage || 0;
     const discountAmount = service.discount_amount || 0;
-    const discountType = discountPercentage > 0 ? 'percentage' : (discountAmount > 0 ? 'fixed' : 'percentage');
+    
+    // AIDEV-NOTE: Se discount_percentage está como decimal (<= 1), converter para percentual para exibição
+    // Se está como percentual (> 1), usar diretamente (compatibilidade com dados antigos)
+    if (discountPercentage > 0 && discountPercentage <= 1) {
+      discountPercentage = discountPercentage * 100; // Converter 0.10 para 10
+    }
+    
+    // AIDEV-NOTE: CORREÇÃO - Determinar tipo de desconto corretamente
+    // Priorizar desconto fixo se existir, senão usar percentual
+    // Se ambos existirem, usar o que tem valor maior (mais provável de ser o correto)
+    const discountType = discountAmount > 0 
+      ? (discountPercentage > 0 && discountPercentage > discountAmount ? 'percentage' : 'fixed')
+      : (discountPercentage > 0 ? 'percentage' : 'percentage'); // Default para percentage
     
     setDiscountData({
       discount_type: discountType,
       discount_value: discountType === 'percentage' ? discountPercentage : discountAmount,
-      discount_percentage: discountPercentage,
+      discount_percentage: discountPercentage, // AIDEV-NOTE: Percentual para exibição (10)
       discount_amount: discountAmount
+    });
+    
+    // AIDEV-NOTE: Debug log para verificar carregamento do desconto
+    console.log('🔍 [DISCOUNT] Desconto carregado do serviço:', {
+      discountType,
+      discountPercentage,
+      discountAmount,
+      discountValue: discountType === 'percentage' ? discountPercentage : discountAmount
     });
 
     // Carregar dados de impostos se existirem

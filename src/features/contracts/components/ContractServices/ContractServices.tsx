@@ -46,6 +46,7 @@ import {
   formatCurrencyDisplay,
   parseCurrencyInput
 } from '../../utils';
+import { formatCurrency } from '@/lib/utils';
 
 // Hooks customizados
 import { useServiceModal } from '../../hooks/useServiceModal';
@@ -272,6 +273,21 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       const qty = draftInputs.getQuantity(service);
       const subtotal = calculateSubtotal(unitPrice, qty);
       
+      // AIDEV-NOTE: Validação de desconto antes de calcular
+      if (formData.discountData.discount_type === 'percentage') {
+        const percentage = formData.discountData.discount_percentage || 0;
+        if (percentage > 100) {
+          toast.error('O desconto percentual não pode ser maior que 100%');
+          return;
+        }
+      } else {
+        const fixedAmount = formData.discountData.discount_amount || 0;
+        if (fixedAmount > subtotal) {
+          toast.error(`O desconto fixo (${formatCurrency(fixedAmount)}) não pode ser maior que o subtotal (${formatCurrency(subtotal)})`);
+          return;
+        }
+      }
+      
       let discount = 0;
       if (formData.discountData.discount_type === 'percentage') {
         discount = calculateDiscount(subtotal, 'percentage', formData.discountData.discount_percentage);
@@ -281,12 +297,23 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       
       const finalTotal = Math.max(0, subtotal - discount);
       
+      // AIDEV-NOTE: CORREÇÃO - Converter desconto percentual para decimal antes de salvar
+      // O banco espera discount_percentage como decimal (0.10 para 10%), não como percentual (10)
+      // O formulário salva como percentual (10), então precisamos converter para decimal (0.10)
+      let discountPercentage = 0;
+      if (formData.discountData.discount_type === 'percentage') {
+        const percentageValue = formData.discountData.discount_percentage || 0;
+        // Se o valor for > 1, está em percentual (10), converter para decimal (0.10)
+        // Se o valor for <= 1, já está em decimal (0.10), usar diretamente
+        discountPercentage = percentageValue > 1 ? percentageValue / 100 : percentageValue;
+      }
+      
       // Preparar alterações
       const serviceChanges: Partial<SelectedService> = {
         unit_price: unitPrice,
         quantity: qty,
         cost_price: draftInputs.getCostPrice(service) ?? 0,
-        discount_percentage: formData.discountData.discount_type === 'percentage' ? formData.discountData.discount_percentage : 0,
+        discount_percentage: discountPercentage, // AIDEV-NOTE: Usar decimal (0.10 para 10%)
         discount_amount: formData.discountData.discount_type === 'fixed' ? formData.discountData.discount_amount : 0,
         ...formData.financialData,
         ...formData.dueDateData,
@@ -478,7 +505,14 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           id="quantity"
                           type="text"
                           inputMode="numeric"
-                          value={draftInputs.draftState.quantity.input || (currentService?.quantity || '')}
+                          className="text-center"
+                          value={
+                            // AIDEV-NOTE: CORREÇÃO - Se input é null, não está sendo editado, usar valor do serviço
+                            // Se input é string (vazia ou não), está sendo editado, usar o input
+                            draftInputs.draftState.quantity.input !== null
+                              ? draftInputs.draftState.quantity.input
+                              : (currentService?.quantity?.toString() || '1')
+                          }
                           onChange={(e) => draftInputs.handleQuantityChange(e.target.value)}
                           onBlur={draftInputs.handleQuantityBlur}
                           onFocus={() => draftInputs.handleQuantityFocus(currentService)}

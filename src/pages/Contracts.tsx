@@ -7,7 +7,7 @@ import { NewContractForm } from "@/components/contracts/NewContractForm";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 // Removido import do VisuallyHidden - usando sr-only do Tailwind
-import { toast } from "@/components/ui/use-toast";
+// AIDEV-NOTE: Removido import de toast - não é mais necessário (toast de sucesso é exibido em ContractFormActions.tsx)
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -210,14 +210,9 @@ export default function Contracts() {
   }, [navigate, slug]);
 
   const handleContractFormSuccess = useCallback(async (contractId: string) => {
-    const isCreate = formMode === "create";
-    
-    toast({
-      title: "Sucesso!",
-      description: isCreate 
-        ? "Contrato criado com sucesso!" 
-        : "Contrato atualizado com sucesso!",
-    });
+    // AIDEV-NOTE: CORREÇÃO - Removido toast duplicado
+    // O toast de sucesso já é exibido em ContractFormActions.tsx
+    // Mantendo apenas um toast para evitar duplicação
     
     // Aguardar um momento para garantir que todas as operações do backend sejam concluídas
     await new Promise(resolve => setTimeout(resolve, 500));
