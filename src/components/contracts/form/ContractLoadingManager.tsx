@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useContractForm } from "./ContractFormProvider";
+import { ContractFormSkeleton } from "../ContractFormSkeleton";
 
 interface ContractLoadingManagerProps {
   contractId?: string;
@@ -64,20 +65,7 @@ export function ContractLoadingManager({ contractId, children }: ContractLoading
       
       {/* Mostrar skeleton completo durante carregamento inicial */}
       {isLoadingContract && contractId ? (
-        <div className="p-6 space-y-6">
-          <div className="animate-pulse">
-            <div className="h-8 w-64 bg-slate-700 rounded mb-4"></div>
-            <div className="space-y-4">
-              <div className="h-4 w-full bg-slate-700 rounded"></div>
-              <div className="h-4 w-3/4 bg-slate-700 rounded"></div>
-              <div className="h-4 w-1/2 bg-slate-700 rounded"></div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-              <div className="h-32 bg-slate-700 rounded"></div>
-              <div className="h-32 bg-slate-700 rounded"></div>
-            </div>
-          </div>
-        </div>
+        <ContractFormSkeleton />
       ) : (
         React.cloneElement(children as React.ReactElement, { 
           contract: contractData, 

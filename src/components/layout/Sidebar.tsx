@@ -1,4 +1,4 @@
-import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt } from "lucide-react";
+import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt, Activity } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -77,13 +77,53 @@ export default function Sidebar() {
    * e faz fallback para URL pública. Corrige o bucket para STORAGE_BUCKETS.AVATARS.
    */
   const getAvatarUrl = async (path: string) => {
-    try {
-      const url = await getImageUrl(STORAGE_BUCKETS.AVATARS, path, 3600);
-      setAvatarUrl(url);
-    } catch (error) {
-      logError('Erro ao obter URL da imagem', 'Sidebar', error);
+  try {
+    if (!path) {
+      setAvatarUrl(null);
+      return;
     }
-  };
+
+    // Se já é uma URL completa → usa direto
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      setAvatarUrl(path);
+      return;
+    }
+
+    // Garante que o path não é algo quebrado
+    if (path.trim() === "" || path.includes("undefined")) {
+      logError("Path inválido para avatar", "Sidebar", path);
+      setAvatarUrl(null);
+      return;
+    }
+
+    // TENTATIVA 1 — URL assinada (bucket privado)
+    const signed = await supabase.storage
+      .from(STORAGE_BUCKETS.AVATARS)
+      .createSignedUrl(path, 3600);
+
+    if (signed.data?.signedUrl) {
+      setAvatarUrl(signed.data.signedUrl);
+      return;
+    }
+
+    // TENTATIVA 2 — fallback para URL pública
+    const { data } = supabase.storage
+      .from(STORAGE_BUCKETS.AVATARS)
+      .getPublicUrl(path);
+
+    if (data?.publicUrl) {
+      setAvatarUrl(data.publicUrl);
+      return;
+    }
+
+    // Fallback final
+    setAvatarUrl(null);
+  } catch (error) {
+    logError("Erro ao resolver avatar", "Sidebar", error);
+    setAvatarUrl(null);
+  }
+};
+
 
   // Função para fazer logout
   const handleLogout = async () => {
@@ -162,11 +202,34 @@ export default function Sidebar() {
           logDebug('Usuário carregado', 'Sidebar');
           setProfile(userData);
           if (userData.avatar_url) {
-            if (userData.avatar_url.startsWith('http')) {
-              setAvatarUrl(userData.avatar_url);
-            } else {
-              await getAvatarUrl(userData.avatar_url);
+            const raw = userData.avatar_url;
+
+            // Caso seja URL completa → usa direto
+            if (raw.startsWith("http")) {
+              setAvatarUrl(raw);
+              return;
             }
+
+            // Caso seja UUID → buscar file_path no user_avatars
+            const isUuid = /^[0-9a-fA-F-]{36}$/.test(raw);
+            if (isUuid) {
+              const { data: avatarRow } = await supabase
+                .from("user_avatars")
+                .select("file_path")
+                .eq("id", raw)
+                .eq("user_id", session.user.id)
+                .maybeSingle();
+
+              if (avatarRow?.file_path) {
+                await getAvatarUrl(avatarRow.file_path);
+              } else {
+                setAvatarUrl(null);
+              }
+              return;
+            }
+
+            // Caso já seja file_path → usa direto
+            await getAvatarUrl(raw);
           }
         }
       }
@@ -260,7 +323,16 @@ export default function Sidebar() {
       children: [
         { icon: Users, label: "Clientes", path: `/${tenantSlug}/clientes` },
         { icon: LayoutGrid, label: "Serviços", path: `/${tenantSlug}/services` },
-        { icon: Package, label: "Produtos", path: `/${tenantSlug}/products` },
+        { 
+          icon: Package, 
+          label: "Produtos",
+          id: "produtos",
+          isSubmenu: true,
+          children: [
+            { icon: Package, label: "Produtos", path: `/${tenantSlug}/produtos` },
+            { icon: Activity, label: "Movimentações", path: `/${tenantSlug}/produtos/movimentacoes` },
+          ]
+        },
       ]
     },
     { 
@@ -269,8 +341,18 @@ export default function Sidebar() {
       id: "financeiro",
       isSubmenu: true,
       children: [
-              { icon: BarChart3, label: "Painel", path: `/${tenantSlug}/cobrancas` },
-              { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` }
+              { icon: BarChart3, label: "Painel de Cobrança", path: `/${tenantSlug}/cobrancas` },
+              { 
+                icon: Activity, 
+                label: "Movimentações",
+                id: "produtos",
+                isSubmenu: true,
+                children: [
+                  { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
+                  { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
+                  { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` }
+                ]
+              },
             ]
     },
     { icon: CheckSquare, label: "Tarefas", path: `/${tenantSlug}/tasks` },
@@ -281,8 +363,7 @@ export default function Sidebar() {
   ];
 
   const settingsLinks = [
-    { icon: Settings, label: "Configurações", path: `/${tenantSlug}/settings` },
-    { icon: Settings, label: "Config. Contratos", path: `/${tenantSlug}/contratos-config` },
+    { icon: Settings, label: "Configurações", path: `/${tenantSlug}/configuracoes` },
   ];
 
   const handlePortalSelection = () => {
@@ -303,7 +384,7 @@ export default function Sidebar() {
       <div
         ref={sidebarRef}
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex flex-col bg-[#0e1429] shadow-lg transition-all duration-300 ease-in-out md:relative overflow-hidden",
+          "fixed inset-y-0 left-0 z-40 flex flex-col bg-[#10002B] shadow-lg transition-all duration-300 ease-in-out md:relative overflow-hidden",
           {
             "w-64": !isCollapsed,
             "w-[68px]": isCollapsed,
@@ -350,7 +431,7 @@ export default function Sidebar() {
                   <button
                     onClick={() => toggleSubmenu(link.id)}
                     className={cn(
-                      "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                      "group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                       {
                         "text-gray-400 hover:bg-white/5 hover:text-white": true,
                         "justify-center": isCollapsed
@@ -360,12 +441,12 @@ export default function Sidebar() {
                   >
                     <link.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-300 ease-in-out" />
                     {!isCollapsed && (
-                      <>
-                        <span className="flex-1 transition-all duration-300 ease-in-out opacity-100 whitespace-nowrap overflow-hidden">
+                      <div className="flex items-center gap-1">
+                        <span className="transition-all duration-300 ease-in-out opacity-100 whitespace-nowrap overflow-hidden text-left">
                           {link.label}
                         </span>
-                        <ChevronDown className={`h-4 w-4 transition-transform ${expandedMenus.includes(link.id) ? 'rotate-180' : ''}`} />
-                      </>
+                        <ChevronDown className={`h-4 w-4 transition-transform opacity-70 group-hover:opacity-100 ${expandedMenus.includes(link.id) ? 'rotate-180' : ''}`} />
+                      </div>
                     )}
                   </button>
                   
@@ -373,22 +454,70 @@ export default function Sidebar() {
                   {!isCollapsed && expandedMenus.includes(link.id) && (
                     <div className="pl-8 mt-1 space-y-1">
                       {link.children.map((child: any) => (
-                        <Link
-                          key={child.path}
-                          to={child.path}
-                          className={cn(
-                            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
-                            {
-                              "bg-white/10 text-white font-medium": location.pathname === child.path,
-                              "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== child.path,
-                            }
-                          )}
-                        >
-                          <child.icon className="h-4 w-4 flex-shrink-0" />
-                          <span className="whitespace-nowrap overflow-hidden">
-                            {child.label}
-                          </span>
-                        </Link>
+                        child.isSubmenu ? (
+                          // Renderização de submenu aninhado
+                          <div key={`submenu-${child.id}`} className="relative">
+                            <button
+                              onClick={() => toggleSubmenu(child.id)}
+                              className={cn(
+                                "group w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                {
+                                  "text-gray-400 hover:bg-white/5 hover:text-white": true,
+                                }
+                              )}
+                            >
+                              <child.icon className="h-4 w-4 flex-shrink-0" />
+                              <div className="flex items-center gap-1">
+                                <span className="text-left whitespace-nowrap overflow-hidden">
+                                  {child.label}
+                                </span>
+                                <ChevronDown className={`h-3 w-3 transition-transform opacity-70 group-hover:opacity-100 ${expandedMenus.includes(child.id) ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+                            
+                            {/* Submenu aninhado */}
+                            {expandedMenus.includes(child.id) && (
+                              <div className="pl-6 mt-1 space-y-1">
+                                {child.children.map((grandchild: any) => (
+                                  <Link
+                                    key={grandchild.path}
+                                    to={grandchild.path}
+                                    className={cn(
+                                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                                      {
+                                        "bg-white/10 text-white font-medium": location.pathname === grandchild.path,
+                                        "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== grandchild.path,
+                                      }
+                                    )}
+                                  >
+                                    <grandchild.icon className="h-4 w-4 flex-shrink-0" />
+                                    <span className="whitespace-nowrap overflow-hidden">
+                                      {grandchild.label}
+                                    </span>
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // Renderização de link direto
+                          <Link
+                            key={child.path}
+                            to={child.path}
+                            className={cn(
+                              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
+                              {
+                                "bg-white/10 text-white font-medium": location.pathname === child.path,
+                                "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== child.path,
+                              }
+                            )}
+                          >
+                            <child.icon className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap overflow-hidden">
+                              {child.label}
+                            </span>
+                          </Link>
+                        )
                       ))}
                     </div>
                   )}
@@ -401,7 +530,7 @@ export default function Sidebar() {
                   className={cn(
                     "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                     {
-                      "bg-white/10 text-white font-medium border-l-2 border-indigo-400": location.pathname === link.path,
+                      "bg-white/10 text-white font-medium border-l-2 border-primary": location.pathname === link.path,
                       "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== link.path,
                       "justify-center": isCollapsed
                     }
@@ -431,7 +560,7 @@ export default function Sidebar() {
                 className={cn(
                   "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
                   {
-                    "bg-white/10 text-white font-medium border-l-2 border-indigo-400": location.pathname === link.path,
+                    "bg-white/10 text-white font-medium border-l-2 border-primary": location.pathname === link.path,
                     "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== link.path,
                     "justify-center": isCollapsed
                   }

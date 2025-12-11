@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard } from 'lucide-react';
+import { Search, Filter, X, Calendar, DollarSign, FileText, CreditCard, Plus, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 export interface KanbanFilters {
   search: string;
   status: string;
+  billingType: string; // AIDEV-NOTE: Novo filtro para distinguir entre Avulso e Por Contrato
   minValue: string;
   maxValue: string;
   dateRange: string;
@@ -27,6 +28,8 @@ interface KanbanFiltersProps {
   onToggleSelectionMode?: () => void;
   isSelectionMode?: boolean;
   isLoading?: boolean;
+  // AIDEV-NOTE: Prop para abrir modal de faturamento avulso
+  onOpenStandaloneBilling?: () => void;
 }
 
 /**
@@ -48,7 +51,8 @@ export function KanbanFilters({
   hasActiveFilters,
   onToggleSelectionMode,
   isSelectionMode = false,
-  isLoading = false
+  isLoading = false,
+  onOpenStandaloneBilling
 }: KanbanFiltersProps) {
   
   // AIDEV-NOTE: Estado local para controlar expansão dos filtros
@@ -58,9 +62,9 @@ export function KanbanFilters({
   const toggleExpanded = () => setIsExpanded(!isExpanded);
 
   // AIDEV-NOTE: Verificar quantidade de filtros ativos
-  // Considera 'all' como valor inativo para status e dateRange
+  // Considera 'all' como valor inativo para status, billingType e dateRange
   const activeFiltersCount = Object.entries(filters).filter(([key, value]) => {
-    if (key === 'status' || key === 'dateRange') {
+    if (key === 'status' || key === 'dateRange' || key === 'billingType') {
       return value !== '' && value !== 'all';
     }
     return value !== '';
@@ -77,7 +81,7 @@ export function KanbanFilters({
               placeholder="Buscar por cliente, contrato ou valor..."
               value={filters.search}
               onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
-              className="pl-10 border border-gray-300 focus:border-blue-500 bg-white"
+              className="pl-10 border border-gray-300 focus:border-primary bg-white"
             />
           </div>
           
@@ -88,7 +92,7 @@ export function KanbanFilters({
               className={cn(
                 "flex items-center space-x-2 border transition-all duration-200 flex-1 sm:flex-none justify-center",
                 isExpanded 
-                  ? "border-blue-300 bg-blue-100 text-blue-700" 
+                  ? "border-primary/30 bg-primary/10 text-primary" 
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
               )}
             >
@@ -96,7 +100,7 @@ export function KanbanFilters({
               <span className="hidden sm:inline">Filtros</span>
               <span className="sm:hidden">Filtrar</span>
               {activeFiltersCount > 0 && (
-                <Badge variant="secondary" className="ml-1 bg-blue-600 text-white">
+                <Badge variant="secondary" className="ml-1 bg-primary text-white">
                   {activeFiltersCount}
                 </Badge>
               )}
@@ -111,6 +115,20 @@ export function KanbanFilters({
               >
                 <X className="h-4 w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Limpar</span>
+              </Button>
+            )}
+
+            {/* AIDEV-NOTE: Botão para criar faturamento avulso */}
+            {onOpenStandaloneBilling && (
+              <Button
+                variant="default"
+                onClick={onOpenStandaloneBilling}
+                disabled={isLoading}
+                className="flex items-center space-x-2 bg-primary hover:bg-primary/90 text-white"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Faturamento Avulso</span>
+                <span className="sm:hidden">Avulso</span>
               </Button>
             )}
 
@@ -139,7 +157,12 @@ export function KanbanFilters({
                   Busca: {filters.search.length > 8 ? filters.search.substring(0, 8) + '...' : filters.search}
                 </Badge>
               )}
-              {filters.status && (
+              {filters.billingType && filters.billingType !== 'all' && (
+                <Badge variant="outline" className="text-xs">
+                  Tipo: {filters.billingType === 'avulso' ? 'Avulso' : filters.billingType === 'contrato' ? 'Por Contrato' : filters.billingType}
+                </Badge>
+              )}
+              {filters.status && filters.status !== 'all' && (
                 <Badge variant="outline" className="text-xs">
                   Status: {filters.status}
                 </Badge>
@@ -168,7 +191,28 @@ export function KanbanFilters({
               transition={{ duration: 0.3, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 pt-4 border-t border-gray-200">
+                {/* AIDEV-NOTE: Filtro por tipo de faturamento (Avulso ou Por Contrato) */}
+                <div className="space-y-2">
+                  <label className="flex items-center text-sm font-medium text-gray-700">
+                    <Tags className="h-4 w-4 mr-1" />
+                    Tipo
+                  </label>
+                  <Select
+                    value={filters.billingType || 'all'}
+                    onValueChange={(value) => onFilterChange({ ...filters, billingType: value })}
+                  >
+                    <SelectTrigger className="border border-gray-300 focus:border-primary">
+                      <SelectValue placeholder="Todos os tipos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      <SelectItem value="avulso">Faturamento Avulso</SelectItem>
+                      <SelectItem value="contrato">Por Contrato</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* AIDEV-NOTE: Filtro por status */}
                 <div className="space-y-2">
                   <label className="flex items-center text-sm font-medium text-gray-700">
@@ -203,7 +247,7 @@ export function KanbanFilters({
                     placeholder="Valor mínimo"
                     value={filters.minValue || ''}
                     onChange={(e) => onFilterChange({ ...filters, minValue: e.target.value })}
-                    className="border border-gray-300 focus:border-blue-500 bg-white"
+                    className="border border-gray-300 focus:border-primary bg-white"
                   />
                 </div>
 
@@ -218,7 +262,7 @@ export function KanbanFilters({
                     placeholder="Valor máximo"
                     value={filters.maxValue || ''}
                     onChange={(e) => onFilterChange({ ...filters, maxValue: e.target.value })}
-                    className="border border-gray-300 focus:border-blue-500 bg-white"
+                    className="border border-gray-300 focus:border-primary bg-white"
                   />
                 </div>
 

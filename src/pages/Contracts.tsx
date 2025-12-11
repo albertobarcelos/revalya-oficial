@@ -242,11 +242,17 @@ export default function Contracts() {
         return;
       }
     }
-    setIsFormDialogOpen(false);
-    setHasUnsavedChanges(false);
     
-    // Limpar parâmetros da URL ao fechar o formulário
+    // Limpar parâmetros da URL primeiro para evitar re-renderizações
     navigate(`/${slug}/contratos`);
+    
+    // Limpar estados após um pequeno delay para transição suave
+    setTimeout(() => {
+      setIsFormDialogOpen(false);
+      setHasUnsavedChanges(false);
+      setSelectedContractId(null);
+      setFormMode("create");
+    }, 100);
   }, [hasUnsavedChanges, formMode, navigate, slug]);
 
   // Efeito para sincronizar com a URL - SEMPRE declarado antes dos guard clauses
@@ -351,13 +357,13 @@ export default function Contracts() {
 
   return (
     <Layout>
-      <div className={viewState !== "list" ? "hidden" : ""}>
+      {viewState === "list" && (
         <ContractList 
           onCreateContract={handleCreateContract} 
           onViewContract={handleViewContract}
           onEditContract={handleEditContract}
         />
-      </div>
+      )}
 
       <Dialog open={isFormDialogOpen} onOpenChange={(open) => {
         if (!open) handleCloseFormDialog();

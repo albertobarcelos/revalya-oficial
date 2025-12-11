@@ -53,8 +53,7 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       '&:hover': {
         borderColor: '#6366f1',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-        transform: 'translateY(-1px)'
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
       }
     }),
     multiValue: (base, { data }) => ({
@@ -98,7 +97,13 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
       borderRadius: '12px',
       boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05)',
       border: '1px solid #e5e7eb',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      zIndex: 10000,
+      pointerEvents: 'auto'
+    }),
+    menuPortal: (base) => ({
+      ...base,
+      zIndex: 10000
     }),
     option: (base, { data, isFocused, isSelected }) => ({
       ...base,
@@ -111,10 +116,9 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
       fontWeight: isSelected ? '600' : '500',
       padding: '12px 16px',
       borderLeft: isSelected ? `4px solid ${data.color}` : '4px solid transparent',
-      transition: 'all 0.15s ease',
+      transition: 'none',
       '&:hover': {
-        backgroundColor: `${data.color}15`,
-        transform: 'translateX(2px)'
+        backgroundColor: `${data.color}15`
       }
     })
   };
@@ -143,11 +147,6 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      whileHover={{ 
-        scale: 1.02,
-        boxShadow: "0 8px 25px rgba(0, 0, 0, 0.1)",
-        transition: { duration: 0.2 }
-      }}
     >
       <motion.div
         whileHover={{ rotate: 15, scale: 1.1 }}
@@ -167,7 +166,7 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
           options={selectOptions}
           value={selectedValues}
           onChange={handleChange}
-          placeholder="✨ Selecionar tags mágicas..."
+          placeholder=" Selecionar tags"
           closeMenuOnSelect={false}
           styles={customStyles}
           className="min-w-[250px] text-sm"
@@ -175,6 +174,9 @@ const TagSelector = ({ availableTags, selectedTags = [], onTagSelect }: TagSelec
           noOptionsMessage={() => "🔍 Nenhuma tag encontrada"}
           isSearchable
           isClearable={false}
+          menuPortalTarget={document.body}
+          menuPosition="absolute"
+          menuPlacement="bottom"
         />
       </motion.div>
     </motion.div>

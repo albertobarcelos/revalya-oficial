@@ -5,12 +5,20 @@ import { queryClient } from '@/lib/queryClient';
 import { format, startOfMonth, endOfMonth, addDays, isToday, isBefore, isAfter } from 'date-fns';
 
 // AIDEV-NOTE: Interface atualizada para refletir dados da VIEW billing_kanban corrigida
+// AIDEV-NOTE: contract_id agora pode ser NULL para suportar faturamentos avulsos
+// AIDEV-NOTE: id é o period_id (ID do contract_billing_periods), adicionado alias para clareza
 export interface KanbanContract {
+  /** ID do período de faturamento (contract_billing_periods.id) - alias: period_id */
   id: string;
-  contract_id: string;
+  /** Alias para 'id' - ID do período de faturamento para maior clareza semântica */
+  period_id?: string;
+  /** ID do contrato associado - pode ser NULL para faturamentos avulsos */
+  contract_id: string | null;
   customer_id: string;
   customer_name: string;
   contract_number: string;
+  /** Número da Ordem de Serviço (sequencial: 001, 002, ...) - pode ser NULL */
+  order_number?: string | null;
   amount: number;
   status: 'Faturar Hoje' | 'Faturamento Pendente' | 'Faturados no Mês' | 'Contratos a Renovar';
   bill_date: string;
@@ -22,6 +30,8 @@ export interface KanbanContract {
   billing_status: string;
   priority: string;
   kanban_column: string;
+  /** Indica se é um faturamento avulso (standalone) */
+  is_standalone?: boolean;
 }
 
 export interface KanbanData {
@@ -153,6 +163,10 @@ export function useBillingKanban() {
           amount_planned: billingKanbanData[0]?.amount_planned,
           amount_billed: billingKanbanData[0]?.amount_billed
         });
+        console.log('🔍 [DEBUG] order_number disponível?', {
+          order_number: billingKanbanData[0]?.order_number,
+          has_order_number: !!billingKanbanData[0]?.order_number
+        });
       }
 
       // AIDEV-NOTE: Agrupar dados por categoria
@@ -162,6 +176,11 @@ export function useBillingKanban() {
         'faturados': [],
         'renovar': []
       };
+
+      // AIDEV-NOTE: Separar períodos que precisam buscar order_number
+      const periodsNeedingOrderNumber: string[] = [];
+      const standalonePeriodsNeedingOrderNumber: string[] = [];
+      const contractsMap = new Map<string, KanbanContract>();
 
       // AIDEV-NOTE: Processar cada registro da VIEW e categorizar
       (billingKanbanData || []).forEach(row => {
@@ -173,15 +192,21 @@ export function useBillingKanban() {
           amount: row.amount,
           amount_planned: row.amount_planned,
           amount_billed: row.amount_billed,
-          category
+          category,
+          order_number: row.order_number
         });
         
+        // AIDEV-NOTE: Criar objeto KanbanContract com nomenclatura clara
+        // id e period_id são o mesmo valor (ID do contract_billing_periods)
+        const isStandalone = !row.contract_id;
         const contract: KanbanContract = {
           id: row.id,
-          contract_id: row.contract_id,
+          period_id: row.id, // AIDEV-NOTE: Alias explícito para clareza semântica
+          contract_id: row.contract_id || null, // AIDEV-NOTE: Pode ser NULL para faturamentos avulsos
           customer_id: row.customer_id,
           customer_name: row.customer_name,
-          contract_number: row.contract_number,
+          contract_number: row.contract_number || 'Faturamento Avulso', // AIDEV-NOTE: Fallback para avulsos
+          order_number: row.order_number || null, // AIDEV-NOTE: Número da Ordem de Serviço (pode ser NULL)
           amount: row.amount || row.amount_planned || 0, // AIDEV-NOTE: Fallback para amount_planned se amount for null
           status: getStatusLabel(category),
           bill_date: row.bill_date,
@@ -192,11 +217,78 @@ export function useBillingKanban() {
           amount_billed: row.amount_billed,
           billing_status: row.billing_status,
           priority: row.priority,
-          kanban_column: row.kanban_column
+          kanban_column: row.kanban_column,
+          is_standalone: isStandalone, // AIDEV-NOTE: Flag para identificar faturamentos avulsos
         };
 
+        // AIDEV-NOTE: Se não tem order_number, buscar depois (tanto para contratos quanto standalone)
+        if (!contract.order_number) {
+          if (isStandalone) {
+            standalonePeriodsNeedingOrderNumber.push(row.id);
+          } else if (contract.contract_id) {
+            periodsNeedingOrderNumber.push(row.id);
+          }
+        }
+
+        contractsMap.set(row.id, contract);
         groupedData[category as keyof KanbanData].push(contract);
       });
+
+      // AIDEV-NOTE: Buscar order_number em lote para períodos de contratos que não têm
+      if (periodsNeedingOrderNumber.length > 0) {
+        console.log(`🔍 [DEBUG] Buscando order_number para ${periodsNeedingOrderNumber.length} períodos de contratos...`);
+        
+        try {
+          const { data: periodsWithOrderNumber, error: orderNumberError } = await supabase
+            .from('contract_billing_periods')
+            .select('id, order_number')
+            .in('id', periodsNeedingOrderNumber)
+            .eq('tenant_id', tenantId);
+
+          if (!orderNumberError && periodsWithOrderNumber) {
+            // AIDEV-NOTE: Atualizar contracts com order_number encontrado
+            periodsWithOrderNumber.forEach((period: { id: string; order_number: string | null }) => {
+              const contract = contractsMap.get(period.id);
+              if (contract && period.order_number) {
+                contract.order_number = period.order_number;
+                console.log(`✅ [DEBUG] order_number encontrado para período ${period.id}: ${period.order_number}`);
+              }
+            });
+          } else if (orderNumberError) {
+            console.warn('[useBillingKanban] Erro ao buscar order_number de contratos:', orderNumberError);
+          }
+        } catch (error) {
+          console.warn('[useBillingKanban] Erro ao buscar order_number em lote:', error);
+        }
+      }
+
+      // AIDEV-NOTE: Buscar order_number em lote para períodos standalone que não têm
+      if (standalonePeriodsNeedingOrderNumber.length > 0) {
+        console.log(`🔍 [DEBUG] Buscando order_number para ${standalonePeriodsNeedingOrderNumber.length} períodos standalone...`);
+        
+        try {
+          const { data: standalonePeriodsWithOrderNumber, error: standaloneOrderNumberError } = await supabase
+            .from('standalone_billing_periods')
+            .select('id, order_number')
+            .in('id', standalonePeriodsNeedingOrderNumber)
+            .eq('tenant_id', tenantId);
+
+          if (!standaloneOrderNumberError && standalonePeriodsWithOrderNumber) {
+            // AIDEV-NOTE: Atualizar contracts com order_number encontrado
+            standalonePeriodsWithOrderNumber.forEach((period: { id: string; order_number: string | null }) => {
+              const contract = contractsMap.get(period.id);
+              if (contract && period.order_number) {
+                contract.order_number = period.order_number;
+                console.log(`✅ [DEBUG] order_number encontrado para período standalone ${period.id}: ${period.order_number}`);
+              }
+            });
+          } else if (standaloneOrderNumberError) {
+            console.warn('[useBillingKanban] Erro ao buscar order_number de standalone:', standaloneOrderNumberError);
+          }
+        } catch (error) {
+          console.warn('[useBillingKanban] Erro ao buscar order_number standalone em lote:', error);
+        }
+      }
 
       return groupedData;
     },

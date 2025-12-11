@@ -4,125 +4,125 @@
 
 @layer base {
   :root {
-    /* === NOVA PALETA REVALYA SaaS FINANCEIRO === */
+    /* === NOVA PALETA REVALYA - ROXO/Violeta Baseada em #10002B, #240046, #3C006C === */
     
-    /* Azul Corporativo (Principal) */
-    --primary: 220 100% 45%;              /* #0066FF - Botões principais, headers, navegação */
-    --primary-foreground: 210 20% 98%;    /* #F8FAFC - Texto sobre primary */
-    --primary-light: 220 100% 85%;        /* #CCE5FF - Backgrounds suaves, hover states */
-    --primary-dark: 220 100% 35%;         /* #0052CC - Active states, focus */
+    /* Roxo/Violeta Corporativo (Principal) - Baseado em #3C006C */
+    --primary: 270 100% 21%;              /* #3C006C - Botões principais, headers, navegação */
+    --primary-foreground: 270 20% 98%;    /* #F8FAFC - Texto sobre primary */
+    --primary-light: 270 100% 90%;        /* Backgrounds suaves, hover states */
+    --primary-dark: 270 100% 14%;         /* #240046 - Active states, focus */
     
     /* Cores Funcionais */
     --success: 142 76% 36%;               /* #16A34A - Valores recebidos, lucro, confirmações */
-    --success-foreground: 210 20% 98%;    /* #F8FAFC - Texto sobre success */
+    --success-foreground: 270 20% 98%;    /* #F8FAFC - Texto sobre success */
     --success-light: 142 76% 92%;         /* #DCFCE7 - Backgrounds de sucesso */
     
     --danger: 0 84% 60%;                  /* #EF4444 - Cobranças vencidas, erros, perdas */
-    --danger-foreground: 210 20% 98%;     /* #F8FAFC - Texto sobre danger */
+    --danger-foreground: 270 20% 98%;     /* #F8FAFC - Texto sobre danger */
     --danger-light: 0 84% 95%;            /* #FEF2F2 - Backgrounds de erro */
     
     --warning: 43 96% 56%;                /* #F59E0B - Cobranças pendentes, avisos */
-    --warning-foreground: 210 20% 98%;    /* #F8FAFC - Texto sobre warning */
+    --warning-foreground: 270 20% 98%;    /* #F8FAFC - Texto sobre warning */
     --warning-light: 43 96% 95%;          /* #FFFBEB - Backgrounds de aviso */
     
-    --accent: 250 95% 63%;                /* #6366F1 - Features de IA, métricas especiais */
-    --accent-foreground: 210 20% 98%;     /* #F8FAFC - Texto sobre accent */
-    --accent-light: 250 95% 95%;          /* #F0F0FF - Backgrounds de destaque */
+    --accent: 270 95% 63%;                /* Features de IA, métricas especiais */
+    --accent-foreground: 270 20% 98%;     /* #F8FAFC - Texto sobre accent */
+    --accent-light: 270 95% 95%;          /* Backgrounds de destaque */
     
     /* Sistema Base */
-    --background: 210 20% 98%;            /* #F8FAFC - Page backgrounds */
-    --foreground: 210 24% 16%;            /* #0F172A - Headings, emphasis */
+    --background: 270 20% 98%;            /* #F8FAFC - Page backgrounds */
+    --foreground: 270 24% 8%;            /* #10002B - Headings, emphasis */
     
     --card: 0 0% 100%;                    /* #FFFFFF - Card backgrounds */
-    --card-foreground: 210 15% 37%;       /* #334155 - Card text */
+    --card-foreground: 270 15% 37%;       /* Card text */
     
     --popover: 0 0% 100%;                 /* #FFFFFF - Popover backgrounds */
-    --popover-foreground: 210 15% 37%;    /* #334155 - Popover text */
+    --popover-foreground: 270 15% 37%;    /* Popover text */
     
-    --secondary: 210 20% 95%;             /* #F1F5F9 - Secondary backgrounds */
-    --secondary-foreground: 210 15% 37%;  /* #334155 - Secondary text */
+    --secondary: 270 20% 95%;             /* Secondary backgrounds */
+    --secondary-foreground: 270 15% 37%;  /* Secondary text */
     
-    --muted: 210 16% 93%;                 /* #E2E8F0 - Muted backgrounds */
-    --muted-foreground: 210 11% 71%;      /* #64748B - Muted text */
+    --muted: 270 16% 93%;                 /* Muted backgrounds */
+    --muted-foreground: 270 11% 71%;      /* Muted text */
     
     --destructive: 0 84% 60%;             /* #EF4444 - Destructive actions */
-    --destructive-foreground: 210 20% 98%; /* #F8FAFC - Text on destructive */
+    --destructive-foreground: 270 20% 98%; /* #F8FAFC - Text on destructive */
     
-    --border: 210 16% 93%;                /* #E2E8F0 - Borders, dividers */
-    --input: 210 16% 93%;                 /* #E2E8F0 - Input borders */
-    --ring: 220 100% 45%;                 /* #0066FF - Focus rings */
+    --border: 270 16% 93%;                /* Borders, dividers */
+    --input: 270 16% 93%;                 /* Input borders */
+    --ring: 270 100% 21%;                 /* #3C006C - Focus rings */
     
     --radius: 0.5rem;
     
     /* Sidebar personalizada */
-    --sidebar-background: 210 20% 98%;    /* #F8FAFC - Sidebar background */
-    --sidebar-foreground: 210 15% 37%;    /* #334155 - Sidebar text */
-    --sidebar-primary: 220 100% 45%;      /* #0066FF - Sidebar primary */
-    --sidebar-primary-foreground: 210 20% 98%; /* #F8FAFC - Text on sidebar primary */
-    --sidebar-accent: 210 20% 95%;        /* #F1F5F9 - Sidebar accent */
-    --sidebar-accent-foreground: 210 15% 37%; /* #334155 - Text on sidebar accent */
-    --sidebar-border: 210 16% 93%;        /* #E2E8F0 - Sidebar borders */
-    --sidebar-ring: 220 100% 45%;         /* #0066FF - Sidebar focus rings */
+    --sidebar-background: 270 20% 98%;    /* Sidebar background */
+    --sidebar-foreground: 270 15% 37%;    /* Sidebar text */
+    --sidebar-primary: 270 100% 21%;      /* #3C006C - Sidebar primary */
+    --sidebar-primary-foreground: 270 20% 98%; /* Text on sidebar primary */
+    --sidebar-accent: 270 20% 95%;        /* Sidebar accent */
+    --sidebar-accent-foreground: 270 15% 37%; /* Text on sidebar accent */
+    --sidebar-border: 270 16% 93%;        /* Sidebar borders */
+    --sidebar-ring: 270 100% 21%;         /* #3C006C - Sidebar focus rings */
   }
 
   .dark {
-    /* === MODO ESCURO APRIMORADO === */
+    /* === MODO ESCURO - ROXO/Violeta Baseado em #10002B === */
     
-    /* Azul Corporativo (harmonizado para dark) */
-    --primary: 217 91% 60%;               /* #3B82F6 - Azul vibrante mas suave */
-    --primary-foreground: 210 20% 98%;    /* #F8FAFC - Texto sobre primary */
-    --primary-light: 217 91% 25%;         /* Background escuro do primary */
-    --primary-dark: 217 91% 70%;          /* Hover state mais claro */
+    /* Roxo/Violeta Corporativo (harmonizado para dark) */
+    --primary: 270 95% 60%;               /* Roxo vibrante mas suave */
+    --primary-foreground: 270 20% 98%;    /* #F8FAFC - Texto sobre primary */
+    --primary-light: 270 100% 12%;         /* Background escuro do primary */
+    --primary-dark: 270 100% 8%;          /* #10002B - Base mais escura */
     
     /* Cores Funcionais (harmonizadas) */
     --success: 142 71% 45%;               /* #22C55E - Verde equilibrado */
-    --success-foreground: 210 20% 98%;    
+    --success-foreground: 270 20% 98%;    
     --success-light: 142 71% 12%;         /* Background verde escuro */
     
     --danger: 0 72% 51%;                  /* #DC2626 - Vermelho menos agressivo */
-    --danger-foreground: 210 20% 98%;     
+    --danger-foreground: 270 20% 98%;     
     --danger-light: 0 72% 12%;            /* Background vermelho escuro */
     
     --warning: 38 92% 50%;                /* #EA580C - Laranja mais suave */
-    --warning-foreground: 210 20% 98%;    /* Texto claro sobre warning */
+    --warning-foreground: 270 20% 98%;    /* Texto claro sobre warning */
     --warning-light: 38 92% 12%;          /* Background laranja escuro */
     
-    --accent: 262 83% 58%;                /* #8B5CF6 - Roxo harmonioso */
-    --accent-foreground: 210 20% 98%;     
-    --accent-light: 262 83% 15%;          /* Background roxo escuro */
+    --accent: 270 83% 58%;                /* Roxo harmonioso */
+    --accent-foreground: 270 20% 98%;     
+    --accent-light: 270 100% 10%;         /* Background roxo escuro baseado em #10002B */
     
-    /* Sistema Base (dark harmonizado) */
-    --background: 222 84% 5%;             /* #0A0E1A - Background mais escuro e azulado */
-    --foreground: 210 40% 98%;            /* #F8FAFC - Texto principal */
+    /* Sistema Base (dark harmonizado com roxo) */
+    --background: 270 100% 5%;            /* #10002B - Background baseado no roxo escuro */
+    --foreground: 270 20% 98%;            /* #F8FAFC - Texto principal */
     
-    --card: 220 13% 18%;                  /* #2D3748 - Cards com tom azulado */
-    --card-foreground: 210 20% 95%;       /* #F1F5F9 - Texto em cards */
+    --card: 270 100% 8%;                  /* Cards com tom roxo escuro */
+    --card-foreground: 270 20% 95%;       /* #F1F5F9 - Texto em cards */
     
-    --popover: 220 13% 18%;               /* #2D3748 - Popovers consistentes */
-    --popover-foreground: 210 20% 95%;    /* #F1F5F9 - Texto em popovers */
+    --popover: 270 100% 8%;               /* Popovers consistentes */
+    --popover-foreground: 270 20% 95%;    /* #F1F5F9 - Texto em popovers */
     
-    --secondary: 215 16% 25%;             /* #3A4553 - Secondary mais claro */
-    --secondary-foreground: 210 20% 90%;  /* Texto em secondary */
+    --secondary: 270 100% 12%;            /* Secondary baseado em #240046 */
+    --secondary-foreground: 270 20% 90%;  /* Texto em secondary */
     
-    --muted: 215 14% 34%;                 /* #4A5568 - Muted mais visível */
-    --muted-foreground: 215 16% 65%;      /* #9CA3AF - Texto muted legível */
+    --muted: 270 100% 14%;                /* Muted baseado em #240046 */
+    --muted-foreground: 270 16% 65%;      /* Texto muted legível */
     
     --destructive: 0 72% 51%;             /* Consistente com danger */
-    --destructive-foreground: 210 20% 98%; 
+    --destructive-foreground: 270 20% 98%; 
     
-    --border: 215 14% 34%;                /* #4A5568 - Borders visíveis */
-    --input: 215 14% 34%;                 /* Inputs consistentes */
-    --ring: 217 91% 60%;                  /* Focus ring consistente */
+    --border: 270 100% 14%;               /* Borders visíveis baseados em #240046 */
+    --input: 270 100% 14%;                /* Inputs consistentes */
+    --ring: 270 95% 60%;                  /* Focus ring consistente */
     
-    /* Sidebar personalizada (dark harmonizada) */
-    --sidebar-background: 222 84% 4%;     /* Sidebar ainda mais escura */
-    --sidebar-foreground: 210 20% 95%;    /* Texto claro */
-    --sidebar-primary: 217 91% 60%;       /* Primary consistente */
-    --sidebar-primary-foreground: 210 20% 98%;
-    --sidebar-accent: 215 16% 25%;        /* Accent consistente */
-    --sidebar-accent-foreground: 210 20% 90%;
-    --sidebar-border: 215 14% 30%;        /* Borders sutis */
-    --sidebar-ring: 217 91% 60%;          /* Focus rings consistentes */
+    /* Sidebar personalizada (dark harmonizada com roxo) */
+    --sidebar-background: 270 100% 4%;    /* Sidebar ainda mais escura baseada em #10002B */
+    --sidebar-foreground: 270 20% 95%;    /* Texto claro */
+    --sidebar-primary: 270 95% 60%;       /* Primary consistente */
+    --sidebar-primary-foreground: 270 20% 98%;
+    --sidebar-accent: 270 100% 12%;       /* Accent baseado em #240046 */
+    --sidebar-accent-foreground: 270 20% 90%;
+    --sidebar-border: 270 100% 10%;       /* Borders sutis */
+    --sidebar-ring: 270 95% 60%;          /* Focus rings consistentes */
   }
 }
 
@@ -130,8 +130,182 @@
   * {
     @apply border-border;
   }
+  html {
+    /* AIDEV-NOTE: Base font-size para garantir que rem seja calculado corretamente */
+    font-size: 14px;
+  }
+  
   body {
     @apply bg-background text-foreground;
+    /* AIDEV-NOTE: Fonte padronizada conforme Omie */
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgb(51, 51, 51);
+  }
+  
+  /* AIDEV-NOTE: Headings padronizados conforme Omie */
+  h1 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 17.6px;
+    color: rgb(51, 51, 51);
+  }
+  
+  h2 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 17.6px;
+    color: rgb(51, 51, 51);
+  }
+  
+  h3 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 17.6px;
+    color: rgb(53, 50, 48);
+  }
+  
+  h4 {
+    font-family: Poppins, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 15.4px;
+    color: rgb(51, 51, 51);
+  }
+  
+  /* AIDEV-NOTE: Inputs padronizados conforme Omie */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  textarea {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 17.1429px;
+    color: rgb(51, 51, 51);
+    padding: 1px 2px 1px 2px;
+  }
+  
+  /* AIDEV-NOTE: Select padronizado conforme Omie */
+  select {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    color: rgb(75, 75, 75);
+  }
+  
+  /* AIDEV-NOTE: Buttons padronizados conforme Omie */
+  button {
+    font-family: "Open Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  /* AIDEV-NOTE: Links padronizados conforme Omie */
+  a {
+    font-family: "Open Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    color: rgb(0, 183, 255);
+  }
+  
+  /* AIDEV-NOTE: Tables padronizadas conforme Omie */
+  th,
+  thead td {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+    color: rgb(91, 91, 91);
+  }
+  
+  td {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+    color: rgb(91, 91, 91);
+  }
+  
+  /* AIDEV-NOTE: Classes utilitárias globais para facilitar manutenção */
+  /* Todos os elementos devem herdar automaticamente do body, mas estas classes garantem consistência */
+  .text-body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  .text-heading-1 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-2 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-3 {
+    font-family: Poppins, sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 17.6px;
+  }
+  
+  .text-heading-4 {
+    font-family: Poppins, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 15.4px;
+  }
+  
+  .text-input {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 17.1429px;
+    color: rgb(51, 51, 51);
+  }
+  
+  .text-select {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+  }
+  
+  .text-table {
+    font-family: "Open Sans", sans-serif;
+    font-size: 13.2px;
+    font-weight: 400;
+    line-height: 18.48px;
+  }
+  
+  .text-label {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 20px;
+  }
+  
+  .text-small {
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
   }
 }
 

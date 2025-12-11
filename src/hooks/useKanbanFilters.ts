@@ -13,6 +13,7 @@ export function useKanbanFilters(kanbanData: KanbanData) {
   const [filters, setFilters] = useState<KanbanFilters>({
     search: '',
     status: 'all',
+    billingType: 'all', // AIDEV-NOTE: Novo filtro para tipo de faturamento
     minValue: '',
     maxValue: '',
     dateRange: 'all',
@@ -53,6 +54,17 @@ export function useKanbanFilters(kanbanData: KanbanData) {
         const maxValue = parseFloat(filters.maxValue);
         if (!isNaN(maxValue) && contract.amount > maxValue) {
           return false;
+        }
+      }
+
+      // AIDEV-NOTE: Filtro por tipo de faturamento (Avulso ou Por Contrato)
+      if (filters.billingType && filters.billingType !== 'all') {
+        if (filters.billingType === 'avulso') {
+          // AIDEV-NOTE: Faturamento avulso tem contract_id NULL
+          if (contract.contract_id !== null) return false;
+        } else if (filters.billingType === 'contrato') {
+          // AIDEV-NOTE: Faturamento por contrato tem contract_id não NULL
+          if (contract.contract_id === null) return false;
         }
       }
 
@@ -127,7 +139,7 @@ export function useKanbanFilters(kanbanData: KanbanData) {
     );
 
     const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
-      if (key === 'status' || key === 'dateRange') {
+      if (key === 'status' || key === 'dateRange' || key === 'billingType') {
         return value !== '' && value !== 'all';
       }
       return value !== '';
@@ -146,6 +158,7 @@ export function useKanbanFilters(kanbanData: KanbanData) {
     setFilters({
       search: '',
       status: 'all',
+      billingType: 'all', // AIDEV-NOTE: Incluir novo filtro
       minValue: '',
       maxValue: '',
       dateRange: 'all',

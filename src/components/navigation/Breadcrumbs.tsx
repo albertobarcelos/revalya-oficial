@@ -5,6 +5,10 @@ const routeNames: { [key: string]: string } = {
   '': 'Início',
   'clients': 'Clientes',
   'charges': 'Cobranças',
+  'cobrancas': 'Cobranças',
+  'recebimentos': 'Recebimentos',
+  'contas-a-pagar': 'Contas a Pagar',
+  'extrato-bancario': 'Extrato Bancário',
   'notifications': 'Notificações',
   'settings': 'Configurações',
   'dashboard': 'Dashboard',
@@ -18,6 +22,7 @@ const routeNames: { [key: string]: string } = {
   'profile': 'Perfil',
   'integrations': 'Integrações',
   'invites': 'Convites',
+  'configuracoes-financeiras': 'Configurações Financeiras',
 };
 
 export function Breadcrumbs() {
@@ -43,7 +48,7 @@ export function Breadcrumbs() {
         to={homePath}
         className="flex items-center hover:text-foreground transition-colors"
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4 text-primary" />
       </Link>
       {filteredPathnames.map((value, index) => {
         const last = index === filteredPathnames.length - 1;

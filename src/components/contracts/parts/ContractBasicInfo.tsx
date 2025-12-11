@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { format, isAfter, isBefore, addDays, isToday as isTodayDate, isSameDay, parseISO, Locale } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { pt } from 'date-fns/locale';
-import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Calendar, CreditCard, Users, CalendarIcon, Search, Loader2, AlertCircle, Clock, CalendarClock, ChevronLeft, ChevronRight, FileText, Paperclip } from "lucide-react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,17 +39,31 @@ import { ClientCreation } from "./ClientCreation";
 import { ContractFormValues } from "../schema/ContractFormSchema";
 import { FieldSkeleton } from "./FieldSkeleton";
 import { useContractForm } from "../form/ContractFormProvider";
+import { EditClientDialog } from "@/components/clients/EditClientDialog";
+import type { Customer } from "@/types/database";
 
 interface ContractBasicInfoProps {
   customers: any[];
   onClientCreated: (clientId: string) => void;
   isFieldLoading?: (fieldName: string) => boolean;
+  /** Se deve ocultar os campos de vigência (Vigência Inicial e Vigência Final) */
+  hideVigenceFields?: boolean;
+  /** Label customizado para o campo "Nº do Contrato" */
+  contractNumberLabel?: string;
+  /** Label customizado para o campo "Dia de Faturamento" */
+  billingDayLabel?: string;
+  /** Se deve usar calendário para "Previsão de Faturamento" em vez de campo numérico */
+  useBillingDatePicker?: boolean;
 }
 
 export function ContractBasicInfo({ 
   customers, 
   onClientCreated, 
-  isFieldLoading = () => false 
+  isFieldLoading = () => false,
+  hideVigenceFields = false,
+  contractNumberLabel,
+  billingDayLabel,
+  useBillingDatePicker = false
 }: ContractBasicInfoProps) {
   const form = useFormContext<ContractFormValues>();
   const { contractData, isLoadingContract } = useContractForm(); // AIDEV-NOTE: Acessar dados do contrato do contexto
@@ -57,7 +71,11 @@ export function ContractBasicInfo({
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [openInitialDatePicker, setOpenInitialDatePicker] = useState(false);
   const [openFinalDatePicker, setOpenFinalDatePicker] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [openBillingDatePicker, setOpenBillingDatePicker] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Customer | null>(null);
+  const [showEditClient, setShowEditClient] = useState(false);
+  const [initialDateInput, setInitialDateInput] = useState<string>("");
+  const [finalDateInput, setFinalDateInput] = useState<string>("");
   
   // Observar mudanças nas datas para validação em tempo real
   const initialDate = useWatch({ control: form.control, name: 'initial_date' });
@@ -81,6 +99,33 @@ export function ContractBasicInfo({
   // Configuração de localização e funções auxiliares
   const locale: Locale = ptBR || pt;
   
+  // AIDEV-NOTE: Mantém o valor textual dos campos de data sincronizado com o estado do formulário
+  useEffect(() => {
+    if (initialDate) {
+      try {
+        const d = typeof initialDate === 'string' ? new Date(initialDate) : initialDate as Date;
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          setInitialDateInput(format(d, 'dd/MM/yyyy', { locale: ptBR }));
+        }
+      } catch {}
+    } else {
+      setInitialDateInput("");
+    }
+  }, [initialDate]);
+  
+  useEffect(() => {
+    if (finalDate) {
+      try {
+        const d = typeof finalDate === 'string' ? new Date(finalDate) : finalDate as Date;
+        if (d instanceof Date && !isNaN(d.getTime())) {
+          setFinalDateInput(format(d, 'dd/MM/yyyy', { locale: ptBR }));
+        }
+      } catch {}
+    } else {
+      setFinalDateInput("");
+    }
+  }, [finalDate]);
+  
   const getMinDate = () => new Date();
 
   // Função para formatar a data de forma amigável
@@ -91,6 +136,30 @@ export function ContractBasicInfo({
     // Se for string, usar parseISO para evitar problemas de timezone
     const dateObj = typeof date === 'string' ? parseISO(date) : date;
     return format(dateObj, formatStr, { locale: ptBR });
+  };
+
+  /**
+   * Formata uma entrada livre em máscara de data brasileira (dd/mm/aaaa).
+   */
+  const formatInputToDateMask = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 8);
+    const d = digits.slice(0, 2);
+    const m = digits.slice(2, 4);
+    const y = digits.slice(4, 8);
+    let out = d;
+    if (m) out = `${out}/${m}`;
+    if (y) out = `${out}/${y}`;
+    return out;
+  };
+
+  /**
+   * Converte uma string no formato dd/mm/aaaa para Date válida.
+   */
+  const parseMaskedDate = (value: string): Date | null => {
+    const [dd, mm, yyyy] = value.split('/');
+    if (!dd || !mm || !yyyy) return null;
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
   };
 
   // AIDEV-NOTE: Efeito para sincronizar cliente selecionado quando customer_id mudar
@@ -119,7 +188,7 @@ export function ContractBasicInfo({
     }
     
     // Procura o cliente no array customers (para casos onde o cliente está na primeira página)
-    const foundClient = customers.find(c => c.id === customerId);
+    const foundClient = customers.find(c => c.id === customerId) as Customer | undefined;
     if (foundClient) {
       console.log('✅ Cliente encontrado no array customers:', foundClient);
       setSelectedClient(foundClient);
@@ -168,18 +237,10 @@ export function ContractBasicInfo({
                     placeholder="Selecione um cliente"
                     value={selectedClient?.name || ""}
                     readOnly
-                    className="cursor-pointer bg-background/50 border-border/50 transition-colors pr-8"
+                    className="cursor-pointer bg-background/50 border-border/50 transition-colors pr-16"
                     onClick={() => setShowClientSearch(true)}
                     disabled={isFieldLoading("customer_id")}
                   />
-                  {/* AIDEV-NOTE: Debug do selectedClient */}
-                  {console.log('🎯 Campo Cliente - Debug:', {
-                    selectedClient,
-                    selectedClientName: selectedClient?.name,
-                    customerId,
-                    contractCustomer: contractData?.customer,
-                    displayValue: selectedClient?.name || ""
-                  })}
                   <Button
                     type="button"
                     variant="ghost"
@@ -190,6 +251,18 @@ export function ContractBasicInfo({
                   >
                     <Search className="h-4 w-4" />
                   </Button>
+                  {selectedClient?.id && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-8 top-0 h-full aspect-square text-muted-foreground hover:text-primary"
+                      onClick={() => setShowEditClient(true)}
+                      disabled={isFieldLoading("customer_id")}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <FormMessage />
                 
@@ -218,6 +291,17 @@ export function ContractBasicInfo({
                     form.setValue("customer_id", clientData.id);
                   }}
                 />
+                {selectedClient && (
+                  <EditClientDialog
+                    customer={selectedClient}
+                    open={showEditClient}
+                    onOpenChange={setShowEditClient}
+                    onSuccess={() => {
+                      // Após edição, manter o cliente selecionado e fechar o modal
+                      setShowEditClient(false);
+                    }}
+                  />
+                )}
               </FormItem>
             );
           }}
@@ -232,7 +316,7 @@ export function ContractBasicInfo({
               <FormItem className="flex flex-col">
                 <FormLabel className="flex items-center gap-1">
                   <FileText className="h-3.5 w-3.5" />
-                  Nº do Contrato
+                  {contractNumberLabel || "Nº do Contrato"}
                   {isFieldLoading("contract_number") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
                 </FormLabel>
                 <div className="relative">
@@ -254,94 +338,263 @@ export function ContractBasicInfo({
           }}
         />
 
-        {/* Dia de Faturamento */}
+        {/* Dia de Faturamento / Previsão de Faturamento */}
         <FormField
           control={form.control}
           name="billing_day"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" />
-                Dia de Faturamento
-                {isFieldLoading("billing_day") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
-              </FormLabel>
-              <div className="relative">
-                <FieldSkeleton visible={isFieldLoading("billing_day")} />
-                <Input
-                  type="number"
-                  min={1}
-                  max={31}
-                  placeholder="Ex: 15"
-                  className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
-                  {...field}
-                  value={field.value || ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    field.onChange(value ? parseInt(value) : '');
-                  }}
-                />
-              </div>
-              <FormDescription className="text-xs text-center">
-                Dia do mês para vencimento
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            // AIDEV-NOTE: Converter billing_day (número) para Date quando usar date picker
+            const billingDate = useBillingDatePicker && field.value 
+              ? new Date(new Date().getFullYear(), new Date().getMonth(), field.value)
+              : null;
+            
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {billingDayLabel || (useBillingDatePicker ? "Previsão de Faturamento" : "Dia de Faturamento")}
+                  {isFieldLoading("billing_day") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("billing_day")} />
+                  {useBillingDatePicker ? (
+                    // AIDEV-NOTE: Calendário para escolher data completa
+                    <Popover open={openBillingDatePicker} onOpenChange={setOpenBillingDatePicker}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
+                              !billingDate && "text-muted-foreground",
+                              billingDate && "border-primary/30 bg-primary/5 hover:bg-primary/10"
+                            )}
+                            disabled={isFieldLoading("billing_day")}
+                            type="button"
+                          >
+                            <div className="flex flex-col items-start w-full">
+                              {billingDate ? (
+                                <span className="font-medium text-foreground text-sm">
+                                  {formatDate(billingDate, 'dd \'de\' MMMM \'de\' yyyy')}
+                                </span>
+                              ) : (
+                                <span>Selecione a data de faturamento</span>
+                              )}
+                            </div>
+                            <CalendarIcon className={cn(
+                              "ml-auto h-4 w-4 transition-colors flex-shrink-0",
+                              billingDate ? "text-primary" : "text-muted-foreground",
+                              "group-hover:text-primary"
+                            )} />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start">
+                        <div className="p-3">
+                          <div className="flex items-center justify-between px-2 pb-3 border-b border-border/30">
+                            <h4 className="font-medium text-sm text-foreground/90">Selecione a data de faturamento</h4>
+                            {billingDate && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                                onClick={() => {
+                                  field.onChange(null);
+                                  setOpenBillingDatePicker(false);
+                                }}
+                              >
+                                Limpar
+                              </Button>
+                            )}
+                          </div>
+                          <div className="relative z-10">
+                            <CalendarComponent
+                              mode="single"
+                              selected={billingDate || undefined}
+                              onSelect={(date) => {
+                                if (date) {
+                                  // AIDEV-NOTE: Extrair apenas o dia do mês para manter compatibilidade com billing_day
+                                  const day = date.getDate();
+                                  field.onChange(day);
+                                  setOpenBillingDatePicker(false);
+                                }
+                              }}
+                              locale={locale}
+                              classNames={{
+                                months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                                month: "space-y-4",
+                                caption: "flex justify-center pt-1 relative items-center",
+                                caption_label: "text-sm font-medium",
+                                nav: "space-x-1 flex items-center",
+                                nav_button: cn(
+                                  "inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors",
+                                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                                  "disabled:pointer-events-none disabled:opacity-50",
+                                  "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+                                  "h-7 w-7"
+                                ),
+                                nav_button_previous: "absolute left-1",
+                                nav_button_next: "absolute right-1",
+                                table: "w-full border-collapse space-y-1",
+                                head_row: "flex",
+                                head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
+                                row: "flex w-full mt-2",
+                                cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                                day: cn(
+                                  "h-9 w-9 p-0 font-normal aria-selected:opacity-100 rounded-md",
+                                  "hover:bg-accent hover:text-accent-foreground hover:scale-105 transition-all duration-200",
+                                  "focus:bg-accent focus:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-primary/20",
+                                  "cursor-pointer select-none"
+                                ),
+                                day_range_end: "day-range-end",
+                                day_selected: cn(
+                                  "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                                  "focus:bg-primary focus:text-primary-foreground",
+                                  "shadow-md ring-2 ring-primary/20 scale-105"
+                                ),
+                                day_today: cn(
+                                  "bg-accent text-accent-foreground font-semibold",
+                                  "ring-2 ring-primary/30"
+                                ),
+                                day_outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
+                                day_disabled: "text-muted-foreground opacity-50 cursor-not-allowed hover:bg-transparent hover:text-muted-foreground hover:scale-100",
+                                day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                                day_hidden: "invisible",
+                              }}
+                              components={{
+                                IconLeft: ({ ...props }) => (
+                                  <ChevronLeft className="h-4 w-4" />
+                                ),
+                                IconRight: ({ ...props }) => (
+                                  <ChevronRight className="h-4 w-4" />
+                                )
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </PopoverContentModal>
+                    </Popover>
+                  ) : (
+                    // AIDEV-NOTE: Campo numérico tradicional (1-31)
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      placeholder="Ex: 15"
+                      className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
+                      {...field}
+                      value={field.value || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value ? parseInt(value) : '');
+                      }}
+                    />
+                  )}
+                </div>
+                <FormDescription className="text-xs text-center">
+                  {useBillingDatePicker 
+                    ? "Selecione a data prevista para faturamento"
+                    : "Dia do mês para vencimento"}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
       </div>
 
-      {/* Segunda linha: Tipo de Faturamento */}
+      {/* Segunda linha: Tipo de Faturamento ou Número de Parcelas */}
       <div className="grid grid-cols-1 gap-4">
-        <FormField
-          control={form.control}
-          name="billing_type"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel className="flex items-center gap-1">
-                <CreditCard className="h-3.5 w-3.5" />
-                Tipo de Faturamento
-                {isFieldLoading("billing_type") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
-              </FormLabel>
-              <div className="relative">
-                <FieldSkeleton visible={isFieldLoading("billing_type")} />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                  {[
-                    { value: "Mensal", label: "Mensal", icon: "📅", description: "Todo mês" },
-                    { value: "Trimestral", label: "Trimestral", icon: "📊", description: "A cada 3 meses" },
-                    { value: "Semestral", label: "Semestral", icon: "📈", description: "A cada 6 meses" },
-                    { value: "Anual", label: "Anual", icon: "🎯", description: "Uma vez por ano" },
-                    { value: "Único", label: "Único", icon: "💎", description: "Pagamento único" },
-                  ].map((option, index) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => field.onChange(option.value)}
-                      disabled={isFieldLoading("billing_type")}
-                      className={cn(
-                        "p-3 rounded-lg border-2 transition-all duration-200 text-left billing-type-card",
-                        "hover:scale-105 hover:shadow-md",
-                        field.value === option.value
-                          ? "border-primary bg-primary/10 shadow-md"
-                          : "border-border hover:border-primary/50 bg-card hover:bg-primary/5"
-                      )}
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{option.icon}</span>
-                        <span className="font-medium text-sm">{option.label}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
-                    </button>
-                  ))}
+        {hideVigenceFields ? (
+          // AIDEV-NOTE: Na Ordem de Serviço, mostra "Número de Parcelas" em vez de "Tipo de Faturamento"
+          <FormField
+            control={form.control}
+            name="installments"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Número de Parcelas
+                  {isFieldLoading("installments") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("installments")} />
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Ex: 1 (À Vista) ou 12 (12x)"
+                    className="text-center font-semibold bg-background/50 border-border/50 transition-colors"
+                    {...field}
+                    value={field.value || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      field.onChange(value ? parseInt(value) : 1);
+                    }}
+                  />
                 </div>
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormDescription className="text-xs text-center">
+                  {field.value === 1 || !field.value 
+                    ? "À Vista (pagamento único)" 
+                    : `${field.value}x parcelas`}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : (
+          // AIDEV-NOTE: Na tela de Contratos, mantém "Tipo de Faturamento"
+          <FormField
+            control={form.control}
+            name="billing_type"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  Tipo de Faturamento
+                  {isFieldLoading("billing_type") && <Loader2 className="h-3 w-3 ml-1 animate-spin" />}
+                </FormLabel>
+                <div className="relative">
+                  <FieldSkeleton visible={isFieldLoading("billing_type")} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                    {[
+                      { value: "Mensal", label: "Mensal", icon: "📅", description: "Todo mês" },
+                      { value: "Trimestral", label: "Trimestral", icon: "📊", description: "A cada 3 meses" },
+                      { value: "Semestral", label: "Semestral", icon: "📈", description: "A cada 6 meses" },
+                      { value: "Anual", label: "Anual", icon: "🎯", description: "Uma vez por ano" },
+                      { value: "Único", label: "Único", icon: "💎", description: "Pagamento único" },
+                    ].map((option, index) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => field.onChange(option.value)}
+                        disabled={isFieldLoading("billing_type")}
+                        className={cn(
+                          "p-3 rounded-lg border-2 transition-all duration-200 text-left billing-type-card",
+                          "hover:scale-105 hover:shadow-md",
+                          field.value === option.value
+                            ? "border-primary bg-primary/10 shadow-md"
+                            : "border-border hover:border-primary/50 bg-card hover:bg-primary/5"
+                        )}
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">{option.icon}</span>
+                          <span className="font-medium text-sm">{option.label}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </div>
 
       {/* Terceira linha: Vigências */}
+      {!hideVigenceFields && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Vigência Inicial */}
         <FormField
@@ -360,41 +613,55 @@ export function ContractBasicInfo({
                 <div className="relative">
                   <FieldSkeleton visible={isFieldLoading("initial_date")} />
                   <Popover open={openInitialDatePicker} onOpenChange={setOpenInitialDatePicker}>
-                    <PopoverTrigger asChild>
+                    <div className={cn(
+                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      isError ? 'border-destructive' : 'border-input'
+                    )}>
                       <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
-                            !field.value && "text-muted-foreground",
-                            field.value && "border-primary/30 bg-primary/5 hover:bg-primary/10",
-                            isError ? "border-destructive" : "hover:border-primary/50"
-                          )}
-                          disabled={isFieldLoading("initial_date")}
-                          type="button"
-                        >
-                          <div className="flex flex-col items-start w-full">
-                            {field.value ? (
-                              <>
-                                <span className="font-medium text-foreground text-sm">
-                                  {formatDate(field.value, 'dd \'de\' MMMM \'de\' yyyy, EEEE')}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-0.5">
-                                  {isTodayDate(new Date(field.value)) ? 'Hoje' : 'Data de início do contrato'}
-                                </span>
-                              </>
-                            ) : (
-                              <span>Selecione a vigência inicial</span>
-                            )}
-                          </div>
-                          <CalendarIcon className={cn(
-                            "ml-auto h-4 w-4 transition-colors flex-shrink-0",
-                            field.value ? "text-primary" : "text-muted-foreground",
-                            isError ? "text-destructive" : "group-hover:text-primary"
-                          )} />
-                        </Button>
+                        <Input
+                          placeholder="dd/mm/aaaa"
+                          value={initialDateInput}
+                          onChange={(e) => {
+                            const masked = formatInputToDateMask(e.target.value);
+                            setInitialDateInput(masked);
+                            if (masked.length === 10) {
+                              const parsed = parseMaskedDate(masked);
+                              if (parsed) {
+                                form.clearErrors('initial_date');
+                                field.onChange(parsed);
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const [dd, mm, yyyy] = v.split('/');
+                            const parsed = (dd && mm && yyyy) ? new Date(Number(yyyy), Number(mm) - 1, Number(dd)) : null;
+                            if (parsed && parsed instanceof Date && !isNaN(parsed.getTime())) {
+                              form.clearErrors('initial_date');
+                              field.onChange(parsed);
+                              setInitialDateInput(format(parsed, 'dd/MM/yyyy', { locale: ptBR }));
+                            } else if (v.length > 0) {
+                              form.setError('initial_date', { type: 'manual', message: 'Selecione uma vigência inicial válida' });
+                            }
+                          }}
+                          inputMode="numeric"
+                          maxLength={10}
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 px-3"
+                          disabled={isFieldLoading('initial_date')}
+                        />
                       </FormControl>
-                    </PopoverTrigger>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          disabled={isFieldLoading('initial_date')}
+                          aria-label="Abrir calendário"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </div>
                     <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start" onInteractOutside={(e) => {
                       // Impede que o popover feche ao interagir com o calendário ou botões de atalho
                       const target = e.target as HTMLElement;
@@ -430,6 +697,7 @@ export function ContractBasicInfo({
                             onSelect={(date) => {
                               if (date) {
                                 field.onChange(date);
+                                setInitialDateInput(format(date, 'dd/MM/yyyy', { locale: ptBR }));
                                 setOpenInitialDatePicker(false);
                                 
                                 // Se houver data final e for anterior à nova data inicial, limpa a data final
@@ -500,6 +768,7 @@ export function ContractBasicInfo({
                               const today = getMinDate();
                               form.setValue('initial_date', today);
                               form.trigger('initial_date');
+                              setInitialDateInput(format(today, 'dd/MM/yyyy', { locale: ptBR }));
                               setOpenInitialDatePicker(false);
                             }}
                           >
@@ -541,44 +810,64 @@ export function ContractBasicInfo({
                 <div className="relative">
                   <FieldSkeleton visible={isFieldLoading("final_date")} />
                   <Popover open={openFinalDatePicker} onOpenChange={setOpenFinalDatePicker}>
-                    <PopoverTrigger asChild>
+                    <div className={cn(
+                      'grid grid-cols-[1fr_40px] items-center w-full rounded-md border mt-1',
+                      isError ? 'border-destructive' : 'border-input',
+                      !initialDate ? 'opacity-70 cursor-not-allowed' : ''
+                    )}>
                       <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal group transition-all duration-200 h-auto py-3",
-                            !field.value && "text-muted-foreground",
-                            field.value && "border-primary/30 bg-primary/5 hover:bg-primary/10",
-                            isError ? "border-destructive" : "hover:border-primary/50",
-                            !initialDate ? "opacity-70 cursor-not-allowed" : ""
-                          )}
-                          disabled={isFieldLoading("final_date") || !initialDate}
-                          type="button"
-                        >
-                          <div className="flex flex-col items-start w-full">
-                            {field.value ? (
-                              <>
-                                <span className="font-medium text-foreground text-sm">
-                                  {formatDate(field.value, 'dd \'de\' MMMM \'de\' yyyy, EEEE')}
-                                </span>
-                                <span className="text-xs text-muted-foreground mt-0.5">
-                                  Data de término do contrato
-                                </span>
-                              </>
-                            ) : (
-                              <span>
-                                {initialDate ? 'Selecione a vigência final' : 'Primeiro selecione a vigência inicial'}
-                              </span>
-                            )}
-                          </div>
-                          <CalendarIcon className={cn(
-                            "ml-auto h-4 w-4 transition-colors flex-shrink-0",
-                            field.value ? "text-primary" : "text-muted-foreground",
-                            isError ? "text-destructive" : "group-hover:text-primary"
-                          )} />
-                        </Button>
+                        <Input
+                          placeholder="dd/mm/aaaa"
+                          value={finalDateInput}
+                          onChange={(e) => {
+                            const masked = formatInputToDateMask(e.target.value);
+                            setFinalDateInput(masked);
+                            if (masked.length === 10) {
+                              const parsed = parseMaskedDate(masked);
+                              if (parsed) {
+                                if (initialDate && isBefore(parsed, new Date(initialDate))) {
+                                  form.setError('final_date', { type: 'manual', message: 'A data final deve ser posterior à data inicial' });
+                                } else {
+                                  form.clearErrors('final_date');
+                                  field.onChange(parsed);
+                                }
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const [dd, mm, yyyy] = v.split('/');
+                            const parsed = (dd && mm && yyyy) ? new Date(Number(yyyy), Number(mm) - 1, Number(dd)) : null;
+                            if (parsed && parsed instanceof Date && !isNaN(parsed.getTime())) {
+                              if (initialDate && isBefore(parsed, new Date(initialDate))) {
+                                form.setError('final_date', { type: 'manual', message: 'A data final deve ser posterior à data inicial' });
+                                return;
+                              }
+                              form.clearErrors('final_date');
+                              field.onChange(parsed);
+                              setFinalDateInput(format(parsed, 'dd/MM/yyyy', { locale: ptBR }));
+                            } else if (v.length > 0) {
+                              form.setError('final_date', { type: 'manual', message: 'Selecione uma vigência final válida' });
+                            }
+                          }}
+                          inputMode="numeric"
+                          maxLength={10}
+                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-9 px-3"
+                          disabled={isFieldLoading('final_date') || !initialDate}
+                        />
                       </FormControl>
-                    </PopoverTrigger>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-9 w-10 border-l border-input rounded-none rounded-r-md hover:bg-accent/50"
+                          disabled={isFieldLoading('final_date') || !initialDate}
+                          aria-label="Abrir calendário"
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </div>
                     <PopoverContentModal className="w-auto p-0 rounded-xl shadow-xl border-border/50 bg-card/95 backdrop-blur-sm" align="start" onInteractOutside={(e) => {
                       // Impede que o popover feche ao interagir com o calendário ou botões de atalho
                       const target = e.target as HTMLElement;
@@ -621,6 +910,7 @@ export function ContractBasicInfo({
                             onSelect={(date) => {
                               if (date) {
                                 field.onChange(date);
+                                setFinalDateInput(format(date, 'dd/MM/yyyy', { locale: ptBR }));
                                 setOpenFinalDatePicker(false);
                               }
                             }}
@@ -699,6 +989,7 @@ export function ContractBasicInfo({
                                     const endDate = addDays(start, 30);
                                     form.setValue('final_date', endDate);
                                     form.trigger('final_date');
+                                    setFinalDateInput(format(endDate, 'dd/MM/yyyy', { locale: ptBR }));
                                     setOpenFinalDatePicker(false);
                                   } else {
                                     toast.error('Selecione uma vigência inicial válida antes de usar o atalho.');
@@ -718,6 +1009,7 @@ export function ContractBasicInfo({
                                     const endDate = addDays(start, 365);
                                     form.setValue('final_date', endDate);
                                     form.trigger('final_date');
+                                    setFinalDateInput(format(endDate, 'dd/MM/yyyy', { locale: ptBR }));
                                     setOpenFinalDatePicker(false);
                                   } else {
                                     toast.error('Selecione uma vigência inicial válida antes de usar o atalho.');
@@ -744,6 +1036,7 @@ export function ContractBasicInfo({
           }}
         />
       </div>
+      )}
     </div>
   );
 }

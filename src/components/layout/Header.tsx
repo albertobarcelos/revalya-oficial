@@ -1,4 +1,4 @@
-import { LogOut, Search, Settings, User, Building2 } from "lucide-react";
+import { LogOut, Settings, User, Building2 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
@@ -19,6 +19,11 @@ interface HeaderProps {
   children?: ReactNode;
 }
 
+/**
+ * Cabeçalho responsivo com suporte a tema claro/escuro
+ * Comentário de nível de função: usa tokens de tema (bg-background, border-border, text-foreground)
+ * para manter consistência visual no dark mode.
+ */
 const Header = ({ children }: HeaderProps) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,7 +62,7 @@ const Header = ({ children }: HeaderProps) => {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
       <div className="container flex h-14 items-center">
         <div className="flex flex-1 items-center space-x-4">
           <Breadcrumbs />
@@ -67,28 +72,16 @@ const Header = ({ children }: HeaderProps) => {
               {children}
             </div>
           )}
-          <div className="flex items-center space-x-2">
-            <div className="relative flex-1 max-w-md">
-              <Search
-                size={20}
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                className="w-full pl-10 pr-4 py-2 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
+          <div className="flex items-center space-x-3 md:space-x-4">
             <NotificationSheet />
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="p-2 rounded-lg hover:bg-accent">
-                  <User size={20} />
+                <button className="p-2 rounded-lg text-foreground hover:text-primary focus:outline-none">
+                  <User size={20} className="text-foreground" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="bg-popover border border-border">
                 <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/meus-aplicativos")}>
@@ -99,7 +92,7 @@ const Header = ({ children }: HeaderProps) => {
                   <User className="mr-2 h-4 w-4" />
                   <span>Perfil</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate(isInTenant ? `/${tenantId}/settings` : "/settings")}>
+                <DropdownMenuItem onClick={() => navigate(isInTenant ? `/${tenantId}/configuracoes` : "/configuracoes")}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Configurações</span>
                 </DropdownMenuItem>

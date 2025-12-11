@@ -79,7 +79,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
               {icon}
             </div>
             <div>
-              <h3 className="text-sm font-medium text-white/90">{title}</h3>
+              <h3 className="text-label font-medium text-white/90">{title}</h3>
               {count !== undefined && (
                 <p className="text-xs text-white/70">{count} itens</p>
               )}
@@ -102,7 +102,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
         
         <div className="space-y-1">
           <motion.p 
-            className="text-2xl font-bold text-white"
+            className="text-heading-1 font-bold text-white"
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.3, delay: delay + 0.2 }}
@@ -122,37 +122,27 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
   return (
     <div className={cn("space-y-6", className)}>
       {/* AIDEV-NOTE: Grid principal de métricas - layout responsivo com 5 cards principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Pago para vencer */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Recebidos (Pagos/Confirmados) */}
         <MetricCard
-          title="Pago para vencer"
+          title="Recebidos"
           value={metrics.totalPaid}
           count={metrics.paidCount}
           icon={<Wallet className="h-5 w-5" />}
           color="green"
           delay={0}
         />
-        
-        {/* Pago para vencer (duplicado conforme layout original) */}
+
+        {/* A vencer (Pendentes no período) */}
         <MetricCard
-          title="Pago para vencer"
-          value={metrics.totalPaid}
-          count={metrics.paidCount}
-          icon={<DollarSign className="h-5 w-5" />}
+          title="A vencer"
+          value={metrics.totalPending}
+          count={metrics.pendingCount}
+          icon={<Clock className="h-5 w-5" />}
           color="yellow"
           delay={0.1}
         />
-        
-        {/* Pago para vencer (terceiro card) */}
-        <MetricCard
-          title="Pago para vencer"
-          value={metrics.totalPaid}
-          count={metrics.paidCount}
-          icon={<Target className="h-5 w-5" />}
-          color="yellow"
-          delay={0.2}
-        />
-        
+
         {/* Vencido */}
         <MetricCard
           title="Vencido"
@@ -160,23 +150,23 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           count={metrics.overdueCount}
           icon={<AlertTriangle className="h-5 w-5" />}
           color="red"
+          delay={0.2}
+        />
+
+        {/* Ticket Médio (movido para a primeira fileira) */}
+        <MetricCard
+          title="Ticket Médio"
+          value={metrics.avgTicket}
+          icon={<Target className="h-5 w-5" />}
+          color="purple"
           delay={0.3}
         />
-        
-        {/* Recebidos */}
-        <MetricCard
-          title="Recebidos"
-          value={metrics.totalReceivable}
-          count={metrics.paidCount}
-          icon={<TrendingUp className="h-5 w-5" />}
-          color="red"
-          delay={0.4}
-        />
+
       </div>
       
-      {/* AIDEV-NOTE: Segunda linha de métricas - MRR e outras métricas importantes */}
+      {/* AIDEV-NOTE: Segunda linha de métricas - ordem personalizada */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Receita de Referência */}
+        {/* 1. Receita de Referência */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -184,12 +174,12 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Receita de Referência</h3>
+            <h3 className="text-sm font-medium text-slate-300">Receita Recorrente Mensal</h3>
             <Calendar className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatCurrency(metrics.mrrTotal)}</p>
-            <div className="flex items-center gap-2 text-sm">
+            <p className="text-heading-1 font-bold">{formatCurrency(metrics.mrrTotal)}</p>
+            <div className="flex items-center gap-2 text-body">
               <span className="text-slate-400">MRR Growth:</span>
               <span className={cn(
                 "font-medium",
@@ -200,8 +190,8 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
             </div>
           </div>
         </motion.div>
-        
-        {/* Novos Clientes */}
+
+        {/* 2. Receita Recorrente Anual (ARR) */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -209,16 +199,16 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Novos Clientes</h3>
-            <Users className="h-5 w-5 text-slate-400" />
+            <h3 className="text-label font-medium text-slate-300">Receita Recorrente Anual</h3>
+            <DollarSign className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatNumber(metrics.newCustomers)}</p>
-            <p className="text-sm text-slate-400">Este mês</p>
+            <p className="text-heading-1 font-bold">{formatCurrency(metrics.mrrTotal * 12)}</p>
+            <p className="text-body text-slate-400">Estimado com base no MRR</p>
           </div>
         </motion.div>
-        
-        {/* Ticket Médio */}
+
+        {/* 3. Dias p/ Receber */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -226,16 +216,16 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Ticket Médio</h3>
-            <Target className="h-5 w-5 text-slate-400" />
+            <h3 className="text-label font-medium text-slate-300">Dias p/ Receber</h3>
+            <Clock className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{formatCurrency(metrics.avgTicket)}</p>
-            <p className="text-sm text-slate-400">Por cobrança</p>
+            <p className="text-heading-1 font-bold">{Math.round(metrics.avgDaysToReceive)}</p>
+            <p className="text-body text-slate-400">Média em dias</p>
           </div>
         </motion.div>
-        
-        {/* Dias para Receber */}
+
+        {/* 4. Novos Clientes */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -243,12 +233,12 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
           className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-lg"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-300">Dias p/ Receber</h3>
-            <Clock className="h-5 w-5 text-slate-400" />
+            <h3 className="text-label font-medium text-slate-300">Novos Clientes</h3>
+            <Users className="h-5 w-5 text-slate-400" />
           </div>
           <div className="space-y-2">
-            <p className="text-2xl font-bold">{Math.round(metrics.avgDaysToReceive)}</p>
-            <p className="text-sm text-slate-400">Média em dias</p>
+            <p className="text-heading-1 font-bold">{formatNumber(metrics.newCustomers)}</p>
+            <p className="text-body text-slate-400">Este mês</p>
           </div>
         </motion.div>
       </div>

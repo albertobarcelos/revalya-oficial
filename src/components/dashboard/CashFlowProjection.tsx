@@ -81,7 +81,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
       return 1000; // Valor padrão se não houver dados
     }
     
-    const values = filteredData.map(item => Math.max(item.inflow || 0, item.balance || 0))
+    const values = filteredData.map(item => Math.max(item.inflow || 0, item.outflow || 0, item.balance || 0))
       .filter(value => isFinite(value));
     
     return values.length > 0 ? Math.max(...values) : 1000;
@@ -100,18 +100,26 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
   
   const yDomain = [minValue * 1.1, maxValue * 1.1]; // Adiciona 10% de margem
   
+  // Dados para o gráfico com saída negativa para visualização abaixo do zero
+  const chartData = useMemo(() => {
+    return filteredData.map(item => ({
+      ...item,
+      outflowPlot: -Math.abs(item.outflow || 0)
+    }));
+  }, [filteredData]);
+  
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white border rounded-lg shadow-lg p-3 dark:bg-gray-800">
-          <p className="font-medium text-gray-900 dark:text-white">{label}</p>
-          <p className="text-sm text-emerald-600 font-medium mt-1 flex justify-between">
+        <div className="bg-card border border-border rounded-lg shadow-lg p-3">
+          <p className="font-medium text-foreground">{label}</p>
+          <p className="text-body text-emerald-600 font-medium mt-1 flex justify-between">
             <span>Entrada:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.inflow || 0)}</span>
           </p>
-          <p className="text-sm text-red-500 font-medium flex justify-between">
+          <p className="text-body text-red-500 font-medium flex justify-between">
             <span>Saída:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.outflow || 0)}</span>
           </p>
-          <p className="text-sm font-medium mt-1 border-t pt-1 flex justify-between text-blue-500">
+          <p className="text-body font-medium mt-1 border-t pt-1 flex justify-between text-blue-500">
             <span>Saldo:</span> <span className="ml-2">{formatCurrency(payload[0]?.payload?.balance || 0)}</span>
           </p>
         </div>
@@ -121,10 +129,10 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
   };
 
   return (
-    <Card className="shadow-md border border-gray-200 dark:border-gray-700">
+    <Card className="shadow-md bg-card border">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-medium">
+          <CardTitle className="text-base font-medium text-foreground">
             Projeção de Fluxo de Caixa ({selectedPeriod} dias)
           </CardTitle>
           
@@ -158,17 +166,17 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
         </div>
         
         {/* Resumo dos valores */}
-        <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
+        <div className="grid grid-cols-3 gap-4 mt-2 text-body">
           <div className="flex flex-col">
-            <span className="text-gray-500">Total a Receber</span>
+            <span className="text-muted-foreground">Total a Receber</span>
             <span className="font-medium text-emerald-600">{formatCurrency(totals.inflow)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-gray-500">Total de Saídas</span>
+            <span className="text-muted-foreground">Total de Saídas</span>
             <span className="font-medium text-red-500">{formatCurrency(totals.outflow)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-gray-500">Saldo Final</span>
+            <span className="text-muted-foreground">Saldo Final</span>
             <span className={`font-medium ${finalBalance >= 0 ? 'text-blue-500' : 'text-red-500'}`}>
               {formatCurrency(finalBalance)}
             </span>
@@ -179,7 +187,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={filteredData}
+              data={chartData}
               margin={{
                 top: 15,
                 right: 15,
@@ -191,6 +199,10 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 <linearGradient id="colorInflow" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorOutflow" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -205,10 +217,11 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 axisLine={false}
                 interval="preserveStartEnd"
                 minTickGap={20}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
               />
               <YAxis
                 tickFormatter={(value) => formatCurrency(value, true)}
-                tick={{ fontSize: 11 }}
+                tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 width={65}
@@ -234,6 +247,17 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
                 activeDot={{ r: 6, strokeWidth: 1 }}
               />
               
+              <Area
+                type="monotone"
+                dataKey="outflowPlot"
+                name="Saída"
+                stroke="#ef4444"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorOutflow)"
+                activeDot={{ r: 6, strokeWidth: 1 }}
+              />
+              
               <Line
                 type="monotone"
                 dataKey="balance"
@@ -247,7 +271,7 @@ export function CashFlowProjection({ data, days = 30 }: CashFlowProjectionProps)
               <Legend 
                 iconType="circle" 
                 iconSize={8}
-                wrapperStyle={{ fontSize: '12px', paddingTop: '5px' }}
+                wrapperStyle={{ fontSize: '12px', paddingTop: '5px', color: 'hsl(var(--foreground))' }}
               />
             </AreaChart>
           </ResponsiveContainer>

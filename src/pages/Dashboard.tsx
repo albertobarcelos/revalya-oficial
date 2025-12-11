@@ -2,32 +2,21 @@ import { useQueryClient } from "@tanstack/react-query";
 import { dashboardService } from "@/services/dashboardService";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
-import { Calendar, Download, TrendingUp } from "lucide-react";
-import { formatCurrency, formatCpfCnpj } from "@/lib/utils";
-import { formatInstallmentDisplay, getInstallmentBadgeVariant } from "@/utils/installmentUtils";
-import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { Button } from "@/components/ui/button";
 import { DateRange } from "react-day-picker";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DetailDialog } from "@/pages/dashboard/DetailDialog";
 import { format } from "date-fns";
-import { RecentContracts } from "@/components/dashboard/RecentContracts"; // Adicionar se necessário
+import { useContracts } from "@/hooks/useContracts";
 import { PendingTasks } from "@/components/dashboard/PendingTasks";
+import { useSecureTasks } from "@/hooks/useSecureTasks";
 import { useSecureTenantQuery, useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
 import { useParams, useNavigate } from "react-router-dom";
 
 // Novos componentes
-import { RevenueTrendChart } from "@/components/dashboard/RevenueTrendChart";
-import { CashFlowProjection } from "@/components/dashboard/CashFlowProjection";
-import { OverdueByTimeChart } from "@/components/dashboard/OverdueByTimeChart";
-import { PaymentMethodChart } from "@/components/dashboard/PaymentMethodChart";
-import { KeyMetricsCards } from "@/components/dashboard/KeyMetricsCards";
-import { DashboardMetrics } from "@/components/dashboard/DashboardMetrics";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HeaderControls } from "@/pages/dashboard/HeaderControls";
+import { DashboardMainContent } from "@/pages/dashboard/DashboardMainContent";
 
 export default function Dashboard() {
   const { slug } = useParams<{ slug: string }>();
@@ -50,16 +39,21 @@ export default function Dashboard() {
   useEffect(() => {
     if (currentTenant?.id) {
       console.log(`🧹 [CACHE] Limpando cache dashboard para tenant: ${currentTenant.name} (${currentTenant.id})`);
-      queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+      // Corrigir chave para coincidir com a usada na query
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
       queryClient.invalidateQueries({ queryKey: ['cashFlowProjection'] });
-      queryClient.removeQueries({ queryKey: ['dashboardMetrics'] });
+      queryClient.removeQueries({ queryKey: ['dashboard-metrics'] });
       queryClient.removeQueries({ queryKey: ['cashFlowProjection'] });
     }
-  }, [currentTenant?.id, queryClient]);
+  }, [currentTenant.id, currentTenant.name, queryClient]);
 
   // 🔐 BUSCAR DADOS DE MÉTRICAS - USANDO HOOK SEGURO MULTI-TENANT
   const { data: dashboardMetrics, isLoading: isLoadingMetrics, error: metricsError } = useSecureTenantQuery(
-    ['dashboard-metrics'],
+    [
+      'dashboard-metrics',
+      format(dateRange?.from ?? new Date(), 'yyyy-MM-dd'),
+      format(dateRange?.to ?? new Date(), 'yyyy-MM-dd')
+    ],
     async (supabase, tenantId) => {
       // 🛡️ VALIDAÇÃO DUPLA DE SEGURANÇA
       if (!tenantId) {
@@ -291,6 +285,14 @@ export default function Dashboard() {
     }
   };
 
+  // Contratos recentes (Top 5 por criação)
+  const { contracts: recentContracts, isLoading: isLoadingRecentContracts } = useContracts({
+    limit: 5,
+    page: 1,
+  });
+
+  const { tasks: pendingTasks } = useSecureTasks({ status: 'pending', limit: 10 });
+
   const handleShowDetail = (title: string, data: any[]) => {
     setDetailTitle(title);
     setDetailData(data);
@@ -304,293 +306,43 @@ export default function Dashboard() {
       <Sidebar />
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <Header>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-1" onClick={handleExport}>
-              <Download className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline text-sm">Exportar</span>
-            </Button>
-            <DateRangePicker
-              date={dateRange}
-              onDateChange={setDateRange}
-            />
-          </div>
+          <HeaderControls
+            dateRange={dateRange}
+            onDateChange={(range) => setDateRange(range as DateRange)}
+            onExportCsv={handleExport}
+            onExportExcel={async () => {
+              try {
+                const blob = await dashboardService.exportMetricsExcel(currentTenant.id, dateRange);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `metricas-${dateRange.from?.toISOString().split("T")[0]}-${dateRange.to?.toISOString().split("T")[0]}.xls`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                toast({ title: "✅ Exportação concluída", description: "Arquivo Excel gerado com cores." });
+              } catch (error) {
+                toast({ title: "❌ Erro na exportação", description: "Não foi possível gerar o Excel.", variant: "destructive" });
+              }
+            }}
+          />
         </Header>
         <div className="flex flex-col h-full p-4 overflow-auto">
           {isLoadingMetrics || isLoadingCashFlow ? (
             <DashboardSkeleton />
           ) : (
-            <div className="space-y-6">
-              {/* Cards de métricas principais - Layout original restaurado */}
-              <DashboardMetrics metrics={dashboardMetrics || {
-                totalPaid: 0,
-                totalPending: 0,
-                totalOverdue: 0,
-                totalReceivable: 0,
-                paidCount: 0,
-                pendingCount: 0,
-                overdueCount: 0,
-                newCustomers: 0,
-                newCustomersList: [],
-                mrrTotal: 0,
-                mrcTotal: 0,
-                netMonthlyValue: 0,
-                mrrGrowth: 0,
-                avgTicket: 0,
-                avgDaysToReceive: 0,
-                revenueByMonth: [],
-                revenueByDueDate: [],
-                overdueByTime: [
-                  { period: "1-15", amount: 0, count: 0 },
-                  { period: "16-30", amount: 0, count: 0 },
-                  { period: "31-60", amount: 0, count: 0 },
-                  { period: "60+", amount: 0, count: 0 }
-                ],
-                chargesByStatus: [
-                  { status: "RECEIVED", count: 0, amount: 0, charges: [] },
-                  { status: "PENDING", count: 0, amount: 0, charges: [] },
-                  { status: "OVERDUE", count: 0, amount: 0, charges: [] },
-                  { status: "CONFIRMED", count: 0, amount: 0, charges: [] }
-                ],
-                chargesByPriority: [
-                  { priority: "high", count: 0, amount: 0 },
-                  { priority: "medium", count: 0, amount: 0 },
-                  { priority: "low", count: 0, amount: 0 }
-                ],
-                chargesByPaymentMethod: [
-                  { method: "pix", count: 0, amount: 0 },
-                  { method: "boleto", count: 0, amount: 0 },
-                  { method: "cartao", count: 0, amount: 0 },
-                  { method: "outro", count: 0, amount: 0 }
-                ]
-              }} />
-
-              {/* Gráficos principais */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Tendência de receita - sempre exibir */}
-                <RevenueTrendChart 
-                  data={dashboardMetrics?.revenueByMonth || []}
-                  dueData={dashboardMetrics?.revenueByDueDate || []}
-                  growth={dashboardMetrics?.mrrGrowth || 0}
-                />
-              </div>
-              
-              {/* Projeção de fluxo de caixa em uma linha separada - sempre exibir */}
-              <div className="w-full mt-6">
-                <CashFlowProjection data={cashFlowData || []} days={30} />
-              </div>
-
-              {/* Tabs para diferentes visualizações */}
-              <Tabs defaultValue="receivables" className="w-full">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="receivables">Recebíveis</TabsTrigger>
-                  <TabsTrigger value="overdue">Inadimplência</TabsTrigger>
-                  <TabsTrigger value="customer">Clientes</TabsTrigger>
-                  <TabsTrigger value="contracts">Contratos Recentes</TabsTrigger>
-                  <TabsTrigger value="tasks">Tarefas Pendentes</TabsTrigger>
-                </TabsList>
-                
-                {/* Recebíveis */}
-                <TabsContent value="receivables" className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Distribuição por métodos de pagamento - sempre exibir */}
-                    <PaymentMethodChart data={dashboardMetrics?.chargesByPaymentMethod || [
-                      { method: "pix", count: 0, amount: 0 },
-                      { method: "boleto", count: 0, amount: 0 },
-                      { method: "cartao", count: 0, amount: 0 },
-                      { method: "outro", count: 0, amount: 0 }
-                    ]} />
-                    
-                    {/* Cobranças por período - sempre exibir */}
-                    <div className="bg-card rounded-lg border shadow-sm p-6">
-                      <h3 className="text-base font-medium mb-4">Cobranças por Status</h3>
-                      <div className="space-y-4">
-                        {(dashboardMetrics?.chargesByStatus || [
-                          { status: "RECEIVED", count: 0, amount: 0, charges: [] },
-                          { status: "PENDING", count: 0, amount: 0, charges: [] },
-                          { status: "OVERDUE", count: 0, amount: 0, charges: [] },
-                          { status: "CONFIRMED", count: 0, amount: 0, charges: [] }
-                        ]).map((statusGroup) => (
-                          <div 
-                            key={statusGroup.status}
-                            className="flex items-center justify-between p-3 bg-background rounded-md hover:bg-accent cursor-pointer transition-colors"
-                            onClick={() => handleShowDetail(`Cobranças ${statusGroup.status === 'RECEIVED' ? 'Recebidas' : statusGroup.status === 'PENDING' ? 'Pendentes' : 'Vencidas'}`, statusGroup.charges)}
-                          >
-                            <div>
-                              <span className="text-sm font-medium">
-                                {statusGroup.status === 'RECEIVED' ? 'Recebidas' : 
-                                 statusGroup.status === 'PENDING' ? 'Pendentes' : 
-                                 statusGroup.status === 'OVERDUE' ? 'Vencidas' : 
-                                 statusGroup.status === 'CONFIRMED' ? 'Confirmadas' : statusGroup.status}
-                              </span>
-                              <p className="text-xs text-muted-foreground">{statusGroup.count} cobranças</p>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-sm font-medium">{formatCurrency(statusGroup.amount)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                {/* Inadimplência */}
-                <TabsContent value="overdue" className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Inadimplência por tempo - sempre exibir */}
-                    <OverdueByTimeChart data={dashboardMetrics?.overdueByTime || [
-                      { period: "1-15", amount: 0, count: 0 },
-                      { period: "16-30", amount: 0, count: 0 },
-                      { period: "31-60", amount: 0, count: 0 },
-                      { period: "60+", amount: 0, count: 0 }
-                    ]} />
-                    
-                    {/* Lista de inadimplentes */}
-                    <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-                      <div className="p-4 border-b">
-                        <h3 className="text-base font-medium">Maiores Inadimplências</h3>
-                      </div>
-                      <div className="p-0 max-h-[250px] overflow-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Cliente</TableHead>
-                              <TableHead className="text-right">Valor</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {dashboardMetrics?.chargesByStatus
-                              .find(s => s.status === 'OVERDUE')?.charges
-                              .sort((a, b) => (b.valor || 0) - (a.valor || 0))
-                              .slice(0, 5)
-                              .map((charge) => (
-                                <TableRow key={charge.id}>
-                                  <TableCell className="font-medium">
-                                    {charge.customer?.name || "Cliente não identificado"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {formatCurrency(charge.valor)}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                {/* Clientes */}
-                <TabsContent value="customer" className="space-y-4">
-                  <div className="grid grid-cols-1 gap-6">
-                    {/* Novos clientes */}
-                    <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-                      <div className="p-4 border-b">
-                        <h3 className="text-base font-medium">Novos Clientes (Últimos {dashboardMetrics?.newCustomersList?.length || 0})</h3>
-                      </div>
-                      <div className="p-0 max-h-[300px] overflow-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Nome</TableHead>
-                              <TableHead>Empresa</TableHead>
-                              <TableHead>CPF/CNPJ</TableHead>
-                              <TableHead className="text-right">Data</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(dashboardMetrics?.newCustomersList || []).slice(0, 5)
-                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                              .map((customer) => (
-                                <TableRow key={customer.id}>
-                                  <TableCell className="font-medium">
-                                    {customer.name || "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {customer.company || "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {formatCpfCnpj(customer.cpf_cnpj)}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    {format(new Date(customer.created_at), 'dd/MM/yyyy')}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="contracts">
-                  <RecentContracts contracts={[]} />
-                </TabsContent>
-                
-                <TabsContent value="tasks">
-                  <PendingTasks tasks={[]} />
-                </TabsContent>
-              </Tabs>
-            </div>
+            <DashboardMainContent
+              metrics={dashboardMetrics}
+              cashFlowData={cashFlowData || []}
+              recentContracts={recentContracts}
+              pendingTasks={pendingTasks as never[]}
+              onShowDetail={handleShowDetail}
+            />
           )}
         </div>
       </div>
-      {/* Modal para exibir detalhes */}
-      <Dialog open={showDetail} onOpenChange={setShowDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{detailTitle}</DialogTitle>
-            <DialogDescription>
-              Detalhes das cobranças selecionadas
-            </DialogDescription>
-          </DialogHeader>
-          <div className="overflow-auto flex-1">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead>Parcelas</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {detailData.map((charge) => (
-                  <TableRow key={charge.id}>
-                    <TableCell className="font-medium">
-                      {charge.customer?.name || "Cliente não identificado"}
-                    </TableCell>
-                    <TableCell>{formatCurrency(charge.valor)}</TableCell>
-                    <TableCell>
-                      {format(new Date(charge.data_vencimento), 'dd/MM/yyyy')}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getInstallmentBadgeVariant(charge.descricao)} className="text-xs">
-                        {formatInstallmentDisplay(charge.descricao)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        charge.status === 'RECEIVED' ? 'bg-success/10 text-success' :
-                        charge.status === 'PENDING' ? 'bg-primary/10 text-primary' :
-                        charge.status === 'OVERDUE' ? 'bg-danger/10 text-danger' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {charge.status === 'RECEIVED' ? 'Recebido' :
-                         charge.status === 'PENDING' ? 'Pendente' :
-                         charge.status === 'OVERDUE' ? 'Vencido' :
-                         charge.status === 'CONFIRMED' ? 'Confirmado' : charge.status}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DetailDialog open={showDetail} onOpenChange={setShowDetail} title={detailTitle} data={detailData as any[]} />
     </div>
   );
 }

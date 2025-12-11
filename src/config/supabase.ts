@@ -431,7 +431,7 @@ export const storageConfig = {
       maxFiles: 1000
     },
     avatars: {
-      name: 'avatars',
+      name: 'profile-avatars',
       public: true,
       allowedMimeTypes: [
         'image/jpeg',

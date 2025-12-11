@@ -231,27 +231,35 @@ export function useServices(filters: ServiceFilters = {}) {
     async (supabase, tenantId, serviceData: ServiceData) => {
       // AIDEV-NOTE: Inicialização proativa do contexto antes de qualquer operação
       await initializeTenantContext();
-      
+
       console.log(`✏️ [AUDIT] Criando serviço para tenant: ${tenantId}`, serviceData);
-      
-      // AIDEV-NOTE: Usar a mesma função RPC que funciona na edição (set_tenant_context_simple)
-      // Garante que o RLS (Row Level Security) funcione corretamente
-      const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId
+
+      // AIDEV-NOTE: Obter usuário autenticado para auditoria e RLS
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+
+      // AIDEV-NOTE: Configurar contexto com tenant e user para satisfazer políticas RLS (WITH CHECK)
+      const { data: contextResult, error: contextError } = await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: tenantId,
+        p_user_id: userId
       });
-      
+
       if (contextError) {
         console.error('🚨 [SECURITY] Erro ao configurar contexto do tenant:', contextError);
-        // Não falhar por isso, pode ser que a função não exista
       } else {
         console.log('✅ [SECURITY] Contexto do tenant configurado:', contextResult);
       }
-      
+
+      const nowIso = new Date().toISOString();
+
       const { data, error } = await supabase
         .from('services')
         .insert({
           ...serviceData,
-          tenant_id: tenantId // 🛡️ SEMPRE INCLUIR TENANT_ID
+          tenant_id: tenantId,
+          is_active: serviceData.is_active ?? true,
+          created_at: nowIso,
+          updated_at: nowIso
         })
         .select();
 

@@ -59,11 +59,11 @@ export function PaymentMethodChart({ data }: PaymentMethodChartProps) {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 shadow-md rounded-lg border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-          <p className="font-medium">{data.name}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Valor: {formatCurrency(data.value)}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Cobranças: {data.count}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">
+        <div className="bg-card p-3 shadow-md rounded-lg border border-border">
+          <p className="font-medium text-foreground">{data.name}</p>
+          <p className="text-body text-muted-foreground">Valor: {formatCurrency(data.value)}</p>
+          <p className="text-body text-muted-foreground">Cobranças: {data.count}</p>
+          <p className="text-body text-muted-foreground">
             {((data.value / total) * 100).toFixed(1)}% do total
           </p>
         </div>
@@ -73,9 +73,9 @@ export function PaymentMethodChart({ data }: PaymentMethodChartProps) {
   };
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm bg-card border">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-medium">Métodos de Pagamento</CardTitle>
+        <CardTitle className="text-base font-medium text-foreground">Métodos de Pagamento</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-[240px] flex items-center justify-center">
@@ -104,12 +104,13 @@ export function PaymentMethodChart({ data }: PaymentMethodChartProps) {
                   layout="horizontal"
                   iconType="circle"
                   iconSize={8}
+                  wrapperStyle={{ color: 'hsl(var(--foreground))' }}
                 />
               </PieChart>
             </ResponsiveContainer>
           ) : (
             <div className="text-center p-6">
-              <p className="text-sm text-muted-foreground">Não há dados de métodos de pagamento para exibir</p>
+              <p className="text-body text-muted-foreground">Não há dados de métodos de pagamento para exibir</p>
             </div>
           )}
         </div>

@@ -25,6 +25,7 @@ export interface ContractBillingPeriod {
   bill_date: string;
   status: 'PENDING' | 'BILLED' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'DUE_TODAY';
   billed_at?: string;
+  order_number?: string; // AIDEV-NOTE: Número sequencial da Ordem de Serviço (001, 002, ...)
   created_at: string;
   updated_at: string;
   manual_mark: boolean;
@@ -85,6 +86,13 @@ export function useContractBillingPeriods(contractId?: string) {
     const startTime = Date.now()
     
     try {
+      // AIDEV-NOTE: Bloqueio de geração para contratos não ativos
+      if (contract.status !== 'ACTIVE') {
+        await logRetroactiveSkipped(contractId, 'Contrato em rascunho ou não ativo. Períodos não serão gerados.');
+        setIsRetroactive(false)
+        setRetroactiveStats(null)
+        return
+      }
       // Verificar se é contrato retroativo
       if (!isRetroactiveContract(contract)) {
         await logRetroactiveSkipped(contractId, 'Contrato não é retroativo')
@@ -177,7 +185,15 @@ export function useContractBillingPeriods(contractId?: string) {
       }
 
       // AIDEV-NOTE: Verificar se é um contrato retroativo e gerar períodos se necessário
-      const retroactivePeriods = await generateRetroactivePeriods(contractData as Contract);
+      // AIDEV-NOTE: Evita tentativa de geração se contrato não estiver ACTIVE
+      if ((contractData as Contract).status === 'ACTIVE') {
+        const retroactivePeriods = await generateRetroactivePeriods(contractData as Contract);
+        void retroactivePeriods; // Mantém compatibilidade sem uso direto
+      } else {
+        await logRetroactiveSkipped(contractId, 'Contrato não está ACTIVE, nenhuma geração de períodos será executada');
+        setIsRetroactive(false)
+        setRetroactiveStats(null)
+      }
       
       // AIDEV-NOTE: Buscar períodos de faturamento com cobranças relacionadas
       const { data, error } = await supabase

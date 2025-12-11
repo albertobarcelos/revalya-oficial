@@ -98,6 +98,8 @@ interface ContractFormProviderProps {
   onCancel: () => void;
   onFormChange?: (hasChanges: boolean) => void;
   onEditRequest?: (contractId: string) => void;
+  /** Dados pré-carregados para popular o formulário quando não há contractId (ex: standalone billing) */
+  initialData?: Partial<ContractFormValues>;
   children: React.ReactNode;
 }
 
@@ -175,16 +177,26 @@ const calculateTotals = (
 
   const tax = servicesTax + productsTax;
 
-  // AIDEV-NOTE: Usar custos reais da view se disponível, senão calcular por cost_percentage
+  // AIDEV-NOTE: Calcular custos baseado em cost_price dos serviços ou cost_percentage
+  // CORREÇÃO: Priorizar cost_price direto dos serviços quando disponível
   let costs: number;
   
   if (cost_price !== undefined) {
-    // ✅ Usar custos reais da view vw_contract_services_detailed
+    // ✅ Usar custos reais da view vw_contract_services_detailed (para contratos existentes salvos)
     costs = cost_price;
   } else {
-    // ✅ Calcular custos baseado em cost_percentage para contratos novos
+    // ✅ Calcular custos baseado em cost_price direto dos serviços ou cost_percentage
     const servicesCosts = services.reduce((sum, service) => {
       const quantity = service.quantity || 1;
+      
+      // AIDEV-NOTE: CORREÇÃO - Priorizar cost_price direto do serviço
+      if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+        // Usar cost_price direto multiplicado pela quantidade
+        const serviceCost = (service.cost_price || 0) * quantity;
+        return sum + serviceCost;
+      }
+      
+      // Fallback: calcular por cost_percentage se cost_price não estiver disponível
       const unitPrice = service.unit_price || service.default_price || 0;
       const costPercentage = service.cost_percentage || 0;
       const serviceTotal = quantity * unitPrice;
@@ -212,6 +224,7 @@ export function ContractFormProvider({
   onCancel,
   onFormChange,
   onEditRequest,
+  initialData,
   children
 }: ContractFormProviderProps) {
   // Estados do formulário
@@ -233,7 +246,6 @@ export function ContractFormProvider({
   const { data: contractData, isLoading: isLoadingContract, error: contractError, loadContract } = useContractEdit();
 
   // AIDEV-NOTE: Hook para buscar custos reais de contratos existentes
-  console.log('🔍 [DEBUG] ContractFormProvider - contractId:', contractId);
   const { totalCosts: contractCosts, isLoading: isLoadingCosts } = useContractCosts(contractId);
 
   // Sempre edição quando houver um contrato selecionado
@@ -243,6 +255,8 @@ export function ContractFormProvider({
   // Ref para evitar recarregamentos desnecessários
   const loadedContractRef = useRef<string | null>(null);
   const isLoadingRef = useRef<boolean>(false);
+  // AIDEV-NOTE: Ref para rastrear se initialData já foi aplicado (evitar reaplicações)
+  const appliedInitialDataRef = useRef<string | null>(null);
 
   // Configuração do formulário
   const form = useForm<ContractFormValues>({
@@ -279,32 +293,54 @@ export function ContractFormProvider({
     });
 
     form.setValue('services', updatedServices);
-    console.log('🔄 Alterações pendentes aplicadas:', Object.keys(pendingServiceChanges).length);
   }, [form, pendingServiceChanges]);
 
   // 🚀 CARREGAMENTO OTIMIZADO: Carregar dados do contrato quando contractId mudar
   useEffect(() => {
     if (contractId && isEditMode && loadedContractRef.current !== contractId && !isLoadingRef.current) {
-      console.log('🔄 ContractFormProvider: Carregando contrato ID:', contractId);
       isLoadingRef.current = true;
       
       loadContract(contractId, form).then(() => {
         loadedContractRef.current = contractId;
         isLoadingRef.current = false;
-        console.log('✅ ContractFormProvider: Contrato carregado, dados do formulário:', form.getValues());
-        const services = form.getValues('services');
-        console.log('📋 ContractFormProvider: Serviços no formulário após carregamento:', services?.length || 0, services);
       }).catch((error) => {
-        console.error('❌ ContractFormProvider: Erro ao carregar contrato:', error);
+        console.error('❌ Erro ao carregar contrato:', error);
         loadedContractRef.current = null;
         isLoadingRef.current = false;
       });
-    } else if (!contractId) {
-      // Limpar estado quando não há contrato selecionado
-      loadedContractRef.current = null;
-      isLoadingRef.current = false;
+    } else if (!contractId && loadedContractRef.current) {
+      // Limpar estado apenas após um delay para evitar "piscar" ao fechar dialog
+      // Isso permite que o dialog feche suavemente antes de limpar o estado
+      const timeoutId = setTimeout(() => {
+        loadedContractRef.current = null;
+        isLoadingRef.current = false;
+      }, 200);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [contractId, isEditMode]); // Dependências mínimas
+  }, [contractId, isEditMode, form, loadContract]); // Dependências mínimas
+
+  // AIDEV-NOTE: Aplicar initialData quando não há contractId (ex: standalone billing)
+  useEffect(() => {
+    if (!contractId && initialData && Object.keys(initialData).length > 0) {
+      // AIDEV-NOTE: Criar uma chave única baseada no conteúdo do initialData para evitar reaplicações
+      const initialDataKey = JSON.stringify(initialData);
+      
+      // AIDEV-NOTE: Só aplicar se ainda não foi aplicado ou se mudou
+      if (appliedInitialDataRef.current !== initialDataKey) {
+        console.log('📝 Aplicando initialData ao formulário:', initialData);
+        // AIDEV-NOTE: Usar reset para aplicar todos os dados de uma vez
+        form.reset({
+          ...form.getValues(), // Manter valores atuais
+          ...initialData, // Sobrescrever com initialData
+        });
+        appliedInitialDataRef.current = initialDataKey;
+      }
+    } else if (contractId) {
+      // AIDEV-NOTE: Limpar ref quando há contractId (dados vêm do contrato)
+      appliedInitialDataRef.current = null;
+    }
+  }, [contractId, initialData, form]);
 
   // Exibir erro se houver problema no carregamento
   useEffect(() => {
@@ -320,35 +356,84 @@ export function ContractFormProvider({
   const contractDiscount = form.watch('total_discount') || 0;
   
   // AIDEV-NOTE: Função para calcular custos híbridos (backend + local)
+  // CORREÇÃO: Agora calcula custos baseado em cost_price dos serviços quando disponível
   const calculateHybridCosts = useCallback((currentServices: any[]) => {
     if (!contractId || !contractCosts) {
-      // Para contratos novos, usar cost_percentage tradicional
-      return undefined;
+      // Para contratos novos, calcular custos diretamente dos serviços
+      // AIDEV-NOTE: CORREÇÃO - Calcular custos baseado em cost_price dos serviços
+      let totalLocalCosts = 0;
+      
+      currentServices.forEach(service => {
+        const quantity = service.quantity || 1;
+        
+        // Priorizar cost_price direto do serviço
+        if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+          totalLocalCosts += (service.cost_price || 0) * quantity;
+        } else {
+          // Fallback: calcular por cost_percentage
+          const unitPrice = service.unit_price || service.default_price || 0;
+          const costPercentage = service.cost_percentage || 0;
+          const serviceTotal = quantity * unitPrice;
+          const serviceCost = serviceTotal * (costPercentage / 100);
+          totalLocalCosts += serviceCost;
+        }
+      });
+      
+      return totalLocalCosts > 0 ? totalLocalCosts : undefined;
     }
 
-    // Para contratos existentes, combinar custos salvos + custos locais
-    let totalHybridCosts = 0;
+    // Para contratos existentes, combinar custos salvos + custos locais editados
+    let totalLocalCosts = 0;
+    let totalBackendCosts = contractCosts;
 
     currentServices.forEach(service => {
       const serviceId = service.service_id || service.id;
+      const quantity = service.quantity || 1;
       
-      if (serviceId && typeof serviceId === 'string' && serviceId.length > 10) {
-        // Serviço salvo no backend - usar custo real se disponível
-        // Os custos do backend já estão incluídos em contractCosts
-        // Não precisamos somar novamente aqui
+      // AIDEV-NOTE: CORREÇÃO - Verificar se o serviço tem cost_price editado localmente
+      if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+        // Serviço com cost_price editado - usar o valor editado
+        totalLocalCosts += (service.cost_price || 0) * quantity;
+      } else if (serviceId && typeof serviceId === 'string' && serviceId.length > 10) {
+        // Serviço salvo no backend sem edição local - custo já está em contractCosts
+        // Não adicionar novamente
       } else {
         // Serviço novo (local) - calcular custo usando cost_percentage
-        const quantity = service.quantity || 1;
         const unitPrice = service.unit_price || 0;
         const costPercentage = service.cost_percentage || 0;
         const serviceTotal = quantity * unitPrice;
         const serviceCost = serviceTotal * (costPercentage / 100);
-        totalHybridCosts += serviceCost;
+        totalLocalCosts += serviceCost;
       }
     });
 
-    // Retornar custos do backend + custos locais
-    return contractCosts + totalHybridCosts;
+    // AIDEV-NOTE: CORREÇÃO - Se há serviços com cost_price editado, recalcular todos os custos
+    // Caso contrário, usar custos do backend + custos locais de novos serviços
+    const hasEditedCostPrice = currentServices.some(s => 
+      s.cost_price !== undefined && s.cost_price !== null && s.cost_price > 0
+    );
+    
+    if (hasEditedCostPrice) {
+      // Recalcular todos os custos baseado nos cost_price dos serviços
+      let recalculatedCosts = 0;
+      currentServices.forEach(service => {
+        const quantity = service.quantity || 1;
+        if (service.cost_price !== undefined && service.cost_price !== null && service.cost_price > 0) {
+          recalculatedCosts += (service.cost_price || 0) * quantity;
+        } else {
+          // Para serviços sem cost_price, usar cost_percentage ou 0
+          const unitPrice = service.unit_price || service.default_price || 0;
+          const costPercentage = service.cost_percentage || 0;
+          const serviceTotal = quantity * unitPrice;
+          const serviceCost = serviceTotal * (costPercentage / 100);
+          recalculatedCosts += serviceCost;
+        }
+      });
+      return recalculatedCosts;
+    }
+
+    // Retornar custos do backend + custos locais de novos serviços
+    return totalBackendCosts + totalLocalCosts;
   }, [contractId, contractCosts]);
 
   useEffect(() => {
@@ -357,15 +442,6 @@ export function ContractFormProvider({
     
     // AIDEV-NOTE: Calcular custos híbridos para contratos existentes
     const hybridCosts = calculateHybridCosts(services || []);
-    
-    console.log('🔍 [DEBUG] Custos híbridos:', {
-      contractId,
-      contractCosts,
-      hybridCosts,
-      servicesCount: services?.length || 0,
-      hasContractId: !!contractId,
-      hasContractCosts: !!contractCosts
-    });
     
     // AIDEV-NOTE: Incluir desconto do contrato e custos híbridos no cálculo dos totais
     const newTotals = calculateTotals(services || [], products || [], contractDiscount, hybridCosts);
@@ -377,8 +453,6 @@ export function ContractFormProvider({
     form.setValue('total_tax', newTotals.tax);
     
     const itemsCount = (services?.length || 0) + (products?.length || 0);
-    const costsSource = hybridCosts !== undefined ? 'custos híbridos (backend + local)' : 'cost_percentage';
-    console.log('💰 Totais recalculados:', newTotals, 'para', (services?.length || 0), 'serviços e', (products?.length || 0), 'produtos', 'com desconto do contrato:', contractDiscount, 'usando', costsSource);
   }, [services, products, contractDiscount, contractId, contractCosts, form, calculateHybridCosts]);
 
   // Detectar mudanças no formulário

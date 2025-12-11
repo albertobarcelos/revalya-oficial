@@ -18,6 +18,36 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        // AIDEV-NOTE: Fontes padronizadas conforme Omie
+        sans: ['"Open Sans"', '"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        poppins: ['Poppins', 'sans-serif'],
+        body: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+      },
+      fontSize: {
+        // AIDEV-NOTE: Tamanhos padronizados conforme Omie (valores fixos em px)
+        'xs': '12px',           // Select Omie (sobrescreve padrão Tailwind)
+        'sm': '13.2px',         // Tables Omie (sobrescreve padrão Tailwind)
+        'base': '14px',         // Body, Inputs, Buttons Omie (sobrescreve padrão Tailwind)
+        'lg': '16px',           // Headings Omie (sobrescreve padrão Tailwind)
+        'xl': '22px',           // Labels grandes Omie (sobrescreve padrão Tailwind)
+        '2xl': '24px',          // Tamanho extra grande
+        '3xl': '30px',          // Tamanho extra extra grande
+        // Tamanhos específicos Omie (mantidos para referência)
+        'omie-xs': '12px',      // Select
+        'omie-sm': '13.2px',    // Tables
+        'omie-base': '14px',    // Body, Inputs, Buttons, Links (padrão)
+        'omie-md': '16px',      // Headings (H1, H2, H3)
+        'omie-lg': '22px',      // Labels grandes
+      },
+      lineHeight: {
+        // AIDEV-NOTE: Line heights padronizados conforme Omie
+        'omie-tight': '15.4px',   // H4
+        'omie-normal': '17.6px',  // H1, H2, H3
+        'omie-base': '20px',      // Body, Inputs, Buttons
+        'omie-relaxed': '18.48px', // Tables
+        'omie-loose': '31.4286px', // Labels grandes
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

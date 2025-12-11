@@ -12,7 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parse, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface RevenueTrendChartProps {
@@ -69,67 +69,28 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       return lastSixMonths;
     }
 
-    // Usar os dados dos últimos 6 meses
-    const limitedData = data.slice(-6);
-    
-    // Log para verificar os dados recebidos
-    console.log("RevenueTrendChart - Dados de pagamentos limitados:", limitedData);
-    console.log("RevenueTrendChart - Dados de vencimentos completos:", dueData);
-    
-    // Verificar se os arrays têm o mesmo comprimento
-    if (dueData && limitedData.length !== dueData.length) {
-      console.warn(`RevenueTrendChart - Diferença no número de meses: pagamentos=${limitedData.length}, vencimentos=${dueData.length}`);
+    // Montar faixa contínua dos últimos 6 meses a partir da data atual
+    const monthsRange: string[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(now, i);
+      monthsRange.push(format(d, 'MMM/yyyy', { locale: ptBR }));
     }
     
-    // Verificar especificamente os dados de março
-    const marchData = limitedData.find(item => item.month.toLowerCase().includes('mar/'));
-    const marchDueData = dueData?.find(item => item.month.toLowerCase().includes('mar/'));
-    
-    console.log("RevenueTrendChart - Dados de março nos arrays limitados (pagamentos):", marchData);
-    console.log("RevenueTrendChart - Dados de março nos arrays limitados (vencimentos):", marchDueData);
-    
-    // Criar um mapa de todos os meses disponíveis em ambos os arrays
-    const allMonths = new Set<string>();
-    limitedData.forEach(item => allMonths.add(item.month));
-    dueData?.forEach(item => allMonths.add(item.month));
-    
-    // Converter para array e ordenar cronologicamente
-    const sortedMonths = Array.from(allMonths).sort((a, b) => {
-      const dateA = new Date(a.replace('/', ' '));
-      const dateB = new Date(b.replace('/', ' '));
-      return dateA.getTime() - dateB.getTime();
-    });
-    
-    console.log("RevenueTrendChart - Todos os meses ordenados:", sortedMonths);
-    
-    // Pegar os últimos 6 meses
-    const finalMonths = sortedMonths.slice(-6);
-    console.log("RevenueTrendChart - Meses finais para o gráfico:", finalMonths);
-    
-    // Mapear os dados para cada mês
-    return finalMonths.map((month, index) => {
-      // Encontrar os dados correspondentes
-      const paymentItem = limitedData.find(item => item.month === month);
+    // Mapear os dados para cada mês da faixa contínua
+    return monthsRange.map((month, index) => {
+      const paymentItem = data.find(item => item.month === month);
       const dueItem = dueData?.find(item => item.month === month);
-      
-      // Extrair o nome do mês e o ano
       const [monthName, year] = month.split('/');
-      
-      // Formato a ser exibido: "Mai/25" por exemplo
       const displayMonth = `${monthName.charAt(0).toUpperCase() + monthName.slice(1, 3)}/${year.slice(2)}`;
-      
-      // Garantir que os valores estão corretamente associados
       const resultado = {
         month: displayMonth,
         monthFull: month,
-        pagamentos: paymentItem?.revenue || 0, // Pagamentos recebidos
-        vencimentos: dueItem?.revenue || 0,    // Vencimentos esperados
+        pagamentos: paymentItem?.revenue || 0,
+        vencimentos: dueItem?.revenue || 0,
         diferenca: (dueItem?.revenue || 0) - (paymentItem?.revenue || 0)
       };
-      
-      // Log para verificar cada item processado
       console.log(`RevenueTrendChart - Item ${index} (${displayMonth}):`, resultado);
-      
       return resultado;
     });
   }, [data, dueData]);
@@ -228,19 +189,19 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       const isDeficit = valorEsperado > valorRecebido;
       
       return (
-        <div className="bg-white dark:bg-black border border-border rounded-xl p-4 shadow-lg">
-          <p className="text-lg font-bold mb-2">{fullMonth}</p>
+        <div className="bg-card border border-border rounded-xl p-4 shadow-lg">
+          <p className="text-heading-3 font-bold mb-2">{fullMonth}</p>
           
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Esperado:</span>
+              <span className="text-body text-muted-foreground">Esperado:</span>
               <span className="text-base font-bold text-pink-500">
                 {formatCurrency(valorEsperado)}
               </span>
             </div>
             
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Recebido:</span>
+              <span className="text-body text-muted-foreground">Recebido:</span>
               <span className="text-base font-bold text-blue-500">
                 {formatCurrency(valorRecebido)}
               </span>
@@ -249,7 +210,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
             <div className="h-px w-full bg-border my-2" />
             
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Diferença:</span>
+              <span className="text-body text-muted-foreground">Diferença:</span>
               <span className={`text-base font-bold ${isDeficit ? 'text-red-500' : 'text-green-500'}`}>
                 {isDeficit ? '-' : '+'}
                 {formatCurrency(diferenca)}
@@ -263,10 +224,10 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
   };
 
   return (
-    <Card className="col-span-2 overflow-hidden bg-blue-50/80 dark:bg-slate-900/80">
+    <Card className="col-span-2 overflow-hidden bg-card border">
       <CardHeader className="flex flex-row items-start justify-between pb-0">
         <div>
-          <CardTitle className="text-xl font-semibold">
+          <CardTitle className="text-heading-1 font-semibold text-foreground">
             Tendência de Receita
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -277,7 +238,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
         <div className="flex flex-col items-end">
           <div className={`flex items-center rounded-full ${growth >= 0 ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'} px-3 py-1 mb-1`}>
             {growth >= 0 ? <TrendingUp className="mr-1.5 h-4 w-4" /> : <TrendingDown className="mr-1.5 h-4 w-4" />}
-            <span className="text-sm font-medium" title="Crescimento baseado nos valores esperados (a vencer) comparando o mês atual com o primeiro mês do período de 6 meses">{growth.toFixed(1)}%</span>
+            <span className="text-body font-medium" title="Crescimento baseado nos valores esperados (a vencer) comparando o mês atual com o primeiro mês do período de 6 meses">{growth.toFixed(1)}%</span>
           </div>
           <span className="text-xs text-muted-foreground">Crescimento semestral</span>
         </div>
@@ -334,6 +295,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   axisLine={false}
                   tickLine={false}
                   dy={10}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 
                 <YAxis 
@@ -342,6 +304,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   tickLine={false}
                   width={80}
                   domain={[0, maxValue]}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 
                 <Tooltip 
@@ -355,6 +318,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   height={36}
                   iconType="circle"
                   iconSize={8}
+                  wrapperStyle={{ color: 'hsl(var(--foreground))' }}
                   formatter={(value) => {
                     return <span className={value === "Vencimentos Esperados" ? "text-pink-500" : "text-blue-500"}>
                       {value}
@@ -400,9 +364,9 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
         
         {/* Seção de resumo - mostrar apenas mês atual */}
         <div className="grid grid-cols-2 gap-4 p-6 pt-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Recebido</div>
-            <div className="text-2xl font-bold text-blue-500 tracking-tight">
+            <div className="text-heading-1 font-bold text-blue-500 tracking-tight">
               {formatCurrency(currentMonthData.pagamentos)}
             </div>
             <div className="text-xs text-muted-foreground mt-2">
@@ -410,9 +374,9 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
             </div>
           </div>
           
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Total Esperado</div>
-            <div className="text-2xl font-bold text-pink-500 tracking-tight">
+            <div className="text-heading-1 font-bold text-pink-500 tracking-tight">
               {formatCurrency(currentMonthData.vencimentos)}
             </div>
             <div className="text-xs text-muted-foreground mt-2">

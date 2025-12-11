@@ -141,7 +141,7 @@ export function NeonMetricCard({
       {/* Área de conteúdo */}
       <div className="relative z-10 p-5">
         <div className="flex justify-between items-start mb-4">
-          <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+          <h3 className="text-label font-medium text-muted-foreground">{title}</h3>
           <div className={cn(
             "flex items-center justify-center w-8 h-8 rounded-md",
             styles.text,
@@ -157,7 +157,7 @@ export function NeonMetricCard({
         <div className="space-y-3">
           <div className="flex flex-col">
             <p className={cn(
-              "text-2xl font-bold tracking-tight text-white transition-all duration-300",
+              "text-heading-1 font-bold tracking-tight text-white transition-all duration-300",
               isHovered ? "scale-105 origin-left" : ""
             )}>
               {formattedValue}

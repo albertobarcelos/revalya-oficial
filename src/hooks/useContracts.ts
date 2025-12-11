@@ -157,11 +157,43 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
       const search = filters.search;
       let customerIds: string[] = [];
       if (search) {
+        // AIDEV-NOTE: Normalizar CNPJ para buscar com ou sem pontuação
+        // Remove todos os caracteres não numéricos para criar versão normalizada
+        const normalizedSearch = search.replace(/\D/g, '');
+        
+        // Condições de busca para customers
+        const searchConditions = [
+          `name.ilike.%${search}%`,
+          `company.ilike.%${search}%`
+        ];
+        
+        // AIDEV-NOTE: Buscar CNPJ/CPF normalizado (sem pontuação)
+        // Como cpf_cnpj é numérico no banco, usamos busca exata com o número normalizado
+        if (normalizedSearch.length >= 11 && normalizedSearch.length <= 14) {
+          // Busca exata pelo número normalizado
+          const cnpjNumber = parseInt(normalizedSearch, 10);
+          if (!isNaN(cnpjNumber)) {
+            searchConditions.push(`cpf_cnpj.eq.${cnpjNumber}`);
+          }
+        }
+        
+        // AIDEV-NOTE: Se o usuário digitou com pontuação, também busca pelo número normalizado
+        // Se o termo original tinha pontuação e foi normalizado, já foi coberto acima
+        // Mas também tentamos buscar como string caso o banco tenha algum campo de texto
+        // (alguns sistemas mantêm ambos os formatos)
+        if (normalizedSearch !== search && normalizedSearch.length >= 11) {
+          // Já coberto pela busca numérica acima, mas mantemos para compatibilidade
+          const cnpjNumber = parseInt(normalizedSearch, 10);
+          if (!isNaN(cnpjNumber)) {
+            // A busca numérica já foi adicionada acima, não precisa duplicar
+          }
+        }
+        
         const { data: customersMatches, error: customersError } = await supabase
           .from('customers')
           .select('id')
           .eq('tenant_id', tenantId)
-          .or(`name.ilike.%${search}%,company.ilike.%${search}%`);
+          .or(searchConditions.join(','));
         if (!customersError) {
           customerIds = (customersMatches || []).map((c: any) => c.id);
         }
@@ -228,7 +260,8 @@ export function useContracts(filters: ContractFilters & { page?: number; limit?:
             name,
             company,
             email,
-            phone
+            phone,
+            cpf_cnpj
           )
         `)
         .eq('tenant_id', tenantId); // 🛡️ FILTRO OBRIGATÓRIO

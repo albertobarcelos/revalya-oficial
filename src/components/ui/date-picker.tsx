@@ -17,16 +17,28 @@ interface DatePickerProps {
   date?: Date;
   setDate?: (date: Date | undefined) => void;
   className?: string;
+  minDate?: Date;
 }
 
 export function DatePicker({
   date,
   setDate,
   className,
+  minDate,
 }: DatePickerProps) {
+  const [open, setOpen] = React.useState(false)
+
+  const handleSelect = (selected?: Date) => {
+    if (selected) {
+      setDate?.(selected)
+      setOpen(false)
+    } else {
+      setDate?.(undefined)
+    }
+  }
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant={"outline"}
@@ -43,12 +55,13 @@ export function DatePicker({
           <Calendar
             mode="single"
             selected={date}
-            onSelect={setDate}
+            onSelect={handleSelect}
             initialFocus
             locale={ptBR}
+            disabled={minDate ? { before: minDate } : undefined}
           />
         </PopoverContent>
       </Popover>
     </div>
   );
-} 
+}

@@ -51,10 +51,10 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 shadow-md rounded-lg border border-gray-100 dark:bg-gray-800 dark:border-gray-700">
-          <p className="font-medium">{formatPeriod(payload[0].payload.period)}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Valor: {formatCurrency(payload[0].value)}</p>
-          <p className="text-sm text-gray-500 dark:text-gray-300">Cobranças: {payload[0].payload.count}</p>
+        <div className="bg-card p-3 shadow-md rounded-lg border border-border">
+          <p className="font-medium text-foreground">{formatPeriod(payload[0].payload.period)}</p>
+          <p className="text-body text-muted-foreground">Valor: {formatCurrency(payload[0].value)}</p>
+          <p className="text-body text-muted-foreground">Cobranças: {payload[0].payload.count}</p>
         </div>
       );
     }
@@ -62,9 +62,9 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
   };
   
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm bg-card border">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-medium">Inadimplência por Período</CardTitle>
+        <CardTitle className="text-base font-medium text-foreground">Inadimplência por Período</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-[240px] flex items-center justify-center">
@@ -85,14 +85,16 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
                   tickFormatter={formatPeriod}
                   axisLine={false}
                   tickLine={false}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
                 <YAxis 
                   tickFormatter={(value) => formatCurrency(value, true)}
                   axisLine={false}
                   tickLine={false}
                   width={60}
+                  tick={{ fill: 'hsl(var(--foreground))' }}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip />} cursor={false} />
                 <Bar 
                   dataKey="amount" 
                   fill="#f43f5e" 
@@ -103,7 +105,7 @@ export function OverdueByTimeChart({ data }: OverdueByTimeChartProps) {
             </ResponsiveContainer>
           ) : (
             <div className="text-center p-6">
-              <p className="text-sm text-muted-foreground">Não há dados de inadimplência para exibir</p>
+              <p className="text-body text-muted-foreground">Não há dados de inadimplência para exibir</p>
             </div>
           )}
         </div>

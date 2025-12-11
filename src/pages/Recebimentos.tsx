@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DollarSign, Filter, Plus, Edit } from 'lucide-react';
+import { DollarSign, Filter, Plus, Edit, Download, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
@@ -14,9 +14,16 @@ import { Layout } from '@/components/layout/Layout';
 import { financeEntriesService, type FinanceEntryFilters, type FinanceEntryResponse } from '@/services/financeEntriesService';
 import type { Database } from '@/types/database';
 import { useTenantAccessGuard, useSecureTenantQuery, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Separator } from '@/components/ui/separator';
+import { motion, AnimatePresence } from 'framer-motion';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { PaginationFooter } from '@/components/layout/PaginationFooter';
 
 // AIDEV-NOTE: Tipo para entrada financeira baseado no banco de dados
 type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
+type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
 
 // AIDEV-NOTE: Interface para filtros de busca
 interface RecebimentosFilters {
@@ -26,6 +33,7 @@ interface RecebimentosFilters {
   dateTo: string;
   type: string;
   page: number;
+  limit: number;
 }
 
 // AIDEV-NOTE: Interface para dados de paginação
@@ -79,11 +87,114 @@ const Recebimentos: React.FC = () => {
       dateFrom: firstDayOfMonth,
       dateTo: lastDayOfMonth,
       type: 'RECEIVABLE',
-      page: 1
+      page: 1,
+      limit: 25
     };
   });
   
   const { toast } = useToast();
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  const [iconHtml, setIconHtml] = useState<string>('');
+
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>(() => {
+    const from = filters.dateFrom ? new Date(filters.dateFrom) : undefined;
+    const to = filters.dateTo ? new Date(filters.dateTo) : undefined;
+    return { from, to };
+  });
+
+  useEffect(() => {
+    const linkId = 'finance-icon-css';
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement('link');
+      link.id = linkId;
+      link.rel = 'stylesheet';
+      link.href = '/images/Extrato_bancario/finance-styles.css';
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/images/Extrato_bancario/finance-not-css.svg')
+      .then((r) => r.text())
+      .then((text) => {
+        if (!active) return;
+        setIconHtml(text);
+      })
+      .catch(() => {
+        setIconHtml('');
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const emptySvg = document.querySelector('.empty-icon #freepik_stories-finance') as SVGElement | null;
+    if (emptySvg) {
+      emptySvg.setAttribute('width', '100%');
+      emptySvg.removeAttribute('height');
+      emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+  }, [iconHtml]);
+
+  const bankAccountsQuery = useSecureTenantQuery(
+    ['bank-acounts', currentTenant?.id],
+    async (supabase, tId) => {
+      await supabase.rpc('set_tenant_context_simple', { p_tenant_id: tId });
+      const { data, error } = await supabase
+        .from('bank_acounts')
+        .select('id, bank, agency, count, type, tenant_id')
+        .eq('tenant_id', tId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
+    },
+    { enabled: !!currentTenant?.id }
+  );
+
+  const bankLabelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (bankAccountsQuery.data || []).forEach((b: any) => m.set(b.id, b.label));
+    return m;
+  }, [bankAccountsQuery.data]);
+
+  const [selectingEntryId, setSelectingEntryId] = useState<string | null>(null);
+
+  const associateBankAccountMutation = useSecureTenantMutation(
+    async (supabase, tenantId, { entryId, bankAccountId }: { entryId: string; bankAccountId: string }) => {
+      const entry = recebimentos.find(r => r.id === entryId);
+      if (!entry || entry.tenant_id !== tenantId) {
+        throw new Error('Operação não autorizada');
+      }
+      const patch: FinanceEntryUpdate = { bank_account_id: bankAccountId };
+      const updated = await financeEntriesService.updateEntry(entryId, patch);
+      const amount = Number((entry as any).paid_amount ?? (entry as any).net_amount ?? (entry as any).amount ?? 0);
+      const opDate = (entry as any).payment_date ?? new Date().toISOString();
+      const { error } = await supabase
+        .from('bank_operation_history')
+        .insert({
+          tenant_id: tenantId,
+          bank_acount_id: bankAccountId,
+          operation_type: 'CREDIT',
+          amount: amount,
+          operation_date: opDate,
+          description: entry.description ?? 'Recebimento',
+          document_reference: (entry as any).document_id ?? null,
+          category: null,
+        });
+      if (error) throw error;
+      return updated;
+    },
+    {
+      onSuccess: () => {
+        setSelectingEntryId(null);
+        toast({ title: 'Conta associada', description: 'A conta bancária foi vinculada ao recebimento.' });
+      },
+      onError: (error) => {
+        toast({ title: 'Erro', description: error.message || 'Falha ao associar conta', variant: 'destructive' });
+      },
+      invalidateQueries: ['recebimentos']
+    }
+  );
 
 
 
@@ -96,8 +207,9 @@ const Recebimentos: React.FC = () => {
     filters.dateFrom,
     filters.dateTo,
     filters.type,
-    filters.page
-  ], [currentTenant?.id, filters.search, filters.status, filters.dateFrom, filters.dateTo, filters.type, filters.page]);
+    filters.page,
+    filters.limit
+  ], [currentTenant?.id, filters.search, filters.status, filters.dateFrom, filters.dateTo, filters.type, filters.page, filters.limit]);
   
   // 🔐 CONSULTA SEGURA COM VALIDAÇÃO MULTI-TENANT (CAMADA 2)
   const { data: recebimentosData, isLoading, error } = useSecureTenantQuery(
@@ -116,7 +228,7 @@ const Recebimentos: React.FC = () => {
         tenant_id: tenantId, // 🔒 SEMPRE incluir tenant_id
         type: filters.type === 'RECEIVABLE' ? 'RECEIVABLE' : 'PAYABLE',
         page: filters.page,
-        limit: 15
+        limit: filters.limit
       };
 
       if (filters.search) {
@@ -196,7 +308,8 @@ const Recebimentos: React.FC = () => {
       dateFrom: firstDayOfMonth,
       dateTo: lastDayOfMonth,
       type: 'RECEIVABLE',
-      page: 1
+      page: 1,
+      limit: 25
     });
   };
 
@@ -268,59 +381,78 @@ const Recebimentos: React.FC = () => {
     markAsPaidMutation.mutate({ entryId });
   };
 
+  const handleExportCSV = useCallback(() => {
+    const header = ['Descrição', 'Valor', 'Vencimento', 'Status', 'Conta', 'Data Pagamento'];
+    const rows = recebimentos.map((e) => [
+      e.description || '',
+      (e.amount || 0).toString(),
+      e.due_date ? new Date(e.due_date).toISOString().slice(0, 10) : '',
+      e.status || '',
+      e.bank_account_id ? (bankLabelById.get(String(e.bank_account_id)) || String(e.bank_account_id)) : '',
+      e.payment_date ? new Date(e.payment_date).toISOString().slice(0, 10) : ''
+    ]);
+    const csv = [header, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `recebimentos_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    toast({ title: 'Exportado', description: 'CSV gerado com sucesso' });
+  }, [recebimentos, toast]);
+
+  const handleExportPDF = useCallback(async () => {
+    if (!tableRef.current) return;
+    const canvas = await html2canvas(tableRef.current);
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth - 20;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.text('Recebimentos', 10, 10);
+    pdf.addImage(imgData, 'PNG', 10, 20, imgWidth, Math.min(imgHeight, pageHeight - 30));
+    pdf.save(`recebimentos_${new Date().toISOString().slice(0, 10)}.pdf`);
+    toast({ title: 'Exportado', description: 'PDF gerado com sucesso' });
+  }, [toast]);
+
   return (
     <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Recebimentos</h1>
-            <p className="text-muted-foreground">
-              Gerencie seus recebimentos e controle financeiro
-            </p>
-          </div>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Recebimento
-          </Button>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtros
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div>
-                <Label htmlFor="search">Buscar</Label>
-                <Input
-                  id="search"
-                  placeholder="Descrição..."
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="type">Tipo</Label>
-                <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
+        <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-col md:flex-row md:items-end space-y-3 md:space-y-0 md:space-x-4 flex-1">
+                <div>
+                  <Label htmlFor="search">Buscar</Label>
+                  <Input
+                    id="search"
+                    placeholder="Descrição..."
+                    value={filters.search}
+                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  className="mt-1 w-full md:w-80 h-9"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="type">Tipo</Label>
+                  <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
+                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="RECEIVABLE">Recebimentos</SelectItem>
                     <SelectItem value="PAYABLE">Despesas</SelectItem>
                   </SelectContent>
-                </Select>
-              </div>
+                  </Select>
+                </div>
 
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
+                <div>
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
+                    <SelectValue placeholder="Selecione o status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
@@ -329,174 +461,142 @@ const Recebimentos: React.FC = () => {
                     <SelectItem value="OVERDUE">Vencido</SelectItem>
                     <SelectItem value="CANCELLED">Cancelado</SelectItem>
                   </SelectContent>
-                </Select>
-              </div>
+                  </Select>
+                </div>
 
-              <div>
-                <Label htmlFor="dateFrom">Data Inicial</Label>
-                <Input
-                  id="dateFrom"
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
-                />
+                <div>
+                  <Label>Período</Label>
+                  <div className="mt-1 flex items-end gap-2 w-full md:w-80">
+                    <DateRangePicker
+                      date={dateRange as any}
+                      onDateChange={(range: any) => {
+                        if (range?.from && range?.to) {
+                          setDateRange({ from: range.from, to: range.to });
+                          const fromStr = range.from.toISOString().slice(0, 10);
+                          const toStr = range.to.toISOString().slice(0, 10);
+                          setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                        }
+                      }}
+                    />
+                    
+                  </div>
+                </div>
               </div>
-
-              <div>
-                <Label htmlFor="dateTo">Data Final</Label>
-                <Input
-                  id="dateTo"
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
-                />
-              </div>
-              
-              <div className="flex justify-end mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resetFilters}
-                >
-                  Limpar Filtros
+              <div className="flex items-center gap-2 self-end">
+                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+                  <Download className="h-4 w-4" /> CSV
+                </Button>
+                <Button onClick={handleExportPDF} className="gap-2">
+                  <FileText className="h-4 w-4" /> PDF
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              {filters.type === 'RECEIVABLE' ? 'Recebimentos' : 'Despesas'}
-            </CardTitle>
-            <CardDescription>
-              {pagination.total} {filters.type === 'RECEIVABLE' ? 'recebimento(s)' : 'despesa(s)'} encontrado(s) - Página {pagination.page} de {pagination.totalPages}
-            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
+
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Data Pagamento</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recebimentos.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    recebimentos.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium">{entry.description}</TableCell>
-                        <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
-                        <TableCell>
-                          {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(entry.status)}</TableCell>
-                        <TableCell>
-                          {entry.payment_date 
-                            ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
-                            : '-'
-                          }
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {entry.status === 'PENDING' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => markAsPaid(entry.id)}
-                              >
-                                Marcar como Pago
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-             )}
+              <div ref={tableRef} className="rounded-md border flex-1 flex flex-col min-h-0">
+                {recebimentos.length === 0 ? (
+                  <div className="flex-1 min-h-0 flex flex-col items-center justify-center py-12 px-4 empty-icon">
+                    {iconHtml ? (
+                      <div dangerouslySetInnerHTML={{ __html: iconHtml }} className="mb-4 w-[260px] md:w-[320px] mx-auto" />
+                    ) : null}
+                    <div className="text-center text-muted-foreground">
+                      <p className="text-body font-medium">Nenhum {filters.type === 'RECEIVABLE' ? 'recebimento' : 'despesa'} encontrado</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Conta</TableHead>
+                          <TableHead>Data Pagamento</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <AnimatePresence initial={false}>
+                          {recebimentos.map((entry) => (
+                            <motion.tr key={entry.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                              <TableCell className="font-medium">{entry.description}</TableCell>
+                              <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
+                              <TableCell>
+                                {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(entry.status)}</TableCell>
+                              <TableCell>
+                                {entry.bank_account_id ? (
+                                  bankLabelById.get(String(entry.bank_account_id)) || '-'
+                                ) : (
+                                  selectingEntryId === entry.id ? (
+                                    <Select onValueChange={(value) => associateBankAccountMutation.mutate({ entryId: entry.id, bankAccountId: value })}>
+                                      <SelectTrigger className="h-9 w-[220px]">
+                                        <SelectValue placeholder={bankAccountsQuery.isLoading ? 'Carregando...' : 'Selecione a conta'} />
+                                      </SelectTrigger>
+                                      <SelectContent className="w-[300px] max-h-[300px]">
+                                        {(bankAccountsQuery.data || []).map((b: any) => (
+                                          <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Button size="sm" variant="outline" onClick={() => setSelectingEntryId(entry.id)} disabled={bankAccountsQuery.isLoading}>
+                                      Associar Conta
+                                    </Button>
+                                  )
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {entry.payment_date
+                                  ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
+                                  : '-'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  {entry.status === 'PENDING' && (
+                                    <Button size="sm" variant="outline" onClick={() => markAsPaid(entry.id)}>
+                                      Marcar como Pago
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="ghost">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </motion.tr>
+                          ))}
+                        </AnimatePresence>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            )}
+
           </CardContent>
-          
-          {/* AIDEV-NOTE: Componente de paginação */}
-          {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} resultados
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page <= 1}
-                >
-                  Anterior
-                </Button>
-                
-                <div className="flex items-center space-x-1">
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (pagination.totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (pagination.page <= 3) {
-                      pageNum = i + 1;
-                    } else if (pagination.page >= pagination.totalPages - 2) {
-                      pageNum = pagination.totalPages - 4 + i;
-                    } else {
-                      pageNum = pagination.page - 2 + i;
-                    }
-                    
-                    return (
-                      <Button
-                        key={pageNum}
-                        variant={pagination.page === pageNum ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handlePageChange(pageNum)}
-                        className="w-8 h-8 p-0"
-                      >
-                        {pageNum}
-                      </Button>
-                    );
-                  })}
-                </div>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.totalPages}
-                >
-                  Próxima
-                </Button>
-              </div>
+          {!isLoading && pagination.total > 0 && (
+            <div className="flex-shrink-0 border-t">
+              <PaginationFooter
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.total}
+                itemsPerPage={pagination.limit}
+                onPageChange={(page) => handlePageChange(page)}
+                onItemsPerPageChange={(perPage) => setFilters((prev) => ({ ...prev, limit: perPage, page: 1 }))}
+              />
             </div>
           )}
         </Card>
-      </div>
+      </motion.div>
     </Layout>
   );
 };

@@ -8,20 +8,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useContracts } from "@/hooks/useContracts";
+import { ContractCancelButton } from "./ContractCancelButton";
+import { ContractSuspendButton } from "./ContractSuspendButton";
+import { toast } from "sonner";
 
 interface ContractStatusDropdownProps {
   contractId: string;
   currentStatus: string;
   disabled?: boolean;
+  contractNumber?: string;
 }
 
 // AIDEV-NOTE: Componente dropdown para alterar status do contrato diretamente na lista
 export function ContractStatusDropdown({ 
   contractId, 
   currentStatus, 
-  disabled = false 
+  disabled = false,
+  contractNumber
 }: ContractStatusDropdownProps) {
   const { updateContractStatusMutation } = useContracts();
+  const [showCancel, setShowCancel] = React.useState(false);
+  const [showSuspend, setShowSuspend] = React.useState(false);
 
   // Função para obter a cor e texto do badge baseado no status
   const getStatusDisplay = (status: string) => {
@@ -59,8 +66,27 @@ export function ContractStatusDropdown({
     }
   };
 
+  /**
+   * Impede reverter o status para DRAFT após ter saído de DRAFT.
+   * Exibe mensagem amigável e bloqueia a ação no cliente.
+   */
   const handleStatusChange = async (newStatus: string) => {
     if (newStatus === currentStatus || disabled) return;
+
+    // Regra: uma vez que saiu de DRAFT, não pode voltar para DRAFT
+    if (newStatus === 'DRAFT' && currentStatus !== 'DRAFT') {
+      toast.error('Não é possível retornar o contrato para Rascunho após mudança de status.');
+      return;
+    }
+    // Abrir diálogos para operações sensíveis
+    if (newStatus === 'CANCELED') {
+      setShowCancel(true);
+      return;
+    }
+    if (newStatus === 'SUSPENDED') {
+      setShowSuspend(true);
+      return;
+    }
     
     try {
       await updateContractStatusMutation.mutateAsync({
@@ -69,18 +95,20 @@ export function ContractStatusDropdown({
       });
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
+      toast.error('Falha ao atualizar status do contrato.');
     }
   };
 
   const currentDisplay = getStatusDisplay(currentStatus);
 
   return (
+    <>
     <Select 
       value={currentStatus} 
       onValueChange={handleStatusChange}
       disabled={disabled || updateContractStatusMutation.isPending}
     >
-      <SelectTrigger className="h-6 w-auto min-w-[100px] border-0 bg-transparent p-0 hover:bg-muted/50 focus:ring-0 focus:ring-offset-0">
+      <SelectTrigger className="h-6 w-fit border-0 bg-transparent p-0 hover:bg-muted/50 focus:ring-0 focus:ring-offset-0 justify-start gap-1">
         <Badge 
           variant={currentStatus === "DRAFT" ? "outline" : "default"}
           className={currentDisplay.className}
@@ -116,5 +144,22 @@ export function ContractStatusDropdown({
         </SelectItem>
       </SelectContent>
     </Select>
+    <ContractCancelButton
+      contractId={contractId}
+      contractNumber={contractNumber || 'N/A'}
+      isOpen={showCancel}
+      onOpenChange={setShowCancel}
+      hideTrigger
+      onSuccess={() => setShowCancel(false)}
+    />
+    <ContractSuspendButton
+      contractId={contractId}
+      contractNumber={contractNumber || 'N/A'}
+      isOpen={showSuspend}
+      onOpenChange={setShowSuspend}
+      hideTrigger
+      onSuccess={() => setShowSuspend(false)}
+    />
+    </>
   );
 }

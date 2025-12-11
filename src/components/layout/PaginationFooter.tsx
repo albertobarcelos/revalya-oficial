@@ -14,10 +14,11 @@ interface PaginationFooterProps {
   onItemsPerPageChange: (itemsPerPage: number) => void;
   isLoading?: boolean;
   className?: string;
+  totals?: { gross: number; paid: number; remaining: number };
 }
 
 // AIDEV-NOTE: Opções de itens por página disponíveis
-const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+const ITEMS_PER_PAGE_OPTIONS = [25, 50, 100];
 
 // AIDEV-NOTE: Componente de paginação fixa com controles responsivos
 export function PaginationFooter({
@@ -28,7 +29,8 @@ export function PaginationFooter({
   onPageChange,
   onItemsPerPageChange,
   isLoading = false,
-  className = ""
+  className = "",
+  totals
 }: PaginationFooterProps) {
   // AIDEV-NOTE: Calcular range de itens exibidos na página atual
   const startItem = (currentPage - 1) * itemsPerPage + 1;
@@ -72,11 +74,11 @@ export function PaginationFooter({
       <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
         <div className="flex items-center gap-1 sm:gap-2">
           <span>Mostrando</span>
-          <span className="font-medium text-foreground">
+          <span className="font-light text-foreground">
             {totalItems > 0 ? `${startItem}-${endItem}` : '0'}
           </span>
           <span>de</span>
-          <span className="font-medium text-foreground">{totalItems}</span>
+          <span className="font-light text-foreground">{totalItems}</span>
           <span>itens</span>
         </div>
         
@@ -99,6 +101,15 @@ export function PaginationFooter({
             </SelectContent>
           </Select>
         </div>
+
+        {totals && (
+          <div className="ml-auto mr-[60px] flex items-center gap-2">
+            <span className="text-muted-foreground">Totais:</span>
+            <span className="w-[535px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.gross)}</span>
+            <span className="w-[150px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.paid)}</span>
+            <span className="w-[155px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.remaining)}</span>
+          </div>
+        )}
       </div>
 
       {/* AIDEV-NOTE: Controles de navegação de páginas */}

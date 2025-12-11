@@ -941,32 +941,41 @@ export function ContractFormActions({
         onSuccess(savedContractId);
       }
       
-    } catch (error: any) {
-      console.error("Erro ao salvar contrato:", error);
-      
-      // Mensagem de erro mais específica
-      let errorMessage = "Ocorreu um erro ao salvar o contrato.";
-      
-      if (error?.message?.includes('invalid input syntax for type date')) {
-        errorMessage = "Erro no formato das datas. Verifique se as datas estão corretas.";
-      } else if (error?.message?.includes('violates foreign key constraint')) {
-        errorMessage = "Erro de referência. Verifique se o cliente selecionado é válido.";
-      } else if (error?.message?.includes('duplicate key value')) {
-        errorMessage = "Já existe um contrato com este número. Use um número diferente.";
-      } else if (error?.message?.includes('Usuário não autenticado')) {
-        errorMessage = "Sessão expirada. Faça login novamente.";
-      } else if (error?.message?.includes('Slug inválido')) {
-        errorMessage = "Erro de contexto. Recarregue a página e tente novamente.";
-      } else if (error?.message?.includes('Erro ao salvar serviços')) {
-        errorMessage = error.message;
-      } else if (error?.message?.includes('Erro ao salvar produtos')) {
-        errorMessage = error.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      toast.error(errorMessage);
-    } finally {
+      } catch (error: any) {
+        console.error("Erro ao salvar contrato:", error);
+        
+        // Mensagem de erro mais específica
+        let errorMessage = "Ocorreu um erro ao salvar o contrato.";
+        
+        if (error?.message?.includes('invalid input syntax for type date')) {
+          errorMessage = "Erro no formato das datas. Verifique se as datas estão corretas.";
+        } else if (error?.message?.includes('violates foreign key constraint')) {
+          errorMessage = "Erro de referência. Verifique se o cliente selecionado é válido.";
+        } else if (error?.message?.includes('idx_contract_billing_periods_order_number_tenant')) {
+          errorMessage = "Conflito de Ordem de Serviço: já existe uma OS com este número. Tente salvar novamente.";
+        } else if (error?.message?.includes('idx_standalone_billing_periods_order_number_tenant')) {
+          errorMessage = "Conflito de Ordem de Serviço (avulso): já existe uma OS com este número. Tente salvar novamente.";
+        } else if (error?.message?.includes('duplicate key value')) {
+          errorMessage = "Já existe um contrato com este número. Use um número diferente.";
+        } else if (error?.message?.includes('Usuário não autenticado')) {
+          errorMessage = "Sessão expirada. Faça login novamente.";
+        } else if (error?.message?.includes('Slug inválido')) {
+          errorMessage = "Erro de contexto. Recarregue a página e tente novamente.";
+        } else if (error?.message?.includes('Erro ao salvar serviços')) {
+          errorMessage = error.message;
+        } else if (error?.message?.includes('Erro ao salvar produtos')) {
+          errorMessage = error.message;
+        } else if (
+          error?.message?.includes('Período de faturamento não pode ser criado') ||
+          error?.message?.includes('não está ACTIVE')
+        ) {
+          errorMessage = "Contrato em rascunho: períodos de faturamento só serão gerados após ativação.";
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        toast.error(errorMessage);
+      } finally {
       setIsPending(false);
     }
   };

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { IMaskInput } from 'react-imask';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -194,6 +195,14 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Estado local para controlar o valor de entrada do campo Custo Unitário
   const [costPriceInput, setCostPriceInput] = React.useState<string>('');
+  // Estados de rascunho para alterações dentro do modal (não aplicadas imediatamente)
+  const [draftUnitPrice, setDraftUnitPrice] = React.useState<number | null>(null);
+  const [quantityInput, setQuantityInput] = React.useState<string>('');
+  const [draftQuantity, setDraftQuantity] = React.useState<number | null>(null);
+  const [draftCostPrice, setDraftCostPrice] = React.useState<number | null>(null);
+  
+  // AIDEV-NOTE: Ref para evitar recarregamento desnecessário do modal
+  const lastLoadedServiceIdRef = React.useRef<string | null>(null);
   
   // AIDEV-NOTE: Estados para edição em massa - usando interface tipada
   const [bulkEditData, setBulkEditData] = React.useState<BulkEditData>({
@@ -260,13 +269,16 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
     console.log('🔄 ContractServices: Detectada mudança nos serviços do formulário:', formServices.length);
     
     if (formServices.length > 0) {
-      // Garantir que cada serviço tenha o campo 'total' calculado
+      // Garantir que cada serviço tenha o campo 'total' calculado e preserve cost_price
       const servicesWithTotal = formServices.map(service => ({
         ...service,
+        // AIDEV-NOTE: CORREÇÃO - Preservar cost_price explicitamente
+        cost_price: service.cost_price !== undefined ? service.cost_price : (service as any).cost_price || 0,
         total: service.total || (service.quantity || 1) * (service.unit_price || service.default_price || 0)
       }));
       
       console.log('✅ ContractServices: Carregando serviços no estado local:', servicesWithTotal);
+      console.log('🔍 ContractServices: Verificando cost_price nos serviços:', servicesWithTotal.map(s => ({ id: s.id, cost_price: s.cost_price })));
       setSelectedServices(servicesWithTotal);
     } else {
       console.log('📝 ContractServices: Nenhum serviço encontrado no formulário');
@@ -409,6 +421,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   
   // Função para salvar os dados dos impostos e financeiros
   // AIDEV-NOTE: Função para salvar configurações financeiras e de impostos apenas no estado local
+  // CORREÇÃO: Agora sincroniza imediatamente com o formulário para atualizar o resumo
   const handleSaveTaxes = async () => {
     try {
       // Encontrar o serviço que está sendo editado
@@ -427,7 +440,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       }
 
       // AIDEV-NOTE: Preparar dados das alterações para salvar no estado local
+      // Inclui unit_price, quantity e cost_price caso existam rascunhos
       const serviceChanges: Partial<SelectedService> = {
+        unit_price: (draftUnitPrice ?? currentService.unit_price ?? currentService.default_price ?? 0),
+        quantity: (draftQuantity ?? currentService.quantity ?? 1),
+        cost_price: (draftCostPrice ?? (currentService.cost_price !== undefined ? currentService.cost_price : 0)),
         // Incluir campos financeiros
         payment_method: financialData.payment_method,
         card_type: financialData.card_type,
@@ -459,15 +476,29 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       const updatedServices = [...selectedServices];
       updatedServices[serviceIndex] = {
         ...updatedServices[serviceIndex],
-        ...serviceChanges
+        ...serviceChanges,
+        total: (serviceChanges.unit_price || 0) * (serviceChanges.quantity || 1)
       };
       
       setSelectedServices(updatedServices);
+      
+      // AIDEV-NOTE: CORREÇÃO CRÍTICA - Sincronizar imediatamente com o formulário
+      // Isso garante que o resumo seja atualizado em tempo real
+      isInternalUpdate.current = true;
+      form.setValue("services", updatedServices);
+      
       setShowTaxModal(false);
       setEditingServiceId("");
+      // Limpar rascunhos ao confirmar
+      setUnitPriceInput('');
+      setCostPriceInput('');
+      setQuantityInput('');
+      setDraftUnitPrice(null);
+      setDraftQuantity(null);
+      setDraftCostPrice(null);
       
       // AIDEV-NOTE: Feedback visual de que as alterações foram salvas localmente
-      toast.success('Configurações salvas localmente. Clique em "Salvar" no contrato para confirmar as alterações.');
+      toast.success('Configurações salvas localmente. O resumo foi atualizado automaticamente.');
       
     } catch (error) {
       console.error('Erro ao salvar configurações financeiras:', error);
@@ -595,15 +626,23 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   );
   
   // Atualizar o formState quando os serviços selecionados mudarem
+  // AIDEV-NOTE: CORREÇÃO - Adicionado debounce para evitar loop infinito e melhorar performance
   React.useEffect(() => {
-    // Marcar como atualização interna para evitar loop infinito
-    isInternalUpdate.current = true;
+    // Se não há serviços selecionados, não fazer nada
+    if (selectedServices.length === 0) {
+      return;
+    }
     
-    // AIDEV-NOTE: Preservar dados de vencimento existentes ao sincronizar com o formulário
-    const currentFormServices = form.getValues('services') || [];
-    
-    // Mesclar dados existentes do formulário com selectedServices para preservar configurações
-    const mergedServices = selectedServices.map(selectedService => {
+    // AIDEV-NOTE: Debounce para evitar sincronização excessiva durante digitação
+    const timeoutId = setTimeout(() => {
+      // Marcar como atualização interna para evitar loop infinito
+      isInternalUpdate.current = true;
+      
+      // AIDEV-NOTE: Preservar dados de vencimento existentes ao sincronizar com o formulário
+      const currentFormServices = form.getValues('services') || [];
+      
+      // Mesclar dados existentes do formulário com selectedServices para preservar configurações
+      const mergedServices = selectedServices.map(selectedService => {
       const existingFormService = currentFormServices.find(fs => fs.id === selectedService.id);
       
       // AIDEV-NOTE: Priorizar alterações da edição em massa sobre dados existentes do formulário
@@ -617,6 +656,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         
         return {
           ...selectedService,
+          // AIDEV-NOTE: CORREÇÃO - Preservar cost_price e unit_price do selectedService
+          cost_price: selectedService.cost_price !== undefined ? selectedService.cost_price : existingFormService.cost_price,
+          unit_price: selectedService.unit_price !== undefined ? selectedService.unit_price : existingFormService.unit_price,
           // AIDEV-NOTE: Para dados de vencimento, priorizar selectedService (edição em massa) sobre formulário
           // Usar nullish coalescing (??) para preservar valores falsy válidos (0, false, etc.)
           due_type: selectedService.due_type ?? existingFormService.due_type,
@@ -634,16 +676,21 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
         };
       }
       
-      return selectedService;
-    });
+        return selectedService;
+      });
+      
+      form.setValue("services", mergedServices);
+    }, 300); // AIDEV-NOTE: Debounce de 300ms para evitar sincronização excessiva
     
-    form.setValue("services", mergedServices);
+    // Cleanup do timeout para evitar vazamentos de memória
+    return () => clearTimeout(timeoutId);
   }, [selectedServices, form]);
 
   // AIDEV-NOTE: Sincronizar dueDateData com selectedServices quando campos de vencimento são alterados na edição normal
-  // CORREÇÃO: Adicionar controle para evitar sincronização durante edição ativa
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante edição ativa e carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId && !isEditingDueDateData) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && !isEditingDueDateData && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de vencimento
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -663,8 +710,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
    }, [dueDateData, editingServiceId, isEditingDueDateData]);
 
   // AIDEV-NOTE: Sincronizar billingData com selectedServices quando configuração de cobrança é alterada na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de cobrança
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -682,8 +731,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
    }, [billingData, editingServiceId]);
 
   // AIDEV-NOTE: Sincronizar financialData com selectedServices quando dados financeiros são alterados na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados financeiros
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -705,8 +756,10 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
   }, [financialData, editingServiceId]);
 
   // AIDEV-NOTE: Sincronizar taxData com selectedServices quando dados de impostos são alterados na edição normal
+  // CORREÇÃO: Adicionar controle para evitar sincronização durante carregamento inicial
   React.useEffect(() => {
-    if (selectedServices.length > 0 && editingServiceId) {
+    // AIDEV-NOTE: CORREÇÃO - Não sincronizar se estamos carregando dados iniciais do modal
+    if (selectedServices.length > 0 && editingServiceId && lastLoadedServiceIdRef.current === editingServiceId) {
       // Atualizar o serviço atual nos selectedServices com os dados de impostos
       const updatedServices = selectedServices.map(service => {
         if (service.id === editingServiceId) {
@@ -739,20 +792,40 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
 
   // AIDEV-NOTE: useEffect para carregar dados do serviço quando o modal de edição é aberto
   // Corrige o problema de reset do formulário para valores padrão
+  // CORREÇÃO: Agora carrega unit_price e cost_price corretamente
+  // CORREÇÃO CRÍTICA: Adicionado ref para evitar recarregamento desnecessário
   React.useEffect(() => {
-    if (editingServiceId) {
+    // AIDEV-NOTE: Evitar recarregamento se já carregamos este serviço e o modal ainda está aberto
+    if (editingServiceId && showTaxModal && lastLoadedServiceIdRef.current !== editingServiceId) {
       console.log('🔄 Carregando dados do serviço para edição:', editingServiceId);
       
       // Encontrar o serviço atual nos selectedServices
       const currentService = selectedServices.find(service => service.id === editingServiceId);
       
       if (currentService) {
-        console.log('✅ Serviço encontrado, carregando dados de vencimento:', currentService);
+        console.log('✅ Serviço encontrado, carregando todos os dados:', currentService);
+        
+        // AIDEV-NOTE: Carregar unit_price, quantity e cost_price em rascunho
+        // Limpar estados de input e inicializar rascunhos com valores atuais do serviço
+        setUnitPriceInput('');
+        setCostPriceInput('');
+        setQuantityInput('');
+        setDraftUnitPrice(
+          typeof currentService.unit_price === 'number'
+            ? currentService.unit_price
+            : (typeof currentService.default_price === 'number' ? currentService.default_price : null)
+        );
+        setDraftQuantity(typeof currentService.quantity === 'number' ? currentService.quantity : 1);
+        setDraftCostPrice(
+          currentService.cost_price !== undefined && currentService.cost_price !== null
+            ? currentService.cost_price
+            : null
+        );
         
         // AIDEV-NOTE: Carregar dados de vencimento apenas se o serviço já possui dados salvos
         // Evita sobrescrever valores configurados pelo usuário com valores padrão
         // CORREÇÃO: Usar nullish coalescing (??) para preservar valores falsy válidos
-        if (currentService.due_type || currentService.due_value) {
+        if (currentService.due_type || currentService.due_value !== undefined) {
           setDueDateData({
             due_type: currentService.due_type ?? 'days_after_billing',
             due_value: currentService.due_value ?? 5,
@@ -792,7 +865,22 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           });
         }
         
+        // AIDEV-NOTE: Carregar configuração de cobrança
+        if (currentService.generate_billing !== undefined) {
+          setBillingData({
+            generate_billing: currentService.generate_billing
+          });
+        }
+        
+        // Marcar como carregado
+        lastLoadedServiceIdRef.current = editingServiceId;
+        
         console.log('📋 Dados carregados condicionalmente:', {
+          unit_price: currentService.unit_price,
+          cost_price: currentService.cost_price,
+          cost_price_undefined: currentService.cost_price === undefined,
+          cost_price_null: currentService.cost_price === null,
+          cost_price_zero: currentService.cost_price === 0,
           dueDateData: currentService.due_type ? {
             due_type: currentService.due_type,
             due_value: currentService.due_value,
@@ -802,8 +890,11 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
       } else {
         console.log('⚠️ Serviço não encontrado nos selectedServices');
       }
+    } else if (!showTaxModal) {
+      // AIDEV-NOTE: Limpar ref quando o modal fecha
+      lastLoadedServiceIdRef.current = null;
     }
-  }, [editingServiceId]);
+  }, [editingServiceId, showTaxModal]); // AIDEV-NOTE: Removido selectedServices das dependências para evitar loop
    
   return (
     <div>
@@ -823,7 +914,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
               variant="outline" 
               size="sm"
               onClick={handleBulkEdit}
-              className="gap-1 border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-400 transition-all duration-200"
+              className="gap-1 border border-border bg-card text-foreground hover:bg-accent transition-all duration-200"
             >
               <Calculator className="h-3.5 w-3.5" />
               Editar em Massa ({selectedServiceIds.length})
@@ -915,14 +1006,14 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           <span>Impostos e Retenções</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          className="gap-2 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer"
+                          className="gap-2 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                         >
                           <Copy className="h-4 w-4" />
                           <span>Duplicar</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
-                          className="text-destructive gap-2 focus:text-destructive hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer" 
+                          className="text-destructive gap-2 focus:text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer" 
                           onClick={() => handleRemoveService(service.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -995,69 +1086,52 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     {/* Campo de Valor Unitário */}
                     <div className="space-y-2">
                       <Label htmlFor="unitPrice" className="text-sm font-medium">Valor Unitário</Label>
-                      <Input 
+                      <IMaskInput
                         id="unitPrice"
-                        type="text"
-                        inputMode="decimal"
+                        mask={Number}
+                        scale={2}
+                        thousandsSeparator={'.'}
+                        radix={','}
+                        mapToRadix={['.']}
+                        padFractionalZeros={true}
+                        normalizeZeros={true}
+                        signed={false}
+                        prefix={'R$ '}
                         value={(() => {
-                          // Se há um valor no estado local de input, usa ele (durante digitação)
                           if (unitPriceInput !== '') {
                             return unitPriceInput;
                           }
-                          // Caso contrário, usa o valor do serviço
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          const value = currentService?.unit_price ?? currentService?.default_price ?? '';
-                          return value === 0 ? '' : value.toString();
+                          const value = draftUnitPrice ?? currentService?.unit_price ?? currentService?.default_price ?? '';
+                          if (value === '' || value === 0) return '';
+                          return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
                         })()}
-                        onChange={(e) => {
-                          const inputValue = e.target.value;
-                          
-                          // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
-                          const allowedCharsRegex = /^[0-9.,]*$/;
-                          
-                          // Se o valor contém apenas caracteres permitidos, aceita a entrada
-                          if (allowedCharsRegex.test(inputValue)) {
-                            // Atualiza o estado local para preservar a formatação durante digitação
-                            setUnitPriceInput(inputValue);
-                            
-                            // Converte para número apenas para cálculos internos
-                            let numericValue = 0;
-                            if (inputValue.trim() !== '') {
-                              // Normaliza: substitui vírgula por ponto, remove pontos extras
-                              const normalizedValue = inputValue
-                                .replace(',', '.')
-                                .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
-                              
-                              const parsed = parseFloat(normalizedValue);
-                              numericValue = isNaN(parsed) ? 0 : parsed;
-                            }
-                            
-                            // Atualiza o serviço com o valor numérico
-                            setSelectedServices(prev => 
-                              prev.map(service => 
-                                service.id === editingServiceId 
-                                  ? { 
-                                      ...service, 
-                                      unit_price: numericValue,
-                                      total: numericValue * (service.quantity || 1)
-                                    }
-                                  : service
-                              )
-                            );
-                          }
-                          // Se contém caracteres inválidos, ignora a entrada
+                        unmask={false}
+                        onAccept={(masked) => {
+                          const inputValue = String(masked);
+                          setUnitPriceInput(inputValue);
+                          const numericValue = (() => {
+                            const onlyNumbers = inputValue.replace(/[^0-9,]/g, '');
+                            if (!onlyNumbers) return 0;
+                            const normalized = onlyNumbers.replace(',', '.');
+                            const parsed = parseFloat(normalized);
+                            return isNaN(parsed) ? 0 : parsed;
+                          })();
+                          setDraftUnitPrice(numericValue);
                         }}
-                        onBlur={() => {
-                          // Quando o usuário sai do campo, limpa o estado local
-                          setUnitPriceInput('');
-                        }}
+                        onBlur={() => setUnitPriceInput('')}
                         onFocus={() => {
-                          // Quando o usuário entra no campo, inicializa o estado local
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          const value = currentService?.unit_price ?? currentService?.default_price ?? '';
-                          setUnitPriceInput(value === 0 ? '' : value.toString());
+                          const baseValue =
+                            draftUnitPrice ?? currentService?.unit_price ?? currentService?.default_price ?? null;
+                          const formatted = typeof baseValue === 'number' && baseValue > 0
+                            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseValue)
+                            : '';
+                          setUnitPriceInput(formatted);
+                          setDraftUnitPrice(typeof baseValue === 'number' ? baseValue : null);
                         }}
-                        placeholder="Ex: 1500,00 ou 1500.00"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="R$ 1.500,00"
                       />
                       <p className="text-xs text-muted-foreground">
                         Valor cobrado por unidade do serviço
@@ -1074,27 +1148,24 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                           type="text"
                           inputMode="numeric"
                           value={(() => {
+                            if (quantityInput !== '') return quantityInput;
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
                             const value = currentService?.quantity ?? '';
                             return value === 0 ? '' : value.toString();
                           })()}
                           onChange={(e) => {
                             const inputValue = e.target.value;
-                            // Permite apenas números inteiros
                             const sanitizedValue = inputValue.replace(/[^0-9]/g, '');
-                            const newValue = sanitizedValue === '' ? 1 : parseInt(sanitizedValue);
-                            
-                            setSelectedServices(prev => 
-                              prev.map(service => 
-                                service.id === editingServiceId 
-                                  ? { 
-                                      ...service, 
-                                      quantity: isNaN(newValue) ? 1 : Math.max(1, newValue),
-                                      total: (service.unit_price || service.default_price || 0) * (isNaN(newValue) ? 1 : Math.max(1, newValue))
-                                    }
-                                  : service
-                              )
-                            );
+                            setQuantityInput(sanitizedValue);
+                            const newValue = sanitizedValue === '' ? null : parseInt(sanitizedValue);
+                            setDraftQuantity(newValue && !isNaN(newValue) ? Math.max(1, newValue) : null);
+                          }}
+                          onBlur={() => setQuantityInput('')}
+                          onFocus={() => {
+                            const currentService = selectedServices.find(s => s.id === editingServiceId);
+                            const value = currentService?.quantity ?? 1;
+                            setQuantityInput(value === 0 ? '' : value.toString());
+                            setDraftQuantity(typeof value === 'number' ? value : null);
                           }}
                           placeholder="Ex: 2"
                         />
@@ -1106,68 +1177,51 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       {/* Campo de Preço de Custo */}
                       <div className="space-y-2">
                         <Label htmlFor="costPrice" className="text-sm font-medium">Custo Unitário</Label>
-                        <Input 
+                        <IMaskInput
                           id="costPrice"
-                          type="text"
-                          inputMode="decimal"
+                          mask={Number}
+                          scale={2}
+                          thousandsSeparator={'.'}
+                          radix={','}
+                          mapToRadix={['.']}
+                          padFractionalZeros={true}
+                          normalizeZeros={true}
+                          signed={false}
+                          prefix={'R$ '}
                           value={(() => {
-                            // Se há um valor no estado local de input, usa ele (durante digitação)
                             if (costPriceInput !== '') {
                               return costPriceInput;
                             }
-                            // Caso contrário, usa o valor do serviço
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
-                            const value = currentService?.cost_price ?? '';
-                            return value === 0 ? '' : value.toString();
+                            const value = draftCostPrice ?? currentService?.cost_price;
+                            if (value === undefined || value === null || value === 0) return '';
+                            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
                           })()}
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            
-                            // AIDEV-NOTE: Permite apenas números, vírgula, ponto - aceita entrada livre
-                            const allowedCharsRegex = /^[0-9.,]*$/;
-                            
-                            // Se o valor contém apenas caracteres permitidos, aceita a entrada
-                            if (allowedCharsRegex.test(inputValue)) {
-                              // Atualiza o estado local para preservar a formatação durante digitação
-                              setCostPriceInput(inputValue);
-                              
-                              // Converte para número apenas para cálculos internos
-                              let numericValue = 0;
-                              if (inputValue.trim() !== '') {
-                                // Normaliza: substitui vírgula por ponto, remove pontos extras
-                                const normalizedValue = inputValue
-                                  .replace(',', '.')
-                                  .replace(/\.(?=.*\.)/g, ''); // Remove pontos extras, mantém apenas o último
-                                
-                                const parsed = parseFloat(normalizedValue);
-                                numericValue = isNaN(parsed) ? 0 : parsed;
-                              }
-                              
-                              // Atualiza o serviço com o valor numérico
-                              setSelectedServices(prev => 
-                                prev.map(service => 
-                                  service.id === editingServiceId 
-                                    ? { 
-                                        ...service, 
-                                        cost_price: numericValue
-                                      }
-                                    : service
-                                )
-                              );
-                            }
-                            // Se contém caracteres inválidos, ignora a entrada
+                          unmask={false}
+                          onAccept={(masked) => {
+                            const inputValue = String(masked);
+                            setCostPriceInput(inputValue);
+                            const numericValue = (() => {
+                              const onlyNumbers = inputValue.replace(/[^0-9,]/g, '');
+                              if (!onlyNumbers) return 0;
+                              const normalized = onlyNumbers.replace(',', '.');
+                              const parsed = parseFloat(normalized);
+                              return isNaN(parsed) ? 0 : parsed;
+                            })();
+                            setDraftCostPrice(numericValue);
                           }}
-                          onBlur={() => {
-                            // Quando o usuário sai do campo, limpa o estado local
-                            setCostPriceInput('');
-                          }}
+                          onBlur={() => setCostPriceInput('')}
                           onFocus={() => {
-                            // Quando o usuário entra no campo, inicializa o estado local
                             const currentService = selectedServices.find(s => s.id === editingServiceId);
-                            const value = currentService?.cost_price ?? '';
-                            setCostPriceInput(value === 0 ? '' : value.toString());
+                            const baseValue = draftCostPrice ?? currentService?.cost_price ?? null;
+                            const formatted = typeof baseValue === 'number' && baseValue > 0
+                              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseValue)
+                              : '';
+                            setCostPriceInput(formatted);
+                            setDraftCostPrice(typeof baseValue === 'number' ? baseValue : null);
                           }}
-                          placeholder="Ex: 800,00 ou 800.00"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          placeholder="R$ 800,00"
                         />
                         <p className="text-xs text-muted-foreground">
                           Custo interno do serviço (opcional)
@@ -1183,7 +1237,9 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                       <span className="text-lg font-semibold text-primary">
                         {(() => {
                           const currentService = selectedServices.find(s => s.id === editingServiceId);
-                          return formatCurrency(currentService?.total || 0);
+                          const unit = draftUnitPrice ?? (currentService?.unit_price || currentService?.default_price || 0);
+                          const qty = draftQuantity ?? (currentService?.quantity || 1);
+                          return formatCurrency(unit * qty);
                         })()}
                       </span>
                     </div>
@@ -1812,7 +1868,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Tributos Municipais</h4>
                     <div className="flex justify-between text-sm">
                       <span>ISS (Imposto Sobre Serviços):</span>
@@ -1820,7 +1876,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <div className="flex justify-between text-sm font-medium">
                       <span>Total Aproximado de Tributos:</span>
                       <span className="text-primary dark:text-primary">
@@ -1838,7 +1894,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                   </div>
                   
                   {/* Informações Adicionais */}
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <h4 className="font-medium text-primary dark:text-primary mb-2">Informações Importantes</h4>
             <div className="text-xs text-primary/80 dark:text-primary/80 space-y-1">
                       <p>• Os valores apresentados são aproximados e podem variar conforme a legislação vigente.</p>
@@ -1848,7 +1904,7 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-4 pt-3 border-t border-border">
                     <p className="text-xs text-primary/70 dark:text-primary/70">
                       <strong>Fonte:</strong> Receita Federal do Brasil e legislação tributária vigente.<br/>
                       Esta informação tem caráter meramente educativo e informativo.
@@ -1862,7 +1918,15 @@ export function ContractServices({ form, contractId }: ContractServicesProps) {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button 
               variant="outline" 
-              onClick={() => setShowTaxModal(false)}
+              onClick={() => {
+                setUnitPriceInput('');
+                setCostPriceInput('');
+                setQuantityInput('');
+                setDraftUnitPrice(null);
+                setDraftQuantity(null);
+                setDraftCostPrice(null);
+                setShowTaxModal(false);
+              }}
               className="border-border/50"
             >
               Cancelar
