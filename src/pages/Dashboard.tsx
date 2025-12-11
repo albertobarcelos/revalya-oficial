@@ -7,7 +7,7 @@ import { DateRange } from "react-day-picker";
 import { useToast } from "@/hooks/use-toast";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { DetailDialog } from "@/pages/dashboard/DetailDialog";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useContracts } from "@/hooks/useContracts";
 import { PendingTasks } from "@/components/dashboard/PendingTasks";
 import { useSecureTasks } from "@/hooks/useSecureTasks";
@@ -27,8 +27,8 @@ export default function Dashboard() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   
   const [dateRange, setDateRange] = useState<DateRange>({
-    from: new Date(new Date().setDate(1)),
-    to: new Date(),
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
   });
   const [showDetail, setShowDetail] = useState(false);
   const [detailData, setDetailData] = useState<any[]>([]);

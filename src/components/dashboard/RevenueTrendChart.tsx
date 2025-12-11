@@ -69,11 +69,11 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
       return lastSixMonths;
     }
 
-    // Montar faixa contínua dos últimos 6 meses a partir da data atual
+    // Montar faixa contínua: 6 meses para trás e 6 para frente a partir do mês atual
     const monthsRange: string[] = [];
     const now = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(now, i);
+    for (let i = -6; i <= 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       monthsRange.push(format(d, 'MMM/yyyy', { locale: ptBR }));
     }
     
@@ -250,7 +250,7 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={chartData}
-                margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
+                margin={{ top: 20, right: 32, left: 24, bottom: 16 }}
               >
                 <defs>
                   <linearGradient id="gradientPink" x1="0" y1="0" x2="0" y2="1">
@@ -296,6 +296,8 @@ export function RevenueTrendChart({ data, dueData, growth }: RevenueTrendChartPr
                   tickLine={false}
                   dy={10}
                   tick={{ fill: 'hsl(var(--foreground))' }}
+                  interval="preserveStartEnd"
+                  padding={{ left: 20, right: 28 }}
                 />
                 
                 <YAxis 

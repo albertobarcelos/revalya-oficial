@@ -72,19 +72,24 @@ const invalidateBillingCache = (tenantId: string) => {
   console.log('🔄 Cache invalidado para tenant:', tenantId);
 };
 
-// AIDEV-NOTE: Função para categorizar registros em colunas do kanban baseado no kanban_column da view
-const categorizeRecord = (record: { kanban_column: string }): string => {
-  switch (record.kanban_column) {
-    case 'Faturar Hoje':
-      return 'faturar-hoje';
-    case 'Faturados no Mês':
-      return 'faturados';
-    case 'Contratos a Renovar':
-      return 'renovar';
-    case 'Faturamento Pendente':
-    default:
-      return 'pendente';
-  }
+/**
+ * Categoriza o registro em colunas do kanban com regras mutuamente exclusivas.
+ * Prioriza cálculo por `bill_date` e `status`, evitando sobreposição entre "Faturar Hoje" e "Pendente".
+ */
+const categorizeRecord = (record: { bill_date: string; status?: string; kanban_column?: string }): string => {
+  const now = new Date();
+  const bill = new Date(record.bill_date);
+
+  if (record.status === 'BILLED') return 'faturados';
+  if (record.status === 'EXPIRED') return 'renovar';
+
+  const isSameDay = bill.getFullYear() === now.getFullYear() && bill.getMonth() === now.getMonth() && bill.getDate() === now.getDate();
+  if (isSameDay) return 'faturar-hoje';
+
+  if (bill < new Date(now.getFullYear(), now.getMonth(), now.getDate())) return 'pendente';
+
+  // Futuro: não classificar como pendente aqui; manter como pendente apenas se não houver período "hoje" para o mesmo contrato (tratado após agrupamento)
+  return 'pendente';
 };
 
 // AIDEV-NOTE: Função auxiliar para mapear categoria para status label
@@ -177,6 +182,33 @@ export function useBillingKanban() {
         'renovar': []
       };
 
+      // AIDEV-NOTE: Carregar descontos gerais dos contratos em lote para calcular valores líquidos
+      const contractIds: string[] = Array.from(new Set((billingKanbanData || [])
+        .map((row: any) => row.contract_id)
+        .filter((id: string | null) => !!id))) as string[];
+
+      const discountMap = new Map<string, number>();
+      if (contractIds.length > 0) {
+        try {
+          const { data: contractsDiscounts, error: contractsError } = await supabase
+            .from('contracts')
+            .select('id, total_discount')
+            .in('id', contractIds)
+            .eq('tenant_id', tenantId);
+
+          if (contractsError) {
+            console.warn('[useBillingKanban] Erro ao buscar total_discount dos contratos:', contractsError);
+          } else if (contractsDiscounts) {
+            contractsDiscounts.forEach((c: { id: string; total_discount?: number }) => {
+              discountMap.set(c.id, c.total_discount || 0);
+            });
+            console.log('✅ [DEBUG] total_discount carregado para', contractsDiscounts.length, 'contratos');
+          }
+        } catch (error) {
+          console.warn('[useBillingKanban] Exceção ao carregar descontos dos contratos:', error);
+        }
+      }
+
       // AIDEV-NOTE: Separar períodos que precisam buscar order_number
       const periodsNeedingOrderNumber: string[] = [];
       const standalonePeriodsNeedingOrderNumber: string[] = [];
@@ -199,6 +231,10 @@ export function useBillingKanban() {
         // AIDEV-NOTE: Criar objeto KanbanContract com nomenclatura clara
         // id e period_id são o mesmo valor (ID do contract_billing_periods)
         const isStandalone = !row.contract_id;
+        const baseAmount = row.amount ?? row.amount_planned ?? 0;
+        const contractDiscount = !isStandalone && row.contract_id ? (discountMap.get(row.contract_id) || 0) : 0;
+        const isPendingOrDue = category === 'faturar-hoje' || category === 'pendente';
+        const computedAmount = isPendingOrDue ? Math.max(baseAmount - contractDiscount, 0) : baseAmount;
         const contract: KanbanContract = {
           id: row.id,
           period_id: row.id, // AIDEV-NOTE: Alias explícito para clareza semântica
@@ -207,7 +243,7 @@ export function useBillingKanban() {
           customer_name: row.customer_name,
           contract_number: row.contract_number || 'Faturamento Avulso', // AIDEV-NOTE: Fallback para avulsos
           order_number: row.order_number || null, // AIDEV-NOTE: Número da Ordem de Serviço (pode ser NULL)
-          amount: row.amount || row.amount_planned || 0, // AIDEV-NOTE: Fallback para amount_planned se amount for null
+          amount: computedAmount, // AIDEV-NOTE: Valor líquido considerando desconto geral do contrato para pendentes/hoje
           status: getStatusLabel(category),
           bill_date: row.bill_date,
           billed_at: row.billed_at,
@@ -232,6 +268,24 @@ export function useBillingKanban() {
 
         contractsMap.set(row.id, contract);
         groupedData[category as keyof KanbanData].push(contract);
+      });
+
+      // Remover registros futuros da coluna pendente quando existir um período "Faturar Hoje" para o mesmo contrato
+      const today = new Date();
+      const dueTodayContractIds = new Set(
+        (groupedData['faturar-hoje'] || [])
+          .map(c => c.contract_id)
+          .filter((id): id is string => !!id)
+      );
+
+      groupedData['pendente'] = (groupedData['pendente'] || []).filter(c => {
+        if (!c.contract_id) return true; // manter avulsos
+        const bill = new Date(c.bill_date);
+        const isFuture = bill > new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        if (isFuture && dueTodayContractIds.has(c.contract_id)) {
+          return false; // evitar duplicação visual: mantém apenas o "hoje"
+        }
+        return true;
       });
 
       // AIDEV-NOTE: Buscar order_number em lote para períodos de contratos que não têm

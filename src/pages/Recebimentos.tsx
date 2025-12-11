@@ -20,6 +20,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
+import { RecebimentosFilters } from '@/components/recebimentos/RecebimentosFilters';
+import { RecebimentosTable } from '@/components/recebimentos/RecebimentosTable';
 
 // AIDEV-NOTE: Tipo para entrada financeira baseado no banco de dados
 type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
@@ -146,7 +148,7 @@ const Recebimentos: React.FC = () => {
         .eq('tenant_id', tId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
+      return (data || []).map((a: Database['public']['Tables']['bank_acounts']['Row']) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
     },
     { enabled: !!currentTenant?.id }
   );
@@ -167,8 +169,8 @@ const Recebimentos: React.FC = () => {
       }
       const patch: FinanceEntryUpdate = { bank_account_id: bankAccountId };
       const updated = await financeEntriesService.updateEntry(entryId, patch);
-      const amount = Number((entry as any).paid_amount ?? (entry as any).net_amount ?? (entry as any).amount ?? 0);
-      const opDate = (entry as any).payment_date ?? new Date().toISOString();
+      const amount = Number((entry as FinanceEntry).paid_amount ?? (entry as FinanceEntry).net_amount ?? (entry as FinanceEntry).amount ?? 0);
+      const opDate = (entry as FinanceEntry).payment_date ?? new Date().toISOString();
       const { error } = await supabase
         .from('bank_operation_history')
         .insert({
@@ -321,18 +323,7 @@ const Recebimentos: React.FC = () => {
     }).format(value);
   };
 
-  // AIDEV-NOTE: Retorna badge colorido baseado no status
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      PENDING: { label: 'Pendente', variant: 'secondary' as const },
-      PAID: { label: 'Pago', variant: 'default' as const },
-      OVERDUE: { label: 'Vencido', variant: 'destructive' as const },
-      CANCELLED: { label: 'Cancelado', variant: 'outline' as const }
-    };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.PENDING;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
 
   // 🔐 MUTAÇÃO SEGURA PARA MARCAR COMO PAGO
   const markAsPaidMutation = useSecureTenantMutation(
@@ -422,75 +413,21 @@ const Recebimentos: React.FC = () => {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardHeader className="pb-2">
-            <div className="flex items-end justify-between gap-4">
-              <div className="flex flex-col md:flex-row md:items-end space-y-3 md:space-y-0 md:space-x-4 flex-1">
-                <div>
-                  <Label htmlFor="search">Buscar</Label>
-                  <Input
-                    id="search"
-                    placeholder="Descrição..."
-                    value={filters.search}
-                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  className="mt-1 w-full md:w-80 h-9"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="type">Tipo</Label>
-                  <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="RECEIVABLE">Recebimentos</SelectItem>
-                    <SelectItem value="PAYABLE">Despesas</SelectItem>
-                  </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger className="mt-1 w-full md:w-40 h-9">
-                    <SelectValue placeholder="Selecione o status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="PENDING">Pendente</SelectItem>
-                    <SelectItem value="PAID">Pago</SelectItem>
-                    <SelectItem value="OVERDUE">Vencido</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                  </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Período</Label>
-                  <div className="mt-1 flex items-end gap-2 w-full md:w-80">
-                    <DateRangePicker
-                      date={dateRange as any}
-                      onDateChange={(range: any) => {
-                        if (range?.from && range?.to) {
-                          setDateRange({ from: range.from, to: range.to });
-                          const fromStr = range.from.toISOString().slice(0, 10);
-                          const toStr = range.to.toISOString().slice(0, 10);
-                          setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
-                        }
-                      }}
-                    />
-                    
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 self-end">
-                <Button variant="outline" onClick={handleExportCSV} className="gap-2">
-                  <Download className="h-4 w-4" /> CSV
-                </Button>
-                <Button onClick={handleExportPDF} className="gap-2">
-                  <FileText className="h-4 w-4" /> PDF
-                </Button>
-              </div>
-            </div>
+            <RecebimentosFilters
+              filters={{ search: filters.search, status: filters.status, type: filters.type }}
+              onFiltersChange={(next) => setFilters((prev) => ({ ...prev, ...next }))}
+              dateRange={dateRange}
+              onDateRangeChange={(range) => {
+                setDateRange(range);
+                if (range?.from && range?.to) {
+                  const fromStr = range.from.toISOString().slice(0, 10);
+                  const toStr = range.to.toISOString().slice(0, 10);
+                  setFilters(prev => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
+                }
+              }}
+              onExportCSV={handleExportCSV}
+              onExportPDF={handleExportPDF}
+            />
           </CardHeader>
           <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
 
@@ -511,72 +448,19 @@ const Recebimentos: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex-1 overflow-auto min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-gray-400 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-500">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
-                        <TableRow>
-                          <TableHead>Descrição</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Conta</TableHead>
-                          <TableHead>Data Pagamento</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <AnimatePresence initial={false}>
-                          {recebimentos.map((entry) => (
-                            <motion.tr key={entry.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                              <TableCell className="font-medium">{entry.description}</TableCell>
-                              <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
-                              <TableCell>
-                                {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
-                              </TableCell>
-                              <TableCell>{getStatusBadge(entry.status)}</TableCell>
-                              <TableCell>
-                                {entry.bank_account_id ? (
-                                  bankLabelById.get(String(entry.bank_account_id)) || '-'
-                                ) : (
-                                  selectingEntryId === entry.id ? (
-                                    <Select onValueChange={(value) => associateBankAccountMutation.mutate({ entryId: entry.id, bankAccountId: value })}>
-                                      <SelectTrigger className="h-9 w-[220px]">
-                                        <SelectValue placeholder={bankAccountsQuery.isLoading ? 'Carregando...' : 'Selecione a conta'} />
-                                      </SelectTrigger>
-                                      <SelectContent className="w-[300px] max-h-[300px]">
-                                        {(bankAccountsQuery.data || []).map((b: any) => (
-                                          <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  ) : (
-                                    <Button size="sm" variant="outline" onClick={() => setSelectingEntryId(entry.id)} disabled={bankAccountsQuery.isLoading}>
-                                      Associar Conta
-                                    </Button>
-                                  )
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {entry.payment_date
-                                  ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
-                                  : '-'}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  {entry.status === 'PENDING' && (
-                                    <Button size="sm" variant="outline" onClick={() => markAsPaid(entry.id)}>
-                                      Marcar como Pago
-                                    </Button>
-                                  )}
-                                  <Button size="sm" variant="ghost">
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </motion.tr>
-                          ))}
-                        </AnimatePresence>
-                      </TableBody>
-                    </Table>
+                    <RecebimentosTable
+                      recebimentos={recebimentos}
+                      bankLabelById={bankLabelById}
+                      selectingEntryId={selectingEntryId}
+                      setSelectingEntryId={setSelectingEntryId}
+                      bankAccounts={(bankAccountsQuery.data || []) as any}
+                      bankAccountsLoading={bankAccountsQuery.isLoading}
+                      onAssociateBankAccount={(entryId, bankAccountId) =>
+                        associateBankAccountMutation.mutate({ entryId, bankAccountId })
+                      }
+                      onMarkAsPaid={(entryId) => markAsPaid(entryId)}
+                      formatCurrency={formatCurrency}
+                    />
                   </div>
                 )}
               </div>
