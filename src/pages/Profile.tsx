@@ -204,8 +204,8 @@ export default function Profile() {
       setPendingAvatarPath(null); // Limpa o pendente ao remover
       
       // AIDEV-NOTE: Dispara evento customizado para atualizar Sidebar
-      window.dispatchEvent(new CustomEvent('profile-avatar-updated', {
-        detail: { avatarPath: null }
+      window.dispatchEvent(new CustomEvent('profile-updated', {
+        detail: { avatarPath: null, profile: { ...profile, avatar_url: null } }
       }));
       logDebug('Evento de remoção de avatar disparado', { context: 'Profile' });
     } catch (error: unknown) {
@@ -258,12 +258,6 @@ export default function Profile() {
                     try {
                       await updateAvatar.mutateAsync(pendingAvatarPath);
                       setPendingAvatarPath(null); // Limpa o pendente após salvar
-                      
-                      // AIDEV-NOTE: Dispara evento customizado para atualizar Sidebar
-                      window.dispatchEvent(new CustomEvent('profile-avatar-updated', {
-                        detail: { avatarPath: pendingAvatarPath }
-                      }));
-                      logDebug('Evento de atualização de avatar disparado', { context: 'Profile' });
                     } catch (error: unknown) {
                       const err = error instanceof Error ? error : new Error(String(error));
                       logError("Erro ao salvar avatar", { context: "Profile", error: err });
@@ -273,6 +267,16 @@ export default function Profile() {
                   }
                   setProfile(prev => ({ ...prev, ...updatedProfile }));
                   await profileQuery.refetch();
+                  
+                  // AIDEV-NOTE: Dispara evento customizado para atualizar Sidebar após salvar perfil
+                  // Isso garante que nome, avatar e outros dados sejam atualizados no Sidebar
+                  window.dispatchEvent(new CustomEvent('profile-updated', {
+                    detail: { 
+                      avatarPath: pendingAvatarPath || profile?.avatar_url || null,
+                      profile: { ...profile, ...updatedProfile }
+                    }
+                  }));
+                  logDebug('Evento de atualização de perfil disparado', { context: 'Profile' });
                 }}
                 isLoading={isLoading}
               />

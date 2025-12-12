@@ -229,6 +229,16 @@ export function useZustandTenant() {
     return true;
   };
   
+  // AIDEV-NOTE: Wrapper para refreshPortalData que permite forçar refresh
+  const refreshPortalData = useCallback(async (supabaseClient?: typeof supabase, forceRefresh: boolean = false) => {
+    const client = supabaseClient || supabase;
+    if (!client) {
+      console.warn('⚠️ [useZustandTenant] Supabase não disponível para refresh');
+      return;
+    }
+    await fetchPortalData(client, forceRefresh);
+  }, [supabase, fetchPortalData]);
+  
   return {
     // Estado
     currentTenant,
@@ -242,7 +252,7 @@ export function useZustandTenant() {
     // Ações aprimoradas
     switchToTenant,
     switchToTenantBySlug,
-    refreshPortalData: fetchPortalData,
+    refreshPortalData,
     
     // Seletores convenientes
     activeTenants: availableTenants.filter(t => t.active),

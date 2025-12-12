@@ -21,32 +21,71 @@ export default function Register() {
   const token = searchParams.get("token");
 
   const validateInvite = async () => {
+    console.log('🔍 [DEBUG] Validando convite, token:', token);
+    
     if (!token) {
+      console.error('❌ [DEBUG] Token não fornecido na URL');
       navigate("/invalid-link?error_description=É+necessário+um+convite+válido+para+se+registrar");
       return false;
     }
 
+    // AIDEV-NOTE: Usar tenant_invites em vez de invites (tabela antiga)
+    // A política RLS permite leitura pública de convites pendentes
+    console.log('🔍 [DEBUG] Buscando convite no banco...');
     const { data: invite, error } = await supabase
-      .from("invites")
-      .select()
+      .from("tenant_invites")
+      .select("*, tenant:tenants(name)")
       .eq("token", token)
       .single();
 
-    if (error || !invite) {
+    if (error) {
+      console.error('❌ [DEBUG] Erro ao buscar convite:', error);
+      console.error('❌ [DEBUG] Detalhes do erro:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       navigate("/invalid-link?error_description=Este+convite+não+é+válido");
       return false;
     }
 
-    if (invite.used_at) {
-      navigate("/invalid-link?error_description=Este+convite+já+foi+utilizado");
+    if (!invite) {
+      console.error('❌ [DEBUG] Convite não encontrado para o token fornecido');
+      navigate("/invalid-link?error_description=Este+convite+não+é+válido");
       return false;
     }
 
-    if (new Date(invite.expires_at) < new Date()) {
+    console.log('✅ [DEBUG] Convite encontrado:', {
+      id: invite.id,
+      email: invite.email,
+      status: invite.status,
+      expires_at: invite.expires_at,
+      tenant_name: invite.tenant?.name
+    });
+
+    // Verificar se o convite já foi aceito
+    if (invite.status !== "PENDING") {
+      console.warn('⚠️ [DEBUG] Convite não está pendente, status:', invite.status);
+      if (invite.status === "ACCEPTED") {
+        navigate("/invalid-link?error_description=Este+convite+já+foi+aceito");
+      } else {
+        navigate("/invalid-link?error_description=Este+convite+não+está+mais+disponível");
+      }
+      return false;
+    }
+
+    // Verificar se o convite expirou
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      console.warn('⚠️ [DEBUG] Convite expirado:', {
+        expires_at: invite.expires_at,
+        now: new Date().toISOString()
+      });
       navigate("/invalid-link?error_description=Este+convite+expirou");
       return false;
     }
 
+    console.log('✅ [DEBUG] Convite válido, configurando email:', invite.email);
     setEmail(invite.email);
     return true;
   };
@@ -63,6 +102,7 @@ export default function Register() {
       const isValid = await validateInvite();
       if (!isValid) return;
 
+      // AIDEV-NOTE: Tentar criar conta
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -74,13 +114,33 @@ export default function Register() {
         },
       });
 
-      if (signUpError) throw signUpError;
+      // AIDEV-NOTE: Se o erro for de usuário já existente, redirecionar para login
+      if (signUpError) {
+        if (signUpError.message?.includes('already registered') || 
+            signUpError.message?.includes('already exists') ||
+            signUpError.message?.includes('User already registered')) {
+          toast({
+            title: 'Usuário já existe',
+            description: 'Este email já possui uma conta. Redirecionando para login...',
+          });
+          
+          // Redirecionar para login com o token para processar após login
+          navigate(`/login?redirect=/register?token=${token}`);
+          return;
+        }
+        throw signUpError;
+      }
 
-      // Marcar o convite como usado
-      await supabase
-        .from("invites")
-        .update({ used_at: new Date().toISOString() })
-        .eq("token", token);
+      // AIDEV-NOTE: Buscar o convite novamente para obter tenant_id e role
+      const { data: invite, error: inviteError } = await supabase
+        .from("tenant_invites")
+        .select("tenant_id, role")
+        .eq("token", token)
+        .single();
+
+      if (inviteError || !invite) {
+        throw new Error("Convite não encontrado");
+      }
 
       // Criar o usuário manualmente caso necessário
       if (data.user) {
@@ -95,13 +155,39 @@ export default function Register() {
             name,
             email,
             metadata: { company_name: company },
-            user_role: 'TENANT_USER', // Papel padrão para novos usuários
+            user_role: invite.role, // Usar role do convite
             active: true,
           });
 
         if (userError) {
           console.error("Erro ao criar perfil de usuário:", userError);
         }
+
+        // AIDEV-NOTE: Associar usuário ao tenant automaticamente APENAS quando registra com convite
+        // O trigger auto_create_tenant_admin foi desabilitado para evitar associação automática
+        const { error: tenantUserError } = await supabase
+          .from("tenant_users")
+          .insert({
+            tenant_id: invite.tenant_id,
+            user_id: data.user.id,
+            role: invite.role,
+            active: true, // AIDEV-NOTE: Usuário ativo ao aceitar convite via registro
+          });
+
+        if (tenantUserError) {
+          console.error("Erro ao associar usuário ao tenant:", tenantUserError);
+          // Não bloqueia o fluxo, mas loga o erro
+        }
+
+        // AIDEV-NOTE: Marcar o convite como aceito
+        await supabase
+          .from("tenant_invites")
+          .update({
+            status: "ACCEPTED",
+            accepted_at: new Date().toISOString(),
+            user_id: data.user.id,
+          })
+          .eq("token", token);
       }
 
       toast({

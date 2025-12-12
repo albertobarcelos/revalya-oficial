@@ -165,15 +165,25 @@ export default function Sidebar() {
               // Continuar com a sessão recuperada
             } else {
               logError('Falha na recuperação da sessão no Sidebar', 'Sidebar', recoveredError);
-              return;
+              // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+              // Isso evita que o perfil "suma" durante navegação
+              if (!profile || !session) {
+                return;
+              }
             }
           } else {
             logError('Falha na recuperação da sessão no Sidebar', 'Sidebar', recoveryResult.error);
-            return;
+            // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+            if (!profile || !session) {
+              return;
+            }
           }
         } else {
           logError('Erro de sessão não recuperável no Sidebar', 'Sidebar', error);
-          return;
+          // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+          if (!profile || !session) {
+            return;
+          }
         }
       } else if (session) {
         logDebug('Sessão encontrada', 'Sidebar');
@@ -187,25 +197,45 @@ export default function Sidebar() {
 
         if (userError) throw userError;
         if (userData) {
-          logDebug('Usuário carregado', 'Sidebar');
+          logDebug('Usuário carregado', 'Sidebar', { userId: userData.id, name: userData.name });
           setProfile(userData);
+          
+          // AIDEV-NOTE: Sempre processa o avatar, mesmo se não houver avatar_url
+          // Isso garante que o estado seja atualizado corretamente
           if (userData.avatar_url) {
             const raw = userData.avatar_url;
 
             // Caso seja URL completa → usa direto
             if (raw.startsWith("http")) {
               setAvatarUrl(raw);
-              return;
+            } else {
+              // AIDEV-NOTE: avatar_url agora é diretamente o caminho do arquivo (TEXT)
+              // Não precisa mais buscar em user_avatars
+              getAvatarUrl(raw);
             }
-
-            // AIDEV-NOTE: avatar_url agora é diretamente o caminho do arquivo (TEXT)
-            // Não precisa mais buscar em user_avatars
-            getAvatarUrl(raw);
+          } else {
+            // AIDEV-NOTE: Se não há avatar, limpa o estado explicitamente
+            setAvatarUrl(null);
           }
+        }
+      } else {
+        // AIDEV-NOTE: Se não há sessão mas temos perfil, mantém o estado
+        // Isso evita que dados sejam perdidos durante navegação
+        if (!profile) {
+          logDebug('Sem sessão e sem perfil, limpando estado', 'Sidebar');
+          setProfile(null);
+          setAvatarUrl(null);
+        } else {
+          logDebug('Sem sessão mas mantendo perfil existente', 'Sidebar');
         }
       }
     } catch (error) {
       logError('Erro ao carregar perfil', 'Sidebar', error);
+      // AIDEV-NOTE: Em caso de erro, não limpa o estado se já temos dados válidos
+      // Isso evita que o perfil "suma" durante navegação
+      if (!profile || !session) {
+        logDebug('Erro e sem dados válidos, mantendo estado atual', 'Sidebar');
+      }
     }
   };
 
@@ -227,17 +257,21 @@ export default function Sidebar() {
       // Não fazemos nada com SIGNED_OUT para evitar conflitos
     });
 
-    // AIDEV-NOTE: Listener para atualização de avatar na página de perfil
-    const handleAvatarUpdate = () => {
-      logDebug('Evento de atualização de avatar recebido, refazendo fetch do perfil', 'Sidebar');
-      fetchSessionAndProfile();
+    // AIDEV-NOTE: Listener para atualização de perfil na página de perfil
+    // Escuta mudanças em nome, avatar e outros dados do perfil
+    const handleProfileUpdate = () => {
+      logDebug('Evento de atualização de perfil recebido, refazendo fetch do perfil', 'Sidebar');
+      // Pequeno delay para garantir que o banco foi atualizado
+      setTimeout(() => {
+        fetchSessionAndProfile();
+      }, 300);
     };
 
-    window.addEventListener('profile-avatar-updated', handleAvatarUpdate);
+    window.addEventListener('profile-updated', handleProfileUpdate);
 
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener('profile-avatar-updated', handleAvatarUpdate);
+      window.removeEventListener('profile-updated', handleProfileUpdate);
     };
   }, []);
 

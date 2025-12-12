@@ -142,7 +142,7 @@ export function useCustomers(params?: UseCustomersParams) {
         const emailExists = await checkEmailExists(supabase, tenantId, customerData.email);
         if (emailExists) {
           console.error(`🚨 [SECURITY] Email duplicado detectado: ${customerData.email} para tenant: ${tenantId}`);
-          throw new Error(`Email ${customerData.email} já está cadastrado neste tenant`);
+          throw new Error(`Email ${customerData.email} já está cadastrado nesta empresa`);
         }
       }
 
@@ -173,7 +173,7 @@ export function useCustomers(params?: UseCustomersParams) {
         // AIDEV-NOTE: Tratamento específico para erro de constraint única
         if (error.code === '23505' && error.message.includes('customers_tenant_id_email_key')) {
           console.error('🚨 [SECURITY] Violação de constraint única detectada:', error);
-          throw new Error(`Email ${customerData.email} já está cadastrado neste tenant`);
+          throw new Error(`Email ${customerData.email} já está cadastrado nesta empresa`);
         }
         throw error;
       }
@@ -276,6 +276,7 @@ export function useCustomers(params?: UseCustomersParams) {
     isLoading: query.isLoading,
     error: query.error,
     createCustomer: createCustomer.mutate,
+    createCustomerAsync: createCustomer.mutateAsync, // AIDEV-NOTE: Versão async para uso com await
     isCreating: createCustomer.isPending,
     updateCustomer: updateCustomer.mutate,
     isUpdating: updateCustomer.isPending,

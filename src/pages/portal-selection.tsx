@@ -8,6 +8,7 @@ import { usePortalManager } from "@/hooks/usePortalManager";
 
 // Importações Zustand
 import { useAuthStore } from "@/store/authStore";
+import { useTenantStore } from "@/store/tenantStore";
 import { useZustandAuth } from "@/hooks/useZustandAuth";
 import { useZustandTenant } from "@/hooks/useZustandTenant";
 import { useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
@@ -68,6 +69,10 @@ export default function PortalSelectionPage() {
   // Zustand hooks
   const { user: authUser } = useZustandAuth();
   
+  // AIDEV-NOTE: Estado para armazenar o nome do usuário da tabela users
+  // Isso garante que o nome seja atualizado quando o perfil for salvo
+  const [userName, setUserName] = useState<string | null>(null);
+  
   // Para portal de seleção, não requer tenant ativo
   const { hasAccess, currentTenant } = useTenantAccessGuard({ requireTenant: false });
   
@@ -78,10 +83,84 @@ export default function PortalSelectionPage() {
     hasLoaded, 
     userRole,
     switchToTenant,
-    refreshPortalData 
+    fetchPortalData 
   } = useZustandTenant();
+
+  // AIDEV-NOTE: Busca o nome do usuário da tabela users e escuta atualizações
+  useEffect(() => {
+    const fetchUserName = async () => {
+      if (!authUser?.id) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (error) {
+          console.error('Erro ao buscar nome do usuário:', error);
+          return;
+        }
+        
+        if (data?.name) {
+          setUserName(data.name);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar nome do usuário:', error);
+      }
+    };
+
+    // Buscar nome inicial
+    fetchUserName();
+
+    // AIDEV-NOTE: Listener para atualização de perfil
+    const handleProfileUpdate = () => {
+      // Pequeno delay para garantir que o banco foi atualizado
+      setTimeout(() => {
+        fetchUserName();
+      }, 300);
+    };
+
+    window.addEventListener('profile-updated', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('profile-updated', handleProfileUpdate);
+    };
+  }, [authUser?.id]);
   
-  const pendingInvites: any[] = [];
+  // AIDEV-NOTE: Obter convites pendentes do store Zustand
+  const { pendingInvites: storePendingInvites, refreshPortalData } = useZustandTenant();
+  
+  // AIDEV-NOTE: Forçar refresh dos dados do portal quando a página for montada
+  // Isso garante que convites recentes sejam buscados
+  useEffect(() => {
+    if (authUser?.id && supabase) {
+      // Pequeno delay para garantir que o componente está montado e dados iniciais carregados
+      const timer = setTimeout(() => {
+        console.log('🔄 [DEBUG] Portal Selection: Forçando refresh dos dados do portal para buscar convites atualizados');
+        // Forçar refresh para buscar convites atualizados
+        refreshPortalData(supabase, true);
+      }, 1000); // Delay maior para garantir que dados iniciais foram carregados
+      
+      return () => clearTimeout(timer);
+    }
+  }, [authUser?.id]); // Apenas quando o usuário mudar (evitar loops)
+  
+  // AIDEV-NOTE: Converter formato do store para formato esperado pelo componente
+  const pendingInvites = storePendingInvites.map((invite: any) => ({
+    id: invite.id,
+    tenant_id: invite.tenant_id,
+    tenant: {
+      name: invite.tenant_name,
+    },
+    role: invite.role,
+    created_at: invite.invited_at,
+    expires_at: invite.expires_at,
+    inviter: {
+      email: 'Sistema',
+    },
+  }));
   
   // Estado de prontidão para renderização sem flicker
   // Considera pronto apenas quando o tenantStore reportar que os dados foram carregados
@@ -300,8 +379,10 @@ export default function PortalSelectionPage() {
         description: 'Você agora tem acesso a este portal.',
       });
       
-      // Recarregar todos os dados do portal
-      await refreshPortalData(supabase);
+      // AIDEV-NOTE: Recarregar todos os dados do portal após aceitar convite
+      const { clearCache, fetchPortalData: refetch } = useTenantStore.getState();
+      clearCache();
+      await refetch(supabase);
       
     } catch (error) {
       console.error('Erro ao aceitar convite:', error);
@@ -325,8 +406,10 @@ export default function PortalSelectionPage() {
         description: 'O convite foi rejeitado com sucesso.',
       });
       
-      // Recarregar todos os dados do portal
-      await refreshPortalData(supabase);
+      // AIDEV-NOTE: Recarregar todos os dados do portal após rejeitar convite
+      const { clearCache, fetchPortalData: refetch } = useTenantStore.getState();
+      clearCache();
+      await refetch(supabase);
     } catch (error) {
       console.error('Erro ao rejeitar convite:', error);
       
@@ -513,7 +596,7 @@ export default function PortalSelectionPage() {
           />
           
           <h1 className="mb-2 text-3xl font-bold tracking-tight text-foreground">
-            Bem-vindo, <span className="text-accent-foreground">{authUser?.user_metadata?.name || 'Usuário'}</span>
+            Bem-vindo, <span className="text-accent-foreground">{userName || authUser?.user_metadata?.name || 'Usuário'}</span>
           </h1>
           
           <p className="text-muted-foreground">{authUser?.email}</p>
