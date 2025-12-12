@@ -2,6 +2,7 @@ import { Save } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useContractForm } from "./ContractFormProvider";
@@ -236,6 +237,9 @@ export function ContractFormActions({
   
   // AIDEV-NOTE: Hook seguro para validação de acesso ao tenant
   const { currentTenant } = useTenantAccessGuard();
+  
+  // AIDEV-NOTE: QueryClient para invalidar cache após salvar contrato
+  const queryClient = useQueryClient();
 
   // AIDEV-NOTE: Hook seguro para inserção de serviços seguindo práticas multi-tenant
   const insertServiceMutation = useSecureTenantMutation(
@@ -551,14 +555,41 @@ export function ContractFormActions({
           // Validar card_type conforme constraint: só pode ter valor se payment_method for 'Cartão'
           const validatedCardType = mappedPaymentMethod === 'Cartão' ? rawCardType : null;
           
+          // AIDEV-NOTE: CORREÇÃO - Calcular discount_percentage baseado no tipo de desconto
+          // O banco calcula discount_amount automaticamente a partir de discount_percentage
+          // IMPORTANTE: O banco espera discount_percentage como DECIMAL (0.10 para 10%), não como percentual (10)
+          // Fórmula do banco: discount_amount = (unit_price * quantity) * discount_percentage
+          // Se discount_percentage = 0.10, então discount_amount = 500 * 0.10 = 50 ✅
+          // Se discount_percentage = 10, então discount_amount = 500 * 10 = 5000 ❌
+          const unitPrice = service.unit_price || service.default_price || 0;
+          const quantity = service.quantity || 1;
+          const subtotal = unitPrice * quantity;
+          
+          let discountPercentage = service.discount_percentage || 0;
+          const discountAmount = service.discount_amount || 0;
+          
+          // AIDEV-NOTE: Se tem desconto fixo, converter para decimal (não percentual)
+          // Fórmula: discount_percentage = discount_amount / subtotal (sem multiplicar por 100)
+          if (discountAmount > 0 && subtotal > 0) {
+            discountPercentage = discountAmount / subtotal; // Decimal: 0.10 para 10%
+          } else if (discountPercentage > 1) {
+            // AIDEV-NOTE: Se discount_percentage está como percentual (ex: 10), converter para decimal (0.10)
+            // Isso corrige valores salvos incorretamente anteriormente
+            discountPercentage = discountPercentage / 100;
+          }
+          
+          // AIDEV-NOTE: Garantir que discount_percentage está entre 0 e 1 (0% a 100% em decimal)
+          discountPercentage = Math.max(0, Math.min(1, discountPercentage));
+          
           return {
             contract_id: savedContractId,
             service_id: service.service_id || genericServiceId,
             description: service.description || service.name,
-            quantity: service.quantity || 1,
-            unit_price: service.unit_price || service.default_price || 0,
+            quantity: quantity,
+            unit_price: unitPrice,
             cost_price: service.cost_price || 0, // AIDEV-NOTE: Campo custo unitário adicionado para salvar edições
-            discount_percentage: service.discount_percentage || 0,
+            discount_percentage: discountPercentage, // AIDEV-NOTE: Usar decimal (0.10 para 10%) - banco calcula discount_amount automaticamente
+            // AIDEV-NOTE: NÃO incluir discount_amount - é uma coluna gerada calculada automaticamente pelo banco
             tax_rate: service.tax_rate || 0,
             payment_method: mappedPaymentMethod,
             card_type: validatedCardType,
@@ -833,13 +864,40 @@ export function ContractFormActions({
             }
           });
           
+          // AIDEV-NOTE: CORREÇÃO - Calcular discount_percentage baseado no tipo de desconto
+          // O banco calcula discount_amount automaticamente a partir de discount_percentage
+          // IMPORTANTE: O banco espera discount_percentage como DECIMAL (0.10 para 10%), não como percentual (10)
+          // Fórmula do banco: discount_amount = (unit_price * quantity) * discount_percentage
+          // Se discount_percentage = 0.10, então discount_amount = 500 * 0.10 = 50 ✅
+          // Se discount_percentage = 10, então discount_amount = 500 * 10 = 5000 ❌
+          const unitPrice = product.unit_price || 0;
+          const quantity = product.quantity || 1;
+          const subtotal = unitPrice * quantity;
+          
+          let discountPercentage = product.discount_percentage || 0;
+          const discountAmount = product.discount_amount || 0;
+          
+          // AIDEV-NOTE: Se tem desconto fixo, converter para decimal (não percentual)
+          // Fórmula: discount_percentage = discount_amount / subtotal (sem multiplicar por 100)
+          if (discountAmount > 0 && subtotal > 0) {
+            discountPercentage = discountAmount / subtotal; // Decimal: 0.10 para 10%
+          } else if (discountPercentage > 1) {
+            // AIDEV-NOTE: Se discount_percentage está como percentual (ex: 10), converter para decimal (0.10)
+            // Isso corrige valores salvos incorretamente anteriormente
+            discountPercentage = discountPercentage / 100;
+          }
+          
+          // AIDEV-NOTE: Garantir que discount_percentage está entre 0 e 1 (0% a 100% em decimal)
+          discountPercentage = Math.max(0, Math.min(1, discountPercentage));
+          
           return {
             contract_id: savedContractId,
             product_id: product.product_id || genericProductId, // Usar produto genérico se não houver product_id
             description: product.description || product.name,
-            quantity: product.quantity || 1,
-            unit_price: product.unit_price || 0,
-            discount_percentage: product.discount_percentage || 0,
+            quantity: quantity,
+            unit_price: unitPrice,
+            discount_percentage: discountPercentage, // AIDEV-NOTE: Usar decimal (0.10 para 10%) - banco calcula discount_amount automaticamente
+            // AIDEV-NOTE: NÃO incluir discount_amount - é uma coluna gerada calculada automaticamente pelo banco
             tax_rate: product.tax_rate || 0,
             // Campos de configuração financeira - usar valores mapeados e validados
             payment_method: mappedPaymentMethod,
@@ -931,7 +989,69 @@ export function ContractFormActions({
         toast.success("Contrato criado com sucesso!");
       }
       
-      // Executar recarregamento automático em background
+      // AIDEV-NOTE: CORREÇÃO - Invalidar todas as queries relacionadas ao contrato
+      // Garante feedback visual imediato de que as alterações foram salvas
+      if (currentTenant?.id) {
+        const tenantId = currentTenant.id;
+        const contractIdToInvalidate = savedContractId || contractId;
+        
+        // Invalidar queries gerais de contratos
+        await queryClient.invalidateQueries({ 
+          queryKey: ['contracts'],
+          exact: false 
+        });
+        
+        // Invalidar query específica do contrato atualizado
+        if (contractIdToInvalidate) {
+          await queryClient.invalidateQueries({ 
+            queryKey: ['contract', contractIdToInvalidate],
+            exact: false 
+          });
+          
+          // Invalidar serviços do contrato
+          await queryClient.invalidateQueries({ 
+            queryKey: ['contract-services', tenantId, contractIdToInvalidate],
+            exact: false 
+          });
+          
+          // Invalidar produtos do contrato
+          await queryClient.invalidateQueries({ 
+            queryKey: ['contract-products', tenantId, contractIdToInvalidate],
+            exact: false 
+          });
+          
+          // Invalidar detalhes do contrato
+          await queryClient.invalidateQueries({ 
+            queryKey: ['contract-detail', tenantId, contractIdToInvalidate],
+            exact: false 
+          });
+        }
+        
+        // Invalidar kanban de faturamento (contrato pode ter mudado de posição)
+        await queryClient.invalidateQueries({ 
+          queryKey: ['billing_kanban', tenantId],
+          exact: false 
+        });
+        
+        // Invalidar períodos de faturamento
+        await queryClient.invalidateQueries({ 
+          queryKey: ['billing_periods', tenantId],
+          exact: false 
+        });
+        
+        await queryClient.invalidateQueries({ 
+          queryKey: ['contract_billing_periods', tenantId],
+          exact: false 
+        });
+        
+        // Forçar refetch da lista de contratos para feedback visual imediato
+        await queryClient.refetchQueries({ 
+          queryKey: ['contracts'],
+          exact: false 
+        });
+      }
+      
+      // Executar recarregamento automático em background (backup)
       if (backgroundRefresh) {
         await backgroundRefresh.refreshAfterSave(!contractId);
       }

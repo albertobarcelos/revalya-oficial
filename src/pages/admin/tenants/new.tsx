@@ -33,7 +33,6 @@ const tenantSchema = z.object({
   document: z.string().min(11, 'Documento inválido'),
   email: z.string().email('Email inválido'),
   phone: z.string().min(10, 'Telefone inválido'),
-  password: z.string().min(6, 'Senha deve ter no mínimo 6 caracteres'),
   reseller_id: z.string().optional().nullable(),
   active: z.boolean().default(true),
 })
@@ -59,7 +58,6 @@ export default function NewTenantPage() {
       document: '',
       email: '',
       phone: '',
-      password: '',
       reseller_id: null,
       active: true,
     },
@@ -84,49 +82,16 @@ export default function NewTenantPage() {
     try {
       setIsLoading(true)
 
-      // 1. Criar usuário no Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            role: 'tenant',
-          },
-        },
-      })
-
-      if (authError) throw authError
-
-      if (!authData.user?.id) {
-        throw new Error('Falha ao criar usuário - ID não encontrado')
+      // AIDEV-NOTE: Obter o ID do usuário atual (admin que está criando o tenant)
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !currentUser) {
+        throw new Error('Usuário não autenticado');
       }
 
-      // 2. AIDEV-NOTE: Sincronizar usuário para public.users primeiro
-      // Garantir que o usuário exista em public.users antes de criar o tenant
-      // para que o trigger auto_create_tenant_admin funcione corretamente
-      const { error: userSyncError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: authData.user.email,
-          user_role: 'TENANT_ADMIN', // Usuário criador do tenant é admin
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
-
-      // Se o usuário já existir, ignoramos o erro (ON CONFLICT DO NOTHING equivalente)
-      if (userSyncError && !userSyncError.message.includes('duplicate key')) {
-        throw new Error(`Erro ao sincronizar usuário: ${userSyncError.message}`)
-      }
-
-      // 3. AIDEV-NOTE: Criar tenant no banco com UUID próprio
-      // O trigger auto_create_tenant_admin será executado automaticamente
-      // e criará a associação tenant_users com role TENANT_ADMIN
+      // 1. AIDEV-NOTE: Criar tenant no banco primeiro (sem criar usuário ainda)
       const { data: tenantData, error: dbError } = await supabase
         .from('tenants')
         .insert({
-          // Removido: id: authData.user.id (deixar o banco gerar UUID próprio)
           name: data.name,
           document: data.document,
           email: data.email,
@@ -139,14 +104,70 @@ export default function NewTenantPage() {
 
       if (dbError) throw dbError
 
-      // 4. AIDEV-NOTE: Não é mais necessário criar associação manual
-      // O trigger auto_create_tenant_admin já fez isso automaticamente
-      // quando o tenant foi inserido na etapa anterior
+      if (!tenantData?.id) {
+        throw new Error('Falha ao criar tenant - ID não encontrado')
+      }
 
-      toast({
-        title: 'Tenant criado com sucesso',
-        description: 'O tenant foi criado e o usuário administrador foi associado automaticamente pelo sistema.',
-      })
+      // 2. AIDEV-NOTE: Criar convite para o administrador do tenant
+      // O usuário receberá um email para criar a conta ou fazer login
+      const token = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
+
+      const { data: inviteData, error: inviteError } = await supabase
+        .from('tenant_invites')
+        .insert({
+          tenant_id: tenantData.id,
+          email: data.email,
+          role: 'TENANT_ADMIN', // Administrador do tenant
+          status: 'PENDING',
+          invited_by: currentUser.id,
+          token: token,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select()
+        .single()
+
+      if (inviteError) {
+        // Se falhar ao criar convite, tentar excluir o tenant criado
+        await supabase.from('tenants').delete().eq('id', tenantData.id);
+        throw new Error(`Erro ao criar convite: ${inviteError.message}`)
+      }
+
+      // 3. AIDEV-NOTE: Enviar email de convite para o administrador
+      try {
+        const { error: emailError } = await supabase.functions.invoke('send-invite-email', {
+          body: {
+            email: data.email,
+            token: token,
+            type: 'tenant',
+            tenantName: data.name,
+            inviterName: currentUser.email || 'Administrador do sistema',
+          },
+        });
+
+        if (emailError) {
+          console.warn('Erro ao enviar email de convite (não crítico):', emailError);
+          // Não bloqueia o fluxo - email é opcional
+          toast({
+            title: 'Tenant criado',
+            description: 'O tenant foi criado, mas houve um erro ao enviar o email. O convite pode ser reenviado depois.',
+            variant: 'default',
+          });
+        } else {
+          toast({
+            title: 'Tenant criado com sucesso',
+            description: `O tenant foi criado e um convite foi enviado para ${data.email}. O administrador receberá um email para criar a conta ou fazer login.`,
+          });
+        }
+      } catch (emailErr: any) {
+        console.warn('Erro ao chamar função de envio de email:', emailErr);
+        toast({
+          title: 'Tenant criado',
+          description: 'O tenant foi criado, mas houve um erro ao enviar o email. O convite pode ser reenviado depois.',
+          variant: 'default',
+        });
+      }
 
       navigate('/admin/tenants')
     } catch (error: any) {
@@ -176,7 +197,7 @@ export default function NewTenantPage() {
         <CardHeader>
           <CardTitle>Informações do Tenant</CardTitle>
           <CardDescription>
-            Preencha os dados do novo tenant. O email cadastrado será o usuário principal com acesso administrativo.
+            Preencha os dados do novo tenant. Um convite será enviado para o email do administrador para criar a conta ou fazer login.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -220,24 +241,7 @@ export default function NewTenantPage() {
                       <Input type="email" placeholder="email@empresa.com.br" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Este email será o usuário principal com acesso administrativo
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Senha do Administrador</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Digite a senha" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Esta senha será usada para o primeiro acesso do administrador
+                      Um convite será enviado para este email. O administrador poderá criar a conta ou fazer login se já tiver uma.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

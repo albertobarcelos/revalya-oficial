@@ -1,5 +1,5 @@
 // AIDEV-NOTE: Botão de ação de faturamento em lote
-// Exibido quando há contratos selecionados no Kanban
+// Exibido no rodapé da coluna "Faturar Hoje" quando há contratos selecionados
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
@@ -18,28 +18,24 @@ export function BillingActionButton({
   if (selectedCount === 0) return null;
 
   return (
-    <div className="flex items-center justify-center mt-4">
-      <Button
-        onClick={onBilling}
-        disabled={isLoading}
-        size="lg"
-        className="flex items-center space-x-2"
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Processando Faturamento...</span>
-          </>
-        ) : (
-          <>
-            <CreditCard className="h-5 w-5" />
-            <span>
-              Faturar {selectedCount} Contrato{selectedCount > 1 ? 's' : ''}
-            </span>
-          </>
-        )}
-      </Button>
-    </div>
+    <Button
+      onClick={onBilling}
+      disabled={isLoading}
+      size="sm"
+      className="w-full h-9 text-sm font-medium"
+    >
+      {isLoading ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          <span>Processando...</span>
+        </>
+      ) : (
+        <>
+          <CreditCard className="h-4 w-4 mr-2" />
+          <span>Faturar ({selectedCount})</span>
+        </>
+      )}
+    </Button>
   );
 }
 

@@ -1,13 +1,11 @@
 // AIDEV-NOTE: Coluna do Kanban de Faturamento
 // Design clean: cabeçalho branco, bordas sutis e sem gradientes
+// Drag and drop removido - fluxo simplificado
 
 import React from 'react';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
 import { Badge } from '@/components/ui/badge';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SortableItem } from '@/components/ui/sortable-item';
 import { KanbanCard } from './KanbanCard';
 import { KanbanEmptyState } from './KanbanEmptyState';
 import {
@@ -35,9 +33,8 @@ export function KanbanColumn({
   itemsPerPage = 10,
   onLoadMore,
   hasMore = false,
+  footer,
 }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: columnId });
-
   const accents = getColumnAccentClasses(columnId);
 
   return (
@@ -48,7 +45,6 @@ export function KanbanColumn({
         'hover:shadow-sm',
         COLUMN_HEADER_STYLES.borderColor,
         COLUMN_HEADER_STYLES.bgColor,
-        isOver && 'ring-1 ring-blue-600/20 bg-blue-50/30',
         // Altura fixa - ocupa 100% do container pai
         'h-full min-h-0 max-h-full'
       )}
@@ -87,9 +83,8 @@ export function KanbanColumn({
         </div>
       </div>
 
-      {/* Área de drop com scroll customizado - altura fixa */}
+      {/* Área de conteúdo com scroll customizado */}
       <div
-        ref={setNodeRef}
         className={cn(
           'flex-1 p-3 space-y-3 overflow-y-auto overflow-x-hidden',
           'min-h-0',
@@ -108,35 +103,36 @@ export function KanbanColumn({
           }
         }}
       >
-        <SortableContext
-          items={contracts.slice(0, itemsPerPage).map((c) => c.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {contracts.slice(0, itemsPerPage).map((contract) => (
-            <SortableItem key={contract.id} id={contract.id} disabled={false} useHandle={true}>
-              <KanbanCard
-                contract={contract}
-                columnId={columnId}
-                onViewDetails={onViewDetails}
-                isSelected={selectedContracts.has(contract.id)}
-                onSelectionChange={onSelectionChange}
-                showCheckbox={showCheckboxes && (columnId === 'faturar-hoje' || columnId === 'pendente')}
-              />
-            </SortableItem>
-          ))}
+        {contracts.slice(0, itemsPerPage).map((contract) => (
+          <KanbanCard
+            key={contract.id}
+            contract={contract}
+            columnId={columnId}
+            onViewDetails={onViewDetails}
+            isSelected={selectedContracts.has(contract.id)}
+            onSelectionChange={onSelectionChange}
+            showCheckbox={showCheckboxes && (columnId === 'faturar-hoje' || columnId === 'pendente')}
+          />
+        ))}
 
-          {/* Estado vazio melhorado */}
-          {contracts.length === 0 && <KanbanEmptyState />}
+        {/* Estado vazio melhorado */}
+        {contracts.length === 0 && <KanbanEmptyState />}
 
-          {/* AIDEV-NOTE: Indicador de carregamento de mais itens */}
-          {hasMore && contracts.length > itemsPerPage && (
-            <div className="text-center py-4">
-              <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
-              <p className="text-xs text-muted-foreground mt-2">Carregando mais...</p>
-            </div>
-          )}
-        </SortableContext>
+        {/* AIDEV-NOTE: Indicador de carregamento de mais itens */}
+        {hasMore && contracts.length > itemsPerPage && (
+          <div className="text-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+            <p className="text-xs text-muted-foreground mt-2">Carregando mais...</p>
+          </div>
+        )}
       </div>
+
+      {/* AIDEV-NOTE: Footer opcional da coluna */}
+      {footer && (
+        <div className="flex-shrink-0 p-3 border-t border-gray-100 bg-white/80">
+          {footer}
+        </div>
+      )}
     </div>
   );
 }

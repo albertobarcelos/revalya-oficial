@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import { useBillingOrder, type BillingOrderErrorType, type BillingOrderError, type BillingOrder } from '@/hooks/useBillingOrder';
 import { useStandalonePeriod } from '@/hooks/useStandalonePeriod';
 import { type StandaloneBillingPeriod } from '@/services/standaloneBillingService';
@@ -10,11 +10,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RefreshCw, AlertCircle, FileWarning, UserX, FileX } from 'lucide-react';
 
 // AIDEV-NOTE: Configuração de mensagens de erro amigáveis por tipo
+// AIDEV-NOTE: CORREÇÃO - Mensagens mais amigáveis que não assustam o usuário
+// O erro mais comum (PERIOD_NOT_FOUND) geralmente é temporário após sessão longa
 const ERROR_MESSAGES: Record<BillingOrderErrorType, { title: string; description: string; icon: React.ReactNode }> = {
   PERIOD_NOT_FOUND: {
-    title: 'Período não encontrado',
-    description: 'O período de faturamento solicitado não foi encontrado. Ele pode ter sido removido ou você não tem permissão para acessá-lo.',
-    icon: <FileX className="h-5 w-5" />,
+    title: 'Não foi possível carregar',
+    description: 'Os dados do faturamento estão temporariamente indisponíveis. Isso pode acontecer após um longo período de uso. Clique em "Tentar novamente" ou atualize a página.',
+    icon: <RefreshCw className="h-5 w-5" />,
   },
   CONTRACT_NOT_FOUND: {
     title: 'Contrato não encontrado',
@@ -42,9 +44,9 @@ const ERROR_MESSAGES: Record<BillingOrderErrorType, { title: string; description
     icon: <AlertCircle className="h-5 w-5" />,
   },
   UNKNOWN_ERROR: {
-    title: 'Erro inesperado',
-    description: 'Ocorreu um erro inesperado ao carregar os dados. Tente novamente ou entre em contato com o suporte.',
-    icon: <AlertCircle className="h-5 w-5" />,
+    title: 'Erro temporário',
+    description: 'Houve um problema ao carregar os dados. Clique em "Tentar novamente" ou atualize a página se o problema persistir.',
+    icon: <RefreshCw className="h-5 w-5" />,
   },
 };
 
@@ -91,6 +93,11 @@ interface BillingOrderDetailsProps {
  * - Inclui tratamento de erro específico com opção de retry
  */
 export function BillingOrderDetails({ periodId, isStandalone, onClose }: BillingOrderDetailsProps) {
+  // AIDEV-NOTE: CORREÇÃO - Auto-retry automático para evitar mostrar erro em casos temporários
+  // Após sessão longa, a primeira tentativa pode falhar mas a segunda geralmente funciona
+  const [autoRetryAttempted, setAutoRetryAttempted] = useState(false);
+  const autoRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   // AIDEV-NOTE: REFATORAÇÃO - Buscar apenas na tabela correta baseado em isStandalone
   // Se sabemos que é standalone, buscar apenas standalone
   // Se sabemos que é contrato, buscar apenas contract_billing_periods
@@ -126,6 +133,39 @@ export function BillingOrderDetails({ periodId, isStandalone, onClose }: Billing
       refetch();
     }
   }, [refetch, standaloneQuery, isActuallyStandalone]);
+  
+  // AIDEV-NOTE: CORREÇÃO - Auto-retry quando detecta erro, mas apenas uma vez
+  // Isso evita mostrar erro ao usuário quando é apenas um problema temporário de sessão
+  const currentError = isActuallyStandalone ? standaloneQuery.error : error;
+  const hasData = isActuallyStandalone ? !!standaloneQuery.data : !!order;
+  
+  useEffect(() => {
+    // AIDEV-NOTE: Se tem erro, não tem dados, não está carregando, e ainda não tentamos auto-retry
+    if (currentError && !hasData && !isLoading && !autoRetryAttempted) {
+      console.log('🔄 [BILLING ORDER DETAILS] Auto-retry iniciado após erro...');
+      setAutoRetryAttempted(true);
+      
+      // AIDEV-NOTE: Esperar um pouco antes de tentar novamente para dar tempo do contexto ser reconfigurado
+      autoRetryTimerRef.current = setTimeout(() => {
+        handleRetry();
+      }, 500);
+    }
+    
+    // AIDEV-NOTE: Limpar timer ao desmontar
+    return () => {
+      if (autoRetryTimerRef.current) {
+        clearTimeout(autoRetryTimerRef.current);
+      }
+    };
+  }, [currentError, hasData, isLoading, autoRetryAttempted, handleRetry]);
+  
+  // AIDEV-NOTE: Se encontrou dados, resetar o flag de auto-retry para próxima vez
+  useEffect(() => {
+    if (hasData && autoRetryAttempted) {
+      console.log('✅ [BILLING ORDER DETAILS] Auto-retry bem sucedido!');
+      setAutoRetryAttempted(false);
+    }
+  }, [hasData, autoRetryAttempted]);
 
   // AIDEV-NOTE: Configuração do ContractForm adaptada para ordem de faturamento
   // IMPORTANTE: Este useMemo inclui a lógica do subtitleMessage para evitar
@@ -307,7 +347,11 @@ export function BillingOrderDetails({ periodId, isStandalone, onClose }: Billing
     };
   }, [order, onClose, isActuallyStandalone, standaloneQuery.data]);
 
-  if (isLoading) {
+  // AIDEV-NOTE: CORREÇÃO - Mostrar loading durante auto-retry para não assustar usuário
+  // Se está fazendo auto-retry, mostrar skeleton ao invés de erro
+  const isAutoRetrying = autoRetryAttempted && !hasData && (orderLoading || standaloneQuery.isLoading);
+  
+  if (isLoading || isAutoRetrying) {
     return (
       <div className="h-full">
         <ContractFormSkeleton />
@@ -318,9 +362,10 @@ export function BillingOrderDetails({ periodId, isStandalone, onClose }: Billing
   // AIDEV-NOTE: Tratamento de erro específico com UI melhorada e opção de retry
   // AIDEV-NOTE: REFATORAÇÃO - Lógica simplificada baseada em isActuallyStandalone
   // Se isStandalone é undefined, aguardar ambas as queries terminarem antes de mostrar erro
-  const shouldShowError = isActuallyStandalone
+  // AIDEV-NOTE: CORREÇÃO - Só mostrar erro se auto-retry já foi tentado e falhou
+  const shouldShowError = autoRetryAttempted && (isActuallyStandalone
     ? (standaloneQuery.error || (!standaloneQuery.isLoading && !standaloneQuery.data))
-    : (error || (!orderLoading && !order && (isStandalone === false || (!standaloneQuery.isLoading && !standaloneQuery.data))));
+    : (error || (!orderLoading && !order && (isStandalone === false || (!standaloneQuery.isLoading && !standaloneQuery.data)))));
   
   if (shouldShowError) {
     // AIDEV-NOTE: Usar erro correto baseado no tipo

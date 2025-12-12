@@ -72,10 +72,11 @@ export interface StandaloneBillingPeriod {
 
 /**
  * AIDEV-NOTE: Interface para item de faturamento avulso
+ * AIDEV-NOTE: Tabela renomeada de standalone_billing_items para billing_period_items
  */
 export interface StandaloneBillingItem {
   id: string;
-  standalone_billing_period_id: string;
+  billing_period_id: string; // AIDEV-NOTE: Renomeado de standalone_billing_period_id
   product_id?: string;
   service_id?: string;
   quantity: number;
@@ -119,22 +120,25 @@ class StandaloneBillingService {
       0
     );
 
-    // AIDEV-NOTE: Criar período avulso
+    // AIDEV-NOTE: Criar período avulso na tabela unificada contract_billing_periods
     // O order_number será gerado automaticamente pelo trigger no banco de dados
     const { data: period, error: periodError } = await supabaseClient
-      .from('standalone_billing_periods')
+      .from('contract_billing_periods')
       .insert({
         tenant_id: tenantId,
         customer_id: data.customer_id,
         contract_id: data.contract_id || null,
         bill_date: data.bill_date,
         due_date: data.due_date,
+        period_start: data.bill_date, // AIDEV-NOTE: Usar bill_date como period_start para standalone
+        period_end: data.due_date, // AIDEV-NOTE: Usar due_date como period_end para standalone
         amount_planned: totalAmount,
         status: 'PENDING',
         payment_method: data.payment_method,
         payment_gateway_id: data.payment_gateway_id || null,
-        description: data.description || null
-        // AIDEV-NOTE: order_number será gerado automaticamente pelo trigger generate_order_number_on_insert_standalone_period
+        description: data.description || null,
+        is_standalone: true // AIDEV-NOTE: Flag para identificar como faturamento avulso
+        // AIDEV-NOTE: order_number será gerado automaticamente pelo trigger
       })
       .select()
       .single();
@@ -148,11 +152,11 @@ class StandaloneBillingService {
       throw new Error('Período de faturamento avulso não foi criado');
     }
 
-    // AIDEV-NOTE: Criar itens do faturamento
+    // AIDEV-NOTE: Criar itens do faturamento na tabela unificada billing_period_items
     if (data.items.length > 0) {
       const itemsToInsert = data.items.map(item => ({
         tenant_id: tenantId,
-        standalone_billing_period_id: period.id,
+        billing_period_id: period.id, // AIDEV-NOTE: Renomeado de standalone_billing_period_id
         product_id: item.product_id || null,
         service_id: item.service_id || null,
         quantity: item.quantity,
@@ -162,13 +166,13 @@ class StandaloneBillingService {
       }));
 
       const { error: itemsError } = await supabaseClient
-        .from('standalone_billing_items')
+        .from('billing_period_items') // AIDEV-NOTE: Tabela renomeada
         .insert(itemsToInsert);
 
       if (itemsError) {
         // AIDEV-NOTE: Rollback - deletar período criado
         await supabaseClient
-          .from('standalone_billing_periods')
+          .from('contract_billing_periods')
           .delete()
           .eq('id', period.id);
 
@@ -176,19 +180,20 @@ class StandaloneBillingService {
       }
     }
 
-    // AIDEV-NOTE: Buscar período completo com relacionamentos
+    // AIDEV-NOTE: Buscar período completo com relacionamentos da tabela unificada
     const { data: fullPeriod, error: fetchError } = await supabaseClient
-      .from('standalone_billing_periods')
+      .from('contract_billing_periods')
       .select(`
         *,
         customer:customers(*),
-        items:standalone_billing_items(
+        items:billing_period_items(
           *,
           product:products(id, name, description),
           service:services(id, name, description)
         )
       `)
       .eq('id', period.id)
+      .eq('is_standalone', true)
       .single();
 
     if (fetchError || !fullPeriod) {
@@ -344,7 +349,7 @@ class StandaloneBillingService {
   }
 
   /**
-   * AIDEV-NOTE: Buscar itens de um faturamento avulso
+   * AIDEV-NOTE: Buscar itens de um faturamento avulso da tabela unificada
    */
   async getStandaloneBillingItems(
     supabaseClient: SupabaseClient,
@@ -357,13 +362,13 @@ class StandaloneBillingService {
     });
 
     const { data: items, error } = await supabaseClient
-      .from('standalone_billing_items')
+      .from('billing_period_items') // AIDEV-NOTE: Tabela renomeada
       .select(`
         *,
         product:products(id, name, description),
         service:services(id, name, description)
       `)
-      .eq('standalone_billing_period_id', periodId)
+      .eq('billing_period_id', periodId) // AIDEV-NOTE: Coluna renomeada
       .eq('tenant_id', tenantId);
 
     if (error) {
@@ -374,7 +379,7 @@ class StandaloneBillingService {
   }
 
   /**
-   * AIDEV-NOTE: Buscar período avulso completo
+   * AIDEV-NOTE: Buscar período avulso completo da tabela unificada
    */
   async getStandaloneBillingPeriod(
     supabaseClient: SupabaseClient,
@@ -387,11 +392,11 @@ class StandaloneBillingService {
     });
 
     const { data: period, error } = await supabaseClient
-      .from('standalone_billing_periods')
+      .from('contract_billing_periods') // AIDEV-NOTE: Tabela unificada
       .select(`
         *,
         customer:customers(*),
-        items:standalone_billing_items(
+        items:billing_period_items(
           *,
           product:products(id, name, description),
           service:services(id, name, description)
@@ -399,6 +404,7 @@ class StandaloneBillingService {
       `)
       .eq('id', periodId)
       .eq('tenant_id', tenantId)
+      .eq('is_standalone', true) // AIDEV-NOTE: Filtrar apenas standalone
       .single();
 
     if (error) {

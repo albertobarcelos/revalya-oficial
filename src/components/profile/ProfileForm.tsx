@@ -42,7 +42,7 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 interface ProfileFormProps {
   profile: Partial<Profile>;
-  onSave: (data: ProfileFormValues) => void;
+  onSave: (data: ProfileFormValues) => Promise<void>; // Agora retorna Promise
   isLoading: boolean;
 }
 
@@ -110,7 +110,8 @@ export function ProfileForm({ profile, onSave, isLoading }: ProfileFormProps) {
 
       if (error) throw error;
 
-      onSave(data);
+      // AIDEV-NOTE: onSave agora é async e pode incluir o salvamento do avatar
+      await onSave(data);
       
       toast({
         title: "Perfil atualizado",

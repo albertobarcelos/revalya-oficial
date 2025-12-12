@@ -47,10 +47,8 @@ const isValidUUID = (id: string | undefined | null): boolean => {
  */
 export function KanbanCard({
   contract,
-  isDragging,
   columnId,
   onViewDetails,
-  dragHandleProps,
   isSelected = false,
   onSelectionChange,
   showCheckbox = false,
@@ -125,71 +123,49 @@ export function KanbanCard({
   return (
     <Card
       className={cn(
-        'group relative overflow-hidden transition-all duration-200 ease-out',
-        'hover:shadow-sm',
-        'bg-white',
-        CARD_STYLES.border,
-        isDragging && 'opacity-60',
-        isSelected && 'ring-1 ring-primary ring-offset-1 border-primary'
+        'group relative overflow-hidden transition-all duration-150',
+        'bg-white border-gray-100',
+        'hover:border-gray-200',
+        isSelected && 'ring-1 ring-primary/50 border-primary/50'
       )}
     >
       {/* Barra sutil de acento de cor indicando a coluna (2px) */}
       <div className={cn('absolute left-0 top-0 h-full w-[2px]', accents.bar)} aria-hidden="true" />
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          {/* Checkbox de seleção */}
-          {showCheckbox && (
-            <div className="flex items-center space-x-2 pb-2 border-b border-gray-100">
-              <Checkbox
-                id={`select-${contract.contract_id}`}
-                checked={isSelected}
-                onCheckedChange={handleSelectionChange}
-                onClick={(e) => e.stopPropagation()}
-                className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-              />
-              <label
-                htmlFor={`select-${contract.contract_id}`}
-                className="text-xs text-gray-600 cursor-pointer font-medium"
-              >
-                Faturar
-              </label>
-            </div>
-          )}
-
-          {/* AIDEV-NOTE: Badge para faturamentos avulsos */}
-          {!contract.contract_id && (
-            <div className="mb-2">
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-300">
-                Avulso
-              </Badge>
-            </div>
-          )}
-
-          {/* Header com drag handle */}
-          <div
-            className={cn(
-              'flex items-center justify-between cursor-grab active:cursor-grabbing',
-              'group-hover:cursor-grab',
-              dragHandleProps && 'select-none'
-            )}
-            {...(dragHandleProps || {})}
-          >
-            <div className="flex items-center space-x-2">
+      <CardContent className="p-3">
+        <div className="space-y-2">
+          {/* Header com checkbox integrado */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* AIDEV-NOTE: Checkbox fixo para seleção (apenas coluna faturar-hoje) */}
+              {showCheckbox && (
+                <Checkbox
+                  id={`select-${periodId}`}
+                  checked={isSelected}
+                  onCheckedChange={handleSelectionChange}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-3.5 w-3.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                />
+              )}
+              {/* AIDEV-NOTE: Indicador de avulso minimalista */}
+              {!contract.contract_id && (
+                <span className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+                  Avulso
+                </span>
+              )}
               <span className={cn('font-semibold text-xs', CARD_STYLES.textPrimary)}>
                 {contract.order_number
-                  ? `OS N° ${contract.order_number}`
+                  ? `OS ${contract.order_number}`
                   : contract.contract_id
                     ? `#${contract.contract_id.slice(-8)}`
-                    : contract.contract_number || 'Avulso'}
+                    : contract.contract_number || ''}
               </span>
             </div>
-            {/* Badge de status — agora discreto, somente ícone com tooltip */}
+            {/* Badge de status — discreto, somente ícone com tooltip */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge
-                    variant="secondary"
-                    className={cn('p-1.5 rounded-full border', accents.badge)}
+                  <span
+                    className={cn('p-1 rounded-full', accents.badge)}
                     title={contract.status}
                     aria-label={`Status: ${contract.status}`}
                   >
@@ -200,7 +176,7 @@ export function KanbanCard({
                     {!isFaturarHoje && !isPending && !isFaturados && !isRenovar && (
                       <Inbox className="w-3 h-3" />
                     )}
-                  </Badge>
+                  </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
                   {contract.status}
@@ -209,32 +185,24 @@ export function KanbanCard({
             </TooltipProvider>
           </div>
 
-          {/* Cliente */}
-          <div className="space-y-1">
-            <p className={cn('text-sm font-medium leading-tight', CARD_STYLES.textSecondary)}>
+          {/* Cliente e Valor em layout compacto */}
+          <div className="flex items-center justify-between">
+            <p className={cn('text-sm font-medium leading-tight truncate max-w-[140px]', CARD_STYLES.textSecondary)}>
               {contract.customer_name}
             </p>
+            <span className={cn('text-sm font-semibold tabular-nums', CARD_STYLES.textPrimary)}>
+              R$ {(contract.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
           </div>
 
-          {/* Valor */}
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center space-x-1">
-              <DollarSign className={cn('w-4 h-4', CARD_STYLES.textPrimary)} />
-              <span className={cn('text-base font-semibold', CARD_STYLES.textPrimary)}>
-                R$ {(contract.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          </div>
-
-          {/* AIDEV-NOTE: Botão de ação com acessibilidade melhorada */}
+          {/* AIDEV-NOTE: Botão de ação minimalista */}
           <Button
             size="sm"
             variant="ghost"
             className={cn(
-              'w-full mt-3 font-medium transition-all duration-200',
-              'hover:bg-gray-50',
-              'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
-              CARD_STYLES.textPrimary,
+              'w-full mt-2 h-8 text-xs font-medium transition-colors',
+              'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
+              'focus-visible:ring-1 focus-visible:ring-primary',
               !isValidPeriodId && 'opacity-50 cursor-not-allowed'
             )}
             disabled={isClicking || !isValidPeriodId}
@@ -248,14 +216,11 @@ export function KanbanCard({
             aria-disabled={!isValidPeriodId}
           >
             {isClicking ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-2 animate-spin" aria-hidden="true" />
-                <span>Carregando...</span>
-              </>
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
             ) : (
               <>
-                <Eye className="h-3 w-3 mr-2" aria-hidden="true" />
-                <span>Ver Detalhes</span>
+                <Eye className="h-3 w-3 mr-1.5" aria-hidden="true" />
+                Ver Detalhes
               </>
             )}
           </Button>

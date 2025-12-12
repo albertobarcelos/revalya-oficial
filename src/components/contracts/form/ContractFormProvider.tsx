@@ -48,6 +48,16 @@ interface TotalValues {
   tax: number;
   costs: number;
   total: number;
+  // AIDEV-NOTE: Detalhamento por tipo de item
+  services: {
+    subtotal: number;
+    discount: number;
+    costs: number;
+  };
+  products: {
+    subtotal: number;
+    discount: number;
+  };
 }
 
 // AIDEV-NOTE: Interface para alterações pendentes de serviços
@@ -128,23 +138,51 @@ const calculateTotals = (
 
   const subtotal = servicesSubtotal + productsSubtotal;
 
-  // Calcular desconto de serviços
+  // AIDEV-NOTE: Calcular desconto de serviços (percentual OU valor fixo)
   const servicesDiscount = services.reduce((sum, service) => {
     const quantity = service.quantity || 1;
     const unitPrice = service.unit_price || service.default_price || 0;
-    const discountPercentage = service.discount_percentage || 0;
     const serviceTotal = quantity * unitPrice;
-    const serviceDiscount = serviceTotal * (discountPercentage / 100);
+    
+    // Verificar se tem desconto fixo ou percentual
+    const discountAmount = (service as any).discount_amount || 0;
+    let discountPercentage = service.discount_percentage || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // Se o valor for > 1, está em percentual (dados antigos), converter para decimal
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
+    // Priorizar desconto fixo se existir, senão calcular por percentual (usar decimal diretamente)
+    const serviceDiscount = discountAmount > 0 
+      ? discountAmount 
+      : serviceTotal * discountPercentage; // AIDEV-NOTE: Usar decimal diretamente (não dividir por 100)
+    
     return sum + serviceDiscount;
   }, 0);
 
-  // Calcular desconto de produtos
+  // AIDEV-NOTE: Calcular desconto de produtos (percentual OU valor fixo)
   const productsDiscount = products.reduce((sum, product) => {
     const quantity = product.quantity || 1;
     const unitPrice = product.price || product.unit_price || 0;
-    const discountPercentage = product.discount_percentage || 0;
     const productTotal = quantity * unitPrice;
-    const productDiscount = productTotal * (discountPercentage / 100);
+    
+    // Verificar se tem desconto fixo ou percentual
+    const discountAmount = (product as any).discount_amount || 0;
+    let discountPercentage = product.discount_percentage || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    // Se o valor for > 1, está em percentual (dados antigos), converter para decimal
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
+    // Priorizar desconto fixo se existir, senão calcular por percentual (usar decimal diretamente)
+    const productDiscount = discountAmount > 0 
+      ? discountAmount 
+      : productTotal * discountPercentage; // AIDEV-NOTE: Usar decimal diretamente (não dividir por 100)
+    
     return sum + productDiscount;
   }, 0);
 
@@ -156,9 +194,20 @@ const calculateTotals = (
     const quantity = service.quantity || 1;
     const unitPrice = service.unit_price || service.default_price || 0;
     const taxRate = service.tax_rate || 0;
-    const discountPercentage = service.discount_percentage || 0;
+    let discountPercentage = service.discount_percentage || 0;
+    const discountAmount = (service as any).discount_amount || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
     const serviceTotal = quantity * unitPrice;
-    const afterDiscount = serviceTotal - (serviceTotal * (discountPercentage / 100));
+    // AIDEV-NOTE: Calcular desconto (fixo ou percentual) e aplicar ao total
+    const discount = discountAmount > 0 
+      ? discountAmount 
+      : serviceTotal * discountPercentage; // Usar decimal diretamente
+    const afterDiscount = serviceTotal - discount;
     const serviceTax = afterDiscount * (taxRate / 100);
     return sum + serviceTax;
   }, 0);
@@ -168,9 +217,20 @@ const calculateTotals = (
     const quantity = product.quantity || 1;
     const unitPrice = product.price || product.unit_price || 0;
     const taxRate = product.tax_rate || 0;
-    const discountPercentage = product.discount_percentage || 0;
+    let discountPercentage = product.discount_percentage || 0;
+    const discountAmount = (product as any).discount_amount || 0;
+    
+    // AIDEV-NOTE: CORREÇÃO - O banco salva discount_percentage como decimal (0.10 para 10%)
+    if (discountPercentage > 1) {
+      discountPercentage = discountPercentage / 100;
+    }
+    
     const productTotal = quantity * unitPrice;
-    const afterDiscount = productTotal - (productTotal * (discountPercentage / 100));
+    // AIDEV-NOTE: Calcular desconto (fixo ou percentual) e aplicar ao total
+    const discount = discountAmount > 0 
+      ? discountAmount 
+      : productTotal * discountPercentage; // Usar decimal diretamente
+    const afterDiscount = productTotal - discount;
     const productTax = afterDiscount * (taxRate / 100);
     return sum + productTax;
   }, 0);
@@ -213,7 +273,17 @@ const calculateTotals = (
     discount: Math.round(totalDiscount * 100) / 100,
     tax: Math.round(tax * 100) / 100,
     costs: Math.round(costs * 100) / 100,
-    total: Math.round(total * 100) / 100
+    total: Math.round(total * 100) / 100,
+    // AIDEV-NOTE: Detalhamento por tipo de item
+    services: {
+      subtotal: Math.round(servicesSubtotal * 100) / 100,
+      discount: Math.round(servicesDiscount * 100) / 100,
+      costs: Math.round(costs * 100) / 100 // Custos são apenas de serviços
+    },
+    products: {
+      subtotal: Math.round(productsSubtotal * 100) / 100,
+      discount: Math.round(productsDiscount * 100) / 100
+    }
   };
 };
 
@@ -231,12 +301,22 @@ export function ContractFormProvider({
   const [formChanged, setFormChanged] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [activeTab, setActiveTab] = useState("servico");
-  const [totalValues, setTotalValues] = useState({
+  const [totalValues, setTotalValues] = useState<TotalValues>({
     subtotal: 0,
     discount: 0,
     tax: 0,
     costs: 0,
     total: 0,
+    // AIDEV-NOTE: Detalhamento por tipo de item
+    services: {
+      subtotal: 0,
+      discount: 0,
+      costs: 0
+    },
+    products: {
+      subtotal: 0,
+      discount: 0
+    }
   });
 
   // AIDEV-NOTE: Estado para alterações pendentes de serviços

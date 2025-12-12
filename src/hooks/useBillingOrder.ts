@@ -127,16 +127,50 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
       let period: any = null;
       let periodError: any = null;
       
-      // AIDEV-NOTE: Primeira tentativa de busca
-      const firstAttempt = await supabase
-        .from('contract_billing_periods')
-        .select('*')
-        .eq('id', periodId)
-        .eq('tenant_id', tenantId)
-        .maybeSingle();
+      // AIDEV-NOTE: CORREÇÃO - Retry automático para evitar falhas temporárias após sessão longa
+      // Problema: Após muito tempo sem atualizar a página, a sessão/contexto pode estar dessincronizado
+      // Solução: Fazer até 3 tentativas com delay progressivo antes de mostrar erro ao usuário
+      const MAX_RETRY_ATTEMPTS = 3;
+      const RETRY_DELAY_MS = 200;
       
-      period = firstAttempt.data;
-      periodError = firstAttempt.error;
+      for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        const attemptResult = await supabase
+          .from('contract_billing_periods')
+          .select('*')
+          .eq('id', periodId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+        
+        period = attemptResult.data;
+        periodError = attemptResult.error;
+        
+        // AIDEV-NOTE: Se encontrou o período, sair do loop
+        if (period) {
+          if (attempt > 1) {
+            console.log(`[useBillingOrder] ✅ Período encontrado na tentativa ${attempt}`);
+          }
+          break;
+        }
+        
+        // AIDEV-NOTE: Se teve erro explícito que não é temporário, sair do loop
+        const isTemporaryError = !periodError || 
+          periodError.code === 'PGRST116' ||
+          periodError.message?.includes('400') ||
+          periodError.message?.includes('Bad Request') ||
+          (periodError as any)?.status === 400;
+        
+        if (periodError && !isTemporaryError) {
+          console.warn(`[useBillingOrder] Erro não recuperável na tentativa ${attempt}:`, periodError);
+          break;
+        }
+        
+        // AIDEV-NOTE: Se não é a última tentativa, esperar antes de tentar novamente
+        if (attempt < MAX_RETRY_ATTEMPTS) {
+          const delay = RETRY_DELAY_MS * attempt; // Delay progressivo: 200ms, 400ms, 600ms
+          console.log(`[useBillingOrder] 🔄 Tentativa ${attempt}/${MAX_RETRY_ATTEMPTS} falhou, aguardando ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
 
       // AIDEV-NOTE: Verificar se o erro é um erro "não encontrado" ou erro de RLS (400)
       // Códigos de erro do PostgREST:
@@ -149,44 +183,20 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
          periodError.message?.includes('Bad Request') ||
          (periodError as any)?.status === 400);
       
-      // AIDEV-NOTE: Se skipStandaloneFallback está ativo e houve erro 400, tentar novamente uma vez
-      // Erro 400 pode ser RLS bloqueando temporariamente
-      if (skipStandaloneFallback && !period && isBadRequestError && !isNotFoundError) {
-        console.log('[useBillingOrder] Erro 400 detectado com skipStandaloneFallback, tentando novamente...', {
-          periodId,
-          tenantId,
-        });
-        
-        // AIDEV-NOTE: Segunda tentativa - pode ser problema temporário de RLS
-        const retryAttempt = await supabase
-          .from('contract_billing_periods')
-          .select('*')
-          .eq('id', periodId)
-          .eq('tenant_id', tenantId)
-          .maybeSingle();
-        
-        if (retryAttempt.data) {
-          period = retryAttempt.data;
-          periodError = null; // Limpar erro se encontrou na segunda tentativa
-          console.log('[useBillingOrder] Período encontrado na segunda tentativa');
-        } else {
-          periodError = retryAttempt.error;
-        }
-      }
-      
       // AIDEV-NOTE: Se skipStandaloneFallback está ativo, não tentar standalone
       // Isso é usado quando já sabemos que não é standalone (ex: isStandalone=false do Kanban)
       if (skipStandaloneFallback) {
         // AIDEV-NOTE: Se não encontrou após todas as tentativas, lançar erro
         if (!period) {
           // AIDEV-NOTE: Log detalhado para debug (seguindo guia de auditoria)
-          console.warn('[useBillingOrder] Período não encontrado com skipStandaloneFallback=true:', {
+          console.warn('[useBillingOrder] Período não encontrado após todas as tentativas:', {
             periodId,
             tenantId,
             errorCode: periodError?.code,
             errorMessage: periodError?.message,
             isNotFoundError,
             isBadRequestError,
+            attemptsUsed: MAX_RETRY_ATTEMPTS,
           });
           
           // AIDEV-NOTE: Verificar se foi um erro crítico ou apenas "não encontrado"
@@ -201,12 +211,11 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
             throw error;
           }
           // AIDEV-NOTE: Erro "não encontrado" ou 400 persistente - período pode ter sido deletado ou movido
+          // AIDEV-NOTE: CORREÇÃO - Mensagem mais amigável que não assusta o usuário
           const error = createBillingOrderError(
             'PERIOD_NOT_FOUND',
             'Período de faturamento não encontrado',
-            periodError 
-              ? `Período não encontrado em contract_billing_periods. Erro: ${periodError.message || periodError.code || 'Desconhecido'}`
-              : 'Período não encontrado em contract_billing_periods. Pode ter sido deletado ou movido.',
+            'Não foi possível carregar os dados do período. Tente atualizar a página.',
             true
           );
           throw error;
@@ -214,37 +223,14 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
         // AIDEV-NOTE: Se encontrou, continuar normalmente (não entrar no bloco de fallback)
       }
 
-      // AIDEV-NOTE: Se não encontrou período OU houve erro "não encontrado" ou 400, tentar standalone
-      // Erro 400 pode ocorrer quando o período não existe na tabela ou RLS bloqueia
-      // Só fazer fallback se skipStandaloneFallback não estiver ativo
-      const shouldTryStandalone = !skipStandaloneFallback && (!period || isNotFoundError || isBadRequestError);
-
-      if (shouldTryStandalone) {
-        // AIDEV-NOTE: Pode ser um faturamento avulso (standalone_billing_periods)
-        const { data: standalonePeriod, error: standaloneError } = await supabase
-          .from('standalone_billing_periods')
-          .select('*')
-          .eq('id', periodId)
-          .eq('tenant_id', tenantId)
-          .maybeSingle(); // AIDEV-NOTE: maybeSingle não gera erro se não encontrar
-
-        if (standaloneError && standaloneError.code !== 'PGRST116') {
-          // AIDEV-NOTE: Se houve erro ao buscar standalone (exceto "não encontrado"), logar mas continuar
-          console.warn('[useBillingOrder] Erro ao buscar standalone:', standaloneError);
-        }
-
-        if (standalonePeriod) {
-          // AIDEV-NOTE: Se for standalone, retornar null para que o componente
-          // use o hook useStandalonePeriod ao invés de lançar erro
-          // O componente BillingOrderDetails já trata este caso corretamente
-          return null;
-        }
-
-        // AIDEV-NOTE: Período não encontrado em nenhuma tabela
-        // Só lançar erro se realmente não encontrou em nenhuma das duas tabelas
-        // E se não foi um erro "não encontrado" esperado
+      // AIDEV-NOTE: TABELA UNIFICADA - Verificar se é standalone diretamente
+      // Com a unificação das tabelas, não precisamos mais de fallback para standalone_billing_periods
+      // Todos os períodos (contrato e avulso) estão em contract_billing_periods com flag is_standalone
+      
+      // AIDEV-NOTE: Se não encontrou período, lançar erro
+      if (!period && !skipStandaloneFallback) {
+        // AIDEV-NOTE: Período não encontrado
         if (periodError && !isNotFoundError && !isBadRequestError) {
-          // AIDEV-NOTE: Se foi um erro crítico (não 400 ou PGRST116), propagar
           const error = createBillingOrderError(
             'PERIOD_NOT_FOUND',
             'Erro ao buscar período de faturamento',
@@ -254,14 +240,20 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
           throw error;
         }
 
-        // AIDEV-NOTE: Período realmente não encontrado em nenhuma tabela
         const error = createBillingOrderError(
           'PERIOD_NOT_FOUND',
           'Período de faturamento não encontrado',
-          'Período não encontrado em contract_billing_periods nem standalone_billing_periods',
+          'Período não encontrado na tabela unificada contract_billing_periods',
           true
         );
         throw error;
+      }
+
+      // AIDEV-NOTE: Se é um período standalone (is_standalone = true), retornar null
+      // para que o componente use useStandalonePeriod
+      if (period?.is_standalone === true) {
+        console.log('[useBillingOrder] Período é standalone, delegando para useStandalonePeriod');
+        return null;
       }
 
       // AIDEV-NOTE: Buscar dados do contrato separadamente (mais confiável que relacionamentos aninhados)
@@ -502,6 +494,10 @@ export function useBillingOrder({ periodId, enabled = true, skipStandaloneFallba
     {
       enabled: enabled && !!periodId,
       refetchOnWindowFocus: false,
+      // AIDEV-NOTE: CORREÇÃO - Adicionar staleTime menor para evitar cache muito longo
+      // Problema: Cache de 10min causa erros após sessão longa
+      // Solução: Cache de 2min para dados de período específico
+      staleTime: 2 * 60 * 1000, // 2 minutos
     }
   );
 }

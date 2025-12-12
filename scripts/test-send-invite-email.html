@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teste - Send Invite Email</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    input, select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    button {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    
+    .result.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+    
+    .result.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+    
+    .result pre {
+      margin-top: 10px;
+      background: rgba(0, 0, 0, 0.05);
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Teste - Send Invite Email</h1>
+    <p class="subtitle">Teste a edge function de envio de emails de convite</p>
+    
+    <form id="testForm">
+      <div class="form-group">
+        <label for="email">Email destinatário *</label>
+        <input 
+          type="email" 
+          id="email" 
+          name="email" 
+          required 
+          placeholder="teste@exemplo.com"
+          value="teste@exemplo.com"
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="token">Token (gerar automaticamente)</label>
+        <input 
+          type="text" 
+          id="token" 
+          name="token" 
+          placeholder="Token será gerado automaticamente"
+          readonly
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="type">Tipo de convite *</label>
+        <select id="type" name="type" required>
+          <option value="tenant">Tenant</option>
+          <option value="reseller">Revendedor</option>
+          <option value="user">Usuário</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="tenantName">Nome do Tenant</label>
+        <input 
+          type="text" 
+          id="tenantName" 
+          name="tenantName" 
+          placeholder="Nome do tenant"
+          value="Tenant de Teste"
+        >
+      </div>
+      
+      <div class="form-group">
+        <label for="inviterName">Nome do Convidante</label>
+        <input 
+          type="text" 
+          id="inviterName" 
+          name="inviterName" 
+          placeholder="Nome de quem está convidando"
+          value="Admin Teste"
+        >
+      </div>
+      
+      <button type="submit" id="submitBtn">
+        <span id="loading" class="loading" style="display: none;"></span>
+        Enviar Email de Teste
+      </button>
+    </form>
+    
+    <div id="result" class="result"></div>
+  </div>
+
+  <script>
+    // AIDEV-NOTE: Configuração - ajuste conforme necessário
+    const SUPABASE_URL = 'https://wyehpiutzvwplllumgdk.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5ZWhwaXV0enZ3cGxsbHVtZ2RrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQwNzY4MDAsImV4cCI6MjA0OTY1MjgwMH0.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; // Substitua pela sua anon key
+    
+    const form = document.getElementById('testForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+    const tokenInput = document.getElementById('token');
+    
+    // Gerar token aleatório ao carregar
+    function generateToken() {
+      return 'test-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    }
+    
+    tokenInput.value = generateToken();
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      // Desabilitar botão e mostrar loading
+      submitBtn.disabled = true;
+      loading.style.display = 'inline-block';
+      result.style.display = 'none';
+      
+      // Coletar dados do formulário
+      const formData = new FormData(form);
+      const data = {
+        email: formData.get('email'),
+        token: formData.get('token') || generateToken(),
+        type: formData.get('type'),
+        tenantName: formData.get('tenantName') || '',
+        inviterName: formData.get('inviterName') || ''
+      };
+      
+      try {
+        console.log('📧 Enviando requisição:', data);
+        
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/send-invite-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(data),
+        });
+        
+        const resultData = await response.json();
+        
+        console.log('📊 Resposta:', resultData);
+        
+        if (response.ok) {
+          result.className = 'result success';
+          result.innerHTML = `
+            <strong>✅ Email enviado com sucesso!</strong>
+            <p style="margin-top: 10px;">Verifique a caixa de entrada de: <strong>${data.email}</strong></p>
+            <pre>${JSON.stringify(resultData, null, 2)}</pre>
+          `;
+        } else {
+          result.className = 'result error';
+          result.innerHTML = `
+            <strong>❌ Erro ao enviar email</strong>
+            <p style="margin-top: 10px;"><strong>Status:</strong> ${response.status}</p>
+            <p><strong>Erro:</strong> ${resultData.error || 'Erro desconhecido'}</p>
+            ${resultData.details ? `<p><strong>Detalhes:</strong> ${resultData.details}</p>` : ''}
+            <pre>${JSON.stringify(resultData, null, 2)}</pre>
+          `;
+        }
+      } catch (error) {
+        console.error('❌ Erro:', error);
+        result.className = 'result error';
+        result.innerHTML = `
+          <strong>❌ Erro na requisição</strong>
+          <p style="margin-top: 10px;">${error.message}</p>
+        `;
+      } finally {
+        // Reabilitar botão e esconder loading
+        submitBtn.disabled = false;
+        loading.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
+

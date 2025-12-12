@@ -208,8 +208,8 @@ export const useTenantStore = create<TenantState>((set, get) => ({
     }
   },
 
-  fetchPortalData: async (supabase: SupabaseClient) => {
-    const { isLoading, hasLoaded, loadFromCache, saveToCache } = get();
+  fetchPortalData: async (supabase: SupabaseClient, forceRefresh: boolean = false) => {
+    const { isLoading, hasLoaded, loadFromCache, saveToCache, clearCache } = get();
     
     // AIDEV-NOTE: Lock mais robusto - verificar isLoading E hasLoaded
     if (isLoading) {
@@ -217,13 +217,18 @@ export const useTenantStore = create<TenantState>((set, get) => ({
       return;
     }
     
-    // AIDEV-NOTE: Se já carregou com sucesso, não recarregar
-    if (hasLoaded) {
+    // AIDEV-NOTE: Se forceRefresh for true, limpar cache e permitir recarregar
+    if (forceRefresh) {
+      console.log('🔄 [DEBUG] Forçando refresh - limpando cache e recarregando dados');
+      clearCache();
+      set({ hasLoaded: false }); // Resetar hasLoaded para permitir nova busca
+    } else if (hasLoaded) {
       console.log('🔍 [DEBUG] fetchPortalData já foi executado com sucesso, ignorando chamada duplicada');
+      console.log('💡 [DEBUG] Use fetchPortalData(supabase, true) para forçar refresh');
       return;
     }
     
-    console.log('🔍 [DEBUG] fetchPortalData iniciado');
+    console.log('🔍 [DEBUG] fetchPortalData iniciado', { forceRefresh });
     
     try {
       // AIDEV-NOTE: Setar isLoading ANTES de qualquer operação assíncrona
@@ -267,8 +272,9 @@ export const useTenantStore = create<TenantState>((set, get) => ({
       
       console.log('🔍 [DEBUG] User role obtido:', userRole);
       
-      // Buscar tenants do usuário
-      console.log('🔍 [DEBUG] Buscando tenants do usuário...');
+      // AIDEV-NOTE: Buscar tenants do usuário APENAS se o convite foi aceito
+      // CRÍTICO: Não mostrar tenants com convites pendentes
+      console.log('🔍 [DEBUG] Buscando tenants do usuário (apenas com convites aceitos)...');
       const { data: userTenants, error: tenantsError } = await supabase
         .from('tenant_users')
         .select(`
@@ -286,6 +292,36 @@ export const useTenantStore = create<TenantState>((set, get) => ({
         `)
         .eq('user_id', userId) // 🔒 CORREÇÃO CRÍTICA: Filtrar apenas tenants do usuário atual
         .eq('active', true);
+      
+      // AIDEV-NOTE: Filtrar tenants que têm convites pendentes
+      // Só mostrar tenants onde o convite foi aceito (status = 'ACCEPTED') ou não há convite
+      if (userTenants && userTenants.length > 0) {
+        const userEmail = user?.email;
+        if (userEmail) {
+          // Buscar convites pendentes para os tenants encontrados
+          const tenantIds = userTenants.map((ut: any) => ut.tenant_id);
+          const { data: pendingInvitesForTenants } = await supabase
+            .from('tenant_invites')
+            .select('tenant_id, status')
+            .in('tenant_id', tenantIds)
+            .eq('email', userEmail)
+            .eq('status', 'PENDING');
+          
+          // Remover tenants que têm convites pendentes
+          const pendingTenantIds = new Set(pendingInvitesForTenants?.map((inv: any) => inv.tenant_id) || []);
+          const filteredTenants = userTenants.filter((ut: any) => !pendingTenantIds.has(ut.tenant_id));
+          
+          console.log('🔍 [DEBUG] Tenants filtrados (removidos com convites pendentes):', {
+            total: userTenants.length,
+            filtrados: filteredTenants.length,
+            removidos: userTenants.length - filteredTenants.length
+          });
+          
+          // Substituir userTenants pelos filtrados
+          userTenants.length = 0;
+          userTenants.push(...filteredTenants);
+        }
+      }
 
       console.log('🔍 [DEBUG] Resultado tenant_users:', { userTenants, tenantsError });
       if (tenantsError) throw tenantsError;
@@ -299,32 +335,50 @@ export const useTenantStore = create<TenantState>((set, get) => ({
         updated_at: ut.tenants.updated_at
       })) || [];
 
-      // Buscar convites pendentes
-      const { data: invites, error: invitesError } = await supabase
-        .from('tenant_invites')
-        .select(`
-          id,
-          tenant_id,
-          role,
-          created_at,
-          expires_at,
-          tenants!inner (
-            name
-          )
-        `)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString());
+      // AIDEV-NOTE: Buscar convites pendentes do usuário atual (filtrar por email)
+      const userEmail = user?.email;
+      let pendingInvites: TenantInvite[] = [];
+      
+      if (!userEmail) {
+        console.warn('⚠️ [DEBUG] Email do usuário não disponível, não buscando convites');
+        console.warn('⚠️ [DEBUG] User object:', { id: user?.id, email: user?.email });
+      } else {
+        console.log('🔍 [DEBUG] Buscando convites para email:', userEmail);
+        
+        const { data: invites, error: invitesError } = await supabase
+          .from('tenant_invites')
+          .select(`
+            id,
+            tenant_id,
+            role,
+            created_at,
+            expires_at,
+            tenants!inner (
+              name
+            )
+          `)
+          .eq('status', 'PENDING')
+          .eq('email', userEmail) // AIDEV-NOTE: Filtrar por email do usuário
+          .gt('expires_at', new Date().toISOString());
 
-      if (invitesError) throw invitesError;
+        if (invitesError) {
+          console.error('❌ [DEBUG] Erro ao buscar convites:', invitesError);
+          throw invitesError;
+        }
 
-      const pendingInvites: TenantInvite[] = invites?.map((invite: any) => ({
-        id: invite.id,
-        tenant_id: invite.tenant_id,
-        tenant_name: invite.tenants?.name || 'Tenant desconhecido',
-        role: invite.role,
-        invited_at: invite.created_at,
-        expires_at: invite.expires_at
-      })) || [];
+        console.log('🔍 [DEBUG] Convites encontrados:', invites?.length || 0, invites);
+
+        pendingInvites = invites?.map((invite: any) => ({
+          id: invite.id,
+          tenant_id: invite.tenant_id,
+          tenant_name: invite.tenants?.name || 'Tenant desconhecido',
+          role: invite.role,
+          invited_at: invite.created_at,
+          expires_at: invite.expires_at
+        })) || [];
+        
+        console.log('🔍 [DEBUG] Convites processados:', pendingInvites.length, pendingInvites);
+      }
 
       console.log('🔍 [DEBUG] Tenants processados:', tenants);
       
