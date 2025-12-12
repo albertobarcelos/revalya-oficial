@@ -36,6 +36,21 @@ export function useLoginHandler() {
   const [needsRepair, setNeedsRepair] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
   const isCheckingSessionRef = useRef(false);
+
+  // Estados para fluxo de redefinição via OTP em modal
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetOtp, setResetOtp] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetStep, setResetStep] = useState<"EMAIL" | "CODE" | "PASSWORD">("EMAIL");
+  const [isEmailFormatValid, setIsEmailFormatValid] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
+  const [resendTimer, setResendTimer] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+  const resendIntervalRef = useRef<number | null>(null);
   
   // Estados globais do Zustand
   const { 
@@ -43,7 +58,8 @@ export function useLoginHandler() {
     setLoading, 
     setError,
     isLoading: loading,
-    error: authError 
+    error: authError,
+    setPasswordRecovery
   } = useAuthStore();
 
   /**
@@ -211,35 +227,140 @@ export function useLoginHandler() {
    * Função para processar solicitação de redefinição de senha
    */
   const handleForgotPassword = async () => {
+    setPasswordRecovery(true);
+    setIsResetModalOpen(true);
+    setResetStep('EMAIL');
+    setResetEmail('');
+    setResetOtp('');
+    setResetNewPassword('');
+    setResetConfirmPassword('');
+    setIsEmailFormatValid(false);
+    setCanResend(false);
+    setResendTimer(30);
+  };
+
+  const sendResetCode = async (): Promise<boolean> => {
     try {
-      const email = (document.getElementById('email') as HTMLInputElement)?.value;
-      
-      if (!email) {
-        throw new Error('Por favor, informe seu email para redefinir a senha');
-      }
-      
-      // Verificar se o email existe no sistema
-      const emailCheck = await checkEmailExists(email);
+      if (!resetEmail) throw new Error('Informe seu email');
+      const emailCheck = await checkEmailExists(resetEmail);
       if (!emailCheck.success || !emailCheck.exists) {
-        throw new Error('Este email não está registrado em nosso sistema');
+        toast({ title: 'E-mail não cadastrado', description: 'Verifique e tente novamente.', variant: 'destructive' });
+        return false;
       }
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password',
-      });
-      
+      setIsSendingCode(true);
+      const baseUrl = (import.meta.env.VITE_APP_URL as string) || (window.location.origin);
+      let redirectUrl = 'http://localhost:8080/reset-password';
+      try {
+        const u = new URL(baseUrl);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+          u.protocol = 'http:';
+          u.port = '8080';
+        }
+        u.pathname = '/reset-password';
+        redirectUrl = u.toString();
+      } catch {}
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: redirectUrl });
       if (error) throw error;
-      
+      toast({ title: 'Código enviado', description: 'Verifique seu email.' });
+      setResetStep('CODE');
+      setCanResend(false);
+      setResendTimer(30);
+      if (resendIntervalRef.current) window.clearInterval(resendIntervalRef.current);
+      resendIntervalRef.current = window.setInterval(() => {
+        setResendTimer(prev => {
+          if (prev <= 1) {
+            if (resendIntervalRef.current) window.clearInterval(resendIntervalRef.current);
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return true;
+    } catch (error) {
+      toast({ title: 'Erro ao enviar código', description: error instanceof Error ? error.message : 'Tente novamente.', variant: 'destructive' });
+      return false;
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const resendCode = async () => {
+    if (!canResend) return;
+    await sendResetCode();
+  };
+
+  const validateOtpCode = async (code?: string) => {
+    try {
+      const token = code ?? resetOtp;
+      if (token.length !== 6) return;
+      setIsVerifyingCode(true);
+      const { data: { session }, error } = await supabase.auth.verifyOtp({ email: resetEmail, token, type: 'recovery' });
+      if (error) throw error;
+      if (!session) throw new Error('Código inválido');
+      toast({ title: 'Código validado', description: 'Informe sua nova senha.' });
+      setResetStep('PASSWORD');
+    } catch (error) {
+      toast({ title: 'Código inválido', description: error instanceof Error ? error.message : 'Verifique e tente novamente.', variant: 'destructive' });
+    } finally {
+      setIsVerifyingCode(false);
+    }
+  };
+
+  const isPasswordStrong = (pwd: string) => {
+    const hasMin = pwd.length >= 8;
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasLower = /[a-z]/.test(pwd);
+    const hasNumber = /\d/.test(pwd);
+    return hasMin && hasUpper && hasLower && hasNumber;
+  };
+
+  /**
+   * Verifica OTP e atualiza a senha do usuário em sessão de recuperação
+   */
+  const handleVerifyOtpAndResetPassword = async () => {
+    try {
+      if (!isPasswordStrong(resetNewPassword)) {
+        throw new Error('A senha não atende aos requisitos.');
+      }
+      if (resetNewPassword !== resetConfirmPassword) {
+        throw new Error('As senhas não coincidem.');
+      }
+
+      setIsResetting(true);
+
+      const { error: updateErr } = await supabase.auth.updateUser({ password: resetNewPassword });
+      if (updateErr) throw updateErr;
+
       toast({
-        title: 'Email enviado',
-        description: 'Verifique sua caixa de entrada para redefinir sua senha.',
+        title: 'Senha atualizada',
+        description: 'Sua senha foi redefinida com sucesso. Faça login novamente.',
       });
+
+      // Encerrar sessão de recuperação para exibir campos de login
+      await supabase.auth.signOut();
+      setUser(null);
+
+      // Limpa estados e fecha modal
+      if (resendIntervalRef.current) {
+        window.clearInterval(resendIntervalRef.current);
+        resendIntervalRef.current = null;
+      }
+      setIsResetModalOpen(false);
+      setResetOtp("");
+      setResetNewPassword("");
+      setResetConfirmPassword("");
+      setResetEmail("");
+      setResetStep('EMAIL');
+      setPasswordRecovery(false);
     } catch (error) {
       toast({
-        title: 'Erro ao enviar email',
-        description: error instanceof Error ? error.message : 'Não foi possível enviar o email de redefinição',
+        title: 'Erro na redefinição',
+        description: error instanceof Error ? error.message : 'Não foi possível redefinir sua senha.',
         variant: 'destructive',
       });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -257,5 +378,30 @@ export function useLoginHandler() {
     handleRepairPermissions,
     handleTestConnection,
     handleForgotPassword,
+    sendResetCode,
+    resendCode,
+    validateOtpCode,
+    // Fluxo OTP em modal
+    isResetModalOpen,
+    setIsResetModalOpen,
+    resetStep,
+    setResetStep,
+    resetEmail,
+    setResetEmail,
+    isEmailFormatValid,
+    setIsEmailFormatValid,
+    resetOtp,
+    setResetOtp,
+    resetNewPassword,
+    setResetNewPassword,
+    resetConfirmPassword,
+    setResetConfirmPassword,
+    isResetting,
+    isSendingCode,
+    isVerifyingCode,
+    resendTimer,
+    canResend,
+    isPasswordStrong,
+    handleVerifyOtpAndResetPassword,
   };
 }
