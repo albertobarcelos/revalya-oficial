@@ -67,8 +67,8 @@ export default function ResetPassword() {
       <div className="hidden lg:flex w-1/2 bg-[#0f0f11] flex-col items-center justify-center p-12">
         <div className="max-w-md">
           <img 
-            src="/nexsyn.png" 
-            alt="Nexsyn Logo" 
+            src="/logos/LOGO-REVALYA123.png" 
+            alt="Revalya Logo" 
             className="h-12 mb-8"
           />
           <h1 className="text-4xl font-bold text-white mb-4">
@@ -86,8 +86,8 @@ export default function ResetPassword() {
           {/* Logo mobile */}
           <div className="lg:hidden flex justify-center mb-8">
             <img 
-              src="/nexsyn.png" 
-              alt="Nexsyn Logo" 
+              src="/logos/LOGO-REVALYA123.png" 
+              alt="Revalya Logo" 
               className="h-10"
             />
           </div>
