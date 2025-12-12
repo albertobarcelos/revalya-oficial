@@ -1,36 +1,99 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, UserPlus, Users, Mails } from "lucide-react";
+import { Loader2, Users, Mails } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { UserList } from "@/components/users/UserList";
 import { InviteUserDialog } from "@/components/users/InviteUserDialog";
-import { UserEmptyState } from "@/components/users/UserEmptyState";
 import { InviteEmptyState } from "@/components/users/InviteEmptyState";
 // AIDEV-NOTE: Substituindo useSupabase por hooks de segurança multi-tenant
 import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
-import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
+import { useSupabase } from '@/hooks/useSupabase';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
 
 interface UserManagementProps {
   tenantId: string;
 }
 
 export function UserManagement({ tenantId }: UserManagementProps) {
+  // AIDEV-NOTE: Verificar se o usuário é ADMIN global para permitir acesso sem tenant ativo
+  const { user } = useSupabase();
+  
+  // AIDEV-NOTE: Query para verificar role do usuário na tabela public.users
+  const { data: userRoleData } = useQuery({
+    queryKey: ['user-role-admin-check', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('user_role')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          // Fallback para metadados em caso de erro
+          const fallbackRole = user.app_metadata?.user_role || user.user_metadata?.user_role || user.user_metadata?.role;
+          return { user_role: fallbackRole };
+        }
+
+        return data;
+      } catch (error) {
+        // Fallback para metadados em caso de erro
+        const fallbackRole = user.app_metadata?.user_role || user.user_metadata?.user_role || user.user_metadata?.role;
+        return { user_role: fallbackRole };
+      }
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+    retry: 1
+  });
+
+  const userRole = userRoleData?.user_role || user?.user_metadata?.user_role || user?.user_metadata?.role;
+  const isGlobalAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
   // AIDEV-NOTE: Implementando hooks de segurança multi-tenant
-  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  // Se for ADMIN global, não requer tenant ativo no contexto
+  const { hasAccess: hasTenantAccess } = useTenantAccessGuard();
+  
+  // AIDEV-NOTE: Lógica de acesso combinada: ADMIN global OU acesso ao tenant
+  const hasAccess = useMemo(() => {
+    // Se for ADMIN global, permite acesso mesmo sem tenant ativo no contexto
+    if (isGlobalAdmin) {
+      return true;
+    }
+    // Caso contrário, usa a validação normal de tenant
+    return hasTenantAccess;
+  }, [isGlobalAdmin, hasTenantAccess]);
   
   // AIDEV-NOTE: Query segura para buscar convites pendentes
+  // AIDEV-NOTE: Para ADMIN global, usar query direta sem validação de tenant no contexto
   const { 
     data: invites = [], 
     isLoading: isLoadingInvites, 
     refetch: refetchInvites 
-  } = useSecureTenantQuery(
-    ['tenant_invites', 'pending', tenantId],
-    async (supabase, tenantId) => {
-      // Tentar usar a nova função RPC
+  } = useQuery({
+    queryKey: ['tenant_invites', 'pending', tenantId],
+    queryFn: async () => {
+      // AIDEV-NOTE: ADMIN global pode acessar diretamente, outros precisam de validação
+      if (isGlobalAdmin) {
+        // Query direta para ADMIN global
+        const { data, error } = await supabase
+          .from('tenant_invites')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'PENDING');
+          
+        if (error) throw error;
+        return data || [];
+      }
+      
+      // Para não-ADMINs, usar o hook seguro com validação de tenant
       const { data: rpcData, error: rpcError } = await supabase
         .rpc('get_tenant_pending_invites_v2', { tenant_id_param: tenantId });
         
@@ -50,10 +113,8 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       if (error) throw error;
       return data || [];
     },
-    {
-      enabled: !!tenantId && hasAccess
-    }
-  );
+    enabled: !!tenantId && hasAccess
+  }) as { data: any[]; isLoading: boolean; refetch: () => void };
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -61,7 +122,8 @@ export function UserManagement({ tenantId }: UserManagementProps) {
   
   // AIDEV-NOTE: Função para reenviar convite usando hooks seguros
   const handleResendInvite = async (inviteId: string) => {
-    if (!hasAccess || !currentTenant) {
+    // AIDEV-NOTE: ADMIN global pode acessar mesmo sem tenant ativo no contexto
+    if (!hasAccess) {
       toast({
         title: "Acesso negado",
         description: "Você não tem permissão para realizar esta ação.",
@@ -71,12 +133,63 @@ export function UserManagement({ tenantId }: UserManagementProps) {
     }
 
     try {
-      // Usar o hook seguro para executar a operação
-      const { supabase } = await import('@/hooks/useSupabase');
-      const supabaseClient = supabase();
+      // AIDEV-NOTE: Se for ADMIN global, fazer reenvio direto sem RPC
+      if (isGlobalAdmin) {
+        // Buscar informações do convite
+        const { data: invite, error: inviteError } = await supabase
+          .from('tenant_invites')
+          .select('*, tenant:tenants(name)')
+          .eq('id', inviteId)
+          .single();
+        
+        if (inviteError || !invite) {
+          throw new Error('Convite não encontrado');
+        }
+        
+        // Verificar se o convite está pendente
+        if (invite.status !== 'PENDING') {
+          throw new Error('Apenas convites pendentes podem ser reenviados');
+        }
+        
+        // Obter token do convite (ou usar ID se não tiver token)
+        const inviteToken = invite.token || invite.id;
+        
+        // Buscar informações do usuário que está reenviando
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Usuário não autenticado');
+        }
+        
+        // Enviar email de convite
+        const { error: emailError } = await supabase.functions.invoke('send-invite-email', {
+          body: {
+            email: invite.email,
+            token: inviteToken,
+            type: 'tenant',
+            tenantName: (invite.tenant as any)?.name || 'o tenant',
+            inviterName: user.email || 'um administrador',
+          },
+        });
+        
+        if (emailError) {
+          console.error('Erro ao enviar email:', emailError);
+          throw new Error('Erro ao enviar email de convite');
+        }
+        
+        // AIDEV-NOTE: Convite atualizado implicitamente pelo envio de email
+        // Não há necessidade de atualizar campos que não existem na tabela
+        
+        refetchInvites();
+        
+        toast({
+          title: "Convite reenviado",
+          description: "O convite foi reenviado com sucesso.",
+        });
+        return;
+      }
       
-      // Tentar usar a nova função RPC
-      const { data: rpcResult, error: rpcError } = await supabaseClient
+      // AIDEV-NOTE: Para não-ADMINs, usar a RPC que valida permissões
+      const { data: rpcResult, error: rpcError } = await supabase
         .rpc('resend_tenant_invite_v2', { invite_id_param: inviteId });
       
       if (rpcError) {
@@ -100,11 +213,11 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       }
       
       // Fallback para o método original
-      const { error } = await supabaseClient
+      // AIDEV-NOTE: Apenas atualizar created_at para "refrescar" o convite
+      const { error } = await supabase
         .from('tenant_invites')
         .update({ 
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date().toISOString()
         })
         .eq('id', inviteId)
         .eq('tenant_id', tenantId); // AIDEV-NOTE: Validação adicional de tenant
@@ -129,7 +242,8 @@ export function UserManagement({ tenantId }: UserManagementProps) {
   
   // AIDEV-NOTE: Função para cancelar convite usando hooks seguros
   const handleCancelInvite = async (inviteId: string) => {
-    if (!hasAccess || !currentTenant) {
+    // AIDEV-NOTE: ADMIN global pode acessar mesmo sem tenant ativo no contexto
+    if (!hasAccess) {
       toast({
         title: "Acesso negado",
         description: "Você não tem permissão para realizar esta ação.",
@@ -139,12 +253,52 @@ export function UserManagement({ tenantId }: UserManagementProps) {
     }
 
     try {
-      // Usar o hook seguro para executar a operação
-      const { supabase } = await import('@/hooks/useSupabase');
-      const supabaseClient = supabase();
+      // AIDEV-NOTE: Se for ADMIN global, fazer cancelamento direto sem RPC
+      if (isGlobalAdmin) {
+        // Verificar se o convite existe e está pendente
+        const { data: invite, error: inviteError } = await supabase
+          .from('tenant_invites')
+          .select('id, status, tenant_id')
+          .eq('id', inviteId)
+          .single();
+        
+        if (inviteError || !invite) {
+          throw new Error('Convite não encontrado');
+        }
+        
+        // Verificar se o convite pertence ao tenant correto
+        if (invite.tenant_id !== tenantId) {
+          throw new Error('Convite não pertence a este tenant');
+        }
+        
+        // Verificar se o convite está pendente
+        if (invite.status !== 'PENDING') {
+          throw new Error('Apenas convites pendentes podem ser cancelados');
+        }
+        
+        // AIDEV-NOTE: Usar DELETE em vez de UPDATE para evitar problemas com trigger que tenta acessar updated_at
+        // Esta é a mesma abordagem usada pelo inviteService.cancelInvite
+        const { error: deleteError } = await supabase
+          .from('tenant_invites')
+          .delete()
+          .eq('id', inviteId)
+          .eq('tenant_id', tenantId);
+        
+        if (deleteError) {
+          throw deleteError;
+        }
+        
+        refetchInvites();
+        
+        toast({
+          title: "Convite cancelado",
+          description: "O convite foi cancelado com sucesso.",
+        });
+        return;
+      }
       
-      // Tentar usar a nova função RPC
-      const { data: rpcResult, error: rpcError } = await supabaseClient
+      // AIDEV-NOTE: Para não-ADMINs, usar a RPC que valida permissões
+      const { data: rpcResult, error: rpcError } = await supabase
         .rpc('cancel_tenant_invite_v2', { invite_id_param: inviteId });
       
       if (rpcError) {
@@ -168,7 +322,7 @@ export function UserManagement({ tenantId }: UserManagementProps) {
       }
       
       // Fallback para o método original
-      const { error } = await supabaseClient
+      const { error } = await supabase
         .from('tenant_invites')
         .update({ status: 'CANCELLED' })
         .eq('id', inviteId)

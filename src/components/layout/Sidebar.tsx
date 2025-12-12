@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { supabase, STORAGE_BUCKETS, getImageUrl } from '@/lib/supabase';
+import { supabase, STORAGE_BUCKETS } from '@/lib/supabase';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,56 +73,44 @@ export default function Sidebar() {
 
   /**
    * Resolve a URL de exibição do avatar a partir da chave salva em users.avatar_url.
-   * Comentário de nível de função: usa URL assinada para compatibilidade com bucket privado
-   * e faz fallback para URL pública. Corrige o bucket para STORAGE_BUCKETS.AVATARS.
+   * AIDEV-NOTE: Bucket profile-avatars é público, usa URL pública diretamente.
    */
-  const getAvatarUrl = async (path: string) => {
-  try {
-    if (!path) {
+  const getAvatarUrl = (path: string) => {
+    try {
+      if (!path) {
+        setAvatarUrl(null);
+        return;
+      }
+
+      // Se já é uma URL completa → usa direto
+      if (path.startsWith("http://") || path.startsWith("https://")) {
+        setAvatarUrl(path);
+        return;
+      }
+
+      // Garante que o path não é algo quebrado
+      if (path.trim() === "" || path.includes("undefined")) {
+        logError("Path inválido para avatar", { context: "Sidebar", path });
+        setAvatarUrl(null);
+        return;
+      }
+
+      // AIDEV-NOTE: Bucket público - usa URL pública diretamente
+      const { data } = supabase.storage
+        .from(STORAGE_BUCKETS.AVATARS)
+        .getPublicUrl(path);
+
+      if (data?.publicUrl) {
+        setAvatarUrl(data.publicUrl);
+        return;
+      }
+
       setAvatarUrl(null);
-      return;
-    }
-
-    // Se já é uma URL completa → usa direto
-    if (path.startsWith("http://") || path.startsWith("https://")) {
-      setAvatarUrl(path);
-      return;
-    }
-
-    // Garante que o path não é algo quebrado
-    if (path.trim() === "" || path.includes("undefined")) {
-      logError("Path inválido para avatar", "Sidebar", path);
+    } catch (error) {
+      logError("Erro ao resolver avatar", { context: "Sidebar", error });
       setAvatarUrl(null);
-      return;
     }
-
-    // TENTATIVA 1 — URL assinada (bucket privado)
-    const signed = await supabase.storage
-      .from(STORAGE_BUCKETS.AVATARS)
-      .createSignedUrl(path, 3600);
-
-    if (signed.data?.signedUrl) {
-      setAvatarUrl(signed.data.signedUrl);
-      return;
-    }
-
-    // TENTATIVA 2 — fallback para URL pública
-    const { data } = supabase.storage
-      .from(STORAGE_BUCKETS.AVATARS)
-      .getPublicUrl(path);
-
-    if (data?.publicUrl) {
-      setAvatarUrl(data.publicUrl);
-      return;
-    }
-
-    // Fallback final
-    setAvatarUrl(null);
-  } catch (error) {
-    logError("Erro ao resolver avatar", "Sidebar", error);
-    setAvatarUrl(null);
-  }
-};
+  };
 
 
   // Função para fazer logout
@@ -177,15 +165,25 @@ export default function Sidebar() {
               // Continuar com a sessão recuperada
             } else {
               logError('Falha na recuperação da sessão no Sidebar', 'Sidebar', recoveredError);
-              return;
+              // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+              // Isso evita que o perfil "suma" durante navegação
+              if (!profile || !session) {
+                return;
+              }
             }
           } else {
             logError('Falha na recuperação da sessão no Sidebar', 'Sidebar', recoveryResult.error);
-            return;
+            // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+            if (!profile || !session) {
+              return;
+            }
           }
         } else {
           logError('Erro de sessão não recuperável no Sidebar', 'Sidebar', error);
-          return;
+          // AIDEV-NOTE: Não limpa o estado se já temos dados válidos
+          if (!profile || !session) {
+            return;
+          }
         }
       } else if (session) {
         logDebug('Sessão encontrada', 'Sidebar');
@@ -199,42 +197,45 @@ export default function Sidebar() {
 
         if (userError) throw userError;
         if (userData) {
-          logDebug('Usuário carregado', 'Sidebar');
+          logDebug('Usuário carregado', 'Sidebar', { userId: userData.id, name: userData.name });
           setProfile(userData);
+          
+          // AIDEV-NOTE: Sempre processa o avatar, mesmo se não houver avatar_url
+          // Isso garante que o estado seja atualizado corretamente
           if (userData.avatar_url) {
             const raw = userData.avatar_url;
 
             // Caso seja URL completa → usa direto
             if (raw.startsWith("http")) {
               setAvatarUrl(raw);
-              return;
+            } else {
+              // AIDEV-NOTE: avatar_url agora é diretamente o caminho do arquivo (TEXT)
+              // Não precisa mais buscar em user_avatars
+              getAvatarUrl(raw);
             }
-
-            // Caso seja UUID → buscar file_path no user_avatars
-            const isUuid = /^[0-9a-fA-F-]{36}$/.test(raw);
-            if (isUuid) {
-              const { data: avatarRow } = await supabase
-                .from("user_avatars")
-                .select("file_path")
-                .eq("id", raw)
-                .eq("user_id", session.user.id)
-                .maybeSingle();
-
-              if (avatarRow?.file_path) {
-                await getAvatarUrl(avatarRow.file_path);
-              } else {
-                setAvatarUrl(null);
-              }
-              return;
-            }
-
-            // Caso já seja file_path → usa direto
-            await getAvatarUrl(raw);
+          } else {
+            // AIDEV-NOTE: Se não há avatar, limpa o estado explicitamente
+            setAvatarUrl(null);
           }
+        }
+      } else {
+        // AIDEV-NOTE: Se não há sessão mas temos perfil, mantém o estado
+        // Isso evita que dados sejam perdidos durante navegação
+        if (!profile) {
+          logDebug('Sem sessão e sem perfil, limpando estado', 'Sidebar');
+          setProfile(null);
+          setAvatarUrl(null);
+        } else {
+          logDebug('Sem sessão mas mantendo perfil existente', 'Sidebar');
         }
       }
     } catch (error) {
       logError('Erro ao carregar perfil', 'Sidebar', error);
+      // AIDEV-NOTE: Em caso de erro, não limpa o estado se já temos dados válidos
+      // Isso evita que o perfil "suma" durante navegação
+      if (!profile || !session) {
+        logDebug('Erro e sem dados válidos, mantendo estado atual', 'Sidebar');
+      }
     }
   };
 
@@ -256,8 +257,21 @@ export default function Sidebar() {
       // Não fazemos nada com SIGNED_OUT para evitar conflitos
     });
 
+    // AIDEV-NOTE: Listener para atualização de perfil na página de perfil
+    // Escuta mudanças em nome, avatar e outros dados do perfil
+    const handleProfileUpdate = () => {
+      logDebug('Evento de atualização de perfil recebido, refazendo fetch do perfil', 'Sidebar');
+      // Pequeno delay para garantir que o banco foi atualizado
+      setTimeout(() => {
+        fetchSessionAndProfile();
+      }, 300);
+    };
+
+    window.addEventListener('profile-updated', handleProfileUpdate);
+
     return () => {
       subscription.unsubscribe();
+      window.removeEventListener('profile-updated', handleProfileUpdate);
     };
   }, []);
 
