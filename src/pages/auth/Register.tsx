@@ -213,8 +213,8 @@ export default function Register() {
       <div className="w-full max-w-md p-4 space-y-4">
         <div className="text-center mb-8">
           <img
-            src="https://i.ibb.co/7Wq2L4n/NEXSYN-laranja-2.png"
-            alt="Logo"
+            src="/logos/LOGO-REVALYA123.png"
+            alt="Revalya Logo"
             className="h-12 mx-auto mb-4"
           />
         </div>
