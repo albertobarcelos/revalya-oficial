@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { format, subMonths, differenceInDays, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, addDays, startOfDay, endOfDay } from "date-fns";
+import { format, subMonths, addMonths, differenceInDays, parseISO, isAfter, isBefore, startOfMonth, endOfMonth, addDays, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DashboardMetrics, CashFlowProjection, RevenueTrendItem } from "@/types/models/dashboard";
 import { DateRange } from "react-day-picker";
@@ -49,11 +49,11 @@ export const dashboardService = {
         console.warn(`Aviso: O ano atual no sistema é ${currentYear}, mas o ano correto é 2025.`);
       }
       
-      // Data de início para buscar dados históricos (6 meses atrás)
-      const sixMonthsAgoDate = subMonths(new Date(), 6);
-      const sixMonthsAgo = format(sixMonthsAgoDate, 'yyyy-MM-dd');
+      // Janela para tendências: 6 meses para trás e 6 para frente
+      const trendStart = format(startOfMonth(subMonths(new Date(), 6)), 'yyyy-MM-dd');
+      const trendEnd = format(endOfMonth(addMonths(new Date(), 6)), 'yyyy-MM-dd');
       
-      console.log(`Buscando dados a partir de ${sixMonthsAgo} (6 meses atrás)`);
+      console.log(`Buscando dados de tendências entre ${trendStart} e ${trendEnd}`);
 
       // Inicializar métricas com valores padrão
       const metrics: DashboardMetrics = {
@@ -155,7 +155,7 @@ export const dashboardService = {
           .eq('tenant_id', tenantId)
           .eq('status', 'ACTIVE'),
           
-        // 5. Buscar dados históricos para tendências (últimos 6 meses)
+        // 5. Buscar dados históricos para tendências (janela -6 a +6 meses)
         supabase
           .from("charges")
           .select(`
@@ -168,7 +168,7 @@ export const dashboardService = {
             tenant_id
           `)
           .eq('tenant_id', tenantId)
-          .gte('data_vencimento', sixMonthsAgo)
+          .or(`and(data_vencimento.gte.${trendStart},data_vencimento.lte.${trendEnd}),and(data_pagamento.gte.${trendStart},data_pagamento.lte.${trendEnd})`)
           .order('data_vencimento', { ascending: true })
           ,
         // 6. Cobranças pagas no período por data_pagamento para calcular Dias p/ Receber
@@ -423,6 +423,10 @@ export const dashboardService = {
           }
         });
         metrics.avgDaysToReceive = countRange > 0 ? totalDaysRange / countRange : 0;
+        const paidTotal = paymentsInRange.reduce((sum, c) => sum + (c.valor || 0), 0);
+        metrics.totalPaid = paidTotal;
+        metrics.paidCount = paymentsInRange.length;
+        metrics.avgTicket = paymentsInRange.length > 0 ? paidTotal / paymentsInRange.length : metrics.avgTicket;
       } else {
         metrics.avgDaysToReceive = countForDaysToReceive > 0 ? totalDaysToReceive / countForDaysToReceive : 0;
       }

@@ -115,10 +115,10 @@ export function useKanbanBilling({ refreshData }: UseKanbanBillingProps): UseKan
 
           console.log(`📋 [BILLING] Processando período de faturamento: ${periodId}`);
 
-          // AIDEV-NOTE: Verificar se é período avulso ou de contrato
-          const { data: standalonePeriod } = await supabase
-            .from('standalone_billing_periods')
-            .select('id')
+          // AIDEV-NOTE: Verificar tipo do período na tabela unificada
+          const { data: periodRecord } = await supabase
+            .from('contract_billing_periods')
+            .select('id, is_standalone')
             .eq('id', periodId)
             .eq('tenant_id', tenantId)
             .single();
@@ -126,7 +126,7 @@ export function useKanbanBilling({ refreshData }: UseKanbanBillingProps): UseKan
           let result: { success: boolean; charge_id?: string; error?: string };
           let billingError: Error | null = null;
 
-          if (standalonePeriod) {
+          if (periodRecord?.is_standalone === true) {
             // AIDEV-NOTE: É um faturamento avulso - usar serviço completo
             console.log(`📋 [BILLING] Processando faturamento avulso: ${periodId}`);
             try {

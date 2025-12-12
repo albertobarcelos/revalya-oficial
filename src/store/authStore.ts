@@ -15,6 +15,7 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
   error: string | null;
+  isPasswordRecovery: boolean;
   
   // Ações
   setUser: (user: User | null) => void;
@@ -22,6 +23,7 @@ interface AuthState {
   setError: (error: string | null) => void;
   initialize: () => void;
   reset: () => void;
+  setPasswordRecovery: (isRecovery: boolean) => void;
 }
 
 /**
@@ -41,13 +43,15 @@ export const useAuthStore = create<AuthState>()(
         isLoading: true,
         isInitialized: false,
         error: null,
+        isPasswordRecovery: false,
         
         // Ações que atualizam o estado
         setUser: (user) => set({ user }),
         setLoading: (isLoading) => set({ isLoading }),
         setError: (error) => set({ error }),
         initialize: () => set({ isInitialized: true, isLoading: false }),
-        reset: () => set({ user: null, error: null }),
+        reset: () => set({ user: null, error: null, isPasswordRecovery: false }),
+        setPasswordRecovery: (isRecovery) => set({ isPasswordRecovery: isRecovery }),
       }),
       {
         name: 'auth-storage', // Nome usado para persistência no localStorage

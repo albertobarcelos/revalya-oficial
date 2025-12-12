@@ -33,6 +33,138 @@ interface BankAccountOption {
 // Tipos movidos para utilitário para compatibilidade com Fast Refresh
 
 /**
+ * Retorna o período padrão do mês atual
+ */
+function getDefaultMonthRange(): DateRangeValue {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return { from: first, to: last };
+}
+
+/**
+ * Garante que o período seja válido; se inválido, redefine e notifica
+ */
+function ensureValidDateRange(range: DateRangeValue, onFix: (fixed: DateRangeValue) => void, notify: (title: string, description: string) => void) {
+  const from = range.from?.getTime();
+  const to = range.to?.getTime();
+  if (from && to && from > to) {
+    const fixed = getDefaultMonthRange();
+    onFix(fixed);
+    notify('Período inválido', 'Data inicial maior que a final. Período redefinido.');
+  }
+}
+
+/**
+ * Constrói a chave da query de extrato de forma determinística
+ */
+function buildStatementQueryKey(
+  tenantId: string | undefined,
+  accountId: string,
+  opType: OperationType,
+  range: DateRangeValue
+) {
+  return [
+    'bank-statement',
+    tenantId,
+    accountId,
+    opType,
+    range.from?.toISOString().slice(0, 10),
+    range.to?.toISOString().slice(0, 10)
+  ];
+}
+
+/**
+ * Ajusta atributos de SVG para tamanhos consistentes
+ */
+function adjustStatementIconSizing() {
+  const headerSvg = document.querySelector('.header-icon svg') as SVGElement | null;
+  if (headerSvg) {
+    headerSvg.setAttribute('width', '24');
+    headerSvg.setAttribute('height', '24');
+    headerSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  }
+  const emptySvg = document.querySelector('.empty-icon svg') as SVGElement | null;
+  if (emptySvg) {
+    emptySvg.setAttribute('width', '100%');
+    emptySvg.removeAttribute('height');
+    emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  }
+}
+
+/**
+ * Faz download de um SVG e retorna seu conteúdo HTML
+ */
+async function fetchIconHtml(url: string): Promise<string> {
+  const r = await fetch(url);
+  return await r.text();
+}
+
+/**
+ * Calcula a paginação local
+ */
+function paginate<T>(items: T[], page: number, perPage: number): T[] {
+  const start = (page - 1) * perPage;
+  return items.slice(start, start + perPage);
+}
+
+/**
+ * Soma saldos atuais a partir de linhas retornadas do banco
+ */
+function sumBalances(rows: Array<{ current_balance?: number | string | null }>): number {
+  return rows.reduce<number>((acc, row) => {
+    const value = row?.current_balance;
+    const num = typeof value === 'number' ? value : Number((value as string | null) ?? 0);
+    return acc + num;
+  }, 0);
+}
+
+/**
+ * Exporta o extrato em CSV
+ * AIDEV-NOTE: Exportação client-side para compartilhamento rápido
+ */
+function exportCsv(transactions: StatementTransaction[], notify: (title: string, description: string) => void) {
+  const csv = buildBankStatementCsv(transactions);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `extrato_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  notify('Exportado', 'CSV gerado com sucesso');
+}
+
+/**
+ * Exporta a tabela de extrato em PDF
+ * AIDEV-NOTE: Usa html2canvas para snapshot do conteúdo renderizado
+ */
+async function exportPdf(tableEl: HTMLDivElement | null, notify: (title: string, description: string) => void) {
+  if (!tableEl) return;
+  const canvas = await html2canvas(tableEl);
+  const imgData = canvas.toDataURL('image/png');
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const imgWidth = pageWidth - 20;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  pdf.text('Extrato Bancário', 10, 10);
+  pdf.addImage(imgData, 'PNG', 10, 20, imgWidth, Math.min(imgHeight, pageHeight - 30));
+  pdf.save(`extrato_${new Date().toISOString().slice(0, 10)}.pdf`);
+  notify('Exportado', 'PDF gerado com sucesso');
+}
+
+/**
+ * Inscreve-se em uma tabela multi-tenant e retorna função de cleanup
+ * AIDEV-NOTE: Realtime mantém o extrato e saldo sempre atualizados
+ */
+function subscribeToTenantTable(tenantId: string, table: string, onChange: () => void) {
+  const channel = supabase
+    .channel(`${table}_${tenantId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table, filter: `tenant_id=eq.${tenantId}` }, onChange)
+    .subscribe();
+  return () => { try { supabase.removeChannel(channel); } catch {} };
+}
+
+/**
  * Página de Extrato Bancário com filtros, saldo em tempo real e exportação
  */
 export default function BankStatement() {
@@ -51,32 +183,13 @@ export default function BankStatement() {
 
   useEffect(() => {
     let active = true;
-    fetch('/images/recebimentos/data-report-animate.svg')
-      .then((r) => r.text())
-      .then((text) => {
-        if (!active) return;
-        setIconHtml(text);
-      })
-      .catch(() => {
-        setIconHtml('');
-      });
+    fetchIconHtml('/images/recebimentos/data-report-animate.svg')
+      .then((text) => { if (active) setIconHtml(text); })
+      .catch(() => setIconHtml(''));
     return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    const headerSvg = document.querySelector('.header-icon svg') as SVGElement | null;
-    if (headerSvg) {
-      headerSvg.setAttribute('width', '24');
-      headerSvg.setAttribute('height', '24');
-      headerSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    }
-    const emptySvg = document.querySelector('.empty-icon svg') as SVGElement | null;
-    if (emptySvg) {
-      emptySvg.setAttribute('width', '100%');
-      emptySvg.removeAttribute('height');
-      emptySvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    }
-  }, [iconHtml]);
+  useEffect(() => { adjustStatementIconSizing(); }, [iconHtml]);
 
   /**
    * Valida se uma string é um UUID v4
@@ -89,12 +202,7 @@ export default function BankStatement() {
   // Filtros
   const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
   const [operationType, setOperationType] = useState<OperationType>('ALL');
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => {
-    const today = new Date();
-    const first = new Date(today.getFullYear(), today.getMonth(), 1);
-    const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { from: first, to: last };
-  });
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => getDefaultMonthRange());
 
   const [accounts, setAccounts] = useState<BankAccountOption[]>([]);
   const tableRef = useRef<HTMLDivElement | null>(null);
@@ -122,26 +230,17 @@ export default function BankStatement() {
   }, [accountsQuery.data]);
 
   useEffect(() => {
-    const from = dateRange.from?.getTime();
-    const to = dateRange.to?.getTime();
-    if (from && to && from > to) {
-      const today = new Date();
-      const first = new Date(today.getFullYear(), today.getMonth(), 1);
-      const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setDateRange({ from: first, to: last });
-      toast({ title: 'Período inválido', description: 'Data inicial maior que a final. Período redefinido.', variant: 'destructive' });
-    }
+    ensureValidDateRange(
+      dateRange,
+      (fixed) => setDateRange(fixed),
+      (title, description) => toast({ title, description, variant: 'destructive' })
+    );
   }, [dateRange.from, dateRange.to, toast]);
 
   // Query de transações do extrato
-  const statementQueryKey = useMemo(() => [
-    'bank-statement',
-    currentTenant?.id,
-    selectedAccountId,
-    operationType,
-    dateRange.from?.toISOString().slice(0, 10),
-    dateRange.to?.toISOString().slice(0, 10)
-  ], [currentTenant?.id, selectedAccountId, operationType, dateRange.from, dateRange.to]);
+  const statementQueryKey = useMemo(() => (
+    buildStatementQueryKey(currentTenant?.id, selectedAccountId, operationType, dateRange)
+  ), [currentTenant?.id, selectedAccountId, operationType, dateRange.from, dateRange.to]);
 
   const statementQuery = useSecureTenantQuery(
     statementQueryKey,
@@ -150,6 +249,7 @@ export default function BankStatement() {
       const to = dateRange.to ? new Date(dateRange.to) : undefined;
       const effectiveOp = operationType === 'CREDIT' || operationType === 'DEBIT' ? operationType : null;
       const accountParam = selectedAccountId === 'ALL' ? null : (isUuid(selectedAccountId) ? selectedAccountId : null);
+      // AIDEV-NOTE: Contexto de tenant para garantir RLS e isolamento
       try { await client.rpc('set_tenant_context_simple', { p_tenant_id: tenantId }); } catch {}
       const { data, error } = await client.rpc('get_bank_statement', {
         p_tenant_id: tenantId,
@@ -171,8 +271,7 @@ export default function BankStatement() {
         category: (r.category_name ?? r.category) ?? null,
         payment_method: r.document_type ?? null
       }));
-      const filtered = operationType === 'ALL' ? mapped : mapped.filter(t => t.kind === operationType);
-      return filtered;
+      return operationType === 'ALL' ? mapped : mapped.filter(t => t.kind === operationType);
     },
     { enabled: !!currentTenant?.id }
   );
@@ -189,11 +288,7 @@ export default function BankStatement() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const paginatedTransactions = useMemo(() => {
-    const start = (page - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-    return transactions.slice(start, end);
-  }, [transactions, page, itemsPerPage]);
+  const paginatedTransactions = useMemo(() => paginate(transactions, page, itemsPerPage), [transactions, page, itemsPerPage]);
 
   const balanceQueryKey = useMemo(() => [
     'bank-statement-balance',
@@ -209,19 +304,12 @@ export default function BankStatement() {
         .select('current_balance')
         .eq('tenant_id', tenantId);
 
-      if (selectedAccountId !== 'ALL') {
-        q = q.eq('id', selectedAccountId);
-      }
+      if (selectedAccountId !== 'ALL') q = q.eq('id', selectedAccountId);
 
       const { data, error } = await q;
       if (error) throw error;
       const rows = Array.isArray(data) ? data : [];
-      const sum = rows.reduce((acc, row) => {
-        const value = (row as { current_balance?: unknown }).current_balance;
-        const num = typeof value === 'number' ? value : Number((value as string | null) ?? 0);
-        return acc + num;
-      }, 0);
-      return sum as number;
+      return sumBalances(rows);
     },
     { enabled: !!currentTenant?.id }
   );
@@ -231,69 +319,30 @@ export default function BankStatement() {
   // Subscribe realtime
   useEffect(() => {
     if (!currentTenant?.id) return;
-    const channel = supabase
-      .channel(`finance_entries_statement_${currentTenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'finance_entries', filter: `tenant_id=eq.${currentTenant.id}` }, () => {
-        // refetch
-        statementQuery.refetch?.();
-      })
-      .subscribe();
-    return () => {
-      try { supabase.removeChannel(channel); } catch {}
-    };
+    // AIDEV-NOTE: Atualiza extrato em tempo real quando lançamentos mudam
+    return subscribeToTenantTable(currentTenant.id, 'finance_entries', () => statementQuery.refetch?.());
   }, [currentTenant?.id, statementQuery.refetch]);
 
   useEffect(() => {
     if (!currentTenant?.id) return;
-    const channel = supabase
-      .channel(`financial_payables_statement_${currentTenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'financial_payables', filter: `tenant_id=eq.${currentTenant.id}` }, () => {
-        statementQuery.refetch?.();
-      })
-      .subscribe();
-    return () => {
-      try { supabase.removeChannel(channel); } catch {}
-    };
+    // AIDEV-NOTE: Atualiza extrato quando contas a pagar variam
+    return subscribeToTenantTable(currentTenant.id, 'financial_payables', () => statementQuery.refetch?.());
   }, [currentTenant?.id, statementQuery.refetch]);
 
   useEffect(() => {
     if (!currentTenant?.id) return;
-    const channel = supabase
-      .channel(`bank_accounts_balance_${currentTenant.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bank_acounts', filter: `tenant_id=eq.${currentTenant.id}` }, () => {
-        balanceQuery.refetch?.();
-      })
-      .subscribe();
-    return () => {
-      try { supabase.removeChannel(channel); } catch {}
-    };
+    // AIDEV-NOTE: Mantém saldo sincronizado
+    return subscribeToTenantTable(currentTenant.id, 'bank_acounts', () => balanceQuery.refetch?.());
   }, [currentTenant?.id, balanceQuery.refetch]);
 
   // Exportar CSV
   const handleExportCSV = useCallback(() => {
-    const csv = buildBankStatementCsv(transactions);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `extrato_${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
-    toast({ title: 'Exportado', description: 'CSV gerado com sucesso' });
+    exportCsv(transactions, (title, description) => toast({ title, description }));
   }, [transactions, toast]);
 
   // Exportar PDF
   const handleExportPDF = useCallback(async () => {
-    if (!tableRef.current) return;
-    const canvas = await html2canvas(tableRef.current);
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth - 20;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    pdf.text('Extrato Bancário', 10, 10);
-    pdf.addImage(imgData, 'PNG', 10, 20, imgWidth, Math.min(imgHeight, pageHeight - 30));
-    pdf.save(`extrato_${new Date().toISOString().slice(0,10)}.pdf`);
-    toast({ title: 'Exportado', description: 'PDF gerado com sucesso' });
+    await exportPdf(tableRef.current, (title, description) => toast({ title, description }));
   }, [toast]);
 
   // Render
@@ -404,23 +453,8 @@ export default function BankStatement() {
                       </TableHeader>
                       <TableBody>
                         <AnimatePresence initial={false}>
-                          {paginatedTransactions.map(t => (
-                            <motion.tr key={t.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                              <TableCell>{new Date(t.date).toLocaleDateString('pt-BR')}</TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {t.kind === 'CREDIT' ? <ArrowUpCircle className="h-4 w-4 text-green-600" /> : <ArrowDownCircle className="h-4 w-4 text-red-600" />}
-                                  <Badge variant={t.kind === 'CREDIT' ? 'secondary' : 'destructive'}>
-                                    {t.kind === 'CREDIT' ? 'Crédito' : 'Débito'}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell className={`text-right ${t.kind === 'CREDIT' ? 'text-green-700' : t.kind === 'DEBIT' ? 'text-red-700' : ''}`}>{formatCurrency(t.value)}</TableCell>
-                              <TableCell>{t.description || '-'}</TableCell>
-                              <TableCell>{t.account_label || '-'}</TableCell>
-                              <TableCell>{t.category || '-'}</TableCell>
-                              <TableCell>{t.payment_method || '-'}</TableCell>
-                            </motion.tr>
+                          {paginatedTransactions.map((t) => (
+                            <StatementRow key={t.id} t={t} />
                           ))}
                         </AnimatePresence>
                       </TableBody>
@@ -452,5 +486,33 @@ export default function BankStatement() {
         </div>
       )}
     </Layout>
+  );
+}
+
+/**
+ * Linha de extrato com ícones e formatação
+ */
+function StatementRow({ t }: { t: StatementTransaction }) {
+  return (
+    <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <TableCell>{new Date(t.date).toLocaleDateString('pt-BR')}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          {t.kind === 'CREDIT' ? (
+            <ArrowUpCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <ArrowDownCircle className="h-4 w-4 text-red-600" />
+          )}
+          <Badge variant={t.kind === 'CREDIT' ? 'secondary' : 'destructive'}>
+            {t.kind === 'CREDIT' ? 'Crédito' : 'Débito'}
+          </Badge>
+        </div>
+      </TableCell>
+      <TableCell className={`text-right ${t.kind === 'CREDIT' ? 'text-green-700' : t.kind === 'DEBIT' ? 'text-red-700' : ''}`}>{formatCurrency(t.value)}</TableCell>
+      <TableCell>{t.description || '-'}</TableCell>
+      <TableCell>{t.account_label || '-'}</TableCell>
+      <TableCell>{t.category || '-'}</TableCell>
+      <TableCell>{t.payment_method || '-'}</TableCell>
+    </motion.tr>
   );
 }
