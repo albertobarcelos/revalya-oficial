@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import BillingDialogContent from '@/components/billing/kanban/BillingDialogContent';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -76,41 +77,56 @@ export function ExpenseCategoriesSection({ tenantId }: Props) {
                   Nova Categoria
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Criar Categoria de Despesa</DialogTitle>
-                  <DialogDescription>Defina a descrição e a categoria de agrupamento</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Descrição</Label>
-                    <Input className="mt-2" value={expenseCategoryInput} onChange={(e) => setExpenseCategoryInput(e.target.value)} placeholder="Ex.: Aluguel, Água, Energia" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Categoria para agrupar no DRE</Label>
-                    <Select value={expenseDre} onValueChange={(v) => setExpenseDre(v as any)}>
-                      <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NONE">Não exibir</SelectItem>
-                        <SelectItem value="DEFAULT">Despesas padrão</SelectItem>
-                        <SelectItem value="SALES">Despesas de vendas</SelectItem>
-                        <SelectItem value="ADMIN">Despesas administrativas</SelectItem>
-                        <SelectItem value="FINANCIAL">Despesas financeiras</SelectItem>
-                        <SelectItem value="MARKETING">Despesas com marketing</SelectItem>
-                        <SelectItem value="PERSONAL">Despesas pessoais</SelectItem>
-                        <SelectItem value="SOCIAL_CHARGES">Encargos sociais</SelectItem>
-                        <SelectItem value="OTHER">Outras despesas</SelectItem>
-                      </SelectContent>
-                    </Select>
+              <BillingDialogContent className="p-0 m-0 border-0">
+                <div className="relative overflow-hidden bg-gradient-to-r from-primary via-primary/85 to-primary/60 border-b border-white/10">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/3 to-white/8 animate-pulse" />
+                  <div className="relative flex items-center justify-between px-6 py-4 z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg">
+                        <Banknote className="h-5 w-5 text-white" />
+                      </div>
+                      <DialogTitle className="text-xl font-semibold text-white">Criar Categoria de Despesa</DialogTitle>
+                    </div>
+                    <DialogDescription className="text-xs text-white/70">Defina a descrição e a categoria de agrupamento</DialogDescription>
                   </div>
                 </div>
-                <DialogFooter>
+
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-2">
+                      <Label>Descrição</Label>
+                      <Input
+                        className="mt-2"
+                        value={expenseCategoryInput}
+                        onChange={(e) => setExpenseCategoryInput(e.target.value)}
+                        placeholder="Ex.: Aluguel, Água, Energia"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Categoria para agrupar no DRE</Label>
+                      <Select value={expenseDre} onValueChange={(v) => setExpenseDre(v as any)}>
+                        <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="NONE">Não exibir</SelectItem>
+                          <SelectItem value="DEFAULT">Despesas padrão</SelectItem>
+                          <SelectItem value="SALES">Despesas de vendas</SelectItem>
+                          <SelectItem value="ADMIN">Despesas administrativas</SelectItem>
+                          <SelectItem value="FINANCIAL">Despesas financeiras</SelectItem>
+                          <SelectItem value="MARKETING">Despesas com marketing</SelectItem>
+                          <SelectItem value="PERSONAL">Despesas pessoais</SelectItem>
+                          <SelectItem value="SOCIAL_CHARGES">Encargos sociais</SelectItem>
+                          <SelectItem value="OTHER">Outras despesas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-gray-50">
                   <Button variant="outline" onClick={() => setShowCategoryForm(false)}>Cancelar</Button>
-                  <Button disabled={!expenseCategoryInput.trim()} onClick={() => { handleAdd('EXPENSE_CATEGORY', expenseCategoryInput); }}>
-                    Salvar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
+                  <Button disabled={!expenseCategoryInput.trim()} onClick={() => { handleAdd('EXPENSE_CATEGORY', expenseCategoryInput); }}>Salvar</Button>
+                </div>
+              </BillingDialogContent>
             </Dialog>
           </div>
         </CardHeader>

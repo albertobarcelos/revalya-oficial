@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useLoginHandler } from "@/hooks/useLoginHandler";
 import { useZustandAuth } from "@/hooks/useZustandAuth";
+import { useToast } from "@/components/ui/use-toast";
  
 
 // Função de log segura que não expõe dados sensíveis
@@ -25,6 +26,7 @@ const logDebug = (message: string, type: 'info' | 'error' | 'warning' = 'info') 
 };
 
 function Login() {
+  const { toast } = useToast();
   const { 
     email,
     setEmail,
@@ -95,6 +97,24 @@ function Login() {
       logDebug(`Usuário já autenticado: ${authUser.email}`, 'info');
     }
   }, [authUser]);
+
+  // Exibe feedback pós-confirmação de cadastro via link de e-mail
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const confirmed = params.get('signup_confirmed');
+      const errorDescription = params.get('error_description');
+      const error = params.get('error');
+      if (confirmed === '1') {
+        toast({ title: 'Email confirmado', description: 'Cadastro validado. Faça login para continuar.' });
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (errorDescription || error) {
+        const desc = decodeURIComponent(errorDescription || 'Falha ao confirmar email');
+        toast({ title: 'Erro na confirmação', description: desc, variant: 'destructive' });
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch {}
+  }, [toast]);
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">

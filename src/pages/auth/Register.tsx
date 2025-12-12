@@ -103,6 +103,21 @@ export default function Register() {
       if (!isValid) return;
 
       // AIDEV-NOTE: Tentar criar conta
+      const baseUrl = (import.meta.env.VITE_APP_URL as string) || (window.location.origin);
+      let emailRedirectTo = 'http://localhost:8080/login?signup_confirmed=1';
+      try {
+        const u = new URL(baseUrl);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+          u.protocol = 'http:';
+          u.port = '8080';
+        }
+        u.pathname = '/login';
+        u.search = 'signup_confirmed=1';
+        emailRedirectTo = u.toString();
+      } catch {
+        void 0;
+      }
+
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -111,6 +126,7 @@ export default function Register() {
             name,
             company_name: company,
           },
+          emailRedirectTo
         },
       });
 
@@ -241,8 +257,14 @@ export default function Register() {
                 <Label htmlFor="company">Empresa</Label>
                 <Input
                   id="company"
+                  type="text"
+                  name="company"
+                  autoComplete="organization"
+                  placeholder="Nome da empresa"
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
+                  readOnly={false}
+                  disabled={false}
                   required
                 />
               </div>
