@@ -1,22 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Label } from '@/components/ui/label';
-import { Landmark, Pencil, Plus, QrCode, Settings, Trash2, CheckCircle, ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Landmark, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useSecureTenantMutation, useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { toast } from '@/components/ui/use-toast';
 import banksData from 'bancos-brasileiros';
-import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, FileText } from 'lucide-react';
+import { BankAccountModal } from './bank/BankAccountModal';
 
-type BankStep = 'bank' | 'pix' | 'preferences' | 'review';
 
 /**
  * Componente de Contas Bancárias
@@ -27,16 +21,7 @@ export function BankAccountsSection() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   const [bankAccounts, setBankAccounts] = useState<Array<{ id: string; bank: string; agency: string; account: string; type: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA'; balance: number; active: boolean }>>([]);
   const [showBankModal, setShowBankModal] = useState(false);
-  const [bankName, setBankName] = useState('');
-  const [bankAgency, setBankAgency] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [bankType, setBankType] = useState<'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' | ''>('');
-  const [bankPix, setBankPix] = useState('');
-  const [bankActive, setBankActive] = useState(true);
-  const [editBankId, setEditBankId] = useState<string | null>(null);
-  const [currentBankStep, setCurrentBankStep] = useState<BankStep>('bank');
-  const [bankErrors, setBankErrors] = useState<Record<string, string>>({});
-  const [showBankSearch, setShowBankSearch] = useState(false);
+  const [bankInitial, setBankInitial] = useState<{ id?: string | null; bank?: string; agency?: string; accountNumber?: string; accountDigit?: string; type?: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' | ''; balance?: number } | null>(null);
 
   type BankItem = { shortName: string; longName: string; compe: string; ispb: string };
   type BankLike = { ShortName?: string; LongName?: string; COMPE?: string; ISPB?: string };
@@ -92,7 +77,7 @@ export function BankAccountsSection() {
   }, [listQuery.data]);
 
   const createMutation = useSecureTenantMutation(
-    async (supabase, tenantId, payload: { bank: string; agencia: string; conta: string; tipo: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' }) => {
+    async (supabase, tenantId, payload: { bank: string; agencia: string; conta: string; tipo: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA'; saldo?: number }) => {
       const tipoDb = payload.tipo === 'OUTRA' ? 'OUTRAS' : payload.tipo;
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
@@ -107,6 +92,7 @@ export function BankAccountsSection() {
           agency: payload.agencia,
           count: payload.conta,
           type: tipoDb,
+          current_balance: payload.saldo ?? 0,
           created_by: userId,
           updated_by: userId,
         })
@@ -127,7 +113,7 @@ export function BankAccountsSection() {
     async (
       supabase,
       tenantId,
-      payload: { id: string; bank: string; agencia: string; conta: string; tipo: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' }
+      payload: { id: string; bank: string; agencia: string; conta: string; tipo: 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA'; saldo?: number }
     ) => {
       const tipoDb = payload.tipo === 'OUTRA' ? 'OUTRAS' : payload.tipo;
       const { data: authData } = await supabase.auth.getUser();
@@ -142,6 +128,7 @@ export function BankAccountsSection() {
           agency: payload.agencia,
           count: payload.conta,
           type: tipoDb,
+          current_balance: payload.saldo ?? undefined,
           updated_by: userId,
         })
         .eq('id', payload.id)
@@ -177,34 +164,7 @@ export function BankAccountsSection() {
     }
   );
 
-  const validateBankStep = (step: BankStep): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (step === 'bank') {
-      if (!bankName.trim()) newErrors.bank = 'Banco é obrigatório';
-    }
-    if (step === 'pix') {
-      if (!bankAgency.trim()) newErrors.agency = 'Agência é obrigatória';
-      if (!bankAccount.trim()) newErrors.account = 'Conta é obrigatória';
-    }
-    if (step === 'preferences') {
-      if (!bankType) newErrors.type = 'Tipo é obrigatório';
-    }
-    setBankErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleBankNext = () => {
-    if (!validateBankStep(currentBankStep)) return;
-    const steps: BankStep[] = ['bank', 'pix', 'preferences', 'review'];
-    const idx = steps.indexOf(currentBankStep);
-    if (idx < steps.length - 1) setCurrentBankStep(steps[idx + 1]);
-  };
-
-  const handleBankPrevious = () => {
-    const steps: BankStep[] = ['bank', 'pix', 'preferences', 'review'];
-    const idx = steps.indexOf(currentBankStep);
-    if (idx > 0) setCurrentBankStep(steps[idx - 1]);
-  };
+  // Removido fluxo de etapas em favor de modal único e simples
 
   if (!hasAccess) {
     return (
@@ -229,195 +189,26 @@ export function BankAccountsSection() {
                 <CardDescription>Gerencie as contas bancárias utilizadas nas operações financeiras</CardDescription>
               </div>
             </div>
-            <Dialog open={showBankModal} onOpenChange={(open) => { setShowBankModal(open); if (!open) { setEditBankId(null); setBankName(''); setBankAgency(''); setBankAccount(''); setBankType(''); setBankPix(''); setBankActive(true); setCurrentBankStep('bank'); setBankErrors({}); } }}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Nova Conta
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-                <div className="flex items-center justify-between px-6 py-4 border-b">
-                  <DialogTitle className="text-xl font-semibold">
-                    {editBankId ? 'Editar Conta Bancária' : 'Nova Conta Bancária'}
-                  </DialogTitle>
-                </div>
-
-                <div className="px-6 py-4 border-b bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    {[
-                      { key: 'bank', label: 'Banco', icon: <Landmark className="h-4 w-4" /> },
-                      { key: 'pix', label: 'Agência', icon: <QrCode className="h-4 w-4" /> },
-                      { key: 'preferences', label: 'Preferências', icon: <Settings className="h-4 w-4" /> },
-                      { key: 'review', label: 'Revisão', icon: <CheckCircle className="h-4 w-4" /> },
-                    ].map((step, index, arr) => {
-                      const isActive = currentBankStep === (step.key as BankStep);
-                      const completedIndex = ['bank','pix','preferences'].indexOf(currentBankStep);
-                      const isCompleted = completedIndex > index;
-                      return (
-                        <div key={String(step.key)} className="flex items-center flex-1">
-                          <div className="flex items-center">
-                            <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isActive ? 'border-blue-600 bg-blue-50 text-blue-600' : ''} ${isCompleted ? 'border-green-600 bg-green-50 text-green-600' : ''} ${!isActive && !isCompleted ? 'border-gray-300 bg-white text-gray-400' : ''}`}>
-                              {isCompleted ? <CheckCircle className="h-5 w-5" /> : step.icon}
-                            </div>
-                            <span className={`ml-2 text-sm font-medium ${isActive ? 'text-blue-600' : ''} ${isCompleted ? 'text-green-600' : ''} ${!isActive && !isCompleted ? 'text-gray-400' : ''}`}>
-                              {step.label}
-                            </span>
-                          </div>
-                          {index < arr.length - 1 && (
-                            <div className={`${isCompleted ? 'bg-green-600' : 'bg-gray-300'} flex-1 h-0.5 mx-4`} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  <AnimatePresence mode="wait">
-                    {currentBankStep === 'bank' && (
-                      <motion.div key="bank" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-1 gap-4">
-                        <div>
-                          <Label>Banco *</Label>
-                          <div className="relative">
-                            <Input
-                              className="mt-2 cursor-pointer"
-                              value={bankName}
-                              readOnly
-                              placeholder="Selecione um banco"
-                              onClick={() => setShowBankSearch(true)}
-                            />
-                            {bankErrors.bank && <p className="text-sm text-red-500">{bankErrors.bank}</p>}
-                          </div>
-                          <Dialog open={showBankSearch} onOpenChange={(open) => setShowBankSearch(open)}>
-                            <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-                              <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                  <Landmark className="h-5 w-5" />
-                                  Selecionar Banco
-                                </DialogTitle>
-                              </DialogHeader>
-                              <BankSearchContent
-                                banks={bankOptions}
-                                onSelect={(b) => { setBankName(b.shortName); setShowBankSearch(false); }}
-                              />
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {currentBankStep === 'pix' && (
-                      <motion.div key="pix" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label>Agência *</Label>
-                          <Input className="mt-2" value={bankAgency} onChange={(e) => setBankAgency(e.target.value)} placeholder="Ex.: 0001" />
-                          {bankErrors.agency && <p className="text-sm text-red-500">{bankErrors.agency}</p>}
-                        </div>
-                        <div>
-                          <Label>Conta *</Label>
-                          <Input
-                            className="mt-2"
-                            value={bankAccount}
-                            inputMode="numeric"
-                            maxLength={8}
-                            onChange={(e) => {
-                              const digits = e.target.value.replace(/\D/g, '').slice(0, 7);
-                              const formatted = digits.length <= 6
-                                ? digits
-                                : `${digits.slice(0, 6)}-${digits.slice(6)}`;
-                              setBankAccount(formatted);
-                            }}
-                            placeholder="Ex.: 123456-7"
-                          />
-                          {bankErrors.account && <p className="text-sm text-red-500">{bankErrors.account}</p>}
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {currentBankStep === 'preferences' && (
-                      <motion.div key="preferences" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="grid grid-cols-1 gap-4">
-                        <div>
-                          <Label>Tipo *</Label>
-                          <Select value={bankType || ''} onValueChange={(v) => setBankType(v as 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA')}>
-                            <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="CORRENTE">Corrente</SelectItem>
-                              <SelectItem value="POUPANCA">Poupança</SelectItem>
-                              <SelectItem value="SALARIO">Salário</SelectItem>
-                              <SelectItem value="OUTRA">Outra</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {bankErrors.type && <p className="text-sm text-red-500">{bankErrors.type}</p>}
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {currentBankStep === 'review' && (
-                      <motion.div key="review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                        <div className="p-4 border rounded-lg">
-                          <h3 className="font-medium mb-2">Banco</h3>
-                          <div className="text-sm space-y-1">
-                            <p><span className="font-medium">Instituição:</span> {bankName}</p>
-                          </div>
-                        </div>
-                        <div className="p-4 border rounded-lg">
-                          <h3 className="font-medium mb-2">Agência</h3>
-                          <div className="text-sm space-y-1">
-                            <p><span className="font-medium">Agência:</span> {bankAgency}</p>
-                            <p><span className="font-medium">Conta:</span> {bankAccount}</p>
-                          </div>
-                        </div>
-                        <div className="p-4 border rounded-lg">
-                          <h3 className="font-medium mb-2">Preferências</h3>
-                          <p className="text-sm"><span className="font-medium">Tipo:</span> {bankType || '-'}</p>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
-                  <Button type="button" variant="outline" onClick={currentBankStep === 'bank' ? () => setShowBankModal(false) : handleBankPrevious}>
-                    <ChevronLeft className="h-4 w-4 mr-2" />
-                    {currentBankStep === 'bank' ? 'Cancelar' : 'Anterior'}
-                  </Button>
-
-                  <div className="flex gap-2">
-                    {currentBankStep !== 'review' ? (
-                      <Button type="button" onClick={handleBankNext}>
-                        Próximo
-                        <ChevronRight className="h-4 w-4 ml-2" />
-                      </Button>
-                    ) : (
-                      <Button type="button" onClick={async () => {
-                        const name = bankName.trim();
-                        const agency = bankAgency.trim();
-                        const acct = bankAccount.trim();
-                        if (!name || !agency || !acct || !bankType) return;
-                        if (editBankId) {
-                          await updateMutation.mutateAsync({ id: editBankId, bank: name, agencia: agency, conta: acct, tipo: bankType as 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' });
-                        } else {
-                          await createMutation.mutateAsync({ bank: name, agencia: agency, conta: acct, tipo: bankType as 'CORRENTE' | 'POUPANCA' | 'SALARIO' | 'OUTRA' });
-                        }
-                        setEditBankId(null);
-                        setBankName('');
-                        setBankAgency('');
-                        setBankAccount('');
-                        setBankType('');
-                        setBankPix('');
-                        setBankActive(true);
-                        setCurrentBankStep('bank');
-                        setBankErrors({});
-                        setShowBankModal(false);
-                      }}>
-                        {editBankId ? 'Salvar Edições' : 'Criar Conta'}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button className="gap-2" onClick={() => { setBankInitial(null); setShowBankModal(true); }}>
+              <Plus className="h-4 w-4" />
+              Nova Conta
+            </Button>
+            <BankAccountModal
+              open={showBankModal}
+              onOpenChange={(open) => { setShowBankModal(open); if (!open) setBankInitial(null); }}
+              initial={bankInitial}
+              banks={bankOptions}
+              onSave={async (values) => {
+                const acct = `${values.accountNumber}${values.accountDigit ? `-${values.accountDigit}` : ''}`;
+                if (values.id) {
+                  await updateMutation.mutateAsync({ id: values.id, bank: values.bank, agencia: values.agency, conta: acct, tipo: values.type, saldo: values.balance });
+                } else {
+                  await createMutation.mutateAsync({ bank: values.bank, agencia: values.agency, conta: acct, tipo: values.type, saldo: values.balance });
+                }
+                setBankInitial(null);
+                setShowBankModal(false);
+              }}
+            />
           </div>
         </CardHeader>
       </Card>
@@ -462,13 +253,16 @@ export function BankAccountsSection() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuItem onClick={() => {
-                            setEditBankId(b.id);
-                            setBankName(b.bank);
-                            setBankAgency(b.agency);
-                            setBankAccount(b.account);
-                            setBankType(b.type);
-                            setBankPix('');
-                            setBankActive(!!b.active);
+                            const parts = String(b.account || '').split('-');
+                            setBankInitial({
+                              id: b.id,
+                              bank: b.bank,
+                              agency: b.agency,
+                              accountNumber: parts[0] || '',
+                              accountDigit: (parts[1]?.slice(0, 1) || ''),
+                              type: b.type,
+                              balance: b.balance ?? 0,
+                            });
                             setShowBankModal(true);
                           }} className="gap-2">
                             <Pencil className="h-4 w-4" />
@@ -495,75 +289,6 @@ export function BankAccountsSection() {
         </CardContent>
       </Card>
     </>
-  );
-}
-/**
- * Conteúdo do modal de seleção de bancos
- * Lista bancos com busca e seleção, baseado em bancos-brasileiros
- */
-function BankSearchContent({ banks, onSelect }: { banks: { shortName: string; longName: string; compe: string; ispb: string }[]; onSelect: (b: { shortName: string; longName: string; compe: string; ispb: string }) => void }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [page, setPage] = useState(1);
-  const limit = 15;
-  const filtered = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return banks;
-    return banks.filter(b =>
-      b.shortName.toLowerCase().includes(term) ||
-      b.longName.toLowerCase().includes(term) ||
-      b.compe.toLowerCase().includes(term) ||
-      b.ispb.toLowerCase().includes(term)
-    );
-  }, [searchTerm, banks]);
-  const totalPages = Math.ceil(filtered.length / limit) || 1;
-  const start = (page - 1) * limit;
-  const slice = filtered.slice(start, start + limit);
-
-  useEffect(() => { setPage(1); }, [searchTerm]);
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex gap-3 flex-shrink-0">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por nome, COMPE ou ISPB" className="pl-10" />
-        </div>
-      </div>
-      <Separator className="my-3" />
-      <div className="flex-1 overflow-y-auto">
-        {slice.map((b) => (
-          <div key={`${b.ispb}-${b.compe}`} onClick={() => onSelect(b)} className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{b.shortName}</div>
-                <div className="text-xs text-muted-foreground truncate">{b.longName}</div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                <span className="mr-3">COMPE: {b.compe || '-'}</span>
-                <span>ISPB: {b.ispb || '-'}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-        {slice.length === 0 && (
-          <div className="py-8 text-center text-muted-foreground">Nenhum banco encontrado</div>
-        )}
-      </div>
-      <Separator className="my-3" />
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">Mostrando {filtered.length === 0 ? 0 : start + 1} a {Math.min(start + limit, filtered.length)} de {filtered.length}</div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="flex items-center gap-1">
-            <ChevronLeft className="h-4 w-4" />
-            Anterior
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="flex items-center gap-1">
-            Próximo
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 

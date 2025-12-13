@@ -274,6 +274,21 @@ export default function Register() {
       }
 
       // AIDEV-NOTE: Tentar criar conta
+      const baseUrl = (import.meta.env.VITE_APP_URL as string) || (window.location.origin);
+      let emailRedirectTo = 'http://localhost:8080/login?signup_confirmed=1';
+      try {
+        const u = new URL(baseUrl);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+          u.protocol = 'http:';
+          u.port = '8080';
+        }
+        u.pathname = '/login';
+        u.search = 'signup_confirmed=1';
+        emailRedirectTo = u.toString();
+      } catch {
+        void 0;
+      }
+
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
         password,
@@ -281,6 +296,7 @@ export default function Register() {
           data: {
             name,
           },
+          emailRedirectTo
         },
       });
 

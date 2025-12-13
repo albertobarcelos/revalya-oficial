@@ -1,20 +1,26 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import BillingDialogContent from '@/components/billing/kanban/BillingDialogContent';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, Settings, Trash2, Banknote } from 'lucide-react';
 import { useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { listFinancialLaunchs, createFinancialLaunch, updateFinancialLaunch, deleteFinancialLaunch, type FinancialOperationType } from '@/services/financialLaunchsService';
 import LaunchEditDialog, { type LaunchEditable } from '@/components/finance/LaunchEditDialog';
 
 type Props = { tenantId?: string | null };
 
+/**
+ * Componente de gestão de Tipos de Lançamento financeiro
+ * - Consulta e mutações seguras com contexto multi-tenant
+ * - Modal de criação padronizado com BillingDialogContent
+ */
 export function LaunchTypesSection({ tenantId }: Props) {
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [entryName, setEntryName] = useState('');
@@ -145,19 +151,28 @@ export function LaunchTypesSection({ tenantId }: Props) {
                   Novo Tipo
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Novo tipo de lançamento financeiro</DialogTitle>
-                  <DialogDescription>Preencha os dados e salve.</DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <BillingDialogContent className="p-0 m-0 border-0">
+                <div className="relative overflow-hidden bg-gradient-to-r from-primary via-primary/85 to-primary/60 border-b border-white/10">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/3 to-white/8 animate-pulse" />
+                  <div className="relative flex items-center justify-between px-6 py-4 z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/10 rounded-lg">
+                        <Banknote className="h-5 w-5 text-white" />
+                      </div>
+                      <DialogTitle className="text-xl font-semibold text-white">Novo tipo de lançamento financeiro</DialogTitle>
+                    </div>
+                    <DialogDescription className="text-xs text-white/70">Preencha os dados abaixo e salve.</DialogDescription>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-auto">
                   <div>
                     <Label>Nome</Label>
                     <Input className="mt-2" value={entryName} onChange={(e) => setEntryName(e.target.value)} placeholder="Ex.: Saída, Entrada, Transferência" />
                   </div>
                   <div className="flex flex-col gap-2 mt-2 md:mt-0">
                     <Label>Situação</Label>
-                    <div className="flex items-center gap-3 md:mt-[30px]">
+                    <div className="flex items-center gap-3 md:mt-5">
                       <span className={`${entryActive ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'} px-3 py-1 rounded-md text-xs font-medium`}>{entryActive ? 'Ativo' : 'Inativo'}</span>
                       <Switch checked={entryActive} onCheckedChange={setEntryActive} />
                     </div>
@@ -184,11 +199,12 @@ export function LaunchTypesSection({ tenantId }: Props) {
                     </label>
                   </div>
                 </div>
-                <DialogFooter>
+
+                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-gray-50">
                   <Button onClick={handleSave} disabled={!entryName.trim()}>Salvar</Button>
                   <Button variant="outline" onClick={() => setShowEntryModal(false)}>Cancelar</Button>
-                </DialogFooter>
-              </DialogContent>
+                </div>
+              </BillingDialogContent>
             </Dialog>
           </div>
         </CardHeader>

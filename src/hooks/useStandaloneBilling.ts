@@ -12,108 +12,36 @@ export function useStandaloneBilling() {
   const { hasAccess, currentTenant } = useTenantAccessGuard();
   const queryClient = useQueryClient();
 
-  // AIDEV-NOTE: Query para listar períodos avulsos
+  // AIDEV-NOTE: Query para listar períodos avulsos na tabela unificada
   const { data: periods, isLoading, error, refetch } = useSecureTenantQuery(
     ['standalone_billing_periods', currentTenant?.id],
     async (supabaseClient, tenantId) => {
-      // AIDEV-NOTE: Configurar contexto de tenant
-      await supabaseClient.rpc('set_tenant_context_simple', {
-        p_tenant_id: tenantId
-      });
+      await supabaseClient.rpc('set_tenant_context_simple', { p_tenant_id: tenantId });
 
-      // AIDEV-NOTE: Buscar períodos primeiro
-      const { data: periodsData, error: queryError } = await supabaseClient
-        .from('standalone_billing_periods')
-        .select('*')
+      const { data, error: queryError } = await supabaseClient
+        .from('contract_billing_periods')
+        .select(`
+          *,
+          customer:customers(*),
+          items:billing_period_items(
+            *,
+            product:products(id, name, description),
+            service:services(id, name, description)
+          )
+        `)
         .eq('tenant_id', tenantId)
+        .eq('is_standalone', true)
         .order('bill_date', { ascending: false });
 
       if (queryError) {
         throw new Error(`Erro ao buscar períodos avulsos: ${queryError.message}`);
       }
 
-      if (!periodsData || periodsData.length === 0) {
-        return [] as StandaloneBillingPeriod[];
-      }
-
-      // AIDEV-NOTE: Buscar dados relacionados separadamente (mais confiável que relacionamentos aninhados)
-      const customerIds = [...new Set(periodsData.map(p => p.customer_id).filter(Boolean))];
-      const periodIds = periodsData.map(p => p.id);
-
-      // Buscar customers
-      const { data: customersData } = await supabaseClient
-        .from('customers')
-        .select('id, name, email, phone, cpf_cnpj, customer_asaas_id')
-        .in('id', customerIds)
-        .eq('tenant_id', tenantId);
-
-      // Buscar items
-      const { data: itemsData } = await supabaseClient
-        .from('standalone_billing_items')
-        .select('*')
-        .in('standalone_billing_period_id', periodIds)
-        .eq('tenant_id', tenantId);
-
-      // Buscar products e services dos items
-      const productIds = [...new Set(itemsData?.map(i => i.product_id).filter(Boolean) || [])];
-      const serviceIds = [...new Set(itemsData?.map(i => i.service_id).filter(Boolean) || [])];
-
-      const { data: productsData } = productIds.length > 0
-        ? await supabaseClient
-            .from('products')
-            .select('id, name, description')
-            .in('id', productIds)
-            .eq('tenant_id', tenantId)
-        : { data: [] };
-
-      const { data: servicesData } = serviceIds.length > 0
-        ? await supabaseClient
-            .from('services')
-            .select('id, name, description')
-            .in('id', serviceIds)
-            .eq('tenant_id', tenantId)
-        : { data: [] };
-
-      // AIDEV-NOTE: Enriquecer dados com relacionamentos
-      const customersMap = (customersData || []).reduce((acc, c) => {
-        acc[c.id] = c;
-        return acc;
-      }, {} as Record<string, any>);
-
-      const productsMap = (productsData || []).reduce((acc, p) => {
-        acc[p.id] = p;
-        return acc;
-      }, {} as Record<string, any>);
-
-      const servicesMap = (servicesData || []).reduce((acc, s) => {
-        acc[s.id] = s;
-        return acc;
-      }, {} as Record<string, any>);
-
-      const itemsMap = (itemsData || []).reduce((acc, item) => {
-        if (!acc[item.standalone_billing_period_id]) {
-          acc[item.standalone_billing_period_id] = [];
-        }
-        acc[item.standalone_billing_period_id].push({
-          ...item,
-          product: item.product_id ? productsMap[item.product_id] : null,
-          service: item.service_id ? servicesMap[item.service_id] : null
-        });
-        return acc;
-      }, {} as Record<string, any[]>);
-
-      // AIDEV-NOTE: Montar resultado final
-      const enrichedData = periodsData.map(period => ({
-        ...period,
-        customer: customersMap[period.customer_id] || null,
-        items: itemsMap[period.id] || []
-      }));
-
-      return enrichedData as StandaloneBillingPeriod[];
+      return (data || []) as unknown as StandaloneBillingPeriod[];
     },
     {
       enabled: hasAccess && !!currentTenant?.id,
-      staleTime: 30 * 1000 // 30 segundos
+      staleTime: 30 * 1000
     }
   );
 

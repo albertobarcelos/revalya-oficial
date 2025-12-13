@@ -1,7 +1,7 @@
 // AIDEV-NOTE: Página principal do Kanban de Faturamento (refatorada)
 // Componente de orquestração usando hooks e componentes especializados
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -88,6 +88,13 @@ export default function FaturamentoKanban() {
     refreshData();
     closeStandaloneBillingModal();
   }, [refreshData, closeStandaloneBillingModal]);
+
+  // AIDEV-NOTE: Forçar atualização imediata ao entrar na página ou trocar de tenant
+  useEffect(() => {
+    if (hasAccess && currentTenant?.id) {
+      refreshData();
+    }
+  }, [hasAccess, currentTenant?.id, refreshData]);
 
   // 🔍 [DEBUG] Log do estado do componente
   console.log('🎯 [COMPONENT] FaturamentoKanban render:', {
