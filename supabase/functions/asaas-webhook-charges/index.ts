@@ -1004,12 +1004,9 @@ async function handlePostRequest(req: Request, tenantId: string) {
   const valor = payment.value || 0;
 
   // AIDEV-NOTE: Buscar barcode e pix_key via API quando necessário
+  // AIDEV-NOTE: apiKey e apiUrl já foram declarados anteriormente na função (linha 890)
   let barcode: string | null = null;
   let pixKey: string | null = null;
-  
-  // AIDEV-NOTE: Obter chave API descriptografada (com fallback para texto plano)
-  const apiKey = await getDecryptedApiKey(tenantId);
-  const apiUrl = integrationData.config?.api_url;
 
   if (apiKey && apiUrl) {
     // AIDEV-NOTE: Buscar barcode para boletos

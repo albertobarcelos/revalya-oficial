@@ -205,25 +205,81 @@ serve(async (req) => {
       'access_token': credentials.apiKey
     }
 
+    // AIDEV-NOTE: Log do body sendo enviado (sem expor dados sensíveis)
+    const requestBody = data ? JSON.stringify(data) : undefined
+    if (requestBody) {
+      const bodyObj = JSON.parse(requestBody)
+      // AIDEV-NOTE: Log sem expor authToken completo
+      const safeBody = { ...bodyObj }
+      if (safeBody.authToken) {
+        safeBody.authToken = safeBody.authToken.substring(0, 4) + '...'
+      }
+      console.log('Body da requisição (sanitizado):', JSON.stringify(safeBody))
+    }
+
     console.log('Requisição autorizada iniciada')
 
     const response = await fetch(url, {
       method: method,
       headers: headers,
-      body: data ? JSON.stringify(data) : undefined,
+      body: requestBody,
     })
 
-    const responseData = await response.json()
+    // AIDEV-NOTE: Ler resposta como texto primeiro para evitar erros de parse
+    const responseText = await response.text()
+    let responseData: any = null
+    
+    try {
+      responseData = responseText ? JSON.parse(responseText) : null
+    } catch (parseError) {
+      console.error('Erro ao parsear resposta da API Asaas:', parseError)
+      console.error('Resposta raw:', responseText)
+      // Se não conseguir fazer parse, usar o texto como erro
+      if (!response.ok) {
+        throw new Error(`Erro na API Asaas (${response.status}): ${responseText || response.statusText}`)
+      }
+    }
     
     console.log('Resposta da API Asaas:', {
       status: response.status,
       ok: response.ok,
-      hasData: !!responseData
+      hasData: !!responseData,
+      url: url
     })
 
     if (!response.ok) {
-      console.error('Erro na API Asaas:', responseData)
-      throw new Error(`Erro na API Asaas: ${responseData.message || response.statusText}`)
+      // AIDEV-NOTE: Log detalhado do erro para debug
+      console.error('Erro na API Asaas - Detalhes completos:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: url,
+        method: method,
+        responseData: responseData,
+        responseText: responseText.substring(0, 500) // Primeiros 500 chars
+      })
+      
+      // AIDEV-NOTE: Extrair mensagem de erro de diferentes formatos
+      let errorMessage = response.statusText || 'Erro desconhecido'
+      if (responseData) {
+        if (responseData.errors && Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+          const firstError = responseData.errors[0]
+          errorMessage = firstError.description || firstError.code || firstError.message || errorMessage
+          console.error('Erro detalhado da API Asaas:', firstError)
+        } else if (responseData.message) {
+          errorMessage = responseData.message
+        } else if (responseData.error) {
+          errorMessage = responseData.error
+        } else if (typeof responseData === 'string') {
+          errorMessage = responseData
+        } else {
+          // AIDEV-NOTE: Se não conseguir extrair mensagem, usar o objeto completo
+          errorMessage = JSON.stringify(responseData).substring(0, 200)
+        }
+      } else if (responseText) {
+        errorMessage = responseText.substring(0, 200)
+      }
+      
+      throw new Error(`Erro na API Asaas: ${errorMessage}`)
     }
 
     return new Response(JSON.stringify(responseData), {
