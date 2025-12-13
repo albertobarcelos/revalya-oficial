@@ -76,17 +76,42 @@ async function getAsaasCredentials(tenantId: string, environment: string = 'prod
     return null
   }
   
-  // AIDEV-NOTE: As credenciais estão armazenadas no campo 'config' (JSONB)
-  // Estrutura: { api_key, api_url, environment, instance_name }
-  const config = data.config || {}
+  // AIDEV-NOTE: Tentar obter chave descriptografada usando função RPC
+  // Se não conseguir, usar texto plano do config (compatibilidade)
+  let apiKey: string | null = null;
   
-  if (!config.api_key) {
-    console.error('API key não encontrada no config para tenant:', tenantId)
+  try {
+    const { data: decryptedKey, error: decryptError } = await supabase.rpc('get_decrypted_api_key', {
+      p_tenant_id: tenantId,
+      p_integration_type: 'asaas'
+    });
+    
+    if (!decryptError && decryptedKey) {
+      apiKey = decryptedKey;
+      console.log('[getAsaasCredentials] Chave API descriptografada com sucesso');
+    } else {
+      // Fallback: usar texto plano do config
+      const config = data.config || {};
+      apiKey = config.api_key || null;
+      if (apiKey) {
+        console.warn('[getAsaasCredentials] Usando chave em texto plano (compatibilidade)');
+      }
+    }
+  } catch (error) {
+    // Se função não existir ou falhar, usar texto plano
+    const config = data.config || {};
+    apiKey = config.api_key || null;
+    console.warn('[getAsaasCredentials] Erro ao descriptografar, usando texto plano:', error);
+  }
+  
+  if (!apiKey) {
+    console.error('API key não encontrada (criptografada ou texto plano) para tenant:', tenantId)
     return null
   }
   
+  const config = data.config || {};
   return {
-    apiKey: config.api_key,
+    apiKey: apiKey,
     apiUrl: config.api_url || 'https://api.asaas.com/v3',
     isActive: data.is_active
   }

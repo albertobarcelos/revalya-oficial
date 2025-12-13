@@ -39,32 +39,91 @@ export function useAsaasImport() {
   const queryClient = useQueryClient();
   const [isImporting, setIsImporting] = useState(false);
 
-  // AIDEV-NOTE: Função para chamar a Edge Function de importação
-  const callImportFunction = useCallback(async (params: AsaasImportParams): Promise<AsaasImportResult> => {
+  // AIDEV-NOTE: Função para chamar a Edge Function de importação com atualização de progresso
+  const callImportFunction = useCallback(async (params: AsaasImportParams, onProgress?: (progress: number, processed: number, total: number) => void): Promise<AsaasImportResult> => {
     if (!currentTenant?.id) {
       throw new Error('Tenant não identificado');
     }
 
-    const { data, error } = await supabase.functions.invoke('asaas-import-charges', {
-      body: {
-        tenant_id: currentTenant.id,
-        start_date: params.startDate,
-        end_date: params.endDate,
-        limit: params.limit || 100
+    const totalLimit = params.limit || 100;
+    let lastProcessed = 0;
+    const startTime = Date.now();
+
+    // AIDEV-NOTE: Atualizar progresso periodicamente enquanto aguarda resposta
+    // Usa estimativa baseada em tempo (assumindo velocidade variável: mais rápido no início, mais lento no final)
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const elapsedSeconds = elapsed / 1000;
+      
+      // AIDEV-NOTE: Estimativa baseada em velocidade variável
+      // Primeiros registros são mais rápidos (busca API), depois mais lentos (processamento)
+      // Estimativa: ~3-5 registros/segundo no início, ~1-2 registros/segundo no final
+      let estimatedProcessed: number;
+      if (elapsedSeconds < 10) {
+        // Primeiros 10 segundos: mais rápido (busca e início do processamento)
+        estimatedProcessed = Math.floor(elapsedSeconds * 4); // ~4 registros/segundo
+      } else if (elapsedSeconds < 30) {
+        // Entre 10-30 segundos: velocidade média
+        estimatedProcessed = 40 + Math.floor((elapsedSeconds - 10) * 2.5); // ~2.5 registros/segundo
+      } else {
+        // Após 30 segundos: mais lento (processamento complexo)
+        estimatedProcessed = 90 + Math.floor((elapsedSeconds - 30) * 1.5); // ~1.5 registros/segundo
       }
-    });
+      
+      estimatedProcessed = Math.min(estimatedProcessed, totalLimit);
+      
+      if (estimatedProcessed > lastProcessed && onProgress) {
+        const progressPercent = Math.min(Math.floor((estimatedProcessed / totalLimit) * 100), 95); // Máximo 95% até receber resultado real
+        onProgress(progressPercent, estimatedProcessed, totalLimit);
+        lastProcessed = estimatedProcessed;
+      }
+    }, 800); // Atualizar a cada 800ms para feedback mais fluido
 
-    if (error) {
-      console.error('❌ Erro ao chamar Edge Function:', error);
-      throw new Error(error.message || 'Erro na importação ASAAS');
+    try {
+      const { data, error } = await supabase.functions.invoke('asaas-import-charges', {
+        body: {
+          tenant_id: currentTenant.id,
+          start_date: params.startDate,
+          end_date: params.endDate,
+          limit: totalLimit
+        }
+      });
+
+      clearInterval(progressInterval);
+
+      if (error) {
+        console.error('❌ Erro ao chamar Edge Function:', error);
+        throw new Error(error.message || 'Erro na importação ASAAS');
+      }
+
+      // AIDEV-NOTE: Atualizar progresso final com dados reais
+      if (data && onProgress) {
+        const actualProcessed = data.summary?.total_processed || 0;
+        onProgress(100, actualProcessed, totalLimit);
+      }
+
+      return data as AsaasImportResult;
+    } catch (error) {
+      clearInterval(progressInterval);
+      throw error;
     }
-
-    return data as AsaasImportResult;
   }, [currentTenant?.id]);
 
   // AIDEV-NOTE: Mutation para importação com feedback visual
   const importMutation = useMutation({
-    mutationFn: callImportFunction,
+    mutationFn: (params: AsaasImportParams) => {
+      return callImportFunction(params, (progress, processed, total) => {
+        // AIDEV-NOTE: Atualizar toast com progresso em tempo real
+        const progressText = progress < 100 
+          ? `Importando... ${processed}/${total} registros (${progress}%)`
+          : `Finalizando... ${processed}/${total} registros`;
+        
+        toast.loading(progressText, {
+          id: 'asaas-import',
+          description: progress < 100 ? 'Aguarde enquanto processamos os registros...' : 'Processando últimos registros...'
+        });
+      });
+    },
     onMutate: () => {
       setIsImporting(true);
       toast.loading('Iniciando importação ASAAS...', {

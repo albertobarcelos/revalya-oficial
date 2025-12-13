@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -17,10 +18,10 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
-  const [company, setCompany] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const [emailExists, setEmailExists] = useState(false);
 
   const token = searchParams.get("token");
 
@@ -100,12 +101,6 @@ export default function Register() {
     console.log('✅ [DEBUG] Convite válido, configurando email:', invite.email);
     setEmail(invite.email);
     
-    // AIDEV-NOTE: Preencher automaticamente o nome da empresa do tenant
-    if (invite.tenant?.name) {
-      console.log('✅ [DEBUG] Preenchendo nome da empresa do tenant:', invite.tenant.name);
-      setCompany(invite.tenant.name);
-    }
-    
     return true;
   };
 
@@ -132,6 +127,7 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     setPasswordError("");
+    setEmailExists(false);
 
     // AIDEV-NOTE: Validar se as senhas coincidem
     if (password !== confirmPassword) {
@@ -164,13 +160,30 @@ export default function Register() {
       if (!token && isDevelopment) {
         console.warn('⚠️ [DEV MODE] Registro sem token - criando apenas conta de autenticação');
         
+        // AIDEV-NOTE: Verificar se o email já existe antes de tentar criar
+        const { data: existingUser } = await supabase
+          .from("users")
+          .select("id, email")
+          .eq("email", email)
+          .single();
+
+        if (existingUser) {
+          setEmailExists(true);
+          setLoading(false);
+          toast({
+            title: 'Email já cadastrado',
+            description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+            variant: "destructive",
+          });
+          return;
+        }
+
         const { error: signUpError, data } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               name,
-              company_name: company,
             },
           },
         });
@@ -179,28 +192,54 @@ export default function Register() {
           if (signUpError.message?.includes('already registered') || 
               signUpError.message?.includes('already exists') ||
               signUpError.message?.includes('User already registered')) {
+            setEmailExists(true);
+            setLoading(false);
             toast({
-              title: 'Usuário já existe',
-              description: 'Este email já possui uma conta. Redirecionando para login...',
+              title: 'Email já cadastrado',
+              description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+              variant: "destructive",
             });
-            navigate('/login');
             return;
           }
           throw signUpError;
         }
 
-        if (data.user) {
-          // Criar perfil básico do usuário
-          await supabase
-            .from("users")
-            .upsert({
-              id: data.user.id,
-              name,
-              email,
-              metadata: { company_name: company },
-              user_role: 'TENANT_USER',
-              active: true,
+        // AIDEV-NOTE: Verificar se o usuário foi realmente criado
+        // O Supabase pode retornar sucesso sem criar se o email já existe
+        if (!data.user) {
+          setEmailExists(true);
+          setLoading(false);
+          toast({
+            title: 'Email já cadastrado',
+            description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Criar perfil básico do usuário
+        const { error: userError } = await supabase
+          .from("users")
+          .upsert({
+            id: data.user.id,
+            name,
+            email,
+            user_role: 'TENANT_USER',
+          });
+
+        if (userError) {
+          console.error("Erro ao criar perfil de usuário:", userError);
+          // Verificar se é erro de duplicação
+          if (userError.message?.includes('duplicate') || userError.code === '23505') {
+            setEmailExists(true);
+            setLoading(false);
+            toast({
+              title: 'Email já cadastrado',
+              description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+              variant: "destructive",
             });
+            return;
+          }
         }
 
         toast({
@@ -216,6 +255,24 @@ export default function Register() {
       const isValid = await validateInvite();
       if (!isValid) return;
 
+      // AIDEV-NOTE: Verificar se o email já existe antes de tentar criar
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id, email")
+        .eq("email", email)
+        .single();
+
+      if (existingUser) {
+        setEmailExists(true);
+        setLoading(false);
+        toast({
+          title: 'Email já cadastrado',
+          description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+          variant: "destructive",
+        });
+        return;
+      }
+
       // AIDEV-NOTE: Tentar criar conta
       const { error: signUpError, data } = await supabase.auth.signUp({
         email,
@@ -223,26 +280,38 @@ export default function Register() {
         options: {
           data: {
             name,
-            company_name: company,
           },
         },
       });
 
-      // AIDEV-NOTE: Se o erro for de usuário já existente, redirecionar para login
+      // AIDEV-NOTE: Se o erro for de usuário já existente, mostrar botão para login
       if (signUpError) {
         if (signUpError.message?.includes('already registered') || 
             signUpError.message?.includes('already exists') ||
             signUpError.message?.includes('User already registered')) {
+          setEmailExists(true);
+          setLoading(false);
           toast({
-            title: 'Usuário já existe',
-            description: 'Este email já possui uma conta. Redirecionando para login...',
+            title: 'Email já cadastrado',
+            description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+            variant: "destructive",
           });
-          
-          // Redirecionar para login com o token para processar após login
-          navigate(`/login?redirect=/register?token=${token}`);
           return;
         }
         throw signUpError;
+      }
+
+      // AIDEV-NOTE: Verificar se o usuário foi realmente criado
+      // O Supabase pode retornar sucesso sem criar se o email já existe
+      if (!data.user) {
+        setEmailExists(true);
+        setLoading(false);
+        toast({
+          title: 'Email já cadastrado',
+          description: 'Este email já possui uma conta. Clique no botão abaixo para fazer login.',
+          variant: "destructive",
+        });
+        return;
       }
 
       // AIDEV-NOTE: Buscar o convite novamente para obter tenant_id e role
@@ -260,7 +329,6 @@ export default function Register() {
       if (data.user) {
         /**
          * Persistir dados do usuário na tabela public.users.
-         * Observação: company_name não existe como coluna em users; armazenamos em users.metadata.company_name.
          */
         const { error: userError } = await supabase
           .from("users")
@@ -268,9 +336,7 @@ export default function Register() {
             id: data.user.id,
             name,
             email,
-            metadata: { company_name: company },
             user_role: invite.role, // Usar role do convite
-            active: true,
           });
 
         if (userError) {
@@ -356,20 +422,6 @@ export default function Register() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company" className="flex items-center gap-1">
-                  Empresa
-                  <span className="text-red-500 font-bold text-base">*</span>
-                </Label>
-                <Input
-                  id="company"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  readOnly={!!token}
-                  className={token ? "bg-gray-100 text-black pl-[5px]" : "text-black pl-[5px]"}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-1">
                   Email
                   <span className="text-red-500 font-bold text-base">*</span>
@@ -378,7 +430,10 @@ export default function Register() {
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailExists(false);
+                  }}
                   readOnly={!!token}
                   className={token ? "bg-gray-100 text-black pl-[5px]" : "text-black pl-[5px]"}
                 />
@@ -449,6 +504,31 @@ export default function Register() {
                 Criar conta
               </Button>
             </form>
+            
+            {/* AIDEV-NOTE: Alerta quando email já existe */}
+            {emailExists && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Email já cadastrado</AlertTitle>
+                <AlertDescription className="mt-2">
+                  Este email já possui uma conta em nosso sistema. Clique no botão abaixo para fazer login.
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (token) {
+                        navigate(`/login?redirect=/register?token=${token}`);
+                      } else {
+                        navigate('/login');
+                      }
+                    }}
+                    className="w-full mt-3 text-white"
+                    variant="default"
+                  >
+                    Ir para Login
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
       </div>

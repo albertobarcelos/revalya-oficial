@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,12 @@ export function DayDetailsDialog({
   const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
   const [isBulkMessageOpen, setIsBulkMessageOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'received'>('all');
+
+  // AIDEV-NOTE: Resetar seleção de cobranças quando a aba mudar
+  useEffect(() => {
+    setSelectedCharges([]);
+  }, [activeTab]);
 
   const onChargeSelect = (chargeId: string, checked: boolean) => {
     setSelectedCharges(prev => 
@@ -223,13 +229,34 @@ export function DayDetailsDialog({
   const allDayChargesSelected = charges.length > 0 && 
     charges.every(charge => selectedCharges.includes(charge.id));
 
-  const dayCharges = charges; // Define dayCharges as charges to fix the reference
+  // AIDEV-NOTE: Filtrar cobranças baseado na aba ativa
+  const dayCharges = useMemo(() => {
+    if (activeTab === 'all') {
+      return charges;
+    }
+    
+    if (activeTab === 'pending') {
+      return charges.filter(charge => {
+        const status = charge.status?.toLowerCase() || '';
+        return !['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
+      });
+    }
+    
+    if (activeTab === 'received') {
+      return charges.filter(charge => {
+        const status = charge.status?.toLowerCase() || '';
+        return ['received', 'received_in_cash', 'received_pix', 'received_boleto', 'received_card', 'confirmed', 'paid'].includes(status);
+      });
+    }
+    
+    return charges;
+  }, [charges, activeTab]);
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md max-h-[90vh] bg-white p-4">
-          <div className="flex justify-between items-start pb-3 border-b">
+        <DialogContent className="max-w-md max-h-[90vh] bg-white p-4 flex flex-col overflow-hidden">
+          <div className="flex justify-between items-start pb-3 border-b flex-shrink-0">
               <DialogHeader className="p-0 space-y-0">
                 <DialogTitle className="text-xl font-bold">
                   Detalhes do dia: {format(selectedDay, "EEEE", { locale: ptBR }).charAt(0).toUpperCase() + format(selectedDay, "EEEE", { locale: ptBR }).slice(1) + format(selectedDay, ", dd/MM/yyyy", { locale: ptBR })}
@@ -238,9 +265,9 @@ export function DayDetailsDialog({
               <DialogClose className="text-gray-400 hover:text-gray-500 h-4 w-4" />
             </div>
         
-        <div className="space-y-4">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden mt-4">
           {/* Resumo do dia */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-4 flex-shrink-0">
             <div className="bg-white p-4 rounded-lg border shadow-sm">
               <h3 className="text-base font-medium mb-2">Resumo</h3>
               <p className="text-2xl font-bold text-green-600">{formatCurrency(totalValue)}</p>
@@ -264,7 +291,7 @@ export function DayDetailsDialog({
 
           {/* Ações em massa */}
           {selectedDayCharges.length > 0 && (
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end mb-4 flex-shrink-0">
               <Button
                 onClick={() => setIsBulkMessageOpen(true)}
                 disabled={isLoadingMessages}
@@ -278,16 +305,46 @@ export function DayDetailsDialog({
           )}
 
           {/* Abas de status */}
-          <div className="border-b">
+          <div className="border-b flex-shrink-0 mb-4">
             <div className="flex space-x-4 -mb-px">
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 border-blue-500">Todas ({allChargesCount})</Button>
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Pendentes ({pendingChargesCount})</Button>
-              <Button variant="ghost" className="text-sm font-medium hover:bg-gray-100 rounded-none">Recebidas ({receivedChargesCount})</Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => setActiveTab('all')}
+                className={`text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 transition-colors ${
+                  activeTab === 'all' 
+                    ? 'border-blue-500 text-blue-600 font-semibold' 
+                    : 'border-transparent text-gray-600'
+                }`}
+              >
+                Todas ({allChargesCount})
+              </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => setActiveTab('pending')}
+                className={`text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 transition-colors ${
+                  activeTab === 'pending' 
+                    ? 'border-blue-500 text-blue-600 font-semibold' 
+                    : 'border-transparent text-gray-600'
+                }`}
+              >
+                Pendentes ({pendingChargesCount})
+              </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => setActiveTab('received')}
+                className={`text-sm font-medium hover:bg-gray-100 rounded-none border-b-2 transition-colors ${
+                  activeTab === 'received' 
+                    ? 'border-blue-500 text-blue-600 font-semibold' 
+                    : 'border-transparent text-gray-600'
+                }`}
+              >
+                Recebidas ({receivedChargesCount})
+              </Button>
             </div>
           </div>
 
           {/* Lista de cobranças */}
-          <ScrollArea className="h-[60vh] pr-4">
+          <ScrollArea className="flex-1 pr-4 min-h-0">
             {dayCharges.length > 0 ? (
               <div className="space-y-3">
                 {dayCharges.map((charge) => (
