@@ -521,7 +521,31 @@ class BulkService {
     
     const vencimento = charge?.data_vencimento ? new Date(charge.data_vencimento).toLocaleDateString("pt-BR") : "";
     const descricao = charge?.descricao || "";
-    const status = charge?.status || "";
+    
+    // AIDEV-NOTE: Traduzir status para português para exibição nas mensagens
+    const translateStatus = (status: string | null | undefined): string => {
+      if (!status) return "";
+      const statusMap: { [key: string]: string } = {
+        'PENDING': 'Pendente',
+        'RECEIVED': 'Recebido',
+        'CONFIRMED': 'Confirmado',
+        'OVERDUE': 'Vencido',
+        'REFUNDED': 'Reembolsado',
+        'RECEIVED_IN_CASH': 'Recebido em Dinheiro',
+        'REFUND_REQUESTED': 'Reembolso Solicitado',
+        'REFUND_IN_PROGRESS': 'Reembolso em Andamento',
+        'CHARGEBACK_REQUESTED': 'Estorno Solicitado',
+        'CHARGEBACK_DISPUTE': 'Disputa de Estorno',
+        'AWAITING_CHARGEBACK_REVERSAL': 'Aguardando Reversão de Estorno',
+        'DUNNING_REQUESTED': 'Cobrança Solicitada',
+        'DUNNING_RECEIVED': 'Cobrança Recebida',
+        'AWAITING_RISK_ANALYSIS': 'Aguardando Análise de Risco',
+        'CANCELLED': 'Cancelado'
+      };
+      return statusMap[status.toUpperCase()] || status;
+    };
+    
+    const status = translateStatus(charge?.status);
     
     // AIDEV-NOTE: Tag código de barras - usa barcode
     const codigoBarras = charge?.barcode || 'Código de barras não disponível';
@@ -665,7 +689,20 @@ class BulkService {
             const customerPhone = (customer as any).celular_whatsapp?.trim() || (customer as any).phone?.trim() || '';
             if (!customerPhone) throw new Error("Cliente sem telefone cadastrado");
             
-            const msg = (customMessage?.trim() || this.renderMessage(templateContent, customer, charge)).trim();
+            // AIDEV-NOTE: Processar tags tanto em customMessage quanto em templateContent
+            // Se customMessage existe, processar suas tags; senão, usar template processado
+            let msg: string;
+            if (customMessage?.trim()) {
+              // AIDEV-NOTE: Processar tags na mensagem customizada usando renderMessage
+              msg = this.renderMessage(customMessage.trim(), customer, charge).trim();
+              console.log(`[BulkService] Mensagem customizada processada para charge ${charge.id}:`, {
+                original: customMessage.substring(0, 100),
+                processed: msg.substring(0, 100)
+              });
+            } else {
+              // AIDEV-NOTE: Usar template processado
+              msg = this.renderMessage(templateContent, customer, charge).trim();
+            }
             const normalizedPhone = normalizeToE164(customerPhone, countryCode || DEFAULT_COUNTRY_CODE);
             
             // AIDEV-NOTE: Garantir delay mínimo entre mensagens para evitar spam
