@@ -102,6 +102,7 @@ export function BulkMessageDialog({
           valor,
           data_vencimento,
           descricao,
+          status,
           tenant_id,
           pix_key,
           invoice_url,
@@ -225,7 +226,9 @@ export function BulkMessageDialog({
               // AIDEV-NOTE: Campos para links de pagamento
               pix_key: chargeData.pix_key,
               invoice_url: chargeData.invoice_url,
-              pdf_url: chargeData.pdf_url
+              pdf_url: chargeData.pdf_url,
+              // AIDEV-NOTE: Adicionar status da cobrança para processar tag {cobranca.status}
+              status: chargeData.status
             }
           };
           
