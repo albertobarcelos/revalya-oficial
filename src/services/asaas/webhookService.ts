@@ -54,32 +54,64 @@ async function configureAsaasWebhook(
     }
 
     // AIDEV-NOTE: Configura webhook no ASAAS
-    const response = await fetch(`${apiUrl}/v3/webhook`, {
+    // AIDEV-NOTE: Seguindo documentação oficial: POST /v3/webhooks com events array
+    const response = await fetch(`${apiUrl}/v3/webhooks`, {
       method: 'POST',
       headers: {
         'access_token': apiKey,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
+        name: `Webhook Revalya - Tenant ${tenantId}`,
         url: webhookConfig.url,
         enabled: true,
         interrupted: false,
         apiVersion: 3,
         authToken: webhookConfig.token,
-        type: 'PAYMENT'
+        sendType: 'SEQUENTIALLY',
+        events: [
+          'PAYMENT_RECEIVED',
+          'PAYMENT_CONFIRMED',
+          'PAYMENT_OVERDUE',
+          'PAYMENT_REFUNDED',
+          'PAYMENT_DELETED',
+          'PAYMENT_RESTORED',
+          'PAYMENT_UPDATED',
+          'PAYMENT_ANTICIPATED'
+        ]
       })
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error('Erro ao configurar webhook no ASAAS:', error)
+      let errorMessage = 'Erro ao configurar webhook no ASAAS'
+      try {
+        const error = await response.json()
+        // AIDEV-NOTE: API Asaas pode retornar errors array ou message direto
+        if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+          errorMessage = error.errors[0].description || error.errors[0].code || errorMessage
+        } else if (error.message) {
+          errorMessage = error.message
+        } else if (error.description) {
+          errorMessage = error.description
+        }
+      } catch (parseError) {
+        console.error('Erro ao parsear resposta de erro:', parseError)
+        errorMessage = `Erro HTTP ${response.status}: ${response.statusText}`
+      }
+      console.error('Erro ao configurar webhook no ASAAS:', errorMessage)
       return {
         success: false,
-        error: error.message || 'Erro ao configurar webhook no ASAAS'
+        error: errorMessage
       }
     }
 
+    // AIDEV-NOTE: Obtém dados do webhook criado (incluindo ID)
+    const webhookData = await response.json()
+    const webhookId = webhookData?.id
+
     // AIDEV-NOTE: Atualiza configuração no banco
+    // AIDEV-NOTE: Nota: Se a função setup_asaas_webhook não suporta webhook_id, 
+    // podemos adicionar esse campo depois ou usar uma tabela separada
     const { data, error } = await supabase
       .rpc('setup_asaas_webhook', {
         p_tenant_id: tenantId,
@@ -204,21 +236,52 @@ export async function removeTenantWebhook(tenantId: string): Promise<AsaasApiRes
       }
     }
 
-    // AIDEV-NOTE: Remove webhook no ASAAS
-    const response = await fetch(`${credentials.api_url}/v3/webhook`, {
-      method: 'DELETE',
-      headers: {
-        'access_token': credentials.api_key,
-        'Content-Type': 'application/json'
-      }
-    })
+    // AIDEV-NOTE: Busca configuração do webhook para obter a URL
+    const { data: webhookData, error: webhookDataError } = await supabase
+      .rpc('get_tenant_asaas_webhook', {
+        p_tenant_id: tenantId
+      })
+      .single()
 
-    if (!response.ok) {
-      const error = await response.json()
-      console.error('Erro ao remover webhook no ASAAS:', error)
-      return {
-        success: false,
-        error: error.message || 'Erro ao remover webhook no ASAAS'
+    if (webhookDataError || !webhookData?.webhook_url) {
+      console.error('❌ Webhook não encontrado no banco de dados')
+      // AIDEV-NOTE: Se não existe no banco, tenta limpar mesmo assim
+    } else {
+      // AIDEV-NOTE: Lista webhooks no ASAAS para encontrar o ID
+      const listResponse = await fetch(`${credentials.api_url}/v3/webhooks?limit=100`, {
+        method: 'GET',
+        headers: {
+          'access_token': credentials.api_key,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (listResponse.ok) {
+        const listData = await listResponse.json()
+        const webhookToDelete = listData.data?.find(
+          (wh: { url: string }) => wh.url === webhookData.webhook_url
+        )
+
+        if (webhookToDelete?.id) {
+          // AIDEV-NOTE: Remove webhook no ASAAS usando o ID
+          const deleteResponse = await fetch(`${credentials.api_url}/v3/webhooks/${webhookToDelete.id}`, {
+            method: 'DELETE',
+            headers: {
+              'access_token': credentials.api_key,
+              'Content-Type': 'application/json'
+            }
+          })
+
+          if (!deleteResponse.ok) {
+            const error = await deleteResponse.json()
+            console.error('Erro ao remover webhook no ASAAS:', error)
+            // AIDEV-NOTE: Continua para limpar no banco mesmo se falhar na API
+          }
+        } else {
+          console.warn('⚠️ Webhook não encontrado na lista do ASAAS, pode já ter sido removido')
+        }
+      } else {
+        console.warn('⚠️ Erro ao listar webhooks do ASAAS, tentando limpar apenas no banco')
       }
     }
 

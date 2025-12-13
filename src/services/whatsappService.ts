@@ -58,11 +58,15 @@ class WhatsAppService {
   }
   
   /**
-   * Método auxiliar para fazer chamadas à Evolution API
+   * Método auxiliar para fazer chamadas à Evolution API via Edge Function (proxy)
+   * AIDEV-NOTE: Usa Edge Function para evitar problemas de CORS
    */
-  private callEvolutionApi = async (endpoint: string, method: string = 'GET', data?: any): Promise<any> => {
-    const url = `${this.apiUrl}${endpoint}`;
-    
+  private callEvolutionApi = async (
+    endpoint: string, 
+    method: string = 'GET', 
+    data?: any,
+    tenantSlug?: string
+  ): Promise<any> => {
     try {
       // Verificar rate limit
       const canProceed = await rateLimitService.checkLimit('global', endpoint);
@@ -70,136 +74,118 @@ class WhatsAppService {
         throw new Error('Rate limit excedido');
       }
 
-      // Timeout maior para operações de exclusão
-      let timeout = API_TIMEOUT;
-      if (endpoint.includes('delete') || endpoint.includes('disconnect') || method === 'DELETE') {
-        timeout = API_TIMEOUT * 2; // Dobrar o timeout para operações sensíveis
-        logService.info(this.MODULE_NAME, `Usando timeout estendido (${timeout}ms) para operação de exclusão/desconexão`);
+      // AIDEV-NOTE: Obter tenant_id se tenantSlug foi fornecido
+      let tenantId: string | null = null;
+      if (tenantSlug) {
+        const tenant = await this.getTenantBySlug(tenantSlug);
+        if (tenant?.id) {
+          tenantId = tenant.id;
+        }
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      // Se não temos tenantId, tentar obter do contexto atual
+      if (!tenantId) {
+        // AIDEV-NOTE: Tentar obter do store ou contexto se disponível
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            // Tentar buscar tenant do usuário atual
+            const { data: tenantUser } = await supabase
+              .from('tenant_users')
+              .select('tenant_id')
+              .eq('user_id', user.id)
+              .limit(1)
+              .single();
+            
+            if (tenantUser?.tenant_id) {
+              tenantId = tenantUser.tenant_id;
+            }
+          }
+        } catch (error) {
+          logService.debug(this.MODULE_NAME, 'Não foi possível obter tenant_id do contexto:', error);
+        }
+      }
 
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'apikey': this.apiKey
-      };
-      
-      const options: RequestInit = {
-        method,
-        headers,
-        body: data ? JSON.stringify(data) : undefined,
-        signal: controller.signal
-      };
-      
-      logService.debug(this.MODULE_NAME, `Chamando API: ${method} ${url}`, { data });
+      if (!tenantId) {
+        throw new Error('Tenant ID é obrigatório para chamadas à Evolution API. Forneça tenantSlug ou configure o contexto do tenant.');
+      }
+
+      logService.debug(this.MODULE_NAME, `Chamando Evolution API via proxy: ${method} ${endpoint}`, { 
+        data,
+        tenantId 
+      });
       
       // Para depuração, vamos logar o payload quando for POST
       if ((method === 'POST' || method === 'PUT') && data) {
         logService.debug(this.MODULE_NAME, 'Payload:', JSON.stringify(data));
       }
+
+      // AIDEV-NOTE: Chamar Edge Function evolution-proxy usando fetch direto para melhor controle de erros
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
       
-      // Tentativa com retry para operações importantes
-      let retries = 0;
-      const maxRetries = endpoint.includes('delete') || endpoint.includes('disconnect') ? 3 : 1;
+      if (!session) {
+        throw new Error('Sessão não encontrada. Faça login novamente.');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/evolution-proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+          'x-tenant-id': tenantId
+        },
+        body: JSON.stringify({
+          method,
+          endpoint,
+          data,
+          tenant_id: tenantId,
+          environment: 'production'
+        })
+      });
+
+      const responseText = await response.text();
+      let responseData: any = null;
       
-      while (retries <= maxRetries) {
-        try {
-          const response = await fetch(url, options);
-          clearTimeout(timeoutId);
-          
-          // Se a resposta for um sucesso, mas não contém conteúdo (204)
-          if (response.status === 204) {
-            return { success: true };
-          }
-          
-          // Verificar se é uma resposta JSON
-          const contentType = response.headers.get("content-type");
-          const isJson = contentType?.includes("application/json");
-          
-          if (isJson) {
-            const json = await response.json();
-            
-            // Log completo da resposta para diagnóstico
-            logService.debug(this.MODULE_NAME, `Resposta da API (${endpoint}):`, json);
-            
-            if (!response.ok) {
-              logService.error(this.MODULE_NAME, 'Erro na resposta da API:', {
-                status: response.status,
-                error: response.statusText,
-                response: json
-              });
-              
-              // Verificar se é um erro de necessidade de desconexão
-              if (json && json.message && typeof json.message === 'string' && 
-                  json.message.includes('needs to be disconnected') && 
-                  (endpoint.includes('delete') || method === 'DELETE')) {
-                    
-                // Tentar desconectar e tentar novamente
-                if (retries < maxRetries) {
-                  retries++;
-                  logService.info(this.MODULE_NAME, `Instância precisa ser desconectada. Tentando desconectar e tentar novamente (tentativa ${retries})`);
-                  
-                  // Extrair o nome da instância
-                  const instanceMatch = endpoint.match(/\/([^/]+)$/);
-                  if (instanceMatch && instanceMatch[1]) {
-                    const instanceName = instanceMatch[1].split('?')[0]; // Remover query params se houver
-                    try {
-                      // Tentar desconectar antes de nova tentativa
-                      await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE');
-                      await new Promise(resolve => setTimeout(resolve, 2000));
-                      continue; // Tentar a operação original novamente
-                    } catch (disconnectError) {
-                      logService.error(this.MODULE_NAME, `Erro ao tentar desconectar instância ${instanceName}:`, disconnectError);
-                    }
-                  }
-                }
-              }
-              
-              throw new Error(json.error || json.message || `Erro ${response.status}`);
-            }
-            
-            return json;
-          } else {
-            // Se não for JSON, obter o texto da resposta
-            const text = await response.text();
-            
-            // AIDEV-NOTE: Verificar se a resposta é HTML (indica instância não existente)
-            if (text.trim().startsWith('<!DOCTYPE html>') || text.trim().startsWith('<html')) {
-              logService.error(this.MODULE_NAME, `API retornou HTML em vez de JSON para ${endpoint}. Isso geralmente indica que a instância não existe.`);
-              throw new Error('Instância não encontrada - API retornou HTML em vez de JSON');
-            }
-            
-            // Log da resposta de texto
-            logService.debug(this.MODULE_NAME, `Resposta da API (texto) (${endpoint}):`, text);
-            
-            if (!response.ok) {
-              logService.error(this.MODULE_NAME, 'Erro na resposta da API (texto):', {
-                status: response.status,
-                error: response.statusText,
-                response: text
-              });
-              throw new Error(`Erro ${response.status}: ${text}`);
-            }
-            
-            return text;
-          }
-        } catch (fetchError) {
-          if (retries < maxRetries && (
-              endpoint.includes('delete') || 
-              endpoint.includes('disconnect') || 
-              method === 'DELETE'
-            )) {
-            retries++;
-            logService.warn(this.MODULE_NAME, `Erro na requisição. Tentando novamente (${retries}/${maxRetries})...`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-            continue;
-          }
-          throw fetchError;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch (parseError) {
+        logService.warn(this.MODULE_NAME, 'Erro ao fazer parse da resposta:', parseError);
+        // Se não conseguir fazer parse, usar o texto como erro
+        if (!response.ok) {
+          throw new Error(`Erro na Edge Function: ${responseText || response.statusText}`);
         }
       }
+
+      if (!response.ok) {
+        const errorMessage = responseData?.error || 
+                            (typeof responseData === 'string' ? responseData : response.statusText) ||
+                            'Erro ao chamar Evolution API via proxy';
+        
+        logService.error(this.MODULE_NAME, `Erro na Edge Function evolution-proxy (${response.status}):`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorMessage,
+          responseData
+        });
+        
+        throw new Error(errorMessage);
+      }
+
+      // AIDEV-NOTE: Verificar se a resposta contém erro mesmo com status 200
+      if (responseData && responseData.error) {
+        const errorMsg = typeof responseData.error === 'string' 
+          ? responseData.error 
+          : (responseData.error?.message || 'Erro desconhecido na Evolution API');
+        
+        logService.error(this.MODULE_NAME, 'Erro na resposta da API:', responseData.error);
+        throw new Error(errorMsg);
+      }
+
+      logService.debug(this.MODULE_NAME, `Resposta da API (${endpoint}):`, responseData);
       
-      throw new Error(`Máximo de tentativas excedido para ${endpoint}`);
+      return responseData;
     } catch (error) {
       logService.error(this.MODULE_NAME, `Erro ao chamar ${endpoint}:`, { error });
       throw error;
@@ -224,7 +210,7 @@ class WhatsAppService {
   /**
    * Verifica se uma instância existe na Evolution API
    */
-  instanceExists = async (instanceName: string): Promise<boolean> => {
+  instanceExists = async (instanceName: string, tenantSlug?: string): Promise<boolean> => {
     try {
       if (!instanceName) {
         logService.error(this.MODULE_NAME, 'Nome da instância não fornecido');
@@ -233,7 +219,7 @@ class WhatsAppService {
 
       // Tenta verificar com o estado de conexão
       try {
-        const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`);
+        const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET', undefined, tenantSlug);
         if (response && response.instance) {
           return true;
         }
@@ -243,7 +229,7 @@ class WhatsAppService {
       
       // Se falhar, tenta buscar em todas as instâncias
       try {
-        const allInstances = await this.callEvolutionApi(`/instance/fetchInstances`, 'GET');
+        const allInstances = await this.callEvolutionApi(`/instance/fetchInstances`, 'GET', undefined, tenantSlug);
         
         if (allInstances && Array.isArray(allInstances.data)) {
           const found = allInstances.data.some((instance: any) => 
@@ -262,7 +248,7 @@ class WhatsAppService {
       
       // Como último recurso, tenta buscar informações detalhadas
       try {
-        const info = await this.callEvolutionApi(`/instance/info/${instanceName}`);
+        const info = await this.callEvolutionApi(`/instance/info/${instanceName}`, 'GET', undefined, tenantSlug);
         if (info && !info.error) {
           logService.debug(this.MODULE_NAME, `Instância ${instanceName} encontrada via info`);
           return true;
@@ -323,7 +309,7 @@ class WhatsAppService {
       }
       
       // Criar instância com configurações completas
-      const response = await this.callEvolutionApi('/instance/create', 'POST', data);
+      const response = await this.callEvolutionApi('/instance/create', 'POST', data, tenantSlug);
       logService.info(this.MODULE_NAME, 'Instância única criada com sucesso:', response);
       
       // Retorna os dados da instância criada
@@ -341,12 +327,12 @@ class WhatsAppService {
   /**
    * Inicia a conexão de uma instância (necessário para gerar QR code)
    */
-  connectInstance = async (instanceName: string): Promise<boolean> => {
+  connectInstance = async (instanceName: string, tenantSlug?: string): Promise<boolean> => {
     try {
       logService.info(this.MODULE_NAME, `Iniciando conexão da instância: ${instanceName}`);
       
       // Endpoint para iniciar a conexão
-      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET');
+      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET', undefined, tenantSlug);
       
       logService.info(this.MODULE_NAME, `Resposta ao conectar instância ${instanceName}:`, response);
       return true;
@@ -400,12 +386,12 @@ class WhatsAppService {
   /**
    * Gera um QR Code para uma instância
    */
-  generateQRCode = async (instanceName: string): Promise<string> => {
+  generateQRCode = async (instanceName: string, tenantSlug?: string): Promise<string> => {
     try {
       logService.info(this.MODULE_NAME, `Gerando QR code para instância: ${instanceName}`);
       
       // Na Evolution API, o endpoint de conexão retorna o QR code
-      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET'); 
+      const response = await this.callEvolutionApi(`/instance/connect/${instanceName}`, 'GET', undefined, tenantSlug); 
       
       let qrCode: string | null = null;
       
@@ -466,7 +452,7 @@ class WhatsAppService {
       // Tentar obter explicitamente por uma nova chamada
       try {
         logService.info(this.MODULE_NAME, 'Tentando obter QR Code via getQrCode endpoint...');
-        const qrResponse = await this.callEvolutionApi(`/instance/qrcode/${instanceName}`, 'GET');
+        const qrResponse = await this.callEvolutionApi(`/instance/qrcode/${instanceName}`, 'GET', undefined, tenantSlug);
         
         logService.info(this.MODULE_NAME, 'Resposta do endpoint getQrCode:', qrResponse);
         
@@ -499,7 +485,7 @@ class WhatsAppService {
   /**
    * Verifica o status de conexão de uma instância - melhorado para detectar mais estados
    */
-  checkInstanceStatus = async (instanceName: string): Promise<string> => {
+  checkInstanceStatus = async (instanceName: string, tenantSlug?: string): Promise<string> => {
     try {
       if (!instanceName) {
         logService.error(this.MODULE_NAME, 'Nome da instância não fornecido');
@@ -509,7 +495,7 @@ class WhatsAppService {
       logService.info(this.MODULE_NAME, `Verificando status da instância: ${instanceName}`);
       
       // Obter status da instância
-      const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`);
+      const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET', undefined, tenantSlug);
       
       logService.debug(this.MODULE_NAME, 'Status detalhado:', response);
       
@@ -538,7 +524,7 @@ class WhatsAppService {
       if (state === 'disconnected' || !state) {
         try {
           // Tentar obter informações detalhadas
-          const instanceInfo = await this.getInstanceInfo(instanceName);
+          const instanceInfo = await this.getInstanceInfo(instanceName, tenantSlug);
           
           if (instanceInfo && instanceInfo.instance) {
             // Usar o estado da informação detalhada se disponível
@@ -567,13 +553,14 @@ class WhatsAppService {
       }
       
       // Normalizar estado para formato padronizado
-      // Estados observados na API: 'connected', 'connecating', 'disconnected', 'ready', 'paired', 'timeout'
-      if (['connected', 'ready', 'open'].includes(state.toLowerCase())) {
+      // Estados observados na API: 'connected', 'connecating', 'disconnected', 'ready', 'paired', 'timeout', 'open'
+      const normalizedState = state.toLowerCase();
+      if (['connected', 'ready', 'open'].includes(normalizedState)) {
         return 'connected';
-      } else if (['connecting', 'pairing', 'paired', 'syncing'].includes(state.toLowerCase())) {
+      } else if (['connecting', 'pairing', 'paired', 'syncing'].includes(normalizedState)) {
         return 'connecting';
       } else {
-        return state.toLowerCase();
+        return normalizedState as typeof WHATSAPP.CONNECTION_STATES[keyof typeof WHATSAPP.CONNECTION_STATES];
       }
     } catch (error) {
       logService.error(this.MODULE_NAME, 'Erro ao verificar status da instância:', error);
@@ -584,13 +571,13 @@ class WhatsAppService {
   /**
    * Desconecta uma instância (sem deletar)
    */
-  disconnectInstance = async (instanceName: string): Promise<boolean> => {
+  disconnectInstance = async (instanceName: string, tenantSlug?: string): Promise<boolean> => {
     try {
       logService.info(this.MODULE_NAME, `Desconectando instância: ${instanceName}`);
       
       // Endpoint para desconectar a instância sem deletá-la
       // Utilizando o método DELETE com o endpoint correto conforme documentação
-      const response = await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE');
+      const response = await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE', undefined, tenantSlug);
       
       logService.info(this.MODULE_NAME, `Resposta ao desconectar instância ${instanceName}:`, response);
       return true;
@@ -603,7 +590,7 @@ class WhatsAppService {
   /**
    * Deleta uma instância
    */
-  deleteInstance = async (instanceName: string): Promise<boolean> => {
+  deleteInstance = async (instanceName: string, tenantSlug?: string): Promise<boolean> => {
     try {
       logService.info(this.MODULE_NAME, `Deletando instância: ${instanceName}`);
       
@@ -623,7 +610,7 @@ class WhatsAppService {
       // 1. Primeiro endpoint: /instance/delete
       try {
         logService.info(this.MODULE_NAME, `Tentando endpoint DELETE /instance/delete/${instanceName}`);
-        const response = await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE');
+        const response = await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE', undefined, tenantSlug);
         logService.info(this.MODULE_NAME, `Resposta ao deletar instância ${instanceName}:`, response);
         // Se chegou até aqui, a exclusão foi bem-sucedida
         return true;
@@ -636,12 +623,12 @@ class WhatsAppService {
           // Tentar desconectar novamente com mais tempo de espera
           try {
             logService.info(this.MODULE_NAME, `Segunda tentativa de desconexão para ${instanceName}`);
-            await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE');
+            await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE', undefined, tenantSlug);
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             // Tentar excluir novamente após segunda desconexão
             logService.info(this.MODULE_NAME, `Nova tentativa de exclusão após segunda desconexão`);
-            await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE');
+            await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE', undefined, tenantSlug);
             return true;
           } catch (secondError) {
             logService.warn(this.MODULE_NAME, `Erro na segunda tentativa de exclusão:`, secondError);
@@ -653,11 +640,11 @@ class WhatsAppService {
       try {
         logService.info(this.MODULE_NAME, `Tentando método alternativo: logout com DELETE`);
         // Forçar logout primeiro
-        await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE');
+        await this.callEvolutionApi(`/instance/logout/${instanceName}`, 'DELETE', undefined, tenantSlug);
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Tentar excluir após logout forçado
-        await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE');
+        await this.callEvolutionApi(`/instance/delete/${instanceName}`, 'DELETE', undefined, tenantSlug);
         return true;
       } catch (error) {
         logService.warn(this.MODULE_NAME, `Erro no método alternativo de exclusão para ${instanceName}:`, error);
@@ -666,7 +653,7 @@ class WhatsAppService {
       // 3. Tentar método via PUT/POST
       try {
         logService.info(this.MODULE_NAME, `Tentando método via PUT para exclusão`);
-        await this.callEvolutionApi(`/instance/delete`, 'PUT', { instanceName });
+        await this.callEvolutionApi(`/instance/delete`, 'PUT', { instanceName }, tenantSlug);
         return true;
       } catch (putError) {
         logService.warn(this.MODULE_NAME, `Erro no método PUT para exclusão:`, putError);
@@ -674,7 +661,7 @@ class WhatsAppService {
         // Última tentativa via POST
         try {
           logService.info(this.MODULE_NAME, `Tentativa final via POST para exclusão`);
-          await this.callEvolutionApi(`/instance/delete`, 'POST', { instanceName });
+          await this.callEvolutionApi(`/instance/delete`, 'POST', { instanceName }, tenantSlug);
           return true;
         } catch (postError) {
           logService.warn(this.MODULE_NAME, `Erro no método POST para exclusão:`, postError);
@@ -683,7 +670,7 @@ class WhatsAppService {
       
       // Verificar se a instância realmente foi excluída
       try {
-        const exists = await this.instanceExists(instanceName);
+        const exists = await this.instanceExists(instanceName, tenantSlug);
         if (exists) {
           logService.warn(this.MODULE_NAME, `A instância ${instanceName} ainda existe após tentativas de exclusão`);
         } else {
@@ -717,7 +704,7 @@ class WhatsAppService {
         // AIDEV-NOTE: Priorizar instâncias conectadas, mas validar se não têm erros críticos
         const connectedInstance = instances.find(instance => 
           instance.status === WHATSAPP.CONNECTION_STATES.CONNECTED || 
-          instance.status === 'open'
+          (instance.status as string) === 'open'
         );
         
         if (connectedInstance) {
@@ -753,7 +740,7 @@ class WhatsAppService {
   /**
    * Obtém informações detalhadas de uma instância do WhatsApp
    */
-  getInstanceInfo = async (instanceName: string): Promise<any> => {
+  getInstanceInfo = async (instanceName: string, tenantSlug?: string): Promise<any> => {
     try {
       if (!instanceName) {
         throw new Error('Nome da instância não fornecido');
@@ -763,7 +750,7 @@ class WhatsAppService {
       
       try {
         // Usar o endpoint de estado de conexão
-        const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET');
+        const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET', undefined, tenantSlug);
         
         if (response) {
           logService.debug(this.MODULE_NAME, 'Informações da instância:', response);
@@ -775,7 +762,7 @@ class WhatsAppService {
       
       // Se o primeiro endpoint falhar, tentar com o caminho alternativo
       try {
-        const alternativeResponse = await this.callEvolutionApi(`/instance/fetchInstances`, 'GET');
+        const alternativeResponse = await this.callEvolutionApi(`/instance/fetchInstances`, 'GET', undefined, tenantSlug);
         
         if (alternativeResponse && alternativeResponse.data && Array.isArray(alternativeResponse.data)) {
           const instanceData = alternativeResponse.data.find((i: any) => 
@@ -817,7 +804,7 @@ class WhatsAppService {
         }
         
         // 2. Verificar se a instância está apenas desconectada
-        const instances = await this.callEvolutionApi('/instance/fetchInstances', 'GET');
+        const instances = await this.callEvolutionApi('/instance/fetchInstances', 'GET', undefined, tenantSlug);
         if (instances && Array.isArray(instances.data)) {
           const tenantInstance = instances.data.find((instance: any) => 
             instance.instance && instance.instance.includes(`revalya-${tenantSlug}`)
@@ -1014,7 +1001,7 @@ class WhatsAppService {
       // Para ação de CRIAR instância
       if (action === 'create') {
         // Verificar se a instância padrão já existe na API
-        const instanceExists = await this.instanceExists(instanceName);
+        const instanceExists = await this.instanceExists(instanceName, tenantSlug);
         
         if (instanceExists) {
           logService.info(this.MODULE_NAME, `Instância única já existe para ${tenantSlug}: ${instanceName}`);
@@ -1039,7 +1026,7 @@ class WhatsAppService {
       } 
       else if (action === 'connect') {
         // Verificar se a instância padrão existe
-        const instanceExists = await this.instanceExists(instanceName);
+        const instanceExists = await this.instanceExists(instanceName, tenantSlug);
         
         if (!instanceExists) {
           logService.warn(this.MODULE_NAME, `Instância ${instanceName} não encontrada na API. Criando nova instância.`);
@@ -1067,7 +1054,7 @@ class WhatsAppService {
               attempts++;
               logService.info(this.MODULE_NAME, `Verificando existência da instância (tentativa ${attempts}/${maxAttempts})`);
               
-              newInstanceExists = await this.instanceExists(instanceName);
+              newInstanceExists = await this.instanceExists(instanceName, tenantSlug);
               
               if (!newInstanceExists && attempts < maxAttempts) {
                 logService.warn(this.MODULE_NAME, `Instância ainda não existe, aguardando mais 2 segundos...`);
@@ -1102,7 +1089,7 @@ class WhatsAppService {
         logService.info(this.MODULE_NAME, `Tentando conectar à instância: ${instanceName}`);
         
         // Conectar EXPLICITAMENTE antes de gerar QR code
-        const connected = await this.connectInstance(instanceName);
+        const connected = await this.connectInstance(instanceName, tenantSlug);
         if (!connected) {
           logService.error(this.MODULE_NAME, `Falha ao conectar à instância ${instanceName}`);
           return { success: false, error: 'Falha ao conectar à instância' };
@@ -1151,7 +1138,7 @@ class WhatsAppService {
             logService.warn(this.MODULE_NAME, `QR Code não retornado para ${instanceName}. Tentando endpoint alternativo.`);
             
             // Tentar endpoint QR code direto
-            const qrResult = await this.callEvolutionApi(`/instance/qrcode/${instanceName}`, 'GET');
+            const qrResult = await this.callEvolutionApi(`/instance/qrcode/${instanceName}`, 'GET', undefined, tenantSlug);
             
             if (qrResult) {
               // Tentar extrair o QR code de várias propriedades possíveis
@@ -1165,7 +1152,7 @@ class WhatsAppService {
             }
             
             // Se ainda não temos QR code, verificar info da instância
-            const instanceInfo = await this.getInstanceInfo(instanceName);
+            const instanceInfo = await this.getInstanceInfo(instanceName, tenantSlug);
             if (instanceInfo && instanceInfo.instance && instanceInfo.instance.qrcode) {
               return { success: true, qrCode: instanceInfo.instance.qrcode };
             }
@@ -1178,7 +1165,7 @@ class WhatsAppService {
           
           // Tentar obter info da instância como última tentativa
           try {
-            const instanceInfo = await this.getInstanceInfo(instanceName);
+            const instanceInfo = await this.getInstanceInfo(instanceName, tenantSlug);
             if (instanceInfo && instanceInfo.instance && instanceInfo.instance.qrcode) {
               return { success: true, qrCode: instanceInfo.instance.qrcode };
             }
@@ -1221,7 +1208,7 @@ class WhatsAppService {
             }
             
             // Tentar excluir diretamente - este método já inclui várias tentativas
-            deleted = await this.deleteInstance(instance.instanceName);
+            deleted = await this.deleteInstance(instance.instanceName, tenantSlug);
             
             if (deleted) {
               logService.info(this.MODULE_NAME, `Instância ${instance.instanceName} foi excluída com sucesso através do método deleteInstance`);
@@ -1235,7 +1222,7 @@ class WhatsAppService {
           // Verificação final para garantir que a instância foi removida
           try {
             // Verificar se a instância ainda existe
-            const stillExists = await this.instanceExists(instance.instanceName);
+            const stillExists = await this.instanceExists(instance.instanceName, tenantSlug);
             
             if (stillExists) {
               logService.warn(this.MODULE_NAME, `ALERTA: A instância ${instance.instanceName} ainda existe após as tentativas de exclusão`);
@@ -1249,10 +1236,10 @@ class WhatsAppService {
                 for (const method of methods) {
                   try {
                     logService.info(this.MODULE_NAME, `Tentativa desesperada com método ${method}`);
-                    await this.callEvolutionApi(`/instance/delete/${instance.instanceName}`, method);
+                    await this.callEvolutionApi(`/instance/delete/${instance.instanceName}`, method, undefined, tenantSlug);
                     
                     // Verificar se funcionou
-                    const finalCheck = await this.instanceExists(instance.instanceName);
+                    const finalCheck = await this.instanceExists(instance.instanceName, tenantSlug);
                     if (!finalCheck) {
                       logService.info(this.MODULE_NAME, `Sucesso! Método ${method} conseguiu excluir a instância ${instance.instanceName}`);
                       break;
@@ -1267,9 +1254,9 @@ class WhatsAppService {
                 // Última tentativa: desconectar (logout) e depois tentar excluir
                 try {
                   logService.info(this.MODULE_NAME, `Tentativa final: logout forçado e depois delete`);
-                  await this.callEvolutionApi(`/instance/logout/${instance.instanceName}`, 'DELETE');
+                  await this.callEvolutionApi(`/instance/logout/${instance.instanceName}`, 'DELETE', undefined, tenantSlug);
                   await new Promise(resolve => setTimeout(resolve, 2000));
-                  await this.callEvolutionApi(`/instance/delete/${instance.instanceName}`, 'DELETE');
+                  await this.callEvolutionApi(`/instance/delete/${instance.instanceName}`, 'DELETE', undefined, tenantSlug);
                 } catch (lastError) {
                   logService.error(this.MODULE_NAME, `Erro na tentativa final:`, lastError);
                 }
@@ -1400,7 +1387,7 @@ class WhatsAppService {
         })
         .map((instance: any) => ({
           instanceName: instance.name,
-          status: this.mapConnectionStatus(instance.connectionStatus),
+          status: this.mapConnectionStatus(instance.connectionStatus) as typeof WHATSAPP.CONNECTION_STATES[keyof typeof WHATSAPP.CONNECTION_STATES],
           createdAt: new Date()
         }));
 
@@ -1421,17 +1408,17 @@ class WhatsAppService {
   }
 
   // AIDEV-NOTE: Método auxiliar para mapear status de conexão da Evolution API para nossos estados
-  private mapConnectionStatus = (status: string): string => {
+  private mapConnectionStatus = (status: string): typeof WHATSAPP.CONNECTION_STATES[keyof typeof WHATSAPP.CONNECTION_STATES] => {
     switch (status?.toLowerCase()) {
       case 'open':
-        return 'connected';
+        return WHATSAPP.CONNECTION_STATES.CONNECTED;
       case 'close':
       case 'closed':
-        return 'disconnected';
+        return WHATSAPP.CONNECTION_STATES.DISCONNECTED;
       case 'connecting':
-        return 'connecting';
+        return WHATSAPP.CONNECTION_STATES.CONNECTING;
       default:
-        return 'disconnected';
+        return WHATSAPP.CONNECTION_STATES.DISCONNECTED;
     }
   }
 
@@ -1733,12 +1720,12 @@ class WhatsAppService {
    * Reinicia uma instância do WhatsApp
    * Útil para reconectar quando o WhatsApp é desconectado
    */
-  restartInstance = async (instanceName: string): Promise<boolean> => {
+  restartInstance = async (instanceName: string, tenantSlug?: string): Promise<boolean> => {
     try {
       logService.info(this.MODULE_NAME, `Reiniciando instância: ${instanceName}`);
       
       // Endpoint para reiniciar a instância conforme documentação
-      const response = await this.callEvolutionApi(`/instance/restart/${instanceName}`, 'PUT');
+      const response = await this.callEvolutionApi(`/instance/restart/${instanceName}`, 'PUT', undefined, tenantSlug);
       
       logService.info(this.MODULE_NAME, `Resposta ao reiniciar instância ${instanceName}:`, response);
       return true;
@@ -1757,7 +1744,7 @@ class WhatsAppService {
       logService.info(this.MODULE_NAME, `Verificando status da instância: ${instanceName} para tenant: ${tenantSlug}`);
       
       // AIDEV-NOTE: Chamar endpoint de status da Evolution API
-      const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET');
+      const response = await this.callEvolutionApi(`/instance/connectionState/${instanceName}`, 'GET', undefined, tenantSlug);
       
       const status = response?.instance?.state || 'disconnected';
       const isConnected = status === 'open' || status === 'connected';

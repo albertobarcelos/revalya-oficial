@@ -292,6 +292,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
   console.log(`🚀 Iniciando importação ASAAS para tenant ${tenant_id}`);
   console.log(`📅 Período: ${start_date} até ${end_date}`);
   console.log(`👤 User ID para auditoria: ${userId}`);
+  console.log(`📊 Limite total solicitado: ${limit} registros`);
 
   // 1. Buscar configuração ASAAS do tenant (usando supabaseAdmin para dados sensíveis)
   const { data: integration, error: integrationError } = await supabaseAdmin
@@ -306,9 +307,43 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
     throw new Error(`Integração ASAAS não encontrada para tenant ${tenant_id}`);
   }
 
-  const { api_key, api_url } = integration.config;
-  if (!api_key || !api_url) {
-    throw new Error('Configuração ASAAS incompleta (api_key ou api_url ausente)');
+  // AIDEV-NOTE: Tentar obter chave descriptografada usando função RPC
+  // Se não conseguir, usar texto plano do config (compatibilidade)
+  let api_key: string | null = null;
+  
+  try {
+    const { data: decryptedKey, error: decryptError } = await supabaseAdmin.rpc('get_decrypted_api_key', {
+      p_tenant_id: tenant_id,
+      p_integration_type: 'asaas'
+    });
+    
+    if (!decryptError && decryptedKey) {
+      api_key = decryptedKey;
+      console.log('[importChargesFromAsaas] Chave API descriptografada com sucesso');
+    } else {
+      // Fallback: usar texto plano do config
+      const config = integration.config || {};
+      api_key = config.api_key || null;
+      if (api_key) {
+        console.warn('[importChargesFromAsaas] Usando chave em texto plano (compatibilidade)');
+      }
+    }
+  } catch (error) {
+    // Se função não existir ou falhar, usar texto plano
+    const config = integration.config || {};
+    api_key = config.api_key || null;
+    console.warn('[importChargesFromAsaas] Erro ao descriptografar, usando texto plano:', error);
+  }
+
+  if (!api_key) {
+    throw new Error('API key não encontrada (criptografada ou texto plano) para tenant');
+  }
+
+  const config = integration.config || {};
+  const api_url = config.api_url || 'https://api.asaas.com/v3';
+  
+  if (!api_url) {
+    throw new Error('Configuração ASAAS incompleta (api_url ausente)');
   }
 
   // AIDEV-NOTE: Garantir que a URL base termine sem barra e adicionar /v3 se necessário
@@ -317,6 +352,11 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
   
   console.log(`🔑 Usando API URL: ${apiBaseUrl}`);
 
+  // AIDEV-NOTE: Limite fixo de página para API ASAAS (máximo 100 por requisição)
+  const PAGE_LIMIT = 100;
+  // AIDEV-NOTE: Limite total solicitado pelo usuário
+  const TOTAL_LIMIT = limit;
+
   let offset = 0;
   let totalProcessed = 0;
   let totalImported = 0;
@@ -324,12 +364,18 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
   let totalSkipped = 0;
   let totalErrors = 0;
   let hasMore = true;
+  const errors: string[] = []; // AIDEV-NOTE: Array para coletar erros detalhados
 
-  while (hasMore && totalProcessed < limit) {
-    console.log(`📄 Buscando página ${Math.floor(offset / limit) + 1} (offset: ${offset})`);
+  while (hasMore && totalProcessed < TOTAL_LIMIT) {
+    // AIDEV-NOTE: Calcular quantos registros ainda podemos processar nesta página
+    const remainingToProcess = TOTAL_LIMIT - totalProcessed;
+    const pageLimit = Math.min(PAGE_LIMIT, remainingToProcess);
+    
+    console.log(`📄 Buscando página ${Math.floor(offset / PAGE_LIMIT) + 1} (offset: ${offset}, pageLimit: ${pageLimit}, totalProcessed: ${totalProcessed}/${TOTAL_LIMIT})`);
 
     // 2. Buscar pagamentos do ASAAS (filtro por data de vencimento)
-    const asaasUrl = `${apiBaseUrl}/payments?dueDate[ge]=${start_date}&dueDate[le]=${end_date}&limit=${limit}&offset=${offset}`;
+    // AIDEV-NOTE: Usar PAGE_LIMIT fixo para API, não o limite total
+    const asaasUrl = `${apiBaseUrl}/payments?dueDate[ge]=${start_date}&dueDate[le]=${end_date}&limit=${pageLimit}&offset=${offset}`;
     
     console.log(`🔍 URL da requisição: ${asaasUrl}`);
     
@@ -343,8 +389,17 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ Erro na API ASAAS: ${response.status} - ${errorText}`);
-      throw new Error(`Erro na API ASAAS: ${response.status} - ${errorText}`);
+      const errorMsg = `Erro na API ASAAS ao buscar pagamentos: ${response.status} - ${errorText}`;
+      console.error(`❌ ${errorMsg}`);
+      errors.push(errorMsg);
+      // AIDEV-NOTE: Não interromper completamente a importação, apenas registrar o erro e continuar
+      // Se for erro crítico (401, 403), pode ser necessário interromper
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`Erro de autenticação na API ASAAS: ${response.status}`);
+      }
+      // Para outros erros, continuar tentando próximas páginas se houver
+      hasMore = false;
+      break;
     }
 
     const asaasData = await response.json();
@@ -361,14 +416,15 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
     // 3. Processar cada pagamento
     for (const payment of payments) {
       // AIDEV-NOTE: Verificar limite total de processamento
-      if (totalProcessed >= limit) {
+      if (totalProcessed >= TOTAL_LIMIT) {
         hasMore = false;
         break;
       }
 
       try {
-        // AIDEV-NOTE: Buscar charge existente pelo asaas_id
-        const { data: existingCharge } = await supabaseUser
+        // AIDEV-NOTE: Buscar charge existente pelo asaas_id usando supabaseAdmin
+        // Usar admin para garantir acesso mesmo com RLS restritivo
+        const { data: existingCharge } = await supabaseAdmin
           .from('charges')
           .select('id, status, valor, data_pagamento, updated_at')
           .eq('tenant_id', tenant_id)
@@ -484,7 +540,9 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
         );
 
         if (!customerUuid) {
-          console.error(`❌ Não foi possível criar ou encontrar customer para pagamento ${payment.id}`);
+          const errorMsg = `Não foi possível criar ou encontrar customer para pagamento ${payment.id} (customer_id: ${payment.customer || 'N/A'})`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
           totalErrors++;
           totalProcessed++;
           continue;
@@ -590,8 +648,10 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           chargeData.pix_key = payment.pixQrCode;
         }
 
-        // AIDEV-NOTE: Executar UPSERT usando supabaseUser (com RLS e triggers)
-        const { data: charge, error: chargeError } = await supabaseUser
+        // AIDEV-NOTE: Executar UPSERT usando supabaseAdmin para bypassar RLS
+        // A validação de segurança já foi feita (usuário autenticado, tenant validado)
+        // Usar service role é seguro aqui porque o tenant_id está sendo validado antes
+        const { data: charge, error: chargeError } = await supabaseAdmin
           .from('charges')
           .upsert(chargeData, {
             onConflict: 'tenant_id,asaas_id',
@@ -600,7 +660,9 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
           .select('id, created_at, updated_at');
 
         if (chargeError) {
-          console.error(`❌ Erro ao fazer UPSERT do charge ${payment.id}:`, chargeError);
+          const errorMsg = `Erro ao fazer UPSERT do charge ${payment.id}: ${chargeError.message || JSON.stringify(chargeError)}`;
+          console.error(`❌ ${errorMsg}`);
+          errors.push(errorMsg);
           totalErrors++;
           totalProcessed++;
           continue;
@@ -618,7 +680,9 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
         totalProcessed++;
 
       } catch (error) {
-        console.error(`❌ Erro ao processar pagamento ${payment.id}:`, error);
+        const errorMsg = `Erro ao processar pagamento ${payment.id}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(`❌ ${errorMsg}`);
+        errors.push(errorMsg);
         totalErrors++;
         totalProcessed++;
         continue;
@@ -626,8 +690,10 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
     }
 
     // 7. Verificar se há mais páginas
-    offset += limit;
-    hasMore = payments.length === limit && totalProcessed < limit;
+    // AIDEV-NOTE: Incrementar offset pelo limite de página usado, não pelo limite total
+    offset += pageLimit;
+    // AIDEV-NOTE: Continuar paginando se recebemos uma página completa E ainda não atingimos o limite total
+    hasMore = payments.length === pageLimit && totalProcessed < TOTAL_LIMIT;
   }
 
   console.log(`🎉 Importação concluída!`);
@@ -651,7 +717,7 @@ async function importChargesFromAsaas(request: ImportChargesRequest, supabaseUse
       imported_ids: new Array(totalImported).fill(null), // Preenchendo arrays para compatibilidade com frontend
       updated_ids: new Array(totalUpdated).fill(null),   // Preenchendo arrays para compatibilidade com frontend
       skipped_ids: new Array(totalSkipped).fill(null),   // Preenchendo arrays para compatibilidade com frontend
-      errors: []        // AIDEV-NOTE: Placeholder para compatibilidade
+      errors: errors        // AIDEV-NOTE: Array com erros detalhados coletados durante a importação
     }
   };
 }
