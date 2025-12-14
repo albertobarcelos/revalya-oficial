@@ -6,6 +6,7 @@
 
 -- Esta migração é idempotente e só executa se necessário
 -- Em branches novas, a tabela users já tem avatar_url como TEXT na migração inicial
+-- IMPORTANTE: Esta migração só faz sentido se a tabela users já existir
 
 DO $$
 BEGIN
