@@ -43,8 +43,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {
       'X-Client-Info': 'revalya-financial-system',
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
+      // AIDEV-NOTE: NÃO definir Content-Type global - quebra uploads de arquivos
+      // O SDK do Supabase gerencia automaticamente o Content-Type por requisição
     },
   },
 })

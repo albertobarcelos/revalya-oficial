@@ -9,28 +9,25 @@ import { Plus, Search, AlertTriangle, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
-import { getPayablesPaginated, type PayableFilters, type PayableResponse, markAsPaid as markPayableAsPaid, createPayable, updatePayable, type PayableRow } from '@/services/financialPayablesService';
+import type { PayableRow } from '@/services/financialPayablesService';
 import { supabase } from '@/lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTenantAccessGuard, useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
+import { usePayablesQuery } from './contas-a-pagar/hooks/usePayablesQuery';
+import { usePayablesMutations } from './contas-a-pagar/hooks/usePayablesMutations';
 import { AdvancedFilters } from './contas-a-pagar/components/AdvancedFilters';
 import { PayablesTable } from './contas-a-pagar/components/PayablesTable';
 import { CreatePayableModal } from './contas-a-pagar/components/CreatePayableModal';
 import { EditPayableModal } from './contas-a-pagar/components/EditPayableModal';
 import type { PayablesFilters } from './contas-a-pagar/types/filters';
+import type { PaginationData } from './contas-a-pagar/types/pagination';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
 import { Separator } from '@/components/ui/separator';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { motion } from 'framer-motion';
+import { exportPayablesCsv } from './contas-a-pagar/utils/exportCsv';
 
 type FinanceEntry = PayableRow;
-
-interface PaginationData {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
 
 const ContasAPagar: React.FC = () => {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
@@ -39,7 +36,7 @@ const ContasAPagar: React.FC = () => {
 
   
 
-  const [pagination, setPagination] = useState<PaginationData>({ total: 0, page: 1, limit: 10, totalPages: 0 });
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [filters, setFilters] = useState<PayablesFilters>(() => {
     return { search: '', status: [], dateFrom: '', dateTo: '', page: 1 } as PayablesFilters;
   });
@@ -57,54 +54,11 @@ const ContasAPagar: React.FC = () => {
   const [iconHtml, setIconHtml] = useState<string>('');
   
 
-  const queryKey = useMemo(
-    () => [
-      'contas-a-pagar',
-      currentTenant?.id,
-      filters.search,
-      filters.status,
-      filters.dateFrom,
-      filters.dateTo,
-      filters.page,
-      pagination.limit,
-    ],
-    [currentTenant?.id, filters, pagination.limit]
-  );
-
-  const { data: payablesData, isLoading, error } = useSecureTenantQuery(
-    queryKey,
-    async (_supabase, tenantId) => {
-      if (tenantId !== currentTenant?.id) {
-        throw new Error('VIOLAÇÃO DE SEGURANÇA: Tenant inconsistente');
-      }
-
-      const params: PayableFilters = {
-        tenant_id: tenantId,
-        page: filters.page,
-        limit: pagination.limit,
-      };
-
-      if (filters.search) params.search = filters.search;
-      if (filters.status && filters.status.length > 0) (params as any).statuses = filters.status as any;
-      if (filters.dateFrom) params.start_date = filters.dateFrom;
-      if (filters.dateTo) params.end_date = filters.dateTo;
-      if (filters.issueFrom) params.issue_start_date = filters.issueFrom;
-      if (filters.issueTo) params.issue_end_date = filters.issueTo;
-      if (filters.paymentFrom) params.payment_start_date = filters.paymentFrom as any;
-      if (filters.paymentTo) params.payment_end_date = filters.paymentTo as any;
-      if (filters.minAmount) params.min_amount = Number(filters.minAmount);
-      if (filters.maxAmount) params.max_amount = Number(filters.maxAmount);
-      if (filters.category) (params as any).category_id = filters.category;
-      if (filters.paymentMethod) (params as any).payment_method = filters.paymentMethod;
-      if (filters.documentId) (params as any).document_id = filters.documentId;
-      if (filters.supplier) (params as any).supplier_name = filters.supplier;
-
-      const response: PayableResponse = await getPayablesPaginated(params);
-      const invalid = response.data?.filter((i) => i.tenant_id !== tenantId);
-      if (invalid?.length) throw new Error('VIOLAÇÃO DE SEGURANÇA: registros de outro tenant');
-      return response;
-    },
-    { enabled: !!currentTenant?.id && hasAccess }
+  const { payables: payablesList, pagination, isLoading, error } = usePayablesQuery(
+    currentTenant?.id,
+    hasAccess,
+    filters,
+    itemsPerPage
   );
 
   
@@ -120,15 +74,14 @@ const ContasAPagar: React.FC = () => {
   }, [error, toast]);
 
   useEffect(() => {
-    if (payablesData) {
-      setPagination({
-        total: payablesData.total,
-        page: payablesData.page,
-        limit: payablesData.limit,
-        totalPages: payablesData.totalPages,
+    if (error) {
+      toast({
+        title: 'Erro',
+        description: error.message.includes('VIOLAÇÃO') ? 'Violação de segurança detectada' : 'Erro ao carregar contas a pagar',
+        variant: 'destructive',
       });
     }
-  }, [payablesData]);
+  }, [error, toast]);
 
   useEffect(() => {
     let active = true;
@@ -151,7 +104,7 @@ const ContasAPagar: React.FC = () => {
     }
   }, [iconHtml]);
 
-  const payables = (payablesData?.data || []) as FinanceEntry[];
+  const payables = (payablesList || []) as FinanceEntry[];
   const totals = payables.reduce(
     (acc, e) => {
       const gross = e.gross_amount ?? 0;
@@ -178,51 +131,18 @@ const ContasAPagar: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<any | null>(null);
   const [editReadOnly, setEditReadOnly] = useState(false);
-  const updatePayableMutation = useSecureTenantMutation(
-    async (_supabase, tenantId, { id, patch }: { id: string; patch: any }) => {
-      const entry = payables.find((p) => p.id === id);
-      if (!entry || entry.tenant_id !== tenantId) {
-        throw new Error('VIOLAÇÃO DE SEGURANÇA: Tentativa de alterar outro tenant');
-      }
-      return await updatePayable(id, patch);
-    },
-    {
-      invalidateQueries: ['contas-a-pagar'],
-      onSuccess: () => {
-        setEditOpen(false);
-        setEditEntry(null);
-        toast({ title: 'Salvo', description: 'Conta a pagar atualizada' });
-      },
-      onError: (e) => {
-        toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-      }
-    }
-  );
+  const { updatePayableMutation, markAsPaidMutation, createPayableAddAnotherMutation, createPayableSaveInfoMutation } = usePayablesMutations(payables);
 
-  const appendLaunchMutation = useSecureTenantMutation(
-    async (_supabase, tenantId, { id, patch }: { id: string; patch: any }) => {
-      const entry = payables.find((p) => p.id === id);
-      if (!entry || entry.tenant_id !== tenantId) {
-        throw new Error('VIOLAÇÃO DE SEGURANÇA: Tentativa de alterar outro tenant');
+  const appendLaunch = async (variables: { id: string; patch: any }) => {
+    await updatePayableMutation.mutateAsync(variables);
+    try {
+      const vars = variables as any;
+      if (editOpen && editEntry && vars?.id === editEntry.id) {
+        setEditEntry({ ...editEntry, ...vars.patch });
       }
-      return await updatePayable(id, patch);
-    },
-    {
-      invalidateQueries: ['contas-a-pagar'],
-      onSuccess: (_res, _vars) => {
-        try {
-          const vars = _vars as any;
-          if (editOpen && editEntry && vars?.id === editEntry.id) {
-            setEditEntry({ ...editEntry, ...vars.patch });
-          }
-        } catch {}
-        toast({ title: 'Salvo', description: 'Lançamento registrado' });
-      },
-      onError: (e) => {
-        toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-      }
-    }
-  );
+    } catch {}
+    toast({ title: 'Salvo', description: 'Lançamento registrado' });
+  };
   const bulkMarkAsPaid = async () => {
     for (const id of selectedIds) {
       await markAsPaidMutation.mutateAsync({ entryId: id });
@@ -230,66 +150,8 @@ const ContasAPagar: React.FC = () => {
     setSelectedIds([]);
     toast({ title: 'Sucesso', description: 'Contas selecionadas marcadas como pagas' });
   };
-  const exportCsv = () => {
-    const headers = ['Situacao','Vencimento','Numero','Detalhes','Valor','Pago','A pagar'];
-    const statusMap: Record<string, string> = {
-      PENDING: 'Pendente',
-      PAID: 'Pago',
-      OVERDUE: 'Vencida',
-      CANCELLED: 'Estornada',
-      DUE_SOON: 'A vencer',
-      DUE_TODAY: 'Vence hoje',
-    };
-    const rows = payables.map((e) => {
-      const gross = e.gross_amount ?? 0;
-      const net = e.net_amount ?? 0;
-      const paid = e.paid_amount ?? 0;
-      const remaining = Math.max(net - paid, 0);
-      return [
-        statusMap[e.status] || e.status,
-        format(new Date(e.due_date), 'dd/MM/yyyy', { locale: ptBR }),
-        e.entry_number ?? '',
-        e.description ?? '',
-        gross.toFixed(2).replace('.', ','),
-        paid.toFixed(2).replace('.', ','),
-        remaining.toFixed(2).replace('.', ','),
-      ].join(';');
-    });
-    const csv = [headers.join(';'), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contas_a_pagar_${format(new Date(), 'yyyyMMdd')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  const exportCsv = () => exportPayablesCsv(payables);
 
-  const markAsPaidMutation = useSecureTenantMutation(
-    async (_supabase, tenantId, { entryId }: { entryId: string }) => {
-      const entry = payables.find((p) => p.id === entryId);
-      if (!entry || entry.tenant_id !== tenantId) {
-        throw new Error('VIOLAÇÃO DE SEGURANÇA: Tentativa de alterar outro tenant');
-      }
-      const amount = entry.net_amount ?? 0;
-      return await markPayableAsPaid(entryId, amount, 'MANUAL');
-    },
-    {
-      onSuccess: () => {
-        toast({ title: 'Sucesso', description: 'Conta marcada como paga' });
-      },
-      onError: (e) => {
-        toast({
-          title: 'Erro',
-          description: e.message.includes('VIOLAÇÃO') ? 'Operação não autorizada' : 'Falha ao marcar como paga',
-          variant: 'destructive',
-        });
-      },
-      invalidateQueries: ['contas-a-pagar', 'financial-metrics'],
-    }
-  );
 
   const markAsPaid = async (entryId: string) => {
     await markAsPaidMutation.mutateAsync({ entryId });
@@ -310,57 +172,7 @@ const ContasAPagar: React.FC = () => {
   };
   
 
-  const createPayableAddAnotherMutation = useSecureTenantMutation(
-    async (_supabase, tenantId, payload: {
-      description?: string | null;
-      gross_amount: number;
-      net_amount: number;
-      due_date: string;
-      issue_date?: string | null;
-      status?: any;
-      payment_date?: string | null;
-      paid_amount?: number | null;
-      category_id?: string | null;
-      entry_number?: string | undefined;
-      document_id?: string | null;
-      supplier_name?: string | null;
-      repeat?: boolean;
-    }) => {
-      return await createPayable({ tenant_id: tenantId, ...payload } as any);
-    },
-    {
-      invalidateQueries: ['contas-a-pagar'],
-      onSuccess: () => {
-        toast({ title: 'Salvo', description: 'Conta a pagar criada' });
-      }
-    }
-  );
-
-  const createPayableSaveInfoMutation = useSecureTenantMutation(
-    async (_supabase, tenantId, payload: {
-      description?: string | null;
-      gross_amount: number;
-      net_amount: number;
-      due_date: string;
-      issue_date?: string | null;
-      status?: any;
-      payment_date?: string | null;
-      paid_amount?: number | null;
-      category_id?: string | null;
-      entry_number?: string | undefined;
-      document_id?: string | null;
-      supplier_name?: string | null;
-      repeat?: boolean;
-    }) => {
-      return await createPayable({ tenant_id: tenantId, ...payload } as any);
-    },
-    {
-      invalidateQueries: ['contas-a-pagar'],
-      onSuccess: () => {
-        toast({ title: 'Salvo', description: 'Conta a pagar criada' });
-      }
-    }
-  );
+  
 
   useEffect(() => {
     if (!currentTenant?.id) return;
@@ -539,7 +351,7 @@ const ContasAPagar: React.FC = () => {
                 totalItems={pagination.total}
                 itemsPerPage={pagination.limit}
                 onPageChange={(page) => handlePageChange(page)}
-                onItemsPerPageChange={(perPage) => setPagination((p) => ({ ...p, limit: perPage, page: 1 }))}
+                onItemsPerPageChange={(perPage) => { setItemsPerPage(perPage); setFilters((p) => ({ ...p, page: 1 })); }}
                 totals={totals}
               />
             </div>
@@ -573,7 +385,7 @@ const ContasAPagar: React.FC = () => {
           entry={editEntry}
           currentTenantId={currentTenant?.id}
           onSave={(variables) => updatePayableMutation.mutate(variables)}
-          onAddLaunchPatch={(variables) => appendLaunchMutation.mutate(variables)}
+          onAddLaunchPatch={(variables) => appendLaunch(variables)}
           readOnly={editReadOnly}
         />
       </motion.div>

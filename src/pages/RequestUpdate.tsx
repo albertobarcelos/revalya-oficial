@@ -271,7 +271,7 @@ export default function RequestUpdate() {
         <div className="max-w-3xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <img src="/nexsyn.png" alt="Logo Nexsyn" className="h-12 mx-auto mb-4" />
+            <img src="/logos/LOGO-REVALYA123.png" alt="Revalya Logo" className="h-12 mx-auto mb-4" />
             <h1 className="text-3xl font-bold tracking-tight mb-3 text-primary">
               Solicitar Atualização de Valores
             </h1>

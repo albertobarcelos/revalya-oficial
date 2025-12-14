@@ -1,13 +1,13 @@
 import { useSecureTenantMutation, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { markAsPaid as markPayableAsPaid, createPayable, updatePayable } from '@/services/financialPayablesService';
 import { useToast } from '@/components/ui/use-toast';
-import FinancialAuditService from '@/services/financialAuditService';
+import { financialAuditService } from '@/services/financialAuditService';
 import { supabase } from '@/lib/supabase';
 
 export function usePayablesMutations(payables: Array<{ id: string; tenant_id: string; net_amount?: number }>) {
   const { toast } = useToast();
   const { currentTenant } = useTenantAccessGuard();
-  const audit = new FinancialAuditService();
+  const audit = financialAuditService;
 
   async function logAudit(
     action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PAYMENT_RECEIVED',

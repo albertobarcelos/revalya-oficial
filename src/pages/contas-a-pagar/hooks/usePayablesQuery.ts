@@ -1,10 +1,15 @@
 import { useMemo, useEffect, useState } from 'react';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { getPayablesPaginated, type PayableFilters, type PayableResponse, type PayableRow } from '@/services/financialPayablesService';
+import { getPayablesPaginated, type PayableFilters, type PayableResponse, type PayableRow, type PayableStatus } from '@/services/financialPayablesService';
 import type { PaginationData } from '../types/pagination';
 import type { PayablesFilters } from '../types/filters';
 
-export function usePayablesQuery(currentTenantId: string | undefined, hasAccess: boolean, filters: PayablesFilters) {
+export function usePayablesQuery(
+  currentTenantId: string | undefined,
+  hasAccess: boolean,
+  filters: PayablesFilters,
+  limit: number
+) {
   const queryKey = useMemo(
     () => [
       'contas-a-pagar',
@@ -14,11 +19,12 @@ export function usePayablesQuery(currentTenantId: string | undefined, hasAccess:
       filters.dateFrom,
       filters.dateTo,
       filters.page,
+      limit,
     ],
     [currentTenantId, filters]
   );
 
-  const [pagination, setPagination] = useState<PaginationData>({ total: 0, page: 1, limit: 10, totalPages: 0 });
+  const [pagination, setPagination] = useState<PaginationData>({ total: 0, page: 1, limit, totalPages: 0 });
 
   const { data, isLoading, error } = useSecureTenantQuery(
     queryKey,
@@ -26,21 +32,17 @@ export function usePayablesQuery(currentTenantId: string | undefined, hasAccess:
       const params: PayableFilters = {
         tenant_id: tenantId,
         page: filters.page,
-        limit: 10,
+        limit,
       };
       if (filters.search) params.search = filters.search;
-      if (filters.status && filters.status.length > 0) (params as any).statuses = filters.status as any;
+      const allowedStatuses: PayableStatus[] = ['PENDING', 'PAID', 'OVERDUE', 'CANCELLED'];
+      const statusFilter = (filters.status || []).filter((s) => allowedStatuses.includes(s as PayableStatus)) as PayableStatus[];
+      if (statusFilter.length > 0) params.statuses = statusFilter;
       if (filters.dateFrom) params.start_date = filters.dateFrom;
       if (filters.dateTo) params.end_date = filters.dateTo;
-      if (filters.issueFrom) params.issue_start_date = filters.issueFrom;
-      if (filters.issueTo) params.issue_end_date = filters.issueTo;
-      if (filters.paymentFrom) params.payment_start_date = filters.paymentFrom;
-      if (filters.paymentTo) params.payment_end_date = filters.paymentTo;
-      if (filters.minAmount) params.min_amount = Number(filters.minAmount);
-      if (filters.maxAmount) params.max_amount = Number(filters.maxAmount);
-      if (filters.category) params.category = filters.category;
-      if (filters.paymentMethod) params.payment_method = filters.paymentMethod;
-      if (filters.invoiceStatus) params.invoice_status = filters.invoiceStatus;
+      
+      if (filters.category) params.category_id = filters.category;
+      if (filters.documentId) params.document_id = filters.documentId;
 
       const response: PayableResponse = await getPayablesPaginated(params);
       return response;

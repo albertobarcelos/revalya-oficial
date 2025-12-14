@@ -14,6 +14,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useSupabase } from '@/hooks/useSupabase';
+import { useAuthStore } from '@/store/authStore';
 import { TenantAutoLoginRouter } from './TenantAutoLoginRouter';
 import { AdminRoutes } from './AdminRoutes';
 import { AdminLayout } from '@/components/layouts/AdminLayout';
@@ -85,6 +86,7 @@ const LoadingFallback = () => (
  */
 export function AppRouter() {
   const { user, loading } = useSupabase();
+  const isPasswordRecovery = useAuthStore(state => state.isPasswordRecovery);
 
   // Loading state durante inicialização
   if (loading) {
@@ -110,7 +112,7 @@ export function AppRouter() {
         {/* ========== ROTAS PÚBLICAS (Não requerem autenticação) ========== */}
         <Route 
           path={ROUTES.PUBLIC.LOGIN} 
-          element={!user ? <Login /> : <Navigate to={ROUTES.PROTECTED.PORTAL} replace />} 
+          element={!user || isPasswordRecovery ? <Login /> : <Navigate to={ROUTES.PROTECTED.PORTAL} replace />} 
         />
         <Route 
           path={ROUTES.PUBLIC.REGISTER} 

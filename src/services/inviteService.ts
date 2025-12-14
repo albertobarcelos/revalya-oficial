@@ -205,32 +205,48 @@ export const inviteService = {
 
       // Iniciar uma transação (usando blocos aninhados para simular transação)
       try {
-        // 1. Inserir usuário na tabela tenant_users
-        const { error: insertError } = await supabase
+        // AIDEV-NOTE: Verificar se o usuário já está associado ao tenant (caso de retry após erro)
+        const { data: existingTenantUser, error: checkError } = await supabase
           .from('tenant_users')
-          .insert({
-            tenant_id: invite.tenant_id,
-            user_id: user.id,
-            role: invite.role,
-            created_at: new Date().toISOString(),
-          });
-          
-        if (insertError) {
-          console.error('Erro ao inserir usuário no tenant:', insertError);
-          throw insertError;
+          .select('id')
+          .eq('tenant_id', invite.tenant_id)
+          .eq('user_id', user.id)
+          .single();
+        
+        // AIDEV-NOTE: Inserir usuário na tabela tenant_users APENAS se não existir
+        // O trigger auto_create_tenant_admin foi desabilitado para evitar associação automática
+        if (!existingTenantUser) {
+          const { error: insertError } = await supabase
+            .from('tenant_users')
+            .insert({
+              tenant_id: invite.tenant_id,
+              user_id: user.id,
+              role: invite.role,
+              active: true, // AIDEV-NOTE: Usuário ativo ao aceitar convite
+              created_at: new Date().toISOString(),
+            });
+            
+          if (insertError) {
+            console.error('Erro ao inserir usuário no tenant:', insertError);
+            throw insertError;
+          }
+        } else {
+          console.log('✅ [DEBUG] Usuário já está associado ao tenant, pulando inserção');
         }
           
-        // 2. Atualizar o convite
+        // 2. Atualizar o convite (sem passar updated_at, pois a tabela não tem esse campo)
         const { error: updateError } = await supabase
           .from('tenant_invites')
           .update({
             status: 'ACCEPTED',
             accepted_at: new Date().toISOString(),
             user_id: user.id,
+            // AIDEV-NOTE: Não incluir updated_at - a tabela não tem esse campo
           })
           .eq('id', inviteId);
 
         if (updateError) {
+          console.error('Erro ao atualizar convite:', updateError);
           throw updateError;
         }
       } catch (transactionError) {
