@@ -38,7 +38,8 @@ function getEvolutionApiCredentials() {
     hasApiUrl: !!apiUrl,
     hasApiKey: !!apiKey,
     apiUrlLength: apiUrl?.length || 0,
-    apiKeyLength: apiKey?.length || 0
+    apiKeyLength: apiKey?.length || 0,
+    apiUrlValue: apiUrl ? `${apiUrl.substring(0, 30)}...` : 'N/A' // AIDEV-NOTE: Log parcial da URL para debug (sem expor completa)
   });
   
   if (!apiUrl || !apiUrl.trim()) {
@@ -53,8 +54,30 @@ function getEvolutionApiCredentials() {
     throw new Error(errorMsg);
   }
   
+  const cleanedUrl = apiUrl.trim().replace(/\/+$/, '');
+  
+  // AIDEV-NOTE: Bloquear uso da URL antiga (evolution.nexsyn.com.br) que causa erro de certificado SSL
+  // URL correta: https://evolution-backend.nexsyn.com.br
+  // Força atualização dos secrets do Supabase com a URL correta
+  if (cleanedUrl.includes('evolution.nexsyn.com.br') && !cleanedUrl.includes('evolution-backend.nexsyn.com.br')) {
+    const errorMsg = `❌ ERRO CRÍTICO: URL antiga detectada (${cleanedUrl}). Esta URL causa erro de certificado SSL. 
+    
+URL CORRETA: https://evolution-backend.nexsyn.com.br
+
+SOLUÇÃO:
+1. Acesse Supabase Dashboard > Edge Functions > Secrets
+2. Atualize EVOLUTION_API_URL com: https://evolution-backend.nexsyn.com.br
+3. Faça redeploy da Edge Function send-bulk-messages
+
+A URL antiga 'evolution.nexsyn.com.br' não é mais válida e deve ser substituída pela URL correta.`;
+    console.error('[getEvolutionApiCredentials]', errorMsg);
+    throw new Error(`URL antiga detectada. Atualize EVOLUTION_API_URL nos secrets do Supabase com: https://evolution-backend.nexsyn.com.br. URL atual: ${cleanedUrl}`);
+  }
+  
+  console.log('[getEvolutionApiCredentials] ✅ URL validada e será usada:', cleanedUrl);
+  
   return {
-    apiUrl: apiUrl.trim().replace(/\/+$/, ''),
+    apiUrl: cleanedUrl,
     apiKey: apiKey.trim()
   };
 }
@@ -216,6 +239,28 @@ async function getEvolutionConfig(supabase, tenantId, envOverride, headerOverrid
   const apiKey = headerOverrides?.apiKey?.trim() || EVOLUTION_API_KEY;
   const instanceName = headerOverrides?.instanceName?.trim() || dbInstance || EVOLUTION_INSTANCE_ENV || "";
   
+  // AIDEV-NOTE: Bloquear URL antiga mesmo se vier via header override
+  // URL correta: https://evolution-backend.nexsyn.com.br
+  if (apiBaseUrl.includes('evolution.nexsyn.com.br') && !apiBaseUrl.includes('evolution-backend.nexsyn.com.br')) {
+    const errorMsg = `❌ ERRO: URL antiga detectada (${apiBaseUrl}). Esta URL causa erro de certificado SSL. 
+    
+URL CORRETA: https://evolution-backend.nexsyn.com.br
+
+Atualize EVOLUTION_API_URL nos secrets do Supabase ou remova o header x-wa-api-base-url com a URL antiga.`;
+    console.error('[getEvolutionConfig]', errorMsg);
+    throw new Error(`URL antiga não permitida: ${apiBaseUrl}. Use: https://evolution-backend.nexsyn.com.br`);
+  }
+  
+  // AIDEV-NOTE: Log detalhado para debug - identificar origem da URL
+  console.log('[getEvolutionConfig] Configuração final:', {
+    apiBaseUrl,
+    hasHeaderOverride: !!headerOverrides?.baseUrl,
+    source: headerOverrides?.baseUrl ? 'header-override' : 'supabase-vault',
+    instanceName,
+    environment: desiredEnv,
+    tenantId
+  });
+  
   // AIDEV-NOTE: Validação adicional (caso override esteja vazio)
   if (!apiBaseUrl) {
     throw new Error("API URL não encontrada para Evolution. Configure EVOLUTION_API_URL no Supabase Vault.");
@@ -234,6 +279,12 @@ async function getEvolutionConfig(supabase, tenantId, envOverride, headerOverrid
 class EvolutionApi {
   static async sendText(opts) {
     const url = `${opts.baseUrl}/message/sendText/${opts.instance}`;
+    
+    // AIDEV-NOTE: Log crítico da URL que será usada para identificar problema
+    console.log('[EvolutionApi.sendText] URL que será chamada:', url);
+    console.log('[EvolutionApi.sendText] baseUrl recebido:', opts.baseUrl);
+    console.log('[EvolutionApi.sendText] instance recebido:', opts.instance);
+    
     let lastError = "";
     for(let attempt = 1; attempt <= MAX_RETRIES; attempt++){
       try {
