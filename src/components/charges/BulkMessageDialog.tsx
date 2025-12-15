@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TagSelector } from "./TagSelector";
 import { useToast } from '@/components/ui/use-toast';
 import { processMessageTags } from '@/utils/messageUtils';
+import { getTagsForTagSelector } from '@/utils/messageTags'; // AIDEV-NOTE: Tags centralizadas
 import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates'; // AIDEV-NOTE: Hook seguro para templates
 import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery'; // AIDEV-NOTE: Hooks seguros para validação multi-tenant
 import { supabase } from '@/lib/supabase'; // AIDEV-NOTE: Cliente Supabase para queries
@@ -285,21 +286,8 @@ export function BulkMessageDialog({
     }
   }, [hasAccess, accessError, currentTenant, selectedCharges, isLoadingPreview, previewChargeData]);
 
-  // AIDEV-NOTE: Lista de tags disponíveis com estrutura compatível com TagSelector
-  const availableTags = [
-    { id: "{cliente.nome}", name: "Nome do Cliente", color: "#3b82f6" },
-    { id: "{cliente.empresa}", name: "Empresa", color: "#10b981" },
-    { id: "{cliente.cpf_cnpj}", name: "CPF/CNPJ", color: "#f59e0b" },
-    { id: "{cliente.email}", name: "Email", color: "#ef4444" },
-    { id: "{cliente.telefone}", name: "Telefone", color: "#8b5cf6" },
-    { id: "{cobranca.valor}", name: "Valor da Cobrança", color: "#06b6d4" },
-    { id: "{cobranca.vencimento}", name: "Data de Vencimento", color: "#f97316" },
-    { id: "{cobranca.descricao}", name: "Descrição", color: "#84cc16" },
-    { id: "{cobranca.status}", name: "Status", color: "#ec4899" },
-    { id: "{cobranca.pix_copia_cola}", name: "PIX Copia e Cola", color: "#10b981" },
-    { id: "{cobranca.link}", name: "Link Pagamento", color: "#3b82f6" },
-    { id: "{cobranca.link_boleto}", name: "Link Boleto", color: "#8b5cf6" },
-  ];
+  // AIDEV-NOTE: Tags centralizadas - importadas do arquivo único de tags
+  const availableTags = getTagsForTagSelector();
 
   useEffect(() => {
     if (!open) {

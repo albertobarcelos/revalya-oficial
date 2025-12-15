@@ -146,6 +146,13 @@ docs/api/
 *.bak
 *.old
 
+# Database dumps (SQL files from production)
+dump_producao*.sql
+dump_*.sql
+*_dump.sql
+restore_errors.log
+dump_errors.log
+
 # Archive files
 *.zip
 *.tar.gz

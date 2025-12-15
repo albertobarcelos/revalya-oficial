@@ -1,0 +1,46 @@
+name: Deploy Supabase - Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy migrações para Produção
+    environment: production  # Requer aprovação manual se configurado
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.PRODUCTION_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ secrets.PRODUCTION_PROJECT_ID }}
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Linkar ao projeto Production
+        run: supabase link --project-ref $SUPABASE_PROJECT_ID
+
+      - name: Aplicar migrações
+        run: supabase db push
+
+      - name: Deploy Edge Functions
+        run: supabase functions deploy --project-ref $SUPABASE_PROJECT_ID
+
+      - name: Resumo do deploy
+        run: |
+          echo "## 🚀 Deploy Produção Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Projeto:** Produção (main)" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch Git:** main" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

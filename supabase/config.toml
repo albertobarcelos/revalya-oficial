@@ -1,5 +1,9 @@
 project_id = "wyehpiutzvwplllumgdk"
 
+# =============================================================================
+# CONFIGURAÇÃO DE AUTENTICAÇÃO
+# =============================================================================
+
 [auth]
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.

@@ -40,20 +40,5 @@ export interface NotificationSettings {
   messages: NotificationMessage[];
 }
 
-export const AVAILABLE_TAGS = {
-  CLIENTE_NOME: '{cliente.nome}',
-  CLIENTE_EMAIL: '{cliente.email}',
-  CLIENTE_CPF: '{cliente.cpf}',
-  CLIENTE_TELEFONE: '{cliente.telefone}',
-  COBRANCA_VALOR: '{cobranca.valor}',
-  COBRANCA_VENCIMENTO: '{cobranca.vencimento}',
-  COBRANCA_DESCRICAO: '{cobranca.descricao}',
-  COBRANCA_CODIGO_BARRAS: '{cobranca.codigoBarras}',
-  COBRANCA_PIX_COPIA_COLA: '{cobranca.pix_copia_cola}',
-  COBRANCA_LINK: '{cobranca.link}',
-  COBRANCA_LINK_BOLETO: '{cobranca.link_boleto}',
-  DIAS_ATE_VENCIMENTO: '{dias.ateVencimento}',
-  DIAS_APOS_VENCIMENTO: '{dias.aposVencimento}',
-  EMPRESA_NOME: '{empresa.nome}',
-  EMPRESA_TELEFONE: '{empresa.telefone}'
-} as const;
+// AIDEV-NOTE: Tags foram completamente centralizadas em @/utils/messageTags.ts
+// Use diretamente: import { TAG_DEFINITIONS, AVAILABLE_TAGS } from '@/utils/messageTags';
