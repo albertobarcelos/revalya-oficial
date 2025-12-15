@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DateRange } from "react-day-picker";
-import { SearchIcon, Info, Download } from "lucide-react";
+import { SearchIcon, Info, Download, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -70,14 +70,27 @@ const formatChargeType = (type: string | null, status?: string | null): string =
 
 // AIDEV-NOTE: Função movida para utils/installmentUtils.ts para reutilização
 
-export function ChargesList() {
+interface ChargesListProps {
+  onCreateCharge?: () => void;
+}
+
+export function ChargesList({ onCreateCharge }: ChargesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRange>({
-    from: new Date(new Date().setDate(1)),
-    to: new Date(),
-  });
+  
+  // AIDEV-NOTE: Inicializa o calendário com o mês atual completo ao carregar a página
+  const getCurrentMonthRange = (): DateRange => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      from: firstDay,
+      to: lastDay,
+    };
+  };
+  
+  const [dateRange, setDateRange] = useState<DateRange>(getCurrentMonthRange());
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
@@ -88,7 +101,7 @@ export function ChargesList() {
 
   const { data: chargesData, total, isLoading, refetch, cancelCharge, exportToCSV } = useCharges({
     page: currentPage,
-    limit: 10,
+    limit: 25,
     search: searchTerm || undefined,
     status: selectedStatus !== "all" ? selectedStatus : undefined,
     type: selectedType !== "all" ? selectedType : undefined,
@@ -114,10 +127,7 @@ export function ChargesList() {
   };
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
-    setDateRange(range || {
-      from: new Date(new Date().setDate(1)),
-      to: new Date(),
-    });
+    setDateRange(range || getCurrentMonthRange());
     setCurrentPage(1);
   };
 
@@ -227,7 +237,7 @@ export function ChargesList() {
   // AIDEV-NOTE: Hook useCharges corrigido - agora retorna data e total separadamente
   // Processamento correto dos dados das cobranças com paginação
   const charges = chargesData || [];
-  const totalPages = Math.ceil(total / 10);
+  const totalPages = Math.ceil(total / 25);
 
   // AIDEV-NOTE: Dados processados corretamente do hook useCharges
 
@@ -314,7 +324,7 @@ export function ChargesList() {
   };
 
   const renderFilters = () => (
-    <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center gap-3">
       <div className="relative flex-1 max-w-2xl">
         <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -325,48 +335,59 @@ export function ChargesList() {
           aria-label="Buscar cobranças"
         />
       </div>
-      <div className="flex items-center gap-3">
-        {selectedCharges.length > 0 && (
-          <Button 
-            onClick={() => setIsMessageDialogOpen(true)}
-            aria-label={`Enviar mensagem para ${selectedCharges.length} cobranças selecionadas`}
-          >
-            Enviar Mensagem ({selectedCharges.length})
-          </Button>
-        )}
-        <Select defaultValue="all" onValueChange={(value) => handleTypeChange(value)}>
-          <SelectTrigger className="w-full sm:w-40 md:w-44" aria-label="Filtrar por tipo">
-            <SelectValue placeholder="Filtrar por tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
-            <SelectItem value="PIX">PIX</SelectItem>
-            <SelectItem value="BOLETO">Boleto</SelectItem>
-            <SelectItem value="CREDIT_CARD">Cartão de crédito</SelectItem>
-            <SelectItem value="CREDIT_CARD_RECURRING">Cartão de crédito recorrente</SelectItem>
-            <SelectItem value="TRANSFER">Transferência</SelectItem>
-            <SelectItem value="CASH">Dinheiro</SelectItem>
-            <SelectItem value="UNDEFINED">Não definido</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={selectedStatus} onValueChange={handleStatusChange}>
-          <SelectTrigger className="w-full sm:w-40 md:w-44" aria-label="Filtrar por status">
-            <SelectValue placeholder="Filtrar por status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="PENDING">Pendentes</SelectItem>
-            <SelectItem value="OVERDUE">Atrasadas</SelectItem>
-            <SelectItem value="RECEIVED">Recebidas</SelectItem>
-            <SelectItem value="CANCELLED">Canceladas</SelectItem>
-          </SelectContent>
-        </Select>
-        <DateRangePicker
-          date={dateRange}
-          onDateChange={handleDateRangeChange}
-          className="w-full sm:w-72 md:w-80"
-        />
-      </div>
+      {selectedCharges.length > 0 && (
+        <Button 
+          onClick={() => setIsMessageDialogOpen(true)}
+          aria-label={`Enviar mensagem para ${selectedCharges.length} cobranças selecionadas`}
+          variant="outline"
+          className="shrink-0"
+        >
+          Enviar Mensagem ({selectedCharges.length})
+        </Button>
+      )}
+      <Select defaultValue="all" onValueChange={(value) => handleTypeChange(value)}>
+        <SelectTrigger className="w-full sm:w-40 md:w-44 shrink-0" aria-label="Filtrar por tipo">
+          <SelectValue placeholder="Filtrar por tipo" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os tipos</SelectItem>
+          <SelectItem value="PIX">PIX</SelectItem>
+          <SelectItem value="BOLETO">Boleto</SelectItem>
+          <SelectItem value="CREDIT_CARD">Cartão de crédito</SelectItem>
+          <SelectItem value="CREDIT_CARD_RECURRING">Cartão de crédito recorrente</SelectItem>
+          <SelectItem value="TRANSFER">Transferência</SelectItem>
+          <SelectItem value="CASH">Dinheiro</SelectItem>
+          <SelectItem value="UNDEFINED">Não definido</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={selectedStatus} onValueChange={handleStatusChange}>
+        <SelectTrigger className="w-full sm:w-40 md:w-44 shrink-0" aria-label="Filtrar por status">
+          <SelectValue placeholder="Filtrar por status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos</SelectItem>
+          <SelectItem value="PENDING">Pendentes</SelectItem>
+          <SelectItem value="OVERDUE">Atrasadas</SelectItem>
+          <SelectItem value="RECEIVED">Recebidas</SelectItem>
+          <SelectItem value="CANCELLED">Canceladas</SelectItem>
+        </SelectContent>
+      </Select>
+      <DateRangePicker
+        date={dateRange}
+        onDateChange={handleDateRangeChange}
+        className="w-full sm:w-72 md:w-80 shrink-0"
+      />
+      {onCreateCharge && (
+        <Button 
+          className="gap-1 text-white shrink-0" 
+          onClick={onCreateCharge}
+          aria-label="Nova Cobrança"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Nova Cobrança</span>
+          <span className="sm:hidden">Nova</span>
+        </Button>
+      )}
     </div>
   );
 
@@ -397,7 +418,7 @@ export function ChargesList() {
     return (
       <div className="flex flex-col h-full">
         {/* Filtros fixos no topo */}
-        <div className="sticky top-0 bg-background z-10 pb-4">
+        <div className="sticky top-0 bg-background z-10 py-4">
           {renderFilters()}
         </div>
         
@@ -437,7 +458,7 @@ export function ChargesList() {
     return (
       <div className="flex flex-col h-full">
         {/* Filtros fixos no topo */}
-        <div className="sticky top-0 bg-background z-10 pb-4">
+        <div className="sticky top-0 bg-background z-10 py-4">
           {renderFilters()}
         </div>
         
@@ -452,7 +473,7 @@ export function ChargesList() {
   return (
     <div className="flex flex-col h-full">
       {/* Filtros fixos no topo */}
-      <div className="sticky top-0 bg-background z-10 pb-4">
+      <div className="sticky top-0 bg-background z-10 py-4">
         {renderFilters()}
       </div>
       
