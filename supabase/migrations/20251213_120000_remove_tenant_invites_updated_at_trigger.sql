@@ -4,7 +4,6 @@
 
 DROP TRIGGER IF EXISTS set_timestamp_tenant_invites ON tenant_invites;
 
--- AIDEV-NOTE: Comentário explicativo
-COMMENT ON TRIGGER set_timestamp_tenant_invites ON tenant_invites IS 
-  'Trigger removido: tabela tenant_invites não possui campo updated_at';
+-- AIDEV-NOTE: Trigger removido - tabela tenant_invites não possui campo updated_at
+-- Não é possível adicionar COMMENT em trigger que não existe, então apenas removemos
 
