@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Download, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Download, AlertTriangle, CheckCircle, XCircle, Info } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ interface AsaasImportDialogProps {
 // AIDEV-NOTE: Componente principal do diálogo
 export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showErrorsDialog, setShowErrorsDialog] = useState(false);
   const [startDate, setStartDate] = useState(() => 
     format(subDays(new Date(), 7), 'yyyy-MM-dd')
   );
@@ -88,7 +89,7 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
         )}
       </DialogTrigger>
       
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[95vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Download className="h-5 w-5 text-primary" />
@@ -100,7 +101,7 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto flex-1 pr-2">
           {/* AIDEV-NOTE: Formulário de filtros */}
           <Card>
             <CardHeader>
@@ -113,9 +114,18 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* AIDEV-NOTE: Informação sobre filtro por data de vencimento */}
+              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800">
+                  <strong>Importante:</strong> O sistema filtra as cobranças pela <strong>data de vencimento</strong> (dueDate) no ASAAS. 
+                  Selecione o período desejado considerando as datas de vencimento das cobranças.
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="start-date">Data Inicial</Label>
+                  <Label htmlFor="start-date">Data Inicial (Vencimento)</Label>
                   <Input
                     id="start-date"
                     type="date"
@@ -126,7 +136,7 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="end-date">Data Final</Label>
+                  <Label htmlFor="end-date">Data Final (Vencimento)</Label>
                   <Input
                     id="end-date"
                     type="date"
@@ -134,7 +144,6 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
                     onChange={(e) => setEndDate(e.target.value)}
                     disabled={isImporting}
                     min={startDate}
-                    max={format(new Date(), 'yyyy-MM-dd')}
                   />
                 </div>
               </div>
@@ -210,12 +219,30 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
                         </div>
                         <div className="text-sm text-blue-700">Já existiam</div>
                       </div>
-                      <div className="text-center p-3 bg-red-50 rounded-lg">
+                      <button
+                        onClick={() => {
+                          const errorCount = lastImportResult.summary.total_errors ?? 0;
+                          if (errorCount > 0) {
+                            setShowErrorsDialog(true);
+                          }
+                        }}
+                        className={`text-center p-3 rounded-lg transition-colors ${
+                          (lastImportResult.summary.total_errors ?? 0) > 0
+                            ? 'bg-red-50 hover:bg-red-100 cursor-pointer'
+                            : 'bg-red-50 cursor-default'
+                        }`}
+                        disabled={(lastImportResult.summary.total_errors ?? 0) === 0}
+                      >
                         <div className="text-2xl font-bold text-red-600">
                           {lastImportResult.summary.total_errors ?? 0}
                         </div>
-                        <div className="text-sm text-red-700">Erros</div>
-                      </div>
+                        <div className="text-sm text-red-700">
+                          Erros
+                          {(lastImportResult.summary.total_errors ?? 0) > 0 && (
+                            <span className="ml-1 text-xs">(clique para ver detalhes)</span>
+                          )}
+                        </div>
+                      </button>
                     </div>
                   )}
 
@@ -296,6 +323,63 @@ export function AsaasImportDialog({ trigger, onImportComplete }: AsaasImportDial
             </Button>
           </div>
         </div>
+
+        {/* AIDEV-NOTE: Dialog de detalhes de erros */}
+        <Dialog open={showErrorsDialog} onOpenChange={setShowErrorsDialog}>
+          <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-red-600" />
+                Detalhes dos Erros na Importação
+              </DialogTitle>
+              <DialogDescription>
+                Lista completa de erros ocorridos durante a importação de cobranças do ASAAS
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="overflow-y-auto flex-1 pr-2 space-y-2">
+              {lastImportResult?.summary?.errors && lastImportResult.summary.errors.length > 0 ? (
+                lastImportResult.summary.errors.map((error, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-red-50 border border-red-200 rounded-lg"
+                  >
+                    <div className="text-sm font-medium text-red-800 mb-1">
+                      Erro #{index + 1}
+                    </div>
+                    <div className="text-xs text-red-700 font-mono whitespace-pre-wrap break-words">
+                      {typeof error === 'string' ? error : JSON.stringify(error, null, 2)}
+                    </div>
+                  </div>
+                ))
+              ) : lastImportResult?.errors && lastImportResult.errors.length > 0 ? (
+                lastImportResult.errors.map((error, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-red-50 border border-red-200 rounded-lg"
+                  >
+                    <div className="text-sm font-medium text-red-800 mb-1">
+                      Erro #{index + 1}
+                    </div>
+                    <div className="text-xs text-red-700 font-mono whitespace-pre-wrap break-words">
+                      {typeof error === 'string' ? error : JSON.stringify(error, null, 2)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-muted-foreground">
+                  Nenhum erro detalhado disponível
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <Button onClick={() => setShowErrorsDialog(false)} variant="outline">
+                Fechar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

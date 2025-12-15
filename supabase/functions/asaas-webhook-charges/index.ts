@@ -10,6 +10,50 @@ const corsHeaders = {
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
 
+// AIDEV-NOTE: Função helper para obter chave API descriptografada (com fallback para texto plano)
+// Esta função tenta usar a função RPC get_decrypted_api_key que já faz o fallback automaticamente
+async function getDecryptedApiKey(tenantId: string): Promise<string | null> {
+  try {
+    const { data: decryptedKey, error: decryptError } = await supabase.rpc('get_decrypted_api_key', {
+      p_tenant_id: tenantId,
+      p_integration_type: 'asaas'
+    });
+    
+    if (!decryptError && decryptedKey) {
+      console.log('[getDecryptedApiKey] Chave API obtida com sucesso (criptografada ou texto plano)');
+      return decryptedKey;
+    } else {
+      // Se função RPC não existir ou falhar, buscar diretamente do config (compatibilidade)
+      console.warn('[getDecryptedApiKey] Função RPC não disponível, usando fallback direto');
+      const { data: integrationData } = await supabase
+        .from("tenant_integrations")
+        .select("config")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "asaas")
+        .eq("is_active", true)
+        .maybeSingle();
+      
+      const apiKey = integrationData?.config?.api_key || null;
+      if (apiKey) {
+        console.warn('[getDecryptedApiKey] Usando chave em texto plano (compatibilidade)');
+      }
+      return apiKey;
+    }
+  } catch (error) {
+    // Se função não existir ou falhar, usar texto plano
+    console.warn('[getDecryptedApiKey] Erro ao obter chave, usando fallback direto:', error);
+    const { data: integrationData } = await supabase
+      .from("tenant_integrations")
+      .select("config")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "asaas")
+      .eq("is_active", true)
+      .maybeSingle();
+    
+    return integrationData?.config?.api_key || null;
+  }
+}
+
 // AIDEV-NOTE: Mapeamento de status de pagamento para status externo (valores válidos do constraint)
 function mapPaymentStatusToExternal(status: string): string {
   const statusMap: Record<string, string> = {
@@ -684,7 +728,11 @@ async function handleGetRequest(req: Request, url: URL) {
     });
   }
 
-  if (!integrationData.config?.api_key || !integrationData.config?.api_url) {
+  // AIDEV-NOTE: Obter chave API descriptografada (com fallback para texto plano)
+  const apiKey = await getDecryptedApiKey(finalTenantId);
+  const apiUrl = integrationData.config?.api_url;
+
+  if (!apiKey || !apiUrl) {
     return new Response(JSON.stringify({
       error: "Configuração ASAAS incompleta (api_key ou api_url ausente)"
     }), {
@@ -699,8 +747,8 @@ async function handleGetRequest(req: Request, url: URL) {
   // 🔍 Buscar dados do cliente na API ASAAS
   const customerData = await fetchAsaasCustomer(
     customerId,
-    integrationData.config.api_key,
-    integrationData.config.api_url
+    apiKey,
+    apiUrl
   );
 
   if (!customerData) {
@@ -838,13 +886,17 @@ async function handlePostRequest(req: Request, tenantId: string) {
   }
   
   // AIDEV-NOTE: Se não tiver dados do customer no payload e tiver customerId, buscar na API
-  if (!customerData && customerId && integrationData.config?.api_key && integrationData.config?.api_url) {
+  // AIDEV-NOTE: Obter chave API descriptografada (com fallback para texto plano)
+  const apiKey = await getDecryptedApiKey(tenantId);
+  const apiUrl = integrationData.config?.api_url;
+
+  if (!customerData && customerId && apiKey && apiUrl) {
     console.log(`🔍 Buscando dados do customer ${customerId} na API ASAAS...`);
     try {
       customerData = await fetchAsaasCustomer(
         customerId, 
-        integrationData.config.api_key,
-        integrationData.config.api_url
+        apiKey,
+        apiUrl
       );
       if (customerData) {
         console.log(`✅ Dados do customer obtidos: ${customerData.name || 'N/A'}`);
@@ -857,7 +909,7 @@ async function handlePostRequest(req: Request, tenantId: string) {
     }
   } else if (!customerId) {
     console.warn(`⚠️ payment.customer não encontrado ou inválido no payload`);
-  } else if (!integrationData.config?.api_key || !integrationData.config?.api_url) {
+  } else if (!apiKey || !apiUrl) {
     console.warn(`⚠️ API key ou URL não configurados - não é possível buscar dados do customer`);
   }
 
@@ -915,8 +967,8 @@ async function handlePostRequest(req: Request, tenantId: string) {
     tenantId, 
     asaasCustomerId, 
     customerData,
-    integrationData.config?.api_key,
-    integrationData.config?.api_url
+    apiKey,
+    apiUrl
   );
 
   if (!customerUuid) {
@@ -952,17 +1004,18 @@ async function handlePostRequest(req: Request, tenantId: string) {
   const valor = payment.value || 0;
 
   // AIDEV-NOTE: Buscar barcode e pix_key via API quando necessário
+  // AIDEV-NOTE: apiKey e apiUrl já foram declarados anteriormente na função (linha 890)
   let barcode: string | null = null;
   let pixKey: string | null = null;
-  
-  if (integrationData.config?.api_key && integrationData.config?.api_url) {
+
+  if (apiKey && apiUrl) {
     // AIDEV-NOTE: Buscar barcode para boletos
     if (payment.billingType === 'BOLETO' || payment.billingType === 'UNDEFINED') {
       try {
         barcode = await fetchPaymentBarcode(
           asaasId,
-          integrationData.config.api_key,
-          integrationData.config.api_url
+          apiKey,
+          apiUrl
         );
       } catch (error) {
         console.error(`❌ Erro ao buscar barcode:`, error);
@@ -974,8 +1027,8 @@ async function handlePostRequest(req: Request, tenantId: string) {
       try {
         pixKey = await fetchPaymentPixKey(
           asaasId,
-          integrationData.config.api_key,
-          integrationData.config.api_url
+          apiKey,
+          apiUrl
         );
       } catch (error) {
         console.error(`❌ Erro ao buscar PIX key:`, error);

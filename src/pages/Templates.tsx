@@ -12,7 +12,7 @@ import { TemplateCard } from '@/components/templates/TemplateCard';
 import { TemplateSearch } from '@/components/templates/TemplateSearch';
 import { Plus, Search, Filter, Copy, Edit, Trash2 } from 'lucide-react';
 import type { MessageTemplate } from '@/types/template';
-import { AVAILABLE_TAGS } from '@/types/settings';
+import { extractTagsFromMessage } from '@/utils/messageTags'; // AIDEV-NOTE: Tags centralizadas - única fonte de verdade
 // 🔐 IMPORTS DE SEGURANÇA MULTI-TENANT OBRIGATÓRIOS
 import { useSecureNotificationTemplates } from '@/hooks/useSecureNotificationTemplates';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
@@ -269,9 +269,9 @@ export default function Templates() {
     }
   };
 
+  // AIDEV-NOTE: Usar função utilitária do arquivo centralizado
   const extractTags = (message: string): string[] => {
-    const tags = Object.values(AVAILABLE_TAGS);
-    return tags.filter(tag => message.includes(tag));
+    return extractTagsFromMessage(message);
   };
 
   // AIDEV-NOTE: Reset do formulário com valores padrão alinhados ao schema da tabela

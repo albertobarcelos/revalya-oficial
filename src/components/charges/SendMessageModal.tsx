@@ -15,6 +15,7 @@ import { Loader2, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFinancialNotifications } from "@/hooks/useFinancialNotifications";
 import { TagSelector } from "@/components/charges/TagSelector";
+import { getTagsForSelect } from '@/utils/messageTags'; // AIDEV-NOTE: Tags centralizadas
 
 // AIDEV-NOTE: Interface para template de mensagem
 interface MessageTemplate {
@@ -33,20 +34,8 @@ interface SendMessageModalProps {
   isLoading: boolean;
 }
 
-// AIDEV-NOTE: Tags disponíveis para substituição na mensagem
-const availableTags = [
-  { label: "Nome do Cliente", value: "{cliente.nome}" },
-  { label: "Valor da Cobrança", value: "{cobranca.valor}" },
-  { label: "Data de Vencimento", value: "{cobranca.vencimento}" },
-  { label: "Código da Cobrança", value: "{cobranca.codigo}" },
-  { label: "Descrição", value: "{cobranca.descricao}" },
-  { label: "Status", value: "{cobranca.status}" },
-  { label: "Telefone", value: "{cliente.telefone}" },
-  { label: "Email", value: "{cliente.email}" },
-  { label: "PIX Copia e Cola", value: "{cobranca.pix_copia_cola}" },
-  { label: "Link Pagamento", value: "{cobranca.link}" },
-  { label: "Link Boleto", value: "{cobranca.link_boleto}" },
-];
+// AIDEV-NOTE: Tags centralizadas - importadas do arquivo único de tags
+const availableTags = getTagsForSelect();
 
 export function SendMessageModal({
   open,

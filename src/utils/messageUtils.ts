@@ -46,9 +46,11 @@ export const processMessageTags = (message: string, data: {
     data_vencimento: string; 
     descricao?: string; 
     codigo_barras?: string;
+    status?: string;        // AIDEV-NOTE: Status da cobrança
     pix_key?: string;        // AIDEV-NOTE: Chave PIX copia e cola
     invoice_url?: string;   // AIDEV-NOTE: URL da fatura do Asaas
     pdf_url?: string;        // AIDEV-NOTE: URL do PDF do boleto
+    status?: string;         // AIDEV-NOTE: Status da cobrança (PENDING, RECEIVED, etc.)
   }; 
 }) => {
   if (!message) return '';
@@ -104,7 +106,32 @@ export const processMessageTags = (message: string, data: {
   processedMessage = processedMessage.replace(/{cobranca\.valor}/g, formattedValue);
   processedMessage = processedMessage.replace(/{cobranca\.vencimento}/g, formattedDueDate || new Date().toLocaleDateString('pt-BR'));
   processedMessage = processedMessage.replace(/{cobranca\.descricao}/g, data.charge?.descricao || 'Descrição da cobrança');
+  processedMessage = processedMessage.replace(/{cobranca\.status}/g, data.charge?.status || 'Status não disponível');
   processedMessage = processedMessage.replace(/{cobranca\.codigoBarras}/g, data.charge?.codigo_barras || '00000000000000000000000000000000000000000000');
+  
+  // AIDEV-NOTE: Tag status da cobrança - traduzir para português
+  const translateStatus = (status: string | null | undefined): string => {
+    if (!status) return 'Pendente';
+    const statusMap: { [key: string]: string } = {
+      'PENDING': 'Pendente',
+      'RECEIVED': 'Recebido',
+      'CONFIRMED': 'Confirmado',
+      'OVERDUE': 'Vencido',
+      'REFUNDED': 'Reembolsado',
+      'RECEIVED_IN_CASH': 'Recebido em Dinheiro',
+      'REFUND_REQUESTED': 'Reembolso Solicitado',
+      'REFUND_IN_PROGRESS': 'Reembolso em Andamento',
+      'CHARGEBACK_REQUESTED': 'Estorno Solicitado',
+      'CHARGEBACK_DISPUTE': 'Disputa de Estorno',
+      'AWAITING_CHARGEBACK_REVERSAL': 'Aguardando Reversão de Estorno',
+      'DUNNING_REQUESTED': 'Cobrança Solicitada',
+      'DUNNING_RECEIVED': 'Cobrança Recebida',
+      'AWAITING_RISK_ANALYSIS': 'Aguardando Análise de Risco',
+      'CANCELLED': 'Cancelado'
+    };
+    return statusMap[status.toUpperCase()] || status;
+  };
+  processedMessage = processedMessage.replace(/{cobranca\.status}/g, translateStatus(data.charge?.status));
   
   // AIDEV-NOTE: Tag PIX copia e cola - usa pix_key diretamente
   processedMessage = processedMessage.replace(/{cobranca\.pix_copia_cola}/g, data.charge?.pix_key || 'Chave PIX não disponível');
@@ -120,9 +147,6 @@ export const processMessageTags = (message: string, data: {
   // AIDEV-NOTE: Tag link boleto - usa pdf_url
   const linkBoleto = data.charge?.pdf_url || 'Link do boleto não disponível';
   processedMessage = processedMessage.replace(/{cobranca\.link_boleto}/g, linkBoleto);
-  
-  // AIDEV-NOTE: Tags da empresa
-  processedMessage = processedMessage.replace(/{empresa\.nome}/g, data.customer?.company || 'Empresa Exemplo');
   
   // AIDEV-NOTE: Tags de dias
   processedMessage = processedMessage.replace(/{dias\.aposVencimento}/g, daysOverdue.toString());

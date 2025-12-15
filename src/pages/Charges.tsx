@@ -1,22 +1,20 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { ChargesDashboard } from "@/components/charges/dashboard/ChargesDashboard";
 import { Button } from "@/components/ui/button";
-import { DownloadIcon, Plus, ArrowRightLeft } from "lucide-react";
+import { Plus, ArrowRightLeft } from "lucide-react";
 import { CreateChargeDialog } from "@/components/charges/CreateChargeDialog";
-import { ChargesCompanyList } from "@/components/charges/ChargesCompanyList";
 import { ChargesList } from "@/components/charges/ChargesList";
 import { useTenantAccessGuard } from "@/hooks/templates/useSecureTenantQuery";
 import { useQueryClient } from "@tanstack/react-query";
-import { Skeleton } from "@/components/ui/skeleton";
 import { default as ReconciliationModal } from "@/components/reconciliation/ReconciliationModal";
 
 export default function Charges() {
   // 🛡️ PROTEÇÃO MULTI-TENANT OBRIGATÓRIA
-  const { hasAccess, isLoading: accessLoading, currentTenant, accessError } = useTenantAccessGuard();
+  const { hasAccess, currentTenant, accessError } = useTenantAccessGuard();
   
   // 📍 NAVEGAÇÃO E PARÂMETROS
   const navigate = useNavigate();
@@ -93,23 +91,8 @@ export default function Charges() {
   }, [currentTenant, slug, navigate]);
   
   // 🛡️ GUARD CLAUSE: Verificar acesso antes de renderizar
-  if (accessLoading) {
-    console.log('⏳ [AUDIT] Verificando acesso à página de cobranças...');
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Header />
-          <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
-            <div className="space-y-6">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-96 w-full" />
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+  // AIDEV-NOTE: Verificação de loading removida - useTenantAccessGuard não retorna isLoading
+  // O hook já valida o acesso de forma síncrona baseado no estado do Zustand
   
   if (!hasAccess || accessError) {
     console.error('🚫 [SECURITY] Acesso negado à página de cobranças:', accessError);
@@ -149,22 +132,6 @@ export default function Charges() {
         </Header>
         <main className="flex-1 overflow-hidden flex flex-col">
           <div className="h-full flex flex-col">
-            {activeTab !== "dashboard" && (
-              <div className="flex flex-col space-y-2 md:space-y-0 md:flex-row md:items-center md:justify-between border-b pb-3 px-2 sm:px-3">
-                <div>
-                  <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Cobranças</h1>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Gerencie todas as suas cobranças em um só lugar
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button className="gap-1 text-white text-sm w-full sm:w-auto py-1.5" onClick={() => setIsCreateChargeDialogOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    Nova Cobrança
-                  </Button>
-                </div>
-              </div>
-            )}
 
             <div className="flex-1 overflow-hidden px-2 sm:px-10">
               <Tabs 
@@ -186,12 +153,6 @@ export default function Charges() {
                     >
                       Lista
                     </TabsTrigger>
-                    <TabsTrigger 
-                      value="company" 
-                      className="data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none relative h-10 rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 font-medium text-muted-foreground hover:text-foreground data-[state=active]:text-foreground"
-                    >
-                      Empresa
-                    </TabsTrigger>
                   </TabsList>
                 </div>
                 
@@ -200,10 +161,7 @@ export default function Charges() {
                     <ChargesDashboard />
                   </TabsContent>
                   <TabsContent value="list" className="mt-0 h-full">
-                    <ChargesList />
-                  </TabsContent>
-                  <TabsContent value="company" className="mt-0 h-full">
-                    <ChargesCompanyList />
+                    <ChargesList onCreateCharge={() => setIsCreateChargeDialogOpen(true)} />
                   </TabsContent>
                 </div>
               </Tabs>

@@ -88,12 +88,40 @@ export async function getTenantCredentials(
     webhookToken: data.webhook_token
   });
 
+  // AIDEV-NOTE: Tentar obter chave descriptografada usando função RPC
+  // Se não conseguir, usar texto plano do config (compatibilidade)
+  let apiKey: string = '';
+  
+  try {
+    const { data: decryptedKey, error: decryptError } = await supabase.rpc('get_decrypted_api_key', {
+      p_tenant_id: tenantId,
+      p_integration_type: integrationType
+    });
+    
+    if (!decryptError && decryptedKey) {
+      apiKey = decryptedKey;
+      console.log('[getTenantCredentials] Chave API descriptografada com sucesso');
+    } else {
+      // Fallback: usar texto plano do config
+      const config = data.config || {};
+      apiKey = config.api_key || '';
+      if (apiKey) {
+        console.warn('[getTenantCredentials] Usando chave em texto plano (compatibilidade)');
+      }
+    }
+  } catch (error) {
+    // Se função não existir ou falhar, usar texto plano
+    const config = data.config || {};
+    apiKey = config.api_key || '';
+    console.warn('[getTenantCredentials] Erro ao descriptografar, usando texto plano:', error);
+  }
+
   // Usar o campo 'config' que contém as configurações da integração
   const config = data.config || {};
   const webhookToken = data.webhook_token || config.webhook_token;
 
   console.log('[getTenantCredentials] Processando config:', {
-    configApiKey: config.api_key ? 'PRESENTE' : 'AUSENTE',
+    configApiKey: apiKey ? 'PRESENTE' : 'AUSENTE',
     configApiUrl: config.api_url || 'AUSENTE',
     webhookTokenFinal: webhookToken ? 'PRESENTE' : 'AUSENTE'
   });
@@ -104,7 +132,7 @@ export async function getTenantCredentials(
   }
 
   const result = {
-    api_key: config.api_key || '',
+    api_key: apiKey,
     api_url: config.api_url || '',
     webhook_token: webhookToken,
     environment: config.environment || 'production'

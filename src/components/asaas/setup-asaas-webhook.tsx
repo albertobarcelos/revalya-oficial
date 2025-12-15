@@ -11,9 +11,10 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, AlertCircle, CheckCircle2, Link as LinkIcon } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle2, Link as LinkIcon, Bell } from 'lucide-react'
 import { setupTenantWebhook, removeTenantWebhook, checkWebhookStatus } from '@/services/asaas/webhookService'
 import { motion } from 'framer-motion'
+import { Badge } from '@/components/ui/badge'
 
 // AIDEV-NOTE: Interface para status do webhook
 interface WebhookStatus {
@@ -29,6 +30,32 @@ interface SetupAsaasWebhookProps {
   onSuccess?: () => void
   onError?: (error: string) => void
 }
+
+// AIDEV-NOTE: Mapeamento de eventos para nomes amigáveis em português
+const EVENT_NAMES: Record<string, string> = {
+  PAYMENT_CREATED: 'Pagamento Criado',
+  PAYMENT_RECEIVED: 'Pagamento Recebido',
+  PAYMENT_CONFIRMED: 'Pagamento Confirmado',
+  PAYMENT_OVERDUE: 'Pagamento Vencido',
+  PAYMENT_REFUNDED: 'Pagamento Estornado',
+  PAYMENT_DELETED: 'Pagamento Deletado',
+  PAYMENT_RESTORED: 'Pagamento Restaurado',
+  PAYMENT_UPDATED: 'Pagamento Atualizado',
+  PAYMENT_ANTICIPATED: 'Pagamento Antecipado'
+}
+
+// AIDEV-NOTE: Lista de eventos configurados automaticamente
+const CONFIGURED_EVENTS = [
+  'PAYMENT_CREATED',
+  'PAYMENT_RECEIVED',
+  'PAYMENT_CONFIRMED',
+  'PAYMENT_OVERDUE',
+  'PAYMENT_REFUNDED',
+  'PAYMENT_DELETED',
+  'PAYMENT_RESTORED',
+  'PAYMENT_UPDATED',
+  'PAYMENT_ANTICIPATED'
+]
 
 // AIDEV-NOTE: Componente de configuração do webhook
 export function SetupAsaasWebhook({ tenantId, onSuccess, onError }: SetupAsaasWebhookProps) {
@@ -172,11 +199,36 @@ export function SetupAsaasWebhook({ tenantId, onSuccess, onError }: SetupAsaasWe
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.2 }}
             >
-              <Alert className="mb-4">
-                <LinkIcon className="h-4 w-4" />
-                <AlertTitle>Webhook Configurado</AlertTitle>
-                <AlertDescription className="text-sm font-mono break-all">
-                  {webhookConfig.url}
+              <Alert className="mb-4 bg-blue-50 border-blue-200">
+                <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800">Webhook Configurado com Sucesso</AlertTitle>
+                <AlertDescription className="space-y-3 mt-2">
+                  <div className="text-sm text-blue-700">
+                    Seu webhook está ativo e recebendo notificações em tempo real do Asaas.
+                  </div>
+
+                  <div className="pt-2 border-t border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bell className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-blue-800">
+                        Eventos Monitorados:
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {CONFIGURED_EVENTS.map((event) => (
+                        <Badge
+                          key={event}
+                          variant="secondary"
+                          className="bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200"
+                        >
+                          {EVENT_NAMES[event] || event}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-blue-600 mt-2">
+                      Você receberá notificações automáticas quando qualquer um desses eventos ocorrer no Asaas.
+                    </p>
+                  </div>
                 </AlertDescription>
               </Alert>
             </motion.div>

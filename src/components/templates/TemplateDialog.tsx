@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
-import { AVAILABLE_TAGS } from "@/types/settings";
+import { TAG_DEFINITIONS } from "@/utils/messageTags"; // AIDEV-NOTE: Tags centralizadas - única fonte de verdade
 import type { MessageTemplate } from "@/types/settings";
 
 interface TemplateDialogProps {
@@ -104,9 +104,9 @@ export function TemplateDialog({
             placeholder="Digite sua mensagem aqui. Use as tags disponíveis para dados dinâmicos."
           />
           <div className="flex flex-wrap gap-2 mt-2">
-            {Object.entries(AVAILABLE_TAGS).map(([key, value]) => (
+            {TAG_DEFINITIONS.map((tag) => (
               <Badge
-                key={key}
+                key={tag.key}
                 variant="secondary"
                 className="cursor-pointer"
                 onClick={() => {
@@ -114,12 +114,12 @@ export function TemplateDialog({
                   if (textarea) {
                     const start = textarea.selectionStart;
                     const end = textarea.selectionEnd;
-                    const newMessage = formData.message.substring(0, start) + value + formData.message.substring(end);
+                    const newMessage = formData.message.substring(0, start) + tag.value + formData.message.substring(end);
                     setFormData({ ...formData, message: newMessage });
                   }
                 }}
               >
-                {key.toLowerCase().replace(/_/g, ' ')}
+                {tag.label}
               </Badge>
             ))}
           </div>

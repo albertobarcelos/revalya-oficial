@@ -27,19 +27,42 @@ function getFirstEnv(names, { required = true } = {}) {
 };
 const SUPABASE_URL = requireEnv("SUPABASE_URL", Deno.env.get("SUPABASE_URL"));
 const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-// Fallback global (só se não houver registro em tenant_integrations)
-const FALLBACK_EVOLUTION_API_BASE_URL = getFirstEnv([
-  "VITE_EVOLUTION_API_URL",
-  "EVOLUTION_API_BASE_URL"
-], {
-  required: false
-})?.replace?.(/\/+$/, "") || "";
-const FALLBACK_EVOLUTION_API_KEY = getFirstEnv([
-  "VITE_EVOLUTION_API_KEY",
-  "EVOLUTION_API_KEY"
-], {
-  required: false
-}) || "";
+// AIDEV-NOTE: Credenciais fixas da Evolution API (variáveis de ambiente do Supabase Vault)
+// Essas são 100% fixas para todos os tenants, pois a Evolution API é centralizada
+// As variáveis EVOLUTION_API_URL e EVOLUTION_API_KEY devem estar configuradas no Supabase Dashboard > Edge Functions > Secrets
+function getEvolutionApiCredentials() {
+  const apiUrl = Deno.env.get("EVOLUTION_API_URL");
+  const apiKey = Deno.env.get("EVOLUTION_API_KEY");
+  
+  console.log('[getEvolutionApiCredentials] Verificando variáveis de ambiente:', {
+    hasApiUrl: !!apiUrl,
+    hasApiKey: !!apiKey,
+    apiUrlLength: apiUrl?.length || 0,
+    apiKeyLength: apiKey?.length || 0
+  });
+  
+  if (!apiUrl || !apiUrl.trim()) {
+    const errorMsg = 'EVOLUTION_API_URL não configurada no Supabase Vault. Configure em Dashboard > Edge Functions > Secrets';
+    console.error('[getEvolutionApiCredentials]', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  if (!apiKey || !apiKey.trim()) {
+    const errorMsg = 'EVOLUTION_API_KEY não configurada no Supabase Vault. Configure em Dashboard > Edge Functions > Secrets';
+    console.error('[getEvolutionApiCredentials]', errorMsg);
+    throw new Error(errorMsg);
+  }
+  
+  return {
+    apiUrl: apiUrl.trim().replace(/\/+$/, ''),
+    apiKey: apiKey.trim()
+  };
+}
+
+// AIDEV-NOTE: Obter credenciais no início para validação imediata
+const evolutionCredentials = getEvolutionApiCredentials();
+const EVOLUTION_API_BASE_URL = evolutionCredentials.apiUrl;
+const EVOLUTION_API_KEY = evolutionCredentials.apiKey;
 // Fallback opcional de instância via env (raramente necessário)
 const EVOLUTION_INSTANCE_ENV = (Deno.env.get("EVOLUTION_INSTANCE") || "").trim();
 const DEFAULT_COUNTRY_CODE = "55"; // Brasil
@@ -179,28 +202,27 @@ async function getEvolutionConfig(supabase, tenantId, envOverride, headerOverrid
   let cfg = data?.config || {};
   // Tenta ler keys usuais (com sinônimos)
   const pick = (obj, keys, def = "")=>keys.reduce((acc, k)=>acc || obj?.[k] || obj?.[k.toLowerCase()] || obj?.[k.toUpperCase()], "") || def;
-  const dbBaseUrl = String(pick(cfg, [
-    "api_url",
-    "base_url",
-    "evolution_url",
-    "url"
-  ], "")).replace(/\/+$/, "");
-  const dbApiKey = String(pick(cfg, [
-    "api_key",
-    "apikey",
-    "token"
-  ], ""));
+  // AIDEV-NOTE: instance_name é específico por tenant, então ainda busca do banco
   const dbInstance = String(pick(cfg, [
     "instance_name",
     "instance",
     "evolution_instance"
   ], ""));
-  // Overrides por header (se vierem)
-  const apiBaseUrl = (headerOverrides?.baseUrl?.trim() || dbBaseUrl || FALLBACK_EVOLUTION_API_BASE_URL).replace(/\/+$/, "");
-  const apiKey = headerOverrides?.apiKey?.trim() || dbApiKey || FALLBACK_EVOLUTION_API_KEY;
+  // AIDEV-NOTE: Usar credenciais fixas do Supabase Vault (EVOLUTION_API_URL e EVOLUTION_API_KEY)
+  // Essas são 100% fixas para todos os tenants, pois a Evolution API é centralizada
+  // Permite override por header apenas para testes/debug
+  // AIDEV-NOTE: Se não houver override, usar credenciais do Vault (já validadas no início)
+  const apiBaseUrl = (headerOverrides?.baseUrl?.trim() || EVOLUTION_API_BASE_URL).replace(/\/+$/, "");
+  const apiKey = headerOverrides?.apiKey?.trim() || EVOLUTION_API_KEY;
   const instanceName = headerOverrides?.instanceName?.trim() || dbInstance || EVOLUTION_INSTANCE_ENV || "";
-  if (!apiBaseUrl) throw new Error("API URL não encontrada para Evolution (verifique tenant_integrations.config.api_url ou header x-wa-api-base-url).");
-  if (!apiKey) throw new Error("API Key não encontrada para Evolution (verifique tenant_integrations.config.api_key ou header x-wa-api-key).");
+  
+  // AIDEV-NOTE: Validação adicional (caso override esteja vazio)
+  if (!apiBaseUrl) {
+    throw new Error("API URL não encontrada para Evolution. Configure EVOLUTION_API_URL no Supabase Vault.");
+  }
+  if (!apiKey) {
+    throw new Error("API Key não encontrada para Evolution. Configure EVOLUTION_API_KEY no Supabase Vault.");
+  }
   if (!instanceName) throw new Error("Instance Name não encontrado (verifique tenant_integrations.config.instance_name ou header x-wa-instance).");
   return {
     apiBaseUrl,
@@ -499,7 +521,31 @@ class BulkService {
     
     const vencimento = charge?.data_vencimento ? new Date(charge.data_vencimento).toLocaleDateString("pt-BR") : "";
     const descricao = charge?.descricao || "";
-    const status = charge?.status || "";
+    
+    // AIDEV-NOTE: Traduzir status para português para exibição nas mensagens
+    const translateStatus = (status: string | null | undefined): string => {
+      if (!status) return "";
+      const statusMap: { [key: string]: string } = {
+        'PENDING': 'Pendente',
+        'RECEIVED': 'Recebido',
+        'CONFIRMED': 'Confirmado',
+        'OVERDUE': 'Vencido',
+        'REFUNDED': 'Reembolsado',
+        'RECEIVED_IN_CASH': 'Recebido em Dinheiro',
+        'REFUND_REQUESTED': 'Reembolso Solicitado',
+        'REFUND_IN_PROGRESS': 'Reembolso em Andamento',
+        'CHARGEBACK_REQUESTED': 'Estorno Solicitado',
+        'CHARGEBACK_DISPUTE': 'Disputa de Estorno',
+        'AWAITING_CHARGEBACK_REVERSAL': 'Aguardando Reversão de Estorno',
+        'DUNNING_REQUESTED': 'Cobrança Solicitada',
+        'DUNNING_RECEIVED': 'Cobrança Recebida',
+        'AWAITING_RISK_ANALYSIS': 'Aguardando Análise de Risco',
+        'CANCELLED': 'Cancelado'
+      };
+      return statusMap[status.toUpperCase()] || status;
+    };
+    
+    const status = translateStatus(charge?.status);
     
     // AIDEV-NOTE: Tag código de barras - usa barcode
     const codigoBarras = charge?.barcode || 'Código de barras não disponível';
@@ -545,6 +591,7 @@ class BulkService {
       // Tags de cliente
       .replace(/\{cliente\.nome\}/g, nome)
       .replace(/\{cliente\.empresa\}/g, empresa)
+      .replace(/\{cliente\.cpf\}/g, cpfCnpj) // AIDEV-NOTE: Compatibilidade com tag {cliente.cpf}
       .replace(/\{cliente\.cpf_cnpj\}/g, cpfCnpj)
       .replace(/\{cliente\.telefone\}/g, telefone)
       .replace(/\{cliente\.email\}/g, email)
@@ -643,7 +690,20 @@ class BulkService {
             const customerPhone = (customer as any).celular_whatsapp?.trim() || (customer as any).phone?.trim() || '';
             if (!customerPhone) throw new Error("Cliente sem telefone cadastrado");
             
-            const msg = (customMessage?.trim() || this.renderMessage(templateContent, customer, charge)).trim();
+            // AIDEV-NOTE: Processar tags tanto em customMessage quanto em templateContent
+            // Se customMessage existe, processar suas tags; senão, usar template processado
+            let msg: string;
+            if (customMessage?.trim()) {
+              // AIDEV-NOTE: Processar tags na mensagem customizada usando renderMessage
+              msg = this.renderMessage(customMessage.trim(), customer, charge).trim();
+              console.log(`[BulkService] Mensagem customizada processada para charge ${charge.id}:`, {
+                original: customMessage.substring(0, 100),
+                processed: msg.substring(0, 100)
+              });
+            } else {
+              // AIDEV-NOTE: Usar template processado
+              msg = this.renderMessage(templateContent, customer, charge).trim();
+            }
             const normalizedPhone = normalizeToE164(customerPhone, countryCode || DEFAULT_COUNTRY_CODE);
             
             // AIDEV-NOTE: Garantir delay mínimo entre mensagens para evitar spam
