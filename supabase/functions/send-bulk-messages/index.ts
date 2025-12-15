@@ -545,6 +545,7 @@ class BulkService {
       // Tags de cliente
       .replace(/\{cliente\.nome\}/g, nome)
       .replace(/\{cliente\.empresa\}/g, empresa)
+      .replace(/\{cliente\.cpf\}/g, cpfCnpj) // AIDEV-NOTE: Compatibilidade com tag {cliente.cpf}
       .replace(/\{cliente\.cpf_cnpj\}/g, cpfCnpj)
       .replace(/\{cliente\.telefone\}/g, telefone)
       .replace(/\{cliente\.email\}/g, email)

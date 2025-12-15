@@ -34,7 +34,8 @@ import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import { templateService } from "@/services/templateService";
 import type { MessageTemplate } from "@/types/settings";
-import { AVAILABLE_TAGS } from "@/types/settings";
+import { TAG_DEFINITIONS } from "@/utils/messageTags"; // AIDEV-NOTE: Tags centralizadas - única fonte de verdade
+import { extractTagsFromMessage } from '@/utils/messageTags'; // AIDEV-NOTE: Função utilitária centralizada
 import Skeleton from 'react-loading-skeleton';
 
 // Skeleton para card de integração/template
@@ -205,9 +206,9 @@ export default function Templates() {
     });
   };
 
+  // AIDEV-NOTE: Usar função utilitária do arquivo centralizado
   const extractTags = (message: string): string[] => {
-    const tags = Object.values(AVAILABLE_TAGS);
-    return tags.filter(tag => message.includes(tag));
+    return extractTagsFromMessage(message);
   };
 
   const resetForm = () => {
@@ -303,9 +304,9 @@ export default function Templates() {
                         placeholder="Digite sua mensagem aqui. Use as tags disponíveis para dados dinâmicos."
                       />
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {Object.entries(AVAILABLE_TAGS).map(([key, value]) => (
+                        {TAG_DEFINITIONS.map((tag) => (
                           <Badge
-                            key={key}
+                            key={tag.key}
                             variant="secondary"
                             className="cursor-pointer"
                             onClick={() => {
@@ -313,12 +314,12 @@ export default function Templates() {
                               if (textarea) {
                                 const start = textarea.selectionStart;
                                 const end = textarea.selectionEnd;
-                                const newMessage = formData.message.substring(0, start) + value + formData.message.substring(end);
+                                const newMessage = formData.message.substring(0, start) + tag.value + formData.message.substring(end);
                                 setFormData({ ...formData, message: newMessage });
                               }
                             }}
                           >
-                            {key.toLowerCase().replace(/_/g, ' ')}
+                            {tag.label}
                           </Badge>
                         ))}
                       </div>
