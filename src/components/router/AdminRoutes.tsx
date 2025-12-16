@@ -33,7 +33,8 @@ import { AdminLayout } from '@/components/layouts/AdminLayout';
 import { logInfo, logError } from '@/lib/logger';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { motion } from 'framer-motion';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
+import * as Sentry from "@sentry/react";
 
 // Importação lazy de páginas para melhorar performance
 const AdminDashboard = lazy(() => import('@/pages/admin/dashboard'));
@@ -184,6 +185,31 @@ export function AdminRoutes({ userRole }: AdminRoutesProps) {
   // - Prevenção de vazamento de dados entre portais
   // - Invalidação automática ao trocar de tenant
   const adminQueryClient = new QueryClient({
+    // AIDEV-NOTE: Captura de erros global para o Sentry no portal administrativo
+    queryCache: new QueryCache({
+      onError: (error, query) => {
+        Sentry.captureException(error, {
+          extra: {
+            context: 'admin_portal',
+            type: 'queryError',
+            queryKey: query.queryKey,
+            errorMessage: error.message
+          }
+        });
+      }
+    }),
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _context, mutation) => {
+        Sentry.captureException(error, {
+          extra: {
+            context: 'admin_portal',
+            type: 'mutationError',
+            mutationKey: mutation.options.mutationKey,
+            errorMessage: error.message
+          }
+        });
+      }
+    }),
     defaultOptions: {
       queries: {
         // AIDEV-NOTE: Configurações de cache seguras para admin

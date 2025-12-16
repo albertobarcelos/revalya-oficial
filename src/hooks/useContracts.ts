@@ -628,9 +628,9 @@ export function useContractStages() {
       const { data, error } = await supabase
         .from('contract_stages')
         .select('*')
-        .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
-        .eq('active', true)
-        .order('order', { ascending: true })
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
 
       if (error) throw error
       return data as unknown as ContractStage[]
@@ -640,18 +640,30 @@ export function useContractStages() {
   const createStage = useSecureTenantMutation(
     async (supabase, tenantId, stageData: Partial<ContractStage>) => {
       throttledAudit(`✏️ Criando stage para tenant: ${tenantId}`);
-      
+
+      const { data: lastStage } = await supabase
+        .from('contract_stages')
+        .select('order_index')
+        .eq('tenant_id', tenantId)
+        .order('order_index', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextOrderIndex = ((lastStage?.order_index as number | undefined) ?? 0) + 1;
+
       const { data, error } = await supabase
         .from('contract_stages')
         .insert({
           ...stageData,
-          tenant_id: tenantId // 🛡️ SEMPRE INCLUIR TENANT_ID
+          tenant_id: tenantId,
+          order_index: nextOrderIndex,
+          is_active: stageData?.is_active ?? true
         })
         .select()
-        .single()
+        .single();
 
-      if (error) throw error
-      return data
+      if (error) throw error;
+      return data;
     },
     {
       invalidateQueries: ['contract-stages']

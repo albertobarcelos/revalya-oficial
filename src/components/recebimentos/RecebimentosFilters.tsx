@@ -32,22 +32,22 @@ export function RecebimentosFilters({
   onExportPDF
 }: RecebimentosFiltersProps) {
   return (
-    <div className="flex items-end justify-between gap-4">
-      <div className="flex flex-col md:flex-row md:items-end space-y-3 md:space-y-0 md:space-x-4 flex-1">
-        <div>
+    <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end flex-1 w-full">
+        <div className="space-y-2">
           <Label htmlFor="search">Buscar</Label>
           <Input
             id="search"
             placeholder="Descrição..."
             value={filters.search}
             onChange={(e) => onFiltersChange({ search: e.target.value })}
-            className="mt-1 w-full md:w-80 h-9"
+            className="w-full h-10"
           />
         </div>
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="type">Tipo</Label>
           <Select value={filters.type} onValueChange={(value) => onFiltersChange({ type: value })}>
-            <SelectTrigger className="mt-1 w-full md:w-40 h-9">
+            <SelectTrigger className="w-full h-10">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -56,10 +56,10 @@ export function RecebimentosFilters({
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="status">Status</Label>
           <Select value={filters.status} onValueChange={(value) => onFiltersChange({ status: value })}>
-            <SelectTrigger className="mt-1 w-full md:w-40 h-9">
+            <SelectTrigger className="w-full h-10">
               <SelectValue placeholder="Selecione o status" />
             </SelectTrigger>
             <SelectContent>
@@ -71,9 +71,9 @@ export function RecebimentosFilters({
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div className="space-y-2">
           <Label>Período</Label>
-          <div className="mt-1 flex items-end gap-2 w-full md:w-80">
+          <div className="w-full">
             <DateRangePicker
               date={dateRange}
               onDateChange={(range: DateRange | undefined) => {
@@ -85,12 +85,12 @@ export function RecebimentosFilters({
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 self-end">
-        <Button variant="outline" onClick={onExportCSV} className="gap-2">
-          <Download className="h-4 w-4" /> CSV
+      <div className="flex items-center gap-2 justify-end pt-2 xl:pt-0">
+        <Button variant="outline" onClick={onExportCSV} className="gap-2 w-full sm:w-auto">
+          <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
         </Button>
-        <Button onClick={onExportPDF} className="gap-2">
-          <FileText className="h-4 w-4" /> PDF
+        <Button onClick={onExportPDF} className="gap-2 w-full sm:w-auto">
+          <FileText className="h-4 w-4" /> <span className="hidden sm:inline">PDF</span>
         </Button>
       </div>
     </div>

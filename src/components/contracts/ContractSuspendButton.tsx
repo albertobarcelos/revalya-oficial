@@ -72,6 +72,15 @@ export function ContractSuspendButton({
       if (!suspendedStage) {
         // Se não encontrar, tentar criar o estágio
         console.log('Estágio SUSPENDED não encontrado, tentando criar...');
+        const { data: lastStage } = await supabase
+          .from('contract_stages')
+          .select('order_index')
+          .eq('tenant_id', currentTenant?.id)
+          .order('order_index', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const nextOrderIndex = ((lastStage?.order_index as number | undefined) ?? 0) + 1;
         const { data: newStage, error: createError } = await supabase
           .from('contract_stages')
           .insert({
@@ -79,7 +88,8 @@ export function ContractSuspendButton({
             code: 'SUSPENDED',
             name: 'Suspenso',
             description: 'Contrato suspenso temporariamente',
-            is_active: true
+            is_active: true,
+            order_index: nextOrderIndex
           })
           .select('id')
           .single();

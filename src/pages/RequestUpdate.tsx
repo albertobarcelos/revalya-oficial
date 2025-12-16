@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -20,25 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useUpdateValues } from "@/hooks/useUpdateValues";
-import { useCustomers } from "@/hooks/useCustomers";
-import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { clientsService } from "@/services/clientsService";
 import { Label } from "@/components/ui/label";
@@ -71,12 +56,9 @@ export default function RequestUpdate() {
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
   
   const { toast } = useToast();
-  const { customers, isLoading: isLoadingCustomers } = useCustomers();
   const { createUpdateRequest } = useUpdateValues();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [open, setOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [items, setItems] = useState<UpdateItem[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   
@@ -135,37 +117,6 @@ export default function RequestUpdate() {
     }
     return `R$ ${value}`;
   };
-
-  const filteredCustomers = useMemo(() => {
-    if (!customers || !searchTerm.trim()) {
-      // Se não houver termo de busca, retornar todos os clientes (até um limite razoável)
-      return customers?.slice(0, 100) || [];
-    }
-    
-    const searchLower = searchTerm.toLowerCase().trim();
-    
-    // Priorizar resultados que começam com o termo de busca
-    const priorityMatches: any[] = [];
-    const otherMatches: any[] = [];
-    
-    customers.forEach(customer => {
-      const nameMatch = customer.name?.toLowerCase().includes(searchLower);
-      const cpfCnpjMatch = customer.cpf_cnpj?.toString().toLowerCase().includes(searchLower);
-      const companyMatch = customer.company?.toLowerCase().includes(searchLower);
-      
-      if (nameMatch || cpfCnpjMatch || companyMatch) {
-        // Priorizar resultados que começam com o termo de busca
-        if ((customer.name?.toLowerCase().startsWith(searchLower)) || 
-            (customer.cpf_cnpj?.toString().toLowerCase().startsWith(searchLower))) {
-          priorityMatches.push(customer);
-        } else {
-          otherMatches.push(customer);
-        }
-      }
-    });
-    
-    return [...priorityMatches, ...otherMatches];
-  }, [customers, searchTerm]);
 
   const form = useForm<z.infer<typeof itemSchema>>({
     resolver: zodResolver(itemSchema),
