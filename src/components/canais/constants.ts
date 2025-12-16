@@ -72,6 +72,10 @@ export const TOAST_MESSAGES = {
     title: "Acesso negado",
     description: "Você não tem permissão para esta operação."
   },
+  WHATSAPP_ERROR: {
+    title: "Erro no WhatsApp",
+    description: "Não foi possível realizar a operação com o WhatsApp."
+  },
   ERROR_GENERIC: {
     title: "Erro ao processar solicitação",
     description: "Ocorreu um erro inesperado."
