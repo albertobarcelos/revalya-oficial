@@ -55,6 +55,9 @@ export interface UseChargesParams {
   contractId?: string
   startDate?: string
   endDate?: string
+  hasMessage?: boolean // true = com mensagem, false = sem mensagem, undefined = todas
+  messageStartDate?: string // Data inicial de envio da mensagem
+  messageEndDate?: string // Data final de envio da mensagem
 }
 
 /**
@@ -78,7 +81,10 @@ export function useCharges(params: UseChargesParams = {}) {
       customerId: params.customerId,
       contractId: params.contractId,
       startDate: params.startDate,
-      endDate: params.endDate
+      endDate: params.endDate,
+      hasMessage: params.hasMessage,
+      messageStartDate: params.messageStartDate,
+      messageEndDate: params.messageEndDate
     }
   }, [
     params.page,
@@ -89,7 +95,10 @@ export function useCharges(params: UseChargesParams = {}) {
     params.customerId,
     params.contractId,
     params.startDate,
-    params.endDate
+    params.endDate,
+    params.hasMessage,
+    params.messageStartDate,
+    params.messageEndDate
   ])
 
   // AIDEV-NOTE: Memoizar query key para evitar recriação desnecessária
@@ -152,6 +161,47 @@ export function useCharges(params: UseChargesParams = {}) {
         `)
         .eq('tenant_id', tenantId) // 🛡️ FILTRO OBRIGATÓRIO
 
+      // AIDEV-NOTE: Filtro de mensagem enviada - buscar charge_ids que têm ou não têm mensagens
+      let chargeIdsWithMessageFilter: string[] | null = null;
+      if (memoizedParams.hasMessage !== undefined) {
+        // Buscar charge_ids na message_history que atendem aos critérios
+        let messageQuery = supabase
+          .from('message_history')
+          .select('charge_id, created_at')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'SENT'); // AIDEV-NOTE: Status em maiúsculas conforme constraint do banco
+        
+        // Aplicar filtro de data de envio se fornecido
+        if (memoizedParams.messageStartDate) {
+          messageQuery = messageQuery.gte('created_at', memoizedParams.messageStartDate);
+        }
+        if (memoizedParams.messageEndDate) {
+          // Adicionar 23:59:59 ao final do dia para incluir todo o dia
+          const endDate = new Date(memoizedParams.messageEndDate);
+          endDate.setHours(23, 59, 59, 999);
+          messageQuery = messageQuery.lte('created_at', endDate.toISOString());
+        }
+        
+        const { data: messages, error: messageError } = await messageQuery;
+        
+        if (messageError) {
+          console.error('❌ [CHARGES ERROR] Erro ao buscar mensagens para filtro:', messageError);
+          throw messageError;
+        }
+        
+        // Extrair charge_ids únicos
+        const chargeIds = [...new Set((messages || []).map(m => m.charge_id))];
+        
+        if (memoizedParams.hasMessage === true) {
+          // Com mensagem: usar apenas esses charge_ids
+          chargeIdsWithMessageFilter = chargeIds;
+        } else {
+          // Sem mensagem: precisamos buscar todas as charges e filtrar
+          // Isso será feito depois da query principal
+          chargeIdsWithMessageFilter = chargeIds;
+        }
+      }
+
       // Aplicar filtros adicionais usando memoizedParams
       if (memoizedParams.status) {
         query = query.eq('status', memoizedParams.status)
@@ -170,6 +220,23 @@ export function useCharges(params: UseChargesParams = {}) {
       }
       if (memoizedParams.endDate) {
         query = query.lte('data_vencimento', memoizedParams.endDate)
+      }
+      
+      // AIDEV-NOTE: Aplicar filtro de mensagem enviada
+      if (chargeIdsWithMessageFilter !== null) {
+        if (memoizedParams.hasMessage === true) {
+          // Com mensagem: filtrar apenas charges que têm mensagens
+          if (chargeIdsWithMessageFilter.length > 0) {
+            query = query.in('id', chargeIdsWithMessageFilter);
+          } else {
+            // Se não há mensagens, retornar array vazio
+            return {
+              data: [],
+              total: 0
+            };
+          }
+        }
+        // Se hasMessage === false, vamos filtrar depois da query
       }
       if (memoizedParams.search) {
         // AIDEV-NOTE: Busca expandida para incluir dados do cliente (nome, empresa, CPF/CNPJ)
@@ -337,6 +404,19 @@ export function useCharges(params: UseChargesParams = {}) {
       if (memoizedParams.endDate) {
         countQuery = countQuery.lte('data_vencimento', memoizedParams.endDate)
       }
+      
+      // AIDEV-NOTE: Aplicar filtro de mensagem no count também
+      if (chargeIdsWithMessageFilter !== null && memoizedParams.hasMessage === true) {
+        if (chargeIdsWithMessageFilter.length > 0) {
+          countQuery = countQuery.in('id', chargeIdsWithMessageFilter);
+        } else {
+          // Se não há mensagens, retornar count 0
+          return {
+            data: [],
+            total: 0
+          };
+        }
+      }
       if (memoizedParams.search) {
         // AIDEV-NOTE: Aplicar mesma lógica de busca para o count
         const searchTerm = memoizedParams.search.trim();
@@ -454,6 +534,53 @@ export function useCharges(params: UseChargesParams = {}) {
         throw new Error('Violação de segurança detectada')
       }
 
+      // AIDEV-NOTE: Filtrar cobranças sem mensagem se necessário (após a query)
+      let filteredData = data;
+      let filteredCount = count;
+      
+      if (chargeIdsWithMessageFilter !== null && memoizedParams.hasMessage === false) {
+        // Sem mensagem: filtrar charges que NÃO estão na lista de charges com mensagem
+        filteredData = data?.filter(charge => !chargeIdsWithMessageFilter.includes(charge.id));
+        
+        // AIDEV-NOTE: Para count sem mensagem, precisamos buscar todas as charges primeiro
+        // e depois filtrar. Isso é necessário porque a paginação já foi aplicada.
+        // Buscar count total de charges sem mensagem com os mesmos filtros
+        let countQueryWithoutMessage = supabase
+          .from('charges')
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId);
+        
+        // Aplicar os mesmos filtros
+        if (memoizedParams.status) {
+          countQueryWithoutMessage = countQueryWithoutMessage.eq('status', memoizedParams.status);
+        }
+        if (memoizedParams.type) {
+          countQueryWithoutMessage = countQueryWithoutMessage.eq('tipo', memoizedParams.type);
+        }
+        if (memoizedParams.customerId) {
+          countQueryWithoutMessage = countQueryWithoutMessage.eq('customer_id', memoizedParams.customerId);
+        }
+        if (memoizedParams.contractId) {
+          countQueryWithoutMessage = countQueryWithoutMessage.eq('contract_id', memoizedParams.contractId);
+        }
+        if (memoizedParams.startDate) {
+          countQueryWithoutMessage = countQueryWithoutMessage.gte('data_vencimento', memoizedParams.startDate);
+        }
+        if (memoizedParams.endDate) {
+          countQueryWithoutMessage = countQueryWithoutMessage.lte('data_vencimento', memoizedParams.endDate);
+        }
+        
+        // Excluir charges que têm mensagem
+        if (chargeIdsWithMessageFilter.length > 0) {
+          countQueryWithoutMessage = countQueryWithoutMessage.not('id', 'in', `(${chargeIdsWithMessageFilter.join(',')})`);
+        }
+        
+        const { count: countWithoutMessage } = await countQueryWithoutMessage;
+        if (countWithoutMessage !== null) {
+          filteredCount = countWithoutMessage;
+        }
+      }
+
       // AIDEV-NOTE: Buscar serviços dos contratos usando vw_contract_services_detailed
       const contractIds = [...new Set(data?.filter(charge => charge.contract_id).map(charge => charge.contract_id))]
       let contractServicesMap: Record<string, any[]> = {}
@@ -495,7 +622,9 @@ export function useCharges(params: UseChargesParams = {}) {
 
       // AIDEV-NOTE: Enriquecer dados com serviços dos contratos
       // AIDEV-NOTE: Normalizar customers e contracts que podem vir como arrays do Supabase
-      const enrichedData = data?.map(charge => {
+      // AIDEV-NOTE: Usar filteredData se houver filtro de mensagem, senão usar data
+      const dataToEnrich = filteredData || data;
+      const enrichedData = dataToEnrich?.map(charge => {
         // Normalizar customers (pode ser array ou objeto)
         const customers = Array.isArray(charge.customers) 
           ? (charge.customers.length > 0 ? charge.customers[0] : null)
@@ -518,7 +647,7 @@ export function useCharges(params: UseChargesParams = {}) {
 
       return {
         data: enrichedData as Charge[],
-        total: count || 0
+        total: filteredCount || count || 0
       }
     },
     {

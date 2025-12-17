@@ -43,6 +43,9 @@ import { format } from "date-fns";
 import { processMessageTags } from '@/utils/messageUtils';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { formatInstallmentDisplay, getInstallmentBadgeVariant } from '@/utils/installmentUtils';
+import { useMessageCount } from '@/hooks/useMessageCount';
+import { useMemo } from 'react';
+import { MessageSquare } from 'lucide-react';
 
 const formatChargeType = (type: string | null, status?: string | null): string => {
   if (status === "RECEIVED") {
@@ -91,6 +94,7 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
   };
   
   const [dateRange, setDateRange] = useState<DateRange>(getCurrentMonthRange());
+  
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCharges, setSelectedCharges] = useState<string[]>([]);
   const [isMessageDialogOpen, setIsMessageDialogOpen] = useState(false);
@@ -99,15 +103,18 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
   const [isSendingMessages, setIsSendingMessages] = useState(false);
   const { toast } = useToast();
 
-  const { data: chargesData, total, isLoading, refetch, cancelCharge, exportToCSV } = useCharges({
+  const chargesParams: Parameters<typeof useCharges>[0] = {
     page: currentPage,
     limit: 25,
-    search: searchTerm || undefined,
-    status: selectedStatus !== "all" ? selectedStatus : undefined,
-    type: selectedType !== "all" ? selectedType : undefined,
-    startDate: dateRange?.from ? dateRange.from.toISOString().split('T')[0] : undefined,
-    endDate: dateRange?.to ? dateRange.to.toISOString().split('T')[0] : undefined,
-  });
+  };
+  
+  if (searchTerm) chargesParams.search = searchTerm;
+  if (selectedStatus !== "all") chargesParams.status = selectedStatus;
+  if (selectedType !== "all") chargesParams.type = selectedType;
+  if (dateRange?.from) chargesParams.startDate = dateRange.from.toISOString().split('T')[0];
+  if (dateRange?.to) chargesParams.endDate = dateRange.to.toISOString().split('T')[0];
+
+  const { data: chargesData, total, isLoading, refetch, cancelCharge, exportToCSV } = useCharges(chargesParams);
 
   // AIDEV-NOTE: Hook useCharges corrigido - agora retorna data diretamente
 
@@ -238,6 +245,27 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
   // Processamento correto dos dados das cobranças com paginação
   const charges = chargesData || [];
   const totalPages = Math.ceil(total / 25);
+
+  // AIDEV-NOTE: Preparar dados para o hook de contagem de mensagens
+  const { chargeIds, chargeDates } = useMemo(() => {
+    const ids: string[] = [];
+    const dates: { [key: string]: string } = {};
+    
+    charges.forEach((charge) => {
+      ids.push(charge.id);
+      if (charge.created_at) {
+        dates[charge.id] = charge.created_at;
+      }
+    });
+    
+    return { chargeIds: ids, chargeDates: dates };
+  }, [charges]);
+
+  // AIDEV-NOTE: Hook para buscar contagem de mensagens
+  const { messageCounts } = useMessageCount({
+    chargeIds,
+    chargeDates,
+  });
 
   // AIDEV-NOTE: Dados processados corretamente do hook useCharges
 
@@ -549,6 +577,26 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
                             </TooltipTrigger>
                             <TooltipContent>
                               <p className="max-w-xs">{charge.descricao}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {/* AIDEV-NOTE: Indicador visual de mensagem enviada */}
+                      {(messageCounts.get(charge.id) || 0) > 0 && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center space-x-1 text-blue-600">
+                                <MessageSquare className="h-4 w-4" />
+                                <span className="text-xs font-medium">
+                                  {messageCounts.get(charge.id)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {messageCounts.get(charge.id)} mensagem(ns) enviada(s) para esta cobrança
+                              </p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
