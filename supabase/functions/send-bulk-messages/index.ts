@@ -93,9 +93,9 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_INTER_BATCH_DELAY_MS = 1000;
-// AIDEV-NOTE: Delay mínimo entre mensagens individuais para evitar spam (500ms = ~2 msg/seg)
-// WhatsApp permite até 80 msg/seg, mas para evitar detecção de spam, recomendamos ~1-2 msg/seg
-const DEFAULT_MIN_MESSAGE_DELAY_MS = 500;
+// AIDEV-NOTE: Delay mínimo entre mensagens individuais para evitar spam (2000ms = 0.5 msg/seg)
+// WhatsApp permite até 80 msg/seg, mas para evitar detecção de spam, recomendamos ~0.5 msg/seg (2 segundos entre mensagens)
+const DEFAULT_MIN_MESSAGE_DELAY_MS = 2000;
 const MAX_RETRIES = 3;
 /** =========================
  *  Auditoria / Logs
@@ -701,8 +701,8 @@ class BulkService {
     // AIDEV-NOTE: Se há apenas 1 charge, usar concorrência 1 para evitar processamento duplicado
     const CONC = charges.length === 1 ? 1 : Math.max(1, Math.min(Number(concurrency ?? DEFAULT_CONCURRENCY), 10));
     const INTER_DELAY = DEFAULT_INTER_BATCH_DELAY_MS;
-    // AIDEV-NOTE: Throttle mínimo obrigatório para evitar spam (500ms entre mensagens = ~2 msg/seg)
-    // Se não especificado via header, usar delay mínimo padrão
+    // AIDEV-NOTE: Throttle mínimo obrigatório para evitar spam (2000ms entre mensagens = 0.5 msg/seg)
+    // Se não especificado via header, usar delay mínimo padrão de 2 segundos
     const THROTTLE = Math.max(DEFAULT_MIN_MESSAGE_DELAY_MS, Number(throttleMs ?? DEFAULT_MIN_MESSAGE_DELAY_MS));
     
     // AIDEV-NOTE: Set para rastrear charges já processadas (proteção contra race condition)
@@ -763,38 +763,41 @@ class BulkService {
               await new Promise((r)=>setTimeout(r, 10)); // Aguardar 10ms e verificar novamente
             }
             
-            const now = Date.now();
-            const timeSinceLastMessage = now - lastMessageSentAt.value;
-            if (timeSinceLastMessage < THROTTLE) {
-              const waitTime = THROTTLE - timeSinceLastMessage;
-              console.log(`⏱️ Aguardando ${waitTime}ms antes de enviar próxima mensagem (anti-spam)`);
-              await new Promise((r)=>setTimeout(r, waitTime));
-            }
-            
-            // AIDEV-NOTE: Adquirir lock antes de enviar
+            // AIDEV-NOTE: Adquirir lock ANTES de calcular delay para evitar race condition
             sendingLock = true;
-            lastMessageSentAt.value = Date.now();
             
-            let sendResult: { ok: boolean; messageId?: string; error?: string } = {
-              ok: true,
-              messageId: "DRY_RUN",
-              error: undefined
-            };
-            if (!dryRun) {
-              // AIDEV-NOTE: Passar delay mínimo para Evolution API (0 porque já aplicamos delay antes)
-              sendResult = await EvolutionApi.sendText({
-                baseUrl: evoCfg.apiBaseUrl,
-                apiKey: evoCfg.apiKey,
-                instance: evoCfg.instanceName,
-                number: normalizedPhone,
-                text: msg,
-                delay: 0, // AIDEV-NOTE: Delay já aplicado antes, não precisa duplicar
-                requestId
-              });
-            }
-            
-            // AIDEV-NOTE: Liberar lock após envio (garantido pelo finally)
             try {
+              // AIDEV-NOTE: Calcular tempo desde última mensagem e aguardar se necessário
+              const now = Date.now();
+              const timeSinceLastMessage = now - lastMessageSentAt.value;
+              if (timeSinceLastMessage < THROTTLE) {
+                const waitTime = THROTTLE - timeSinceLastMessage;
+                console.log(`⏱️ Aguardando ${waitTime}ms antes de enviar próxima mensagem (anti-spam)`);
+                await new Promise((r)=>setTimeout(r, waitTime));
+              }
+              
+              let sendResult: { ok: boolean; messageId?: string; error?: string } = {
+                ok: true,
+                messageId: "DRY_RUN",
+                error: undefined
+              };
+              if (!dryRun) {
+                // AIDEV-NOTE: Passar delay mínimo para Evolution API (0 porque já aplicamos delay antes)
+                sendResult = await EvolutionApi.sendText({
+                  baseUrl: evoCfg.apiBaseUrl,
+                  apiKey: evoCfg.apiKey,
+                  instance: evoCfg.instanceName,
+                  number: normalizedPhone,
+                  text: msg,
+                  delay: 0, // AIDEV-NOTE: Delay já aplicado antes, não precisa duplicar
+                  requestId
+                });
+              }
+              
+              // AIDEV-NOTE: Atualizar timestamp APÓS o envio ser concluído para garantir intervalo correto
+              lastMessageSentAt.value = Date.now();
+              
+              // AIDEV-NOTE: Liberar lock após envio (garantido pelo finally)
               // AIDEV-NOTE: Incluir informações do customer no logMessage para facilitar consultas
               await this.logMessage({
                 tenantId,
@@ -824,11 +827,16 @@ class BulkService {
               else results.failed++;
             } finally {
               // AIDEV-NOTE: Sempre liberar lock, mesmo em caso de erro
+              // O timestamp já foi atualizado após o envio, então o próximo worker calculará o delay corretamente
               sendingLock = false;
             }
           } catch (err) {
-            // AIDEV-NOTE: Garantir que lock seja liberado em caso de erro
-            sendingLock = false;
+            // AIDEV-NOTE: Garantir que lock seja liberado em caso de erro (se foi adquirido)
+            // O finally interno já libera o lock se o erro ocorreu dentro do try interno
+            // Este catch só precisa liberar se o erro ocorreu antes de adquirir o lock
+            if (sendingLock) {
+              sendingLock = false;
+            }
             
             const msg = err instanceof Error ? err.message : String(err);
             Audit.error(err, {
