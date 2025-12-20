@@ -24,8 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { supabase } from '@/lib/supabase';
-import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
+import { useContracts } from '@/hooks/useContracts';
 
 interface ContractCancelButtonProps {
   contractId: string;
@@ -51,11 +50,11 @@ export function ContractCancelButton({
   const setIsOpen = onOpenChange ?? setInternalOpen;
   const [cancellationReason, setCancellationReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { currentTenant } = useTenantAccessGuard();
+  const { cancelContractMutation } = useContracts();
 
   /**
-   * Cancela o contrato alterando o estágio para CANCELED
-   * Faz lookup de estágio por tenant e cria caso não exista
+   * Cancela o contrato alterando o status para CANCELED
+   * AIDEV-NOTE: Simplificação para usar mutação segura e performática, ignorando stage (Kanban)
    */
   const handleCancelContract = async () => {
     if (!cancellationReason.trim()) {
@@ -66,68 +65,11 @@ export function ContractCancelButton({
     setIsSubmitting(true);
     
     try {
-      // Buscar o estágio de "CANCELED" para este tenant
-      const { data: canceledStage, error: stageError } = await supabase
-        .from('contract_stages')
-        .select('id')
-        .eq('tenant_id', currentTenant?.id)
-        .eq('code', 'CANCELED')
-        .eq('is_active', true)
-        .order('order_index', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (stageError) {
-        console.error('Erro ao buscar estágio:', stageError);
-        throw new Error('Erro ao buscar estágio de cancelamento');
-      }
-
-      if (!canceledStage) {
-        // Se não encontrar, tentar criar o estágio
-        console.log('Estágio CANCELED não encontrado, tentando criar...');
-        const { data: newStage, error: createError } = await supabase
-          .from('contract_stages')
-          .insert({
-            tenant_id: currentTenant?.id,
-            code: 'CANCELED',
-            name: 'Cancelado',
-            description: 'Contrato cancelado',
-            is_active: true
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          console.error('Erro ao criar estágio:', createError);
-          throw new Error('Não foi possível criar o estágio de cancelamento');
-        }
-
-        // Usar o estágio recém-criado
-        const stageId = newStage.id;
-        
-        const { data, error } = await supabase.rpc('change_contract_stage', {
-          p_contract_id: contractId,
-          p_stage_id: stageId,
-          p_comments: `Contrato cancelado: ${cancellationReason}`
-        });
-
-        if (error) {
-          throw error;
-        }
-      } else {
-        // Usar o estágio existente
-        const { data, error } = await supabase.rpc('change_contract_stage', {
-          p_contract_id: contractId,
-          p_stage_id: canceledStage.id,
-          p_comments: `Contrato cancelado: ${cancellationReason}`
-        });
-
-        if (error) {
-          throw error;
-        }
-      }
-
-      toast.success('Contrato cancelado com sucesso!');
+      await cancelContractMutation.mutateAsync({
+        contractId,
+        reason: cancellationReason
+      });
+      
       setIsOpen(false);
       setCancellationReason("");
       

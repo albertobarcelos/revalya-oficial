@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MessageSquare } from "lucide-react";
+import { Loader2, MessageSquare, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { TagSelector } from "./TagSelector";
@@ -54,6 +55,8 @@ export function BulkMessageDialog({
   const [previewMessage, setPreviewMessage] = useState("");
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   
   // 🛡️ HOOKS SEGUROS PARA VALIDAÇÃO MULTI-TENANT - Implementa todas as 5 camadas de segurança
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
@@ -145,6 +148,35 @@ export function BulkMessageDialog({
       onError: (error) => {
         console.error('🚨 [PREVIEW QUERY] Erro capturado pelo onError:', error);
       }
+    }
+  );
+
+  // AIDEV-NOTE: Query segura para buscar status da integração do WhatsApp
+  const { data: whatsappIntegration } = useSecureTenantQuery(
+    ['whatsapp-status', currentTenant?.id],
+    async (supabase, tenantId) => {
+      // 1. CONFIGURAÇÃO DE CONTEXTO OBRIGATÓRIA
+      await supabase.rpc('set_tenant_context_simple', { 
+        p_tenant_id: tenantId 
+      });
+
+      // 2. QUERY SEGURA
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('is_active')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'whatsapp')
+        .maybeSingle();
+
+      if (error) {
+        console.error('🚨 [SECURITY] Erro ao verificar integração WhatsApp:', error);
+        return null;
+      }
+      
+      return data;
+    },
+    {
+      enabled: !!currentTenant?.id && open // Só buscar quando o modal estiver aberto
     }
   );
 
@@ -369,6 +401,15 @@ export function BulkMessageDialog({
 
   const handleSendMessage = async () => {
     console.log('🚀 [BULK-MESSAGE-DIALOG] Iniciando handleSendMessage');
+    
+    // AIDEV-NOTE: Validação de integração do WhatsApp
+    // Se não houver integração ou estiver inativa, mostrar diálogo de alerta
+    if (!whatsappIntegration?.is_active) {
+      console.warn('⚠️ [BULK-MESSAGE-DIALOG] Integração WhatsApp inativa ou inexistente');
+      setShowWhatsAppDialog(true);
+      return;
+    }
+
     console.log('📋 [BULK-MESSAGE-DIALOG] Estado atual:', {
       messageMode,
       selectedTemplateId,
@@ -484,6 +525,7 @@ export function BulkMessageDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col relative !fixed !left-[50%] !top-[50%] !translate-x-[-50%] !translate-y-[-50%]">
         {/* AIDEV-NOTE: Overlay de carregamento durante envio */}
@@ -608,5 +650,50 @@ export function BulkMessageDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* AIDEV-NOTE: Diálogo de alerta para integração do WhatsApp desativada */}
+    <Dialog open={showWhatsAppDialog} onOpenChange={setShowWhatsAppDialog}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <div className="flex items-center gap-2 text-amber-500 mb-2">
+            <AlertTriangle className="h-6 w-6" />
+            <DialogTitle>Integração Desativada</DialogTitle>
+          </div>
+          <DialogDescription className="pt-2">
+            A integração com o WhatsApp está desativada ou não configurada. 
+            Para enviar mensagens em massa, você precisa ativar a integração nas configurações.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-2 mt-4 sm:justify-end">
+          <Button
+            variant="outline"
+            onClick={() => setShowWhatsAppDialog(false)}
+          >
+            Agora não
+          </Button>
+          <Button
+            onClick={() => {
+              setShowWhatsAppDialog(false);
+              onOpenChange(false); // Fechar o modal de envio
+              // Navegar para configurações com a tab de integrações ativa
+              if (currentTenant?.slug) {
+                navigate(`/${currentTenant.slug}/configuracoes#integracoes`);
+              } else {
+                // Fallback se não tiver slug
+                console.error('❌ [NAVIGATE] Slug do tenant não encontrado para navegação');
+                toast({
+                  title: "Erro de navegação",
+                  description: "Não foi possível redirecionar para as configurações.",
+                  variant: "destructive"
+                });
+              }
+            }}
+          >
+            Ativar Agora
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 import { executeWithAuth, logAccess } from '@/utils/authUtils';
 import { MODULE_NAME, TOAST_MESSAGES } from '../constants';
-import { TenantIntegration } from '../types';
+import { TenantIntegration, ConnectionStatus } from '../types';
 
 interface UseWhatsAppToggleProps {
   tenantId: string;
@@ -17,10 +17,10 @@ interface UseWhatsAppToggleProps {
   hasAccess: boolean;
   currentTenant: any;
   integrations: TenantIntegration[];
-  onToggle?: (canal: string, enabled: boolean) => void;
+  onToggle?: ((canal: string, enabled: boolean) => void) | undefined;
   updateCanalState: (canal: 'whatsapp', isActive: boolean) => void;
   updateLoadingState: (canal: 'whatsapp', isLoading: boolean) => void;
-  setConnectionStatus: (status: any) => void;
+  setConnectionStatus: (status: ConnectionStatus) => void;
   enableStatusPolling: (enable: boolean) => void;
   resetConnection: () => void;
 }
@@ -259,13 +259,13 @@ export function useWhatsAppToggle({
         
         // Notificar usuário
         toast({
-          title: TOAST_MESSAGES.WHATSAPP_ENABLED.title,
-          description: TOAST_MESSAGES.WHATSAPP_ENABLED.description,
+          title: TOAST_MESSAGES.WHATSAPP_ACTIVATED.title,
+          description: TOAST_MESSAGES.WHATSAPP_ACTIVATED.description,
           variant: "default"
         });
         
         // Callback opcional
-        onToggle?.(true);
+        onToggle?.('whatsapp', true);
       } else {
         // Desativando WhatsApp
         updateCanalState('whatsapp', false);

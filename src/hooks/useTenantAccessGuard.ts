@@ -18,7 +18,7 @@ import { throttledTenantGuard } from '@/utils/logThrottle';
  * @returns Objeto com informações de acesso
  */
 export function useTenantAccessGuard(requiredRole?: string, requireTenant: boolean = true) {
-  const { currentTenant, userRole } = useZustandTenant();
+  const { currentTenant, userRole, isLoading } = useZustandTenant();
   
   // AIDEV-NOTE: Log throttled para evitar spam - apenas quando há mudanças significativas
   const logKey = `${currentTenant?.id || 'no-tenant'}_${userRole}_${requiredRole || 'no-role'}`;
@@ -60,7 +60,7 @@ export function useTenantAccessGuard(requiredRole?: string, requireTenant: boole
     return null;
   }, [currentTenant?.id, currentTenant?.active, userRole, requiredRole, requireTenant]);
   
-  return { hasAccess, accessError, currentTenant, userRole };
+  return { hasAccess, accessError, currentTenant, userRole, isLoading };
 }
 
 export default useTenantAccessGuard;

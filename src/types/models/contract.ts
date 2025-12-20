@@ -88,7 +88,8 @@ export type ContractStage = {
   description?: string;
   color: string;
   icon?: string;
-  sort_order: number;
+  order_index: number;
+  is_active: boolean;
   is_initial: boolean;
   is_final: boolean;
   created_at: string;

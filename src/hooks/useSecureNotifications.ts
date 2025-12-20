@@ -5,8 +5,9 @@
 
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTenantAccessGuard, useSecureTenantQuery } from './templates/useSecureTenantQuery';
+import { useTenantAccessGuard, useSecureTenantQuery, useSecureTenantMutation } from './templates/useSecureTenantQuery';
 import { supabase } from '@/lib/supabase';
+import * as Sentry from "@sentry/react";
 
 // AIDEV-NOTE: Interface para notificação segura com tenant_id obrigatório
 export interface SecureNotification {
@@ -72,10 +73,16 @@ export function useSecureNotifications(filters: SecureNotificationFilters = {}) 
       offset
     }],
     async (supabase, tenantId) => {
-      // AIDEV-NOTE: Validação crítica - garantir que tenantId é válido antes de usar
-      if (!tenantId || tenantId.trim() === '') {
-        console.error('[SECURITY] Tentativa de buscar notificações sem tenant_id válido');
-        throw new Error('Tenant ID inválido para buscar notificações');
+      // AIDEV-NOTE: Validação crítica - garantir que tenantId é válido e é um UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (!tenantId || !uuidRegex.test(tenantId)) {
+        const errorMsg = `Tenant ID inválido para buscar notificações: "${tenantId}"`;
+        console.error('[SECURITY]', errorMsg);
+        Sentry.captureException(new Error(errorMsg), {
+          tags: { context: 'useSecureNotifications', tenantId }
+        });
+        throw new Error(errorMsg);
       }
 
       // 🛡️ CONSULTA COM FILTRO OBRIGATÓRIO DE TENANT_ID
@@ -104,6 +111,10 @@ export function useSecureNotifications(filters: SecureNotificationFilters = {}) 
       
       if (error) {
         console.error('[SECURITY] Erro ao acessar notificações:', error.message);
+        Sentry.captureException(error, {
+          tags: { context: 'useSecureNotifications', tenantId },
+          extra: { query: 'list_notifications', filters }
+        });
         throw error;
       }
 
@@ -198,10 +209,16 @@ export function useNotificationStats() {
   return useSecureTenantQuery(
     ['notification-stats', currentTenant?.id],
     async (supabase, tenantId) => {
-      // AIDEV-NOTE: Validação crítica - garantir que tenantId é válido antes de usar
-      if (!tenantId || tenantId.trim() === '') {
-        console.error('[SECURITY] Tentativa de buscar estatísticas sem tenant_id válido');
-        throw new Error('Tenant ID inválido para buscar estatísticas');
+      // AIDEV-NOTE: Validação crítica - garantir que tenantId é válido e é um UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (!tenantId || !uuidRegex.test(tenantId)) {
+        const errorMsg = `Tenant ID inválido para buscar estatísticas: "${tenantId}"`;
+        console.error('[SECURITY]', errorMsg);
+        Sentry.captureException(new Error(errorMsg), {
+          tags: { context: 'useNotificationStats', tenantId }
+        });
+        throw new Error(errorMsg);
       }
 
       console.log(`[AUDIT] Carregando estatísticas de notificações para tenant ${tenantId}`);
@@ -213,6 +230,10 @@ export function useNotificationStats() {
 
       if (error) {
         console.error('[SECURITY] Erro ao acessar estatísticas de notificações:', error.message);
+        Sentry.captureException(error, {
+          tags: { context: 'useNotificationStats', tenantId },
+          extra: { query: 'notification_stats' }
+        });
         throw error;
       }
 
