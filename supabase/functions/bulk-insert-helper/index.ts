@@ -1,6 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+
+// CORS headers inline
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
 
 // AIDEV-NOTE: Helper para inserção em lote otimizada no Supabase
 // Resolve problemas de performance e timeout em importações grandes
@@ -161,7 +167,6 @@ Deno.serve(async (req: Request) => {
         id: errorId,
         category,
         severity,
-        message: error.message || 'Erro desconhecido', // Adicionando campo message obrigatório
         userMessage,
         technicalMessage: error.message || 'Erro desconhecido',
         rowIndex: batchIndex * batchSize,
@@ -179,7 +184,7 @@ Deno.serve(async (req: Request) => {
       const batch = data.slice(start, end);
 
       try {
-        const query = supabaseClient.from(table);
+        let query = supabaseClient.from(table);
         
         // 🔧 [DEBUG-EDGE] Log do batch antes da inserção
         console.log(`🔧 [DEBUG-EDGE] Batch ${i + 1} - Primeiro registro:`, {
@@ -211,7 +216,7 @@ Deno.serve(async (req: Request) => {
           const recordIndex = start + j;
           
           try {
-            const query = supabaseClient.from(table);
+            let query = supabaseClient.from(table);
             
             if (upsert && onConflict) {
               const { error } = await query.upsert([record], { onConflict });

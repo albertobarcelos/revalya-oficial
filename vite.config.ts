@@ -64,12 +64,20 @@ export default defineConfig(({ command, mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true, // Sempre usar 5173 em desenvolvimento
-      open: true, // Open browser on server start
+      open: false, // Desabilitar abertura automática do navegador (pode causar lentidão)
       cors: true,
+      // AIDEV-NOTE: Otimizações para melhorar performance
+      fs: {
+        // Permitir servir arquivos de diretórios específicos
+        allow: ['..'],
+      },
       hmr: {
         protocol: 'ws',
         host: '127.0.0.1',
         port: 5173,
+        overlay: true, // Mostrar erros no overlay
+        // AIDEV-NOTE: Otimizar HMR para reduzir recarregamentos
+        clientPort: 5173,
       },
       // AIDEV-NOTE: Proxy removido - usando apenas Supabase
       // Não precisamos mais de proxy para /api pois tudo está no Supabase
@@ -184,18 +192,26 @@ export default defineConfig(({ command, mode }) => {
         'react-router-dom',
         '@supabase/supabase-js',
         '@tanstack/react-query',
+        '@tanstack/react-query-devtools',
         'zod',
         'react-hook-form',
+        '@hookform/resolvers',
         'date-fns',
         'decimal.js',
         'recharts',
         'apexcharts',
         'react-apexcharts',
         'axios',
+        'lucide-react',
+        'framer-motion',
+        '@radix-ui/react-label',
+        'input-otp',
       ],
       exclude: [
         // Exclude large dependencies that should be loaded dynamically
       ],
+      // AIDEV-NOTE: Forçar re-otimização se necessário
+      force: false,
     },
 
     // ESBuild configuration
