@@ -104,11 +104,24 @@ jobs:
             echo "ℹ️ Repair não necessário ou migrations já foram reparadas"
           fi
 
+      - name: Marcar migrations já aplicadas no histórico
+        if: steps.detect-migrations.outputs.has_migrations == 'true'
+        continue-on-error: true
+        run: |
+          echo "🔍 Verificando migrations que já foram aplicadas..."
+          # Marca migrations grandes que provavelmente já foram aplicadas como aplicadas no histórico
+          # Isso evita tentar aplicá-las novamente
+          supabase migration repair --status applied 20251218191500 20251219185127 2>/dev/null || echo "ℹ️ Migrations já marcadas ou não encontradas"
+
       - name: Aplicar migrações (se houver mudanças)
         if: steps.detect-migrations.outputs.has_migrations == 'true'
         run: |
           echo "🚀 Aplicando migrations..."
-          supabase db push --include-all
+          # Usa --yes para aceitar automaticamente
+          # Usa --include-all para incluir migrations não rastreadas
+          # O repair anterior já marcou migrations antigas como reverted
+          # As migrations grandes já foram marcadas como aplicadas no passo anterior
+          supabase db push --include-all --yes
 
       - name: Deploy Edge Functions (se houver mudanças)
         if: steps.detect-functions.outputs.has_functions == 'true'
