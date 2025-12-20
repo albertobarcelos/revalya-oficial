@@ -1,0 +1,109 @@
+name: Notificar Falhas Supabase
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    branches:
+      - main
+      - develop
+    paths:
+      - 'supabase/**'
+  workflow_run:
+    workflows: ["Deploy Supabase - Production"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  monitor-preview:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    name: Monitorar Supabase Preview
+    
+    steps:
+      - name: Aguardar check Supabase Preview
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        id: check
+        with:
+          checkName: Supabase Preview
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          timeoutSeconds: 600  # 10 minutos
+
+      - name: Verificar status do check
+        id: check-status
+        run: |
+          if [ "${{ steps.check.outputs.conclusion }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "❌ Supabase Preview falhou!"
+            exit 1
+          elif [ "${{ steps.check.outputs.conclusion }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "✅ Supabase Preview passou!"
+          else
+            echo "status=${{ steps.check.outputs.conclusion }}" >> $GITHUB_OUTPUT
+            echo "ℹ️ Status: ${{ steps.check.outputs.conclusion }}"
+          fi
+
+      - name: Enviar notificação por e-mail (se falhou)
+        if: steps.check-status.outputs.status == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.hostinger.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Falha no Supabase Preview - PR #${{ github.event.pull_request.number }}"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.EMAIL_USERNAME }}
+          body: |
+            <h2>❌ Falha no Supabase Preview</h2>
+            <p><strong>Pull Request:</strong> #${{ github.event.pull_request.number }}</p>
+            <p><strong>Título:</strong> ${{ github.event.pull_request.title }}</p>
+            <p><strong>Branch:</strong> ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}</p>
+            <p><strong>Autor:</strong> ${{ github.event.pull_request.user.login }}</p>
+            <p><strong>Commit:</strong> ${{ github.event.pull_request.head.sha }}</p>
+            <p><strong>Link:</strong> <a href="${{ github.event.pull_request.html_url }}">Ver PR</a></p>
+            <hr>
+            <p><strong>Erro:</strong> O Supabase Preview falhou ao processar as mudanças.</p>
+            <p>Verifique os logs no GitHub Actions para mais detalhes.</p>
+          content_type: text/html
+
+  monitor-production:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure'
+    name: Monitorar Deploy Produção
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Enviar notificação por e-mail (deploy produção falhou)
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.hostinger.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🚨 FALHA CRÍTICA: Deploy Produção Supabase - ${{ github.event.workflow_run.head_branch }}"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.EMAIL_USERNAME }}
+          body: |
+            <h2>🚨 Falha no Deploy de Produção</h2>
+            <p><strong>Branch:</strong> ${{ github.event.workflow_run.head_branch }}</p>
+            <p><strong>Commit:</strong> ${{ github.event.workflow_run.head_sha }}</p>
+            <p><strong>Autor:</strong> ${{ github.event.workflow_run.actor }}</p>
+            <p><strong>Workflow:</strong> ${{ github.event.workflow_run.name }}</p>
+            <p><strong>Link:</strong> <a href="${{ github.event.workflow_run.html_url }}">Ver Logs</a></p>
+            <hr>
+            <p><strong>⚠️ ATENÇÃO:</strong> O deploy para produção falhou!</p>
+            <p>Verifique os logs imediatamente e tome as ações necessárias.</p>
+            <p><strong>Dashboard Supabase:</strong> <a href="https://supabase.com/dashboard/project/${{ secrets.PRODUCTION_PROJECT_ID }}">Abrir Dashboard</a></p>
+          content_type: text/html
+
