@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.asaas-webhook-charges]
 verify_jwt = false
+
+[functions.evolution-proxy]
+verify_jwt = false
+
+[functions.asaas-import-charges]
+verify_jwt = false
