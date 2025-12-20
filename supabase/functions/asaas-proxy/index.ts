@@ -8,28 +8,28 @@ const corsHeaders = {
 }
 
 // AIDEV-NOTE: Rate limiting simples (em produção usar Redis)
-const requestCache = new Map<string, { count: number; resetTime: number }>()
+const requestCache = new Map<string, { count: number; resetTime: number }>();
 
 function checkRateLimit(tenantId: string): boolean {
-  const now = Date.now()
-  const key = `asaas_${tenantId}`
-  const limit = 100 // 100 requests per minute
-  const windowMs = 60000 // 1 minute
+  const now = Date.now();
+  const key = `asaas_${tenantId}`;
+  const limit = 100; // 100 requests per minute
+  const windowMs = 60000; // 1 minute
   
-  const current = requestCache.get(key)
+  const current = requestCache.get(key);
   
   if (!current || now > current.resetTime) {
-    requestCache.set(key, { count: 1, resetTime: now + windowMs })
-    return true
+    requestCache.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
   }
   
   if (current.count >= limit) {
-    console.warn('RATE_LIMIT_EXCEEDED:', { tenant_id: tenantId, count: current.count, limit })
-    return false
+    console.warn('RATE_LIMIT_EXCEEDED:', { tenant_id: tenantId, count: current.count, limit });
+    return false;
   }
   
-  current.count++
-  return true
+  current.count++;
+  return true;
 }
 
 // AIDEV-NOTE: Função para buscar credenciais do Asaas por tenant
@@ -78,30 +78,30 @@ async function getAsaasCredentials(tenantId: string, environment: string = 'prod
   
   // AIDEV-NOTE: Tentar obter chave descriptografada usando função RPC
   // Se não conseguir, usar texto plano do config (compatibilidade)
-  let apiKey: string | null = null
+  let apiKey: string | null = null;
   
   try {
     const { data: decryptedKey, error: decryptError } = await supabase.rpc('get_decrypted_api_key', {
       p_tenant_id: tenantId,
       p_integration_type: 'asaas'
-    })
+    });
     
     if (!decryptError && decryptedKey) {
-      apiKey = decryptedKey
-      console.log('[getAsaasCredentials] Chave API descriptografada com sucesso')
+      apiKey = decryptedKey;
+      console.log('[getAsaasCredentials] Chave API descriptografada com sucesso');
     } else {
       // Fallback: usar texto plano do config
-      const config = data.config || {}
-      apiKey = config.api_key || null
+      const config = data.config || {};
+      apiKey = config.api_key || null;
       if (apiKey) {
-        console.warn('[getAsaasCredentials] Usando chave em texto plano (compatibilidade)')
+        console.warn('[getAsaasCredentials] Usando chave em texto plano (compatibilidade)');
       }
     }
   } catch (error) {
     // Se função não existir ou falhar, usar texto plano
-    const config = data.config || {}
-    apiKey = config.api_key || null
-    console.warn('[getAsaasCredentials] Erro ao descriptografar, usando texto plano:', error)
+    const config = data.config || {};
+    apiKey = config.api_key || null;
+    console.warn('[getAsaasCredentials] Erro ao descriptografar, usando texto plano:', error);
   }
   
   if (!apiKey) {
@@ -109,7 +109,7 @@ async function getAsaasCredentials(tenantId: string, environment: string = 'prod
     return null
   }
   
-  const config = data.config || {}
+  const config = data.config || {};
   return {
     apiKey: apiKey,
     apiUrl: config.api_url || 'https://api.asaas.com/v3',

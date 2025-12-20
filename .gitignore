@@ -16,8 +16,6 @@ lerna-debug.log*
 .env.production.local
 .env.staging
 .env.production
-.env.development
-.env.backup.*
 
 # Build outputs
 /dist
