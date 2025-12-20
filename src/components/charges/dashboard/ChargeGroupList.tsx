@@ -1,20 +1,16 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
-import type { DateRange } from 'react-day-picker';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Bell, FileText, Building2, CreditCard, Search, Smartphone, Receipt, MessageSquare } from 'lucide-react';
 import { formatPhone } from '@/lib/validation-utils';
 import type { Cobranca } from '@/types/database';
 import { findRelatedOverdueCharges } from '@/utils/chargeGrouping';
 import { useMessageCount } from '@/hooks/useMessageCount';
-import { supabase } from '@/lib/supabase';
-import { useCurrentTenant } from '@/hooks/useZustandTenant';
 
 // AIDEV-NOTE: Interface para props do componente de lista de cobranças do grupo
 interface ChargeGroupListProps {
@@ -174,13 +170,6 @@ export function ChargeGroupList({
 }: ChargeGroupListProps) {
   // AIDEV-NOTE: TODOS os hooks devem ser chamados ANTES de qualquer early return
   const [searchTerm, setSearchTerm] = useState('');
-  // AIDEV-NOTE: Filtros de mensagem - permite filtrar por cobranças com/sem mensagem enviada
-  const [hasMessageFilter, setHasMessageFilter] = useState<string>("all"); // "all" | "with" | "without"
-  const [messageDateRange, setMessageDateRange] = useState<DateRange | undefined>(undefined);
-  // AIDEV-NOTE: Buscar mensagens para filtro (se necessário) - hooks devem estar antes de early returns
-  const [chargesWithMessages, setChargesWithMessages] = useState<Set<string>>(new Set());
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const { currentTenant } = useCurrentTenant();
   
   // AIDEV-NOTE: Calcular cobranças vencidas relacionadas usando useMemo para performance
   // IMPORTANTE: useMemo deve ser chamado antes de qualquer early return
@@ -234,92 +223,6 @@ export function ChargeGroupList({
     chargeIds,
     chargeDates,
   });
-
-  // AIDEV-NOTE: Buscar mensagens para filtro - useEffect deve estar antes de early returns
-  // AIDEV-NOTE: Sempre buscar mensagens quando há grupo selecionado, independente do filtro
-  useEffect(() => {
-    const fetchMessages = async () => {
-      // Se não há grupo selecionado ou tenant, limpar e retornar
-      if (!currentTenant?.id || !selectedGroup) {
-        setChargesWithMessages(new Set());
-        return;
-      }
-
-      const currentGroup = groupedCharges[selectedGroup];
-      if (!currentGroup || !currentGroup.charges || currentGroup.charges.length === 0) {
-        setChargesWithMessages(new Set());
-        return;
-      }
-
-      // AIDEV-NOTE: Se o filtro é "all", ainda buscar mensagens para ter os dados prontos
-      // Mas só aplicar filtro de data se estiver selecionado "with"
-      const shouldApplyDateFilter = hasMessageFilter === "with" && messageDateRange;
-
-      setIsLoadingMessages(true);
-      try {
-        const chargeIdsToSearch = currentGroup.charges.map(c => c.id);
-        console.log('🔍 [MESSAGE FILTER] Buscando mensagens para:', {
-          tenantId: currentTenant.id,
-          chargeCount: chargeIdsToSearch.length,
-          hasMessageFilter,
-          shouldApplyDateFilter,
-          messageDateRange
-        });
-
-        // AIDEV-NOTE: Buscar todas as mensagens primeiro, depois filtrar por status
-        // Isso garante compatibilidade com diferentes formatos de status
-        let messageQuery = supabase
-          .from('message_history')
-          .select('charge_id, created_at, status')
-          .eq('tenant_id', currentTenant.id)
-          .in('charge_id', chargeIdsToSearch);
-
-        // Aplicar filtro de data de envio apenas se "with" estiver selecionado e data fornecida
-        if (shouldApplyDateFilter) {
-          if (messageDateRange?.from) {
-            messageQuery = messageQuery.gte('created_at', messageDateRange.from.toISOString());
-          }
-          if (messageDateRange?.to) {
-            const endDate = new Date(messageDateRange.to);
-            endDate.setHours(23, 59, 59, 999);
-            messageQuery = messageQuery.lte('created_at', endDate.toISOString());
-          }
-        }
-
-        const { data: messages, error: messageError } = await messageQuery;
-        
-        if (messageError) {
-          console.error('❌ [MESSAGE FILTER] Erro ao buscar mensagens:', messageError);
-          setChargesWithMessages(new Set());
-          return;
-        }
-
-        // AIDEV-NOTE: Filtrar mensagens com status 'SENT' ou 'sent' (compatibilidade)
-        const sentMessages = (messages || []).filter(m => {
-          const status = m.status?.toUpperCase() || '';
-          return status === 'SENT';
-        });
-
-        console.log('✅ [MESSAGE FILTER] Mensagens encontradas:', {
-          total: messages?.length || 0,
-          sent: sentMessages.length,
-          statuses: [...new Set((messages || []).map(m => m.status))], // Log dos status únicos encontrados
-          chargeIdsWithMessages: sentMessages.map(m => m.charge_id).slice(0, 10)
-        });
-
-        const chargeIds = new Set(sentMessages.map(m => m.charge_id));
-        console.log('✅ [MESSAGE FILTER] Total de charges com mensagem:', chargeIds.size);
-        setChargesWithMessages(chargeIds);
-      } catch (error) {
-        console.error('❌ [MESSAGE FILTER] Erro ao buscar mensagens para filtro:', error);
-        setChargesWithMessages(new Set());
-      } finally {
-        setIsLoadingMessages(false);
-      }
-    };
-
-    fetchMessages();
-  }, [hasMessageFilter, messageDateRange, currentTenant?.id, selectedGroup, groupedCharges]);
   
   // AIDEV-NOTE: Early returns APÓS todos os hooks
   if (!selectedGroup) return null;
@@ -327,48 +230,26 @@ export function ChargeGroupList({
   const currentGroup = groupedCharges[selectedGroup];
   if (!currentGroup) return null;
 
-  // AIDEV-NOTE: Filtrar cobranças baseado no termo de pesquisa e filtro de mensagem
+  // AIDEV-NOTE: Filtrar cobranças baseado no termo de pesquisa
   const filteredCharges = currentGroup.charges.filter(charge => {
-    // Filtro de busca por texto
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      const customerName = charge.customers?.name?.toLowerCase() || '';
-      const customerCompany = charge.customers?.company?.toLowerCase() || '';
-      const cpfCnpj = charge.customers?.cpf_cnpj?.toString() || '';
-      const valor = charge.valor?.toString() || '';
-      const contractId = charge.contract_id?.toLowerCase() || '';
-      const status = getStatusLabel(charge.status).toLowerCase();
-      const tipo = charge.tipo?.toLowerCase() || '';
-      
-      const matchesSearch = customerName.includes(searchLower) ||
-             customerCompany.includes(searchLower) ||
-             cpfCnpj.includes(searchLower) ||
-             valor.includes(searchLower) ||
-             contractId.includes(searchLower) ||
-             status.includes(searchLower) ||
-             tipo.includes(searchLower);
-      
-      if (!matchesSearch) return false;
-    }
-
-    // Filtro de mensagem
-    if (hasMessageFilter === "with") {
-      const hasMessage = chargesWithMessages.has(charge.id);
-      if (!hasMessage) {
-        console.log('🔍 [MESSAGE FILTER] Cobrança filtrada (sem mensagem):', {
-          chargeId: charge.id,
-          customerName: charge.customers?.name,
-          chargesWithMessagesSize: chargesWithMessages.size,
-          isInSet: chargesWithMessages.has(charge.id)
-        });
-      }
-      return hasMessage;
-    } else if (hasMessageFilter === "without") {
-      const hasNoMessage = !chargesWithMessages.has(charge.id);
-      return hasNoMessage;
-    }
-
-    return true;
+    if (!searchTerm) return true;
+    
+    const searchLower = searchTerm.toLowerCase();
+    const customerName = charge.customers?.name?.toLowerCase() || '';
+    const customerCompany = charge.customers?.company?.toLowerCase() || '';
+    const cpfCnpj = charge.customers?.cpf_cnpj?.toString() || '';
+    const valor = charge.valor?.toString() || '';
+    const contractId = charge.contract_id?.toLowerCase() || '';
+    const status = getStatusLabel(charge.status).toLowerCase();
+    const tipo = charge.tipo?.toLowerCase() || '';
+    
+    return customerName.includes(searchLower) ||
+           customerCompany.includes(searchLower) ||
+           cpfCnpj.includes(searchLower) ||
+           valor.includes(searchLower) ||
+           contractId.includes(searchLower) ||
+           status.includes(searchLower) ||
+           tipo.includes(searchLower);
   });
 
   return (
@@ -403,29 +284,6 @@ export function ChargeGroupList({
             </div>
           </SheetTitle>
         </SheetHeader>
-        
-        {/* AIDEV-NOTE: Filtros de mensagem */}
-        <div className="flex flex-col space-y-2 mt-4 flex-shrink-0">
-          <div className="flex items-center space-x-2">
-            <Select value={hasMessageFilter} onValueChange={setHasMessageFilter}>
-              <SelectTrigger className="w-full sm:w-48" aria-label="Filtrar por mensagem enviada">
-                <SelectValue placeholder="Mensagem enviada" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as cobranças</SelectItem>
-                <SelectItem value="with">Com mensagem enviada</SelectItem>
-                <SelectItem value="without">Sem mensagem enviada</SelectItem>
-              </SelectContent>
-            </Select>
-            {hasMessageFilter === "with" && (
-              <DateRangePicker
-                date={messageDateRange}
-                onDateChange={setMessageDateRange}
-                className="w-full sm:w-72"
-              />
-            )}
-          </div>
-        </div>
         
         {/* AIDEV-NOTE: Container principal com flex para ocupar altura total */}
         <div className="flex flex-col flex-1 min-h-0 mt-6">

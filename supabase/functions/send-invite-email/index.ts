@@ -150,8 +150,8 @@ serve(async (req) => {
       <body>
         <div class="email-wrapper">
           <div class="header">
-            <img src="https://wyehpiutzvwplllumgdk.supabase.co/storage/v1/object/public/imagens/image/LOGO-REVALYA123.png" alt="Revalya"
-            style="width: 160px; margin-bottom: 10px;">
+            <h1>Revalya</h1>
+            <div class="subtitle">Cobrança Inteligente</div>
           </div>
           <div class="content">
             ${content}

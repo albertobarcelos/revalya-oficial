@@ -45,12 +45,12 @@ serve(async (req) => {
           id,
           name,
           slug,
-          status
+          active
         )
       `)
       .eq('user_id', userId)
       .eq('status', 'active')
-      .eq('tenants.status', 'active');
+      .eq('tenants.active', true);
 
     if (tenantError) {
       console.error('Erro ao buscar tenants do usuário:', tenantError);
