@@ -1,0 +1,4 @@
+id,name,email,cpf_cnpj,phone,mobilePhone,company,address,address_number,neighborhood,province,city,state,postal_code,complement,asaas_customer_id
+cus_000005063274,João Silva,joao.silva@email.com,12345678901,1133334444,11999887766,Empresa ABC,Rua das Flores,123,Centro,Centro,São Paulo,SP,01234567,Apto 101,cus_000005063274
+cus_000005063275,Maria Santos,maria.santos@email.com,98765432100,1144445555,11888776655,Empresa XYZ,Av. Paulista,456,Bela Vista,Bela Vista,São Paulo,SP,01310100,Sala 202,cus_000005063275
+cus_000005063276,Pedro Costa,pedro.costa@email.com,11122233344,1155556666,11777665544,Tech Solutions,Rua Augusta,789,Consolação,Consolação,São Paulo,SP,01305000,Conjunto 303,cus_000005063276
