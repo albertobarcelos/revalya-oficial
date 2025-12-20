@@ -1,0 +1,17 @@
+# COMANDOS FINAIS - APLICAR MIGRAÇÃO
+
+## PROBLEMA: Migrações duplicadas com timestamp 20251213
+
+## SOLUÇÃO RECOMENDADA: Via Dashboard
+
+1. Acesse: https://supabase.com/dashboard/project/ivaeoagtrvjsksebnqwr/sql/new
+2. Abra o arquivo: supabase/migrations/20251220111401_functions_triggers_policies.sql
+3. Cole no editor SQL
+4. Execute (Run)
+
+## ALTERNATIVA: Marcar como aplicadas e usar CLI
+
+supabase migration repair --status applied 20251213
+supabase migration repair --status applied 20251214
+supabase db push
+

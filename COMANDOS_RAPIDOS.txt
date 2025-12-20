@@ -1,0 +1,13 @@
+# COMANDOS RÁPIDOS - MIGRAÇÃO
+
+# 1. Conectar (se ainda não conectou)
+supabase link --project-ref ivaeoagtrvjsksebnqwr
+
+# 2. Aplicar migração
+supabase db push
+
+# 3. Verificar status
+supabase migration list
+
+# PRONTO! ✅
+

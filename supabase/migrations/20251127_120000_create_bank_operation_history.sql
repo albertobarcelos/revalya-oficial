@@ -57,10 +57,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER bank_operation_history_updated_at
-  BEFORE UPDATE ON public.bank_operation_history
-  FOR EACH ROW
-  EXECUTE FUNCTION public.update_bank_operation_history_updated_at();
+-- Criar trigger apenas se não existir (idempotente)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger 
+    WHERE tgname = 'bank_operation_history_updated_at'
+  ) THEN
+    CREATE TRIGGER bank_operation_history_updated_at
+      BEFORE UPDATE ON public.bank_operation_history
+      FOR EACH ROW
+      EXECUTE FUNCTION public.update_bank_operation_history_updated_at();
+  END IF;
+END $$;
 
 -- =====================================================
 -- RLS POLICIES
