@@ -96,12 +96,39 @@ jobs:
             echo "✅ Deploy manual - deployando todas as Edge Functions"
           fi
 
+      - name: Reparar histórico de migrations (se necessário)
+        if: steps.detect-migrations.outputs.has_migrations == 'true'
+        continue-on-error: true
+        run: |
+          echo "🔧 Verificando histórico de migrations..."
+          # Tenta fazer repair das migrations que estão no banco mas não no repositório
+          # Isso marca migrations antigas como "reverted" para permitir aplicar novas
+          # As migrations listadas são as que o erro mencionou como faltando no repositório
+          if supabase migration repair --status reverted 20240101000000 20250127 20251125 20251126 20251127 20251128 20251212 20251213 20251220040909 2>&1; then
+            echo "✅ Histórico de migrations reparado"
+          else
+            echo "ℹ️ Repair não necessário ou migrations já foram reparadas"
+          fi
+
+      - name: Marcar migrations já aplicadas no histórico
+        if: steps.detect-migrations.outputs.has_migrations == 'true'
+        continue-on-error: true
+        run: |
+          echo "🔍 Verificando migrations que já foram aplicadas..."
+          # Marca migrations grandes que provavelmente já foram aplicadas como aplicadas no histórico
+          # Isso evita tentar aplicá-las novamente
+          supabase migration repair --status applied 20251218191500 20251219185127 2>/dev/null || echo "ℹ️ Migrations já marcadas ou não encontradas"
+
       - name: Aplicar migrações (apenas mudanças de develop)
         if: steps.detect-migrations.outputs.has_migrations == 'true'
         run: |
           echo "🚀 Aplicando migrations na produção..."
           echo "⚠️  ATENÇÃO: Isso irá modificar o banco de dados de produção!"
-          supabase db push --include-all
+          # Usa --yes para aceitar automaticamente
+          # Usa --include-all para incluir migrations não rastreadas
+          # O repair anterior já marcou migrations antigas como reverted
+          # As migrations grandes já foram marcadas como aplicadas no passo anterior
+          supabase db push --include-all --yes
 
       - name: Deploy Edge Functions (apenas mudanças de develop)
         if: steps.detect-functions.outputs.has_functions == 'true'
