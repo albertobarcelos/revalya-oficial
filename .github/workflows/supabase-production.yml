@@ -101,7 +101,7 @@ jobs:
         run: |
           echo "🚀 Aplicando migrations na produção..."
           echo "⚠️  ATENÇÃO: Isso irá modificar o banco de dados de produção!"
-          supabase db push
+          supabase db push --include-all
 
       - name: Deploy Edge Functions (apenas mudanças de develop)
         if: steps.detect-functions.outputs.has_functions == 'true'

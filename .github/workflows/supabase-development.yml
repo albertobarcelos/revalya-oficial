@@ -62,7 +62,7 @@ jobs:
         if: steps.detect-migrations.outputs.has_migrations == 'true'
         run: |
           echo "🚀 Aplicando migrations..."
-          supabase db push
+          supabase db push --include-all
 
       - name: Deploy Edge Functions (se houver mudanças)
         if: steps.detect-functions.outputs.has_functions == 'true'
