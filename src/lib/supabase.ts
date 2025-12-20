@@ -10,14 +10,52 @@ import type { Database } from '../types/database.types'
 // CONFIGURAÇÕES DO AMBIENTE
 // =====================================================
 
+// AIDEV-NOTE: Detecção automática de ambiente
+// O sistema detecta automaticamente se está em produção ou desenvolvimento
+// baseado na URL do Supabase configurada nas variáveis de ambiente
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 
+// Detectar ambiente baseado na URL
+const isProduction = supabaseUrl.includes('wyehpiutzvwplllumgdk')
+const isDevelopment = supabaseUrl.includes('sqkkktsstkcupldqtsgi') || supabaseUrl.includes('salhcvfmblogfnuqdhve')
+const currentEnv = isProduction ? 'production' : isDevelopment ? 'development' : 'unknown'
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
-    'Variáveis de ambiente do Supabase não configuradas. Verifique NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY'
+    'Variáveis de ambiente do Supabase não configuradas. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY'
   )
+}
+
+// AIDEV-NOTE: Validação de ambiente em desenvolvimento
+// Em desenvolvimento, avisar se as chaves não foram configuradas
+// Suporta tanto o novo formato (sb_publishable_/sb_secret_) quanto o formato antigo (JWT)
+if (isDevelopment && (supabaseAnonKey.includes('SUBSTITUA') || supabaseServiceKey?.includes('SUBSTITUA'))) {
+  console.warn(
+    '⚠️ AMBIENTE DE DESENVOLVIMENTO: Chaves do Supabase precisam ser configuradas!',
+    'Acesse: https://supabase.com/dashboard/project/sqkkktsstkcupldqtsgi/settings/api'
+  )
+}
+
+// AIDEV-NOTE: Validação de formato de chaves
+// Verifica se as chaves estão no formato correto (novo ou antigo)
+if (isDevelopment && import.meta.env.DEV) {
+  const hasNewFormat = supabaseAnonKey.startsWith('sb_publishable_') || supabaseServiceKey?.startsWith('sb_secret_')
+  const hasOldFormat = supabaseAnonKey.startsWith('eyJ') || supabaseServiceKey?.startsWith('eyJ')
+  
+  if (hasNewFormat) {
+    console.log('✅ Usando novo formato de chaves API do Supabase (sb_publishable_/sb_secret_)')
+  } else if (hasOldFormat) {
+    console.log('ℹ️ Usando formato antigo de chaves API do Supabase (JWT)')
+  }
+}
+
+// Log do ambiente atual (apenas em desenvolvimento)
+if (import.meta.env.DEV) {
+  console.log(`🔧 Ambiente detectado: ${currentEnv}`)
+  console.log(`🔗 Supabase URL: ${supabaseUrl}`)
 }
 
 // =====================================================
@@ -33,7 +71,10 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     // CRÍTICO: Configurar tempo de sessão para 24 horas (padrão Supabase)
     // Isso deve resolver o problema de expiração prematura em 60 segundos
-    storageKey: 'sb-wyehpiutzvwplllumgdk-auth-token',
+    // AIDEV-NOTE: Storage key dinâmico baseado no ambiente
+    storageKey: isProduction 
+      ? 'sb-wyehpiutzvwplllumgdk-auth-token' 
+      : 'sb-sqkkktsstkcupldqtsgi-auth-token',
   },
   realtime: {
     params: {

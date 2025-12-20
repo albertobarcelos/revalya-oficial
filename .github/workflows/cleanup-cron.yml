@@ -7,19 +7,146 @@ on:
   workflow_dispatch: # Permite execução manual
 
 jobs:
-  cleanup:
+  cleanup-production:
     runs-on: ubuntu-latest
+    name: Cleanup Production
+    environment: production
     
     steps:
-      - name: Execute Cleanup
+      - name: Validar Secrets
         run: |
-          curl -X POST \
+          echo "Verificando secrets..."
+          echo "PRODUCTION_SUPABASE_URL está configurado: $([ -n "${{ secrets.PRODUCTION_SUPABASE_URL }}" ] && echo 'SIM' || echo 'NÃO')"
+          echo "CRON_SECRET está configurado: $([ -n "${{ secrets.CRON_SECRET }}" ] && echo 'SIM' || echo 'NÃO')"
+          
+          if [ -z "${{ secrets.PRODUCTION_SUPABASE_URL }}" ]; then
+            echo "❌ Erro: PRODUCTION_SUPABASE_URL não está configurado"
+            echo "Configure o secret em: Settings → Secrets and variables → Actions"
+            echo "Ou configure no Environment 'production': Settings → Environments → production → Secrets"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "❌ Erro: CRON_SECRET não está configurado"
+            echo "Configure o secret em: Settings → Secrets and variables → Actions"
+            echo "Ou configure no Environment 'production': Settings → Environments → production → Secrets"
+            exit 1
+          fi
+          echo "✅ Secrets validados"
+      
+      - name: Execute Cleanup - Production
+        id: cleanup
+        run: |
+          set -e
+          echo "🚀 Executando cleanup na produção..."
+          
+          SUPABASE_URL="${{ secrets.PRODUCTION_SUPABASE_URL }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          
+          if [ -z "$SUPABASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "❌ Erro: Secrets não configurados"
+            exit 1
+          fi
+          
+          FULL_URL="${SUPABASE_URL}/functions/v1/cron-cleanup-scheduler"
+          echo "URL: $FULL_URL"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Content-Type: application/json" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/cron-cleanup-scheduler"
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "${FULL_URL}" || echo -e "\n000")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Cleanup executado com sucesso"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Erro no cleanup: HTTP $HTTP_CODE"
+            echo "$BODY" >&2
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
         
       - name: Log Execution
         if: always()
         run: |
-          echo "Cleanup job executed at $(date)"
-          echo "Exit code: $?"
+          echo "## 🧹 Cleanup Production" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Executado em:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.cleanup.outputs.success }}" >> $GITHUB_STEP_SUMMARY
+
+  cleanup-development:
+    runs-on: ubuntu-latest
+    name: Cleanup Development
+    environment: Preview
+    
+    steps:
+      - name: Validar Secrets
+        run: |
+          echo "Verificando secrets..."
+          echo "DEVELOPMENT_SUPABASE_URL está configurado: $([ -n "${{ secrets.DEVELOPMENT_SUPABASE_URL }}" ] && echo 'SIM' || echo 'NÃO')"
+          echo "CRON_SECRET_DEV está configurado: $([ -n "${{ secrets.CRON_SECRET_DEV }}" ] && echo 'SIM' || echo 'NÃO')"
+          
+          if [ -z "${{ secrets.DEVELOPMENT_SUPABASE_URL }}" ]; then
+            echo "❌ Erro: DEVELOPMENT_SUPABASE_URL não está configurado"
+            echo "Configure o secret em: Settings → Secrets and variables → Actions"
+            echo "Ou configure no Environment 'Preview': Settings → Environments → Preview → Secrets"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CRON_SECRET_DEV }}" ]; then
+            echo "❌ Erro: CRON_SECRET_DEV não está configurado"
+            echo "Configure o secret em: Settings → Secrets and variables → Actions"
+            echo "Ou configure no Environment 'Preview': Settings → Environments → Preview → Secrets"
+            exit 1
+          fi
+          echo "✅ Secrets validados"
+      
+      - name: Execute Cleanup - Development
+        id: cleanup
+        run: |
+          set -e
+          echo "🚀 Executando cleanup na development..."
+          
+          SUPABASE_URL="${{ secrets.DEVELOPMENT_SUPABASE_URL }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET_DEV }}"
+          
+          if [ -z "$SUPABASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "❌ Erro: Secrets não configurados"
+            exit 1
+          fi
+          
+          FULL_URL="${SUPABASE_URL}/functions/v1/cron-cleanup-scheduler"
+          echo "URL: $FULL_URL"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "${FULL_URL}" || echo -e "\n000")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Cleanup executado com sucesso"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Erro no cleanup: HTTP $HTTP_CODE"
+            echo "$BODY" >&2
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Log Execution
+        if: always()
+        run: |
+          echo "## 🧹 Cleanup Development" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Executado em:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.cleanup.outputs.success }}" >> $GITHUB_STEP_SUMMARY
