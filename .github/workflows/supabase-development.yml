@@ -7,6 +7,12 @@ on:
     paths:
       - 'supabase/**'
   workflow_dispatch:
+    inputs:
+      force_apply_all:
+        description: 'Forçar aplicar todas as migrations pendentes (ignora detecção de mudanças)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy:
@@ -39,20 +45,46 @@ jobs:
       - name: Detectar mudanças nas migrations
         id: detect-migrations
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^supabase/migrations/'; then
+          # Se for workflow_dispatch com force_apply_all, aplicar todas as migrations
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ "${{ github.event.inputs.force_apply_all }}" == "true" ]; then
             echo "has_migrations=true" >> $GITHUB_OUTPUT
-            echo "✅ Novas migrations detectadas"
+            echo "✅ Execução manual: aplicando todas as migrations pendentes"
+          # Se for workflow_dispatch sem force, verificar se há migrations pendentes
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Verificar se há migrations no diretório que não foram aplicadas
+            echo "has_migrations=true" >> $GITHUB_OUTPUT
+            echo "✅ Execução manual: verificando migrations pendentes"
+          # Se for push, detectar mudanças entre commits
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
+            if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^supabase/migrations/'; then
+              echo "has_migrations=true" >> $GITHUB_OUTPUT
+              echo "✅ Novas migrations detectadas"
+            else
+              echo "has_migrations=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ Nenhuma migration nova"
+            fi
           else
-            echo "has_migrations=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ Nenhuma migration nova"
+            # Fallback: aplicar todas as migrations
+            echo "has_migrations=true" >> $GITHUB_OUTPUT
+            echo "✅ Aplicando todas as migrations pendentes"
           fi
 
       - name: Detectar mudanças nas Edge Functions
         id: detect-functions
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^supabase/functions/'; then
+          # Se for workflow_dispatch, sempre verificar functions
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "has_functions=true" >> $GITHUB_OUTPUT
-            echo "✅ Mudanças nas Edge Functions detectadas"
+            echo "✅ Execução manual: verificando Edge Functions"
+          # Se for push, detectar mudanças entre commits
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
+            if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^supabase/functions/'; then
+              echo "has_functions=true" >> $GITHUB_OUTPUT
+              echo "✅ Mudanças nas Edge Functions detectadas"
+            else
+              echo "has_functions=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ Nenhuma mudança nas Edge Functions"
+            fi
           else
             echo "has_functions=false" >> $GITHUB_OUTPUT
             echo "ℹ️ Nenhuma mudança nas Edge Functions"
