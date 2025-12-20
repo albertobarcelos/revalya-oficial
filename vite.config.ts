@@ -27,6 +27,52 @@ export default defineConfig(({ command, mode }) => {
           return { syntax: 'ecmascript', jsx: true };
         },
       }),
+      {
+        name: 'sentry-dev-tunnel',
+        apply: 'serve',
+        configureServer(server) {
+          server.middlewares.use('/api/sentry', (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              res.end('Method Not Allowed');
+              return;
+            }
+            const dsn = env.VITE_SENTRY_DSN || '';
+            const match = dsn.match(/^https?:\/\/([^@]+)@([^\/]+)\/(\d+)/);
+            const host = match?.[2];
+            const projectId = match?.[3];
+            if (!host || !projectId) {
+              res.statusCode = 500;
+              res.end('Sentry DSN inválido');
+              return;
+            }
+            const targetUrl = `https://${host}/api/${projectId}/envelope/`;
+
+            const chunks: Buffer[] = [];
+            req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+            req.on('end', async () => {
+              const body = Buffer.concat(chunks);
+              try {
+                const fetchModule = await import('node-fetch');
+                const fetch = (fetchModule as any).default || fetchModule;
+                const resp = await fetch(targetUrl, {
+                  method: 'POST',
+                  headers: {
+                    'content-type': (req.headers['content-type'] as string) || 'application/x-sentry-envelope',
+                  },
+                  body,
+                });
+                res.statusCode = resp.status;
+                const text = await resp.text();
+                res.end(text);
+              } catch (err) {
+                res.statusCode = 502;
+                res.end('Falha no tunnel da Sentry');
+              }
+            });
+          });
+        },
+      },
     ],
     
     // Path resolution

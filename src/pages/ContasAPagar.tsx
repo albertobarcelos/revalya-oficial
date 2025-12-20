@@ -232,23 +232,23 @@ const ContasAPagar: React.FC = () => {
 
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardHeader>
-            <div className="flex flex-wrap items-end justify-between gap-4 md:gap-5">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end flex-1 min-w-0">
-                <div>
+            <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end flex-1 w-full">
+                <div className="space-y-2">
                   <Label htmlFor="search">Buscar</Label>
-                  <div className="relative mt-2">
+                  <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="search"
-                      placeholder="Busque por detalhes, número, nome, vencimento ou valor"
+                      placeholder="Busque por detalhes..."
                       value={filters.search}
                       onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-                      className="pl-8 h-9 w-full md:w-[240px]"
+                      className="pl-8 w-full h-10"
                     />
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-2">
                   <Label>Status</Label>
                   <Select value={(() => {
                     const s = filters.status || [];
@@ -259,7 +259,7 @@ const ContasAPagar: React.FC = () => {
                     ...p,
                     status: value === 'all' ? [] : (value === 'DUE' ? ['DUE_SOON','DUE_TODAY'] : [value as any])
                   }))}>
-                    <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                    <SelectTrigger className="w-full h-10">
                       <SelectValue placeholder="Selecione o status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -273,9 +273,9 @@ const ContasAPagar: React.FC = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <Label>Período</Label>
-                  <div className="mt-2 w-full md:w-[240px]">
+                  <div className="w-full">
                     <DateRangePicker
                       date={dateRange as any}
                       onDateChange={(range: any) => {
@@ -290,19 +290,19 @@ const ContasAPagar: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <Label>Totais</Label>
-                  <div className="mt-2 text-sm text-muted-foreground">
+                  <div className="h-10 flex items-center text-sm text-muted-foreground font-medium border rounded-md px-3 bg-muted/50 w-full">
                     R$ {totals?.remaining?.toFixed(2).replace('.', ',')}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-end">
-                <Button variant="outline" onClick={exportCsv} className="gap-2">
-                  <Download className="h-4 w-4" /> CSV
+              <div className="flex items-center gap-2 justify-end pt-2 xl:pt-0">
+                <Button variant="outline" onClick={exportCsv} className="gap-2 w-full sm:w-auto h-10">
+                  <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
                 </Button>
-                <Button onClick={() => setShowCreateModal(true)} className="gap-2">
-                  <Plus className="h-4 w-4" /> Nova
+                <Button onClick={() => setShowCreateModal(true)} className="gap-2 w-full sm:w-auto h-10">
+                  <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nova</span>
                 </Button>
               </div>
             </div>

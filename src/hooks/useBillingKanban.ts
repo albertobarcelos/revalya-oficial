@@ -78,15 +78,44 @@ const invalidateBillingCache = (tenantId: string) => {
  */
 const categorizeRecord = (record: { bill_date: string; status?: string; kanban_column?: string }): string => {
   const now = new Date();
-  const bill = new Date(record.bill_date);
+  
+  // AIDEV-NOTE: Correção de fuso horário na análise da data
+  // Datas no formato YYYY-MM-DD são interpretadas como UTC pelo construtor Date(),
+  // o que pode causar deslocamento de dia dependendo do fuso horário local.
+  // Forçamos a interpretação como data local usando os componentes da data.
+  let bill: Date;
+  if (record.bill_date && record.bill_date.includes('T')) {
+    // Se já tem hora (ISO), usa o construtor padrão
+    bill = new Date(record.bill_date);
+  } else if (record.bill_date) {
+    // Se é apenas data (YYYY-MM-DD), constrói data local ao meio-dia para evitar problemas de virada de dia
+    const [year, month, day] = record.bill_date.split('-').map(Number);
+    bill = new Date(year, month - 1, day, 12, 0, 0);
+  } else {
+    // Fallback para data atual se inválido (não deve acontecer)
+    bill = new Date();
+  }
 
   if (record.status === 'BILLED') return 'faturados';
   if (record.status === 'EXPIRED') return 'renovar';
+  // AIDEV-NOTE: Se o backend já marcou como DUE_TODAY, respeitar
+  if (record.status === 'DUE_TODAY') return 'faturar-hoje';
+
+  // AIDEV-NOTE: Verificar se já foi faturado verificando campos auxiliares
+  // Caso billed_at ou amount_billed estejam preenchidos, considerar como faturado
+  // Isso resolve casos onde o status pode não estar sincronizado na view
+  if (record.billed_at || (record.amount_billed && record.amount_billed > 0)) {
+    return 'faturados';
+  }
 
   const isSameDay = bill.getFullYear() === now.getFullYear() && bill.getMonth() === now.getMonth() && bill.getDate() === now.getDate();
   if (isSameDay) return 'faturar-hoje';
 
-  if (bill < new Date(now.getFullYear(), now.getMonth(), now.getDate())) return 'pendente';
+  // Comparar datas zerando horas para evitar erros de precisão
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const billStart = new Date(bill.getFullYear(), bill.getMonth(), bill.getDate());
+
+  if (billStart < todayStart) return 'pendente';
 
   // Futuro: não classificar como pendente aqui; manter como pendente apenas se não houver período "hoje" para o mesmo contrato (tratado após agrupamento)
   return 'pendente';
@@ -182,30 +211,33 @@ export function useBillingKanban() {
         'renovar': []
       };
 
-      // AIDEV-NOTE: Carregar descontos gerais dos contratos em lote para calcular valores líquidos
+      // AIDEV-NOTE: Carregar descontos e status dos contratos em lote
       const contractIds: string[] = Array.from(new Set((billingKanbanData || [])
         .map((row: any) => row.contract_id)
         .filter((id: string | null) => !!id))) as string[];
 
       const discountMap = new Map<string, number>();
+      const statusMap = new Map<string, string>();
+
       if (contractIds.length > 0) {
         try {
-          const { data: contractsDiscounts, error: contractsError } = await supabase
+          const { data: contractsData, error: contractsError } = await supabase
             .from('contracts')
-            .select('id, total_discount')
+            .select('id, total_discount, status')
             .in('id', contractIds)
             .eq('tenant_id', tenantId);
 
           if (contractsError) {
-            console.warn('[useBillingKanban] Erro ao buscar total_discount dos contratos:', contractsError);
-          } else if (contractsDiscounts) {
-            contractsDiscounts.forEach((c: { id: string; total_discount?: number }) => {
+            console.warn('[useBillingKanban] Erro ao buscar dados dos contratos:', contractsError);
+          } else if (contractsData) {
+            contractsData.forEach((c: { id: string; total_discount?: number; status?: string }) => {
               discountMap.set(c.id, c.total_discount || 0);
+              if (c.status) statusMap.set(c.id, c.status);
             });
-            console.log('✅ [DEBUG] total_discount carregado para', contractsDiscounts.length, 'contratos');
+            console.log('✅ [DEBUG] Dados carregados para', contractsData.length, 'contratos');
           }
         } catch (error) {
-          console.warn('[useBillingKanban] Exceção ao carregar descontos dos contratos:', error);
+          console.warn('[useBillingKanban] Exceção ao carregar dados dos contratos:', error);
         }
       }
 
@@ -216,6 +248,15 @@ export function useBillingKanban() {
 
       // AIDEV-NOTE: Processar cada registro da VIEW e categorizar
       (billingKanbanData || []).forEach(row => {
+        // AIDEV-NOTE: Filtrar contratos suspensos ou cancelados
+        if (row.contract_id) {
+          const contractStatus = statusMap.get(row.contract_id);
+          if (contractStatus === 'SUSPENDED' || contractStatus === 'CANCELED' || contractStatus === 'Suspenso' || contractStatus === 'Cancelado') {
+            console.log(`🚫 [KANBAN] Ignorando contrato ${contractStatus}:`, row.contract_id);
+            return; // Pular este registro
+          }
+        }
+
         const category = categorizeRecord(row);
         
         // AIDEV-NOTE: Debug temporário - verificar valores antes de criar o contrato

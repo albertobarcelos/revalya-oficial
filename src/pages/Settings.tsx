@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
@@ -38,6 +39,7 @@ const MODULE_NAME = 'Settings';
 
 export default function Settings() {
   const { toast } = useToast();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("usuarios");
   const [activeEstoqueSubTab, setActiveEstoqueSubTab] = useState("categorias");
   const [activeContratosSubTab, setActiveContratosSubTab] = useState("modelos");
@@ -46,6 +48,26 @@ export default function Settings() {
   
   // AIDEV-NOTE: Usando hook de segurança multi-tenant obrigatório
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+
+  // AIDEV-NOTE: Verificar hash da URL para ativar tab específica (Deep Linking)
+  useEffect(() => {
+    if (location.hash) {
+      const tab = location.hash.replace('#', '');
+      // Mapeamento de hashes para tabs
+      const validTabs = [
+        "usuarios", 
+        "integracoes", 
+        "cobranca-inteligente", 
+        "configuracoes-financeiras", 
+        "estoque", 
+        "contratos"
+      ];
+      
+      if (validTabs.includes(tab)) {
+        setActiveTab(tab);
+      }
+    }
+  }, [location.hash]);
   
   // Estado para integrações
   const [asaasApiKey, setAsaasApiKey] = useState("");
@@ -205,7 +227,7 @@ export default function Settings() {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <div className="overflow-auto">
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="usuarios" className="flex items-center gap-2">

@@ -352,12 +352,12 @@ export default function BankStatement() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex-1 flex flex-col h-full p-4 md:p-6 pt-4 pb-0">
           <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <CardHeader>
-              <div className="flex flex-wrap items-end justify-between gap-4 md:gap-5">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-5 items-end flex-1 min-w-0">
-                  <div>
+              <div className="flex flex-col space-y-4 xl:space-y-0 xl:flex-row xl:items-end xl:justify-between gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end flex-1 w-full">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Conta Bancária</label>
                     <Select value={selectedAccountId} onValueChange={(v) => setSelectedAccountId(v)}>
-                      <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                      <SelectTrigger className="h-10 w-full">
                         <SelectValue placeholder="Selecione a conta" />
                       </SelectTrigger>
                       <SelectContent>
@@ -368,9 +368,9 @@ export default function BankStatement() {
                     </Select>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Período</label>
-                    <div className="mt-2 w-full md:w-[240px]">
+                    <div className="w-full">
                       <DateRangePicker
                         date={dateRange as any}
                         onDateChange={(range: any) => {
@@ -382,10 +382,10 @@ export default function BankStatement() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Tipo de Operação</label>
                     <Select value={operationType} onValueChange={(v) => setOperationType(v as OperationType)}>
-                      <SelectTrigger className="mt-2 h-9 w-full md:w-[240px]">
+                      <SelectTrigger className="h-10 w-full">
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
                       <SelectContent>
@@ -396,26 +396,27 @@ export default function BankStatement() {
                     </Select>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Saldo Atual</label>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="h-10 flex items-center gap-2 bg-muted/50 px-3 rounded-md border">
                       {currentBalance >= 0 ? (
-                        <ArrowUpCircle className="h-4 w-4 text-green-600" />
+                        <ArrowUpCircle className="h-5 w-5 text-green-600" />
                       ) : (
-                        <ArrowDownCircle className="h-4 w-4 text-red-600" />
+                        <ArrowDownCircle className="h-5 w-5 text-red-600" />
                       )}
-                      <span className={`text-lg font-semibold ${currentBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      <span className={`text-lg font-bold ${currentBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                         {formatCurrency(Math.abs(currentBalance))}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 self-end">
-                  <Button variant="outline" onClick={handleExportCSV} className="gap-2">
-                    <Download className="h-4 w-4" /> CSV
+                
+                <div className="flex items-center gap-2 justify-end pt-2 xl:pt-0">
+                  <Button variant="outline" onClick={handleExportCSV} className="gap-2 w-full sm:w-auto">
+                    <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
                   </Button>
-                  <Button onClick={handleExportPDF} className="gap-2">
-                    <FileText className="h-4 w-4" /> PDF
+                  <Button onClick={handleExportPDF} className="gap-2 w-full sm:w-auto">
+                    <FileText className="h-4 w-4" /> <span className="hidden sm:inline">PDF</span>
                   </Button>
                 </div>
               </div>

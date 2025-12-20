@@ -6,7 +6,7 @@ import { useSecureTenantQuery } from "@/hooks/templates/useSecureTenantQuery";
 import { logService } from "@/services/logService";
 
 // AIDEV-NOTE: Importações modulares para melhor organização e manutenibilidade
-import { CanalIntegrationProps } from './types';
+import { CanalIntegrationProps, TenantIntegration } from './types';
 import { MODULE_NAME, CANAL_TYPES } from './constants';
 import { 
   useCanaisState, 
@@ -16,6 +16,10 @@ import {
 } from './hooks';
 import { CanalCard, QRDialog } from './components';
 
+interface TenantIntegrationsData {
+  integrations: TenantIntegration[];
+}
+
 /**
  * AIDEV-NOTE: Componente principal refatorado seguindo princípios de Clean Code
  * - Responsabilidade única: gerencia apenas a orquestração dos módulos
@@ -24,10 +28,10 @@ import { CanalCard, QRDialog } from './components';
  */
 export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegrationProps) {
   // AIDEV-NOTE: Hooks de segurança para validação de acesso ao tenant
-  const { hasAccess: isAuthorized, isLoading: authLoading } = useTenantAccessGuard();
+  const { hasAccess: isAuthorized, isLoading: authLoading, currentTenant } = useTenantAccessGuard();
   
   // AIDEV-NOTE: Query segura para buscar dados das integrações do tenant usando RPC
-  const { data: tenantData, isLoading: tenantLoading } = useSecureTenantQuery(
+  const { data: tenantData, isLoading: tenantLoading } = useSecureTenantQuery<TenantIntegrationsData>(
     ['tenant-integrations'],
     async (supabase, tenantId) => {
       const { data: integrations, error } = await supabase.rpc('get_tenant_integrations_by_tenant', {
@@ -36,7 +40,7 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
       
       if (error) throw error;
       
-      return { integrations };
+      return { integrations: integrations as TenantIntegration[] };
     }
   );
 
@@ -45,7 +49,8 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
     canaisAtivos,
     loadingCanais,
     handleToggle,
-    updateCanalState
+    updateCanalState,
+    updateLoadingState
   } = useCanaisState(tenantId, isAuthorized, tenantData, onToggle);
 
   // AIDEV-NOTE: Verificação de segurança para evitar undefined
@@ -68,9 +73,40 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
     tenantId,
     isAuthorized,
     tenantData,
-    integrations: tenantData?.integrations || [],
+    integrations: (tenantData as TenantIntegrationsData)?.integrations || [],
     updateCanalState
   });
+
+  // AIDEV-NOTE: Hook para gerenciar ativação/desativação do WhatsApp
+  const { handleWhatsAppToggle } = useWhatsAppToggle({
+    tenantId,
+    tenantSlug,
+    hasAccess: isAuthorized,
+    currentTenant,
+    integrations: (tenantData as TenantIntegrationsData)?.integrations || [],
+    onToggle,
+    updateCanalState,
+    updateLoadingState,
+    setConnectionStatus,
+    enableStatusPolling,
+    resetConnection
+  });
+
+  // AIDEV-NOTE: Handler centralizado para ações do WhatsApp
+  const handleWhatsAppAction = async () => {
+    if (whatsappActive) {
+      if (connectionStatus === 'connected') {
+        // Se estiver ativo e conectado -> Desativar
+        await handleWhatsAppToggle(false);
+      } else {
+        // Se estiver ativo mas não conectado -> Conectar (QR Code)
+        handleConnectWhatsApp();
+      }
+    } else {
+      // Se estiver inativo -> Ativar
+      await handleWhatsAppToggle(true);
+    }
+  };
 
   // AIDEV-NOTE: Hook para monitoramento contínuo do status
   useStatusMonitoring({
@@ -80,7 +116,7 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
     connectionStatus,
     tenantSlug,
     tenantId,
-    integrations: tenantData?.integrations || [],
+    integrations: (tenantData as TenantIntegrationsData)?.integrations || [],
     setConnectionStatus,
     setQrCode,
     setQrDialogOpen,
@@ -88,15 +124,6 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
     enableStatusPolling
   });
 
-  // AIDEV-NOTE: Manipulador de clique nos cards dos canais
-  const handleCardClick = (canal: keyof typeof canaisAtivos) => {
-    if (canal === 'whatsapp' && whatsappActive) {
-      // Se o WhatsApp estiver ativo mas não conectado, abrir o diálogo de QR
-      if (['disconnected', 'timeout', 'conflict'].includes(connectionStatus)) {
-        handleConnectWhatsApp();
-      }
-    }
-  };
 
   // AIDEV-NOTE: Loading states para melhor UX - verificação após todos os hooks
   if (authLoading || tenantLoading) {
@@ -131,7 +158,7 @@ export function CanalIntegration({ tenantId, tenantSlug, onToggle }: CanalIntegr
             isActive={whatsappActive}
             isLoading={loadingCanais?.whatsapp || false}
             connectionStatus={connectionStatus}
-            onToggle={handleConnectWhatsApp}
+            onToggle={handleWhatsAppAction}
           />
 
           <CanalCard

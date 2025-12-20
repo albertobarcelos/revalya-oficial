@@ -12,6 +12,7 @@ import { useZustandTenant } from '@/hooks/useZustandTenant';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { throttledDebug, throttledTenantGuard } from '@/utils/logThrottle';
 import { SecurityMiddleware } from '@/core/security/SecurityMiddleware';
+import * as Sentry from "@sentry/react";
 
 /**
  * Hook seguro para consultas que SEMPRE inclui tenant_id
@@ -61,8 +62,15 @@ export function useSecureTenantQuery<T>(
     
     queryFn: async () => {
       // 🛡️ VALIDAÇÃO DUPLA DE SEGURANÇA
-      if (!currentTenant?.id || currentTenant.id.trim() === '') {
-        throw new Error('❌ ERRO CRÍTICO: Tenant não definido ou ID inválido - possível vazamento de dados!');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (!currentTenant?.id || !uuidRegex.test(currentTenant.id)) {
+        const errorMsg = `❌ ERRO CRÍTICO: Tenant não definido ou ID inválido ("${currentTenant?.id}") - possível vazamento de dados!`;
+        console.error(errorMsg);
+        Sentry.captureException(new Error(errorMsg), {
+            tags: { context: 'useSecureTenantQuery', tenantId: currentTenant?.id }
+        });
+        throw new Error(errorMsg);
       }
       
       if (!currentTenant.active) {
@@ -123,8 +131,15 @@ export function useSecureTenantMutation<TData, TVariables>(
      */
     mutationFn: async (variables: TVariables) => {
       // 🛡️ VALIDAÇÃO CRÍTICA ANTES DE QUALQUER MUTAÇÃO
-      if (!currentTenant?.id) {
-        throw new Error('❌ ERRO CRÍTICO: Tentativa de mutação sem tenant definido!');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (!currentTenant?.id || !uuidRegex.test(currentTenant.id)) {
+        const errorMsg = `❌ ERRO CRÍTICO: Tentativa de mutação sem tenant definido ou ID inválido ("${currentTenant?.id}")!`;
+        console.error(errorMsg);
+        Sentry.captureException(new Error(errorMsg), {
+            tags: { context: 'useSecureTenantMutation', tenantId: currentTenant?.id }
+        });
+        throw new Error(errorMsg);
       }
       if (!currentTenant.active) {
         throw new Error('❌ ERRO: Tentativa de mutação em tenant inativo');
