@@ -62,19 +62,19 @@ jobs:
         if: steps.detect-migrations.outputs.has_migrations == 'true'
         run: |
           echo "🚀 Aplicando migrations..."
-          supabase db push --project-ref $SUPABASE_PROJECT_ID
+          supabase db push
 
       - name: Deploy Edge Functions (se houver mudanças)
         if: steps.detect-functions.outputs.has_functions == 'true'
         run: |
           echo "🚀 Fazendo deploy das Edge Functions..."
-          supabase functions deploy --project-ref $SUPABASE_PROJECT_ID
+          supabase functions deploy
 
       - name: Deploy todas as Edge Functions (se não detectar mudanças específicas)
         if: steps.detect-functions.outputs.has_functions == 'false' && steps.detect-migrations.outputs.has_migrations == 'true'
         run: |
           echo "🚀 Fazendo deploy de todas as Edge Functions (após migrations)..."
-          supabase functions deploy --project-ref $SUPABASE_PROJECT_ID
+          supabase functions deploy
 
       - name: Resumo do deploy
         run: |
