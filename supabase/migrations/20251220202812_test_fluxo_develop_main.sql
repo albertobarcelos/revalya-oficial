@@ -29,17 +29,38 @@ CREATE INDEX IF NOT EXISTS idx_migration_audit_log_environment
 -- RLS Policies
 ALTER TABLE public.migration_audit_log ENABLE ROW LEVEL SECURITY;
 
+-- AIDEV-NOTE: Criar policies apenas se não existirem (idempotência)
 -- Policy: Apenas usuários autenticados podem ver
-CREATE POLICY "migration_audit_log_select_policy" 
-  ON public.migration_audit_log
-  FOR SELECT
-  USING (auth.role() = 'authenticated');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'migration_audit_log' 
+    AND policyname = 'migration_audit_log_select_policy'
+  ) THEN
+    CREATE POLICY "migration_audit_log_select_policy" 
+      ON public.migration_audit_log
+      FOR SELECT
+      USING (auth.role() = 'authenticated');
+  END IF;
+END $$;
 
 -- Policy: Apenas service_role pode inserir (via migrations)
-CREATE POLICY "migration_audit_log_insert_policy" 
-  ON public.migration_audit_log
-  FOR INSERT
-  WITH CHECK (auth.role() = 'service_role');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'migration_audit_log' 
+    AND policyname = 'migration_audit_log_insert_policy'
+  ) THEN
+    CREATE POLICY "migration_audit_log_insert_policy" 
+      ON public.migration_audit_log
+      FOR INSERT
+      WITH CHECK (auth.role() = 'service_role');
+  END IF;
+END $$;
 
 -- Comentários descritivos
 COMMENT ON TABLE public.migration_audit_log IS 'Tabela de auditoria para rastrear aplicação de migrations em diferentes ambientes';
@@ -49,17 +70,25 @@ COMMENT ON COLUMN public.migration_audit_log.applied_by IS 'Usuário ou sistema 
 -- Inserir registro desta migration (apenas para teste)
 -- AIDEV-NOTE: Este INSERT será executado quando a migration for aplicada
 -- O ambiente será detectado automaticamente ou pode ser passado como parâmetro
-INSERT INTO public.migration_audit_log (
-  migration_version,
-  migration_name,
-  environment,
-  notes
-) VALUES (
-  '20251220202812',
-  'test_fluxo_develop_main',
-  'local', -- Será atualizado quando aplicado em develop/main
-  'Migration de teste para validar fluxo Branch → Develop → Main'
-);
+-- Usar DO $$ para evitar erro se o registro já existir
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.migration_audit_log 
+    WHERE migration_version = '20251220202812'
+  ) THEN
+    INSERT INTO public.migration_audit_log (
+      migration_version,
+      migration_name,
+      environment,
+      notes
+    ) VALUES (
+      '20251220202812',
+      'test_fluxo_develop_main',
+      'local', -- Será atualizado quando aplicado em develop/main
+      'Migration de teste para validar fluxo Branch → Develop → Main'
+    );
+  END IF;
+END $$;
 
 COMMIT;
-
