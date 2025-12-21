@@ -74,7 +74,9 @@ END $$;
 
 -- Comentários descritivos
 COMMENT ON FUNCTION public.sync_user_role() IS 'Função trigger que cria automaticamente registro em public.users quando usuário é criado no auth.users';
-COMMENT ON TRIGGER on_auth_user_created ON auth.users IS 'Trigger que dispara sync_user_role() após inserção de novo usuário no auth';
+
+-- AIDEV-NOTE: Não podemos comentar triggers na tabela auth.users pois não somos owners
+-- O trigger on_auth_user_created dispara sync_user_role() após inserção de novo usuário no auth
 
 COMMIT;
 
