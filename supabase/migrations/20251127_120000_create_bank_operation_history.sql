@@ -78,56 +78,97 @@ END $$;
 -- Habilitar RLS
 ALTER TABLE public.bank_operation_history ENABLE ROW LEVEL SECURITY;
 
+-- AIDEV-NOTE: Criar policies apenas se não existirem (idempotência)
 -- SELECT
-CREATE POLICY "bank_operation_history_select_policy" ON public.bank_operation_history
-  FOR SELECT
-  USING (
-    tenant_id IN (
-      SELECT tenant_id FROM public.tenant_users
-      WHERE user_id = auth.uid()
-      AND active = true
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'bank_operation_history' 
+    AND policyname = 'bank_operation_history_select_policy'
+  ) THEN
+    CREATE POLICY "bank_operation_history_select_policy" ON public.bank_operation_history
+      FOR SELECT
+      USING (
+        tenant_id IN (
+          SELECT tenant_id FROM public.tenant_users
+          WHERE user_id = auth.uid()
+          AND active = true
+        )
+      );
+  END IF;
+END $$;
 
 -- INSERT
-CREATE POLICY "bank_operation_history_insert_policy" ON public.bank_operation_history
-  FOR INSERT
-  WITH CHECK (
-    tenant_id IN (
-      SELECT tenant_id FROM public.tenant_users
-      WHERE user_id = auth.uid()
-      AND active = true
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'bank_operation_history' 
+    AND policyname = 'bank_operation_history_insert_policy'
+  ) THEN
+    CREATE POLICY "bank_operation_history_insert_policy" ON public.bank_operation_history
+      FOR INSERT
+      WITH CHECK (
+        tenant_id IN (
+          SELECT tenant_id FROM public.tenant_users
+          WHERE user_id = auth.uid()
+          AND active = true
+        )
+      );
+  END IF;
+END $$;
 
 -- UPDATE
-CREATE POLICY "bank_operation_history_update_policy" ON public.bank_operation_history
-  FOR UPDATE
-  USING (
-    tenant_id IN (
-      SELECT tenant_id FROM public.tenant_users
-      WHERE user_id = auth.uid()
-      AND active = true
-    )
-  )
-  WITH CHECK (
-    tenant_id IN (
-      SELECT tenant_id FROM public.tenant_users
-      WHERE user_id = auth.uid()
-      AND active = true
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'bank_operation_history' 
+    AND policyname = 'bank_operation_history_update_policy'
+  ) THEN
+    CREATE POLICY "bank_operation_history_update_policy" ON public.bank_operation_history
+      FOR UPDATE
+      USING (
+        tenant_id IN (
+          SELECT tenant_id FROM public.tenant_users
+          WHERE user_id = auth.uid()
+          AND active = true
+        )
+      )
+      WITH CHECK (
+        tenant_id IN (
+          SELECT tenant_id FROM public.tenant_users
+          WHERE user_id = auth.uid()
+          AND active = true
+        )
+      );
+  END IF;
+END $$;
 
 -- DELETE
-CREATE POLICY "bank_operation_history_delete_policy" ON public.bank_operation_history
-  FOR DELETE
-  USING (
-    tenant_id IN (
-      SELECT tenant_id FROM public.tenant_users
-      WHERE user_id = auth.uid()
-      AND active = true
-    )
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'bank_operation_history' 
+    AND policyname = 'bank_operation_history_delete_policy'
+  ) THEN
+    CREATE POLICY "bank_operation_history_delete_policy" ON public.bank_operation_history
+      FOR DELETE
+      USING (
+        tenant_id IN (
+          SELECT tenant_id FROM public.tenant_users
+          WHERE user_id = auth.uid()
+          AND active = true
+        )
+      );
+  END IF;
+END $$;
 
 -- Comentários descritivos
 COMMENT ON TABLE public.bank_operation_history IS 'Histórico de operações financeiras (créditos e débitos) por conta bancária';
