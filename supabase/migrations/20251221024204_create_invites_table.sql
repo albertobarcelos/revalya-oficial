@@ -44,30 +44,71 @@ COMMENT ON COLUMN public.invites.used_at IS
 -- RLS Policies
 ALTER TABLE public.invites ENABLE ROW LEVEL SECURITY;
 
+-- AIDEV-NOTE: Criar policies apenas se não existirem (idempotência)
 -- Policy: Usuários autenticados podem ver seus próprios convites criados
-CREATE POLICY "invites_select_own" 
-    ON public.invites
-    FOR SELECT
-    USING (auth.uid() = created_by);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'invites' 
+    AND policyname = 'invites_select_own'
+  ) THEN
+    CREATE POLICY "invites_select_own" 
+      ON public.invites
+      FOR SELECT
+      USING (auth.uid() = created_by);
+  END IF;
+END $$;
 
 -- Policy: Apenas usuários autenticados podem criar convites
-CREATE POLICY "invites_insert_authenticated" 
-    ON public.invites
-    FOR INSERT
-    WITH CHECK (auth.role() = 'authenticated');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'invites' 
+    AND policyname = 'invites_insert_authenticated'
+  ) THEN
+    CREATE POLICY "invites_insert_authenticated" 
+      ON public.invites
+      FOR INSERT
+      WITH CHECK (auth.role() = 'authenticated');
+  END IF;
+END $$;
 
 -- Policy: Usuários podem atualizar convites que criaram
-CREATE POLICY "invites_update_own" 
-    ON public.invites
-    FOR UPDATE
-    USING (auth.uid() = created_by);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'invites' 
+    AND policyname = 'invites_update_own'
+  ) THEN
+    CREATE POLICY "invites_update_own" 
+      ON public.invites
+      FOR UPDATE
+      USING (auth.uid() = created_by);
+  END IF;
+END $$;
 
 -- Policy: Permitir leitura pública por token (para validação de convites)
 -- Isso permite que usuários não autenticados validem convites usando o token
-CREATE POLICY "invites_select_by_token" 
-    ON public.invites
-    FOR SELECT
-    USING (true); -- Permitir leitura pública para validação de convites
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies 
+    WHERE schemaname = 'public' 
+    AND tablename = 'invites' 
+    AND policyname = 'invites_select_by_token'
+  ) THEN
+    CREATE POLICY "invites_select_by_token" 
+      ON public.invites
+      FOR SELECT
+      USING (true); -- Permitir leitura pública para validação de convites
+  END IF;
+END $$;
 
 COMMIT;
 
