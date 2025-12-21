@@ -5,6 +5,18 @@
 -- Autor: Sistema Revalya
 -- =====================================================
 
+-- AIDEV-NOTE: Dropar função existente se houver (idempotência)
+-- Isso é necessário porque CREATE OR REPLACE não permite mudar o tipo de retorno
+DO $$
+BEGIN
+  -- Dropar todas as sobrecargas possíveis da função
+  DROP FUNCTION IF EXISTS public.get_bank_statement(UUID, UUID, DATE, DATE, bank_operation_type) CASCADE;
+  DROP FUNCTION IF EXISTS public.get_bank_statement(UUID) CASCADE;
+  DROP FUNCTION IF EXISTS public.get_bank_statement(UUID, UUID) CASCADE;
+  DROP FUNCTION IF EXISTS public.get_bank_statement(UUID, UUID, DATE) CASCADE;
+  DROP FUNCTION IF EXISTS public.get_bank_statement(UUID, UUID, DATE, DATE) CASCADE;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.get_bank_statement(
   p_tenant_id UUID,
   p_bank_acount_id UUID DEFAULT NULL,
