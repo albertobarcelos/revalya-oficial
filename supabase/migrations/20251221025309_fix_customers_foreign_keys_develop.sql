@@ -142,17 +142,74 @@ BEGIN
   END IF;
 END $$;
 
--- Comentários descritivos
-COMMENT ON CONSTRAINT charges_customer_id_fkey ON public.charges IS 
-  'Foreign key para relacionamento com customers - necessário para PostgREST reconhecer joins';
-COMMENT ON CONSTRAINT contracts_customer_id_fkey ON public.contracts IS 
-  'Foreign key para relacionamento com customers - necessário para PostgREST reconhecer joins';
-COMMENT ON CONSTRAINT tasks_client_id_fkey ON public.tasks IS 
-  'Foreign key para relacionamento com customers (client_id) - necessário para PostgREST reconhecer joins';
-COMMENT ON CONSTRAINT tasks_charge_id_fkey ON public.tasks IS 
-  'Foreign key para relacionamento com charges - necessário para PostgREST reconhecer joins';
-COMMENT ON CONSTRAINT charges_contract_id_fkey ON public.charges IS 
-  'Foreign key para relacionamento com contracts - necessário para PostgREST reconhecer joins';
+-- AIDEV-NOTE: Comentários descritivos (idempotentes)
+-- Comentar constraints apenas se existirem
+DO $$
+BEGIN
+  -- Comentar charges_customer_id_fkey
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'charges_customer_id_fkey'
+    AND conrelid = 'public.charges'::regclass
+  ) THEN
+    COMMENT ON CONSTRAINT charges_customer_id_fkey ON public.charges IS 
+      'Foreign key para relacionamento com customers - necessário para PostgREST reconhecer joins';
+  END IF;
+  
+  -- Comentar contracts_customer_id_fkey
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'contracts_customer_id_fkey'
+    AND conrelid = 'public.contracts'::regclass
+  ) THEN
+    COMMENT ON CONSTRAINT contracts_customer_id_fkey ON public.contracts IS 
+      'Foreign key para relacionamento com customers - necessário para PostgREST reconhecer joins';
+  END IF;
+  
+  -- Comentar tasks_client_id_fkey
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'tasks_client_id_fkey'
+    AND conrelid = 'public.tasks'::regclass
+  ) THEN
+    COMMENT ON CONSTRAINT tasks_client_id_fkey ON public.tasks IS 
+      'Foreign key para relacionamento com customers (client_id) - necessário para PostgREST reconhecer joins';
+  END IF;
+  
+  -- Comentar tasks_charge_id_fkey
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'tasks_charge_id_fkey'
+    AND conrelid = 'public.tasks'::regclass
+  ) THEN
+    COMMENT ON CONSTRAINT tasks_charge_id_fkey ON public.tasks IS 
+      'Foreign key para relacionamento com charges - necessário para PostgREST reconhecer joins';
+  END IF;
+  
+  -- Comentar charges_contract_id_fkey (verifica ambos os nomes possíveis)
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE (conname = 'fk_charges_contract_id' OR conname = 'charges_contract_id_fkey')
+    AND conrelid = 'public.charges'::regclass
+  ) THEN
+    -- Comentar usando o nome que existe
+    IF EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'charges_contract_id_fkey'
+      AND conrelid = 'public.charges'::regclass
+    ) THEN
+      COMMENT ON CONSTRAINT charges_contract_id_fkey ON public.charges IS 
+        'Foreign key para relacionamento com contracts - necessário para PostgREST reconhecer joins';
+    ELSIF EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'fk_charges_contract_id'
+      AND conrelid = 'public.charges'::regclass
+    ) THEN
+      COMMENT ON CONSTRAINT fk_charges_contract_id ON public.charges IS 
+        'Foreign key para relacionamento com contracts - necessário para PostgREST reconhecer joins';
+    END IF;
+  END IF;
+END $$;
 
 COMMIT;
 
