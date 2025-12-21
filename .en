@@ -1,0 +1,63 @@
+﻿# ASAAS API
+# =====================================================
+# DESENVOLVIMENTO: sandbox.asaas.com (ambiente de testes)
+# PRODUÇÃO: api.asaas.com (ambiente real)
+# 
+# ⚠️ Para PRODUÇÃO, altere VITE_ASAAS_ENV para: production
+# ⚠️ Para PRODUÇÃO, altere VITE_ASAAS_API_URL para: https://api.asaas.com/v3
+VITE_ASAAS_API_KEY=$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDA0NjAwNjE6OiRhYWNoXzQ0MWYyZjZmLTAyZjctNGM5MC1hOTZkLTlmYzNkNmFmMGFlMQ==
+VITE_ASAAS_ENV=sandbox
+VITE_ASAAS_API_URL=https://sandbox.asaas.com/v3
+
+# =====================================================
+# WEBSOCKET
+# =====================================================
+# Mesmo valor em ambos os ambientes
+VITE_WEBSOCKET_URL=ws://localhost:5678/ws/payment_updates
+
+# =====================================================
+# SUPABASE
+# =====================================================
+# DESENVOLVIMENTO: sqkkktsstkcupldqtsgi (Development Branch)
+# PRODUÇÃO: wyehpiutzvwplllumgdk (Production/Main)
+# 
+# Dashboard Development: https://supabase.com/dashboard/project/sqkkktsstkcupldqtsgi
+# Dashboard Production: https://supabase.com/dashboard/project/wyehpiutzvwplllumgdk
+# 
+# ⚠️ Para PRODUÇÃO, altere para: https://wyehpiutzvwplllumgdk.supabase.co
+VITE_SUPABASE_URL=https://ivaeoagtrvjsksebnqwr.supabase.co
+
+# DESENVOLVIMENTO: Obter em: https://supabase.com/dashboard/project/sqkkktsstkcupldqtsgi/settings/api
+# PRODUÇÃO: Obter em: https://supabase.com/dashboard/project/wyehpiutzvwplllumgdk/settings/api
+# 
+# ⚠️ Para PRODUÇÃO, altere para a chave de produção
+VITE_SUPABASE_ANON_KEY=sb_publishable_SggdfdM_UvjkTgnRqNCdYA_VIbksfvN
+VITE_SUPABASE_SERVICE_ROLE_KEY=sb_secret_9kO4sVvtZ1FcuQLIm6w8jQ_iO3uFnQV
+
+# URLs da API (Edge Functions)
+# DESENVOLVIMENTO: https://sqkkktsstkcupldqtsgi.supabase.co/functions/v1
+# PRODUÇÃO: https://wyehpiutzvwplllumgdk.supabase.co/functions/v1
+# 
+# ⚠️ Para PRODUÇÃO, altere para: https://wyehpiutzvwplllumgdk.supabase.co/functions/v1
+VITE_API_URL=https://ivaeoagtrvjsksebnqwr.supabase.co/functions/v1
+
+# =====================================================
+# EVOLUTION API
+# =====================================================
+# Mesmo valor em ambos os ambientes
+VITE_EVOLUTION_API_URL=https://evolution.nexsyn.com.br
+VITE_EVOLUTION_API_KEY=d93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a
+
+# =====================================================
+# CONFIGURAÇÕES DE AMBIENTE
+# =====================================================
+# DESENVOLVIMENTO: development
+# PRODUÇÃO: production
+# 
+# ⚠️ Para PRODUÇÃO, altere para:
+# VITE_ENV=production
+# VITE_APP_ENV=production
+# VITE_DEV_MODE=false (ou remova esta linha)
+VITE_ENV=development
+VITE_APP_ENV=development
+VITE_DEV_MODE=true
