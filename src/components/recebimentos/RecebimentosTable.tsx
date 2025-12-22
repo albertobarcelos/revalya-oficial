@@ -7,9 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { StatusBadge } from './StatusBadge';
-import type { Database } from '@/types/database';
-
-type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
+import { formatCpfCnpj } from '@/lib/utils';
+import type { FinanceEntry } from '@/services/financeEntriesService';
 
 interface RecebimentosTableProps {
   recebimentos: FinanceEntry[];
@@ -41,8 +40,13 @@ export function RecebimentosTable({
     <Table>
       <TableHeader className="sticky top-0 bg-background z-10">
         <TableRow>
+          <TableHead>Cliente</TableHead>
+          <TableHead>Empresa</TableHead>
+          <TableHead>CPF/CNPJ</TableHead>
           <TableHead>Descrição</TableHead>
           <TableHead>Valor</TableHead>
+          <TableHead>Valor Líquido</TableHead>
+          <TableHead>Taxas</TableHead>
           <TableHead>Vencimento</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Conta</TableHead>
@@ -54,8 +58,13 @@ export function RecebimentosTable({
         <AnimatePresence initial={false}>
           {recebimentos.map((entry) => (
             <motion.tr key={entry.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <TableCell>{entry.customer?.name || '-'}</TableCell>
+              <TableCell>{entry.customer?.company || '-'}</TableCell>
+              <TableCell>{formatCpfCnpj(entry.customer?.cpf_cnpj)}</TableCell>
               <TableCell className="font-medium">{entry.description}</TableCell>
               <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
+              <TableCell>{formatCurrency(entry.charge?.net_value ?? entry.amount ?? 0)}</TableCell>
+              <TableCell>{formatCurrency((entry.amount ?? 0) - (entry.charge?.net_value ?? entry.amount ?? 0))}</TableCell>
               <TableCell>
                 {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
               </TableCell>

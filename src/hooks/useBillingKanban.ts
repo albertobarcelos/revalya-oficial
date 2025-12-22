@@ -313,19 +313,60 @@ export function useBillingKanban() {
 
       // Remover registros futuros da coluna pendente quando existir um período "Faturar Hoje" para o mesmo contrato
       const today = new Date();
+      
+      // Identificar contratos que têm faturamento para hoje
       const dueTodayContractIds = new Set(
         (groupedData['faturar-hoje'] || [])
           .map(c => c.contract_id)
           .filter((id): id is string => !!id)
       );
 
+      // Identificar contratos que já foram faturados no mês atual
+      // Isso evita mostrar o card do próximo mês na coluna pendente logo após faturar o mês atual
+      const billedThisMonthContractIds = new Set(
+        (groupedData['faturados'] || [])
+          .filter(c => {
+             if (!c.contract_id) return false;
+             // Verifica se a data de faturamento original era deste mês
+             // Usamos bill_date pois é a referência do período
+             let billDate: Date;
+             if (c.bill_date && c.bill_date.includes('T')) {
+               billDate = new Date(c.bill_date);
+             } else {
+               const [year, month, day] = (c.bill_date || '').split('-').map(Number);
+               billDate = new Date(year, month - 1, day, 12, 0, 0);
+             }
+             
+             return billDate.getMonth() === today.getMonth() && billDate.getFullYear() === today.getFullYear();
+          })
+          .map(c => c.contract_id)
+          .filter((id): id is string => !!id)
+      );
+
       groupedData['pendente'] = (groupedData['pendente'] || []).filter(c => {
         if (!c.contract_id) return true; // manter avulsos
-        const bill = new Date(c.bill_date);
+        
+        let bill: Date;
+        if (c.bill_date && c.bill_date.includes('T')) {
+          bill = new Date(c.bill_date);
+        } else {
+          const [year, month, day] = (c.bill_date || '').split('-').map(Number);
+          bill = new Date(year, month - 1, day, 12, 0, 0);
+        }
+        
         const isFuture = bill > new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        
+        // Regra 1: Se tem "Faturar Hoje", esconde o pendente futuro
         if (isFuture && dueTodayContractIds.has(c.contract_id)) {
           return false; // evitar duplicação visual: mantém apenas o "hoje"
         }
+
+        // Regra 2: Se já foi faturado este mês, esconde o pendente futuro
+        // Isso resolve o bug onde ao faturar, o card do mês seguinte aparecia imediatamente em pendente
+        if (isFuture && billedThisMonthContractIds.has(c.contract_id)) {
+          return false;
+        }
+
         return true;
       });
 

@@ -283,13 +283,13 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
                     <div className="bg-muted px-3 py-2 rounded">{entryNumber}</div>
                     <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                       <span>Vencimento</span>
-                      <span>{dueDate ? format(new Date(dueDate), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</span>
+                      <span>{dueDate ? format(new Date(dueDate + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</span>
                     </div>
                     <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                       <span>Valor</span>
                       <div className="flex flex-col items-end">
-                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.gross_amount ?? 0))}</span>
-                        {(entry?.status === 'PAID' && Number(entry?.paid_amount || 0) > 0) && (
+                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.net_amount ?? entry?.gross_amount ?? 0))}</span>
+                        {(Number(entry?.paid_amount || 0) > 0) && (
                           <span className="text-red-600 text-xs">-{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.paid_amount || 0))}</span>
                         )}
                       </div>
@@ -297,7 +297,7 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
                     {!(paidConfirmed || entry?.status === 'PAID') && (
                       <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                         <span>Saldo</span>
-                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.net_amount ?? entry?.gross_amount ?? 0))}</span>
+                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Math.max((Number(entry?.net_amount ?? entry?.gross_amount ?? 0) - Number(entry?.paid_amount ?? 0)), 0))}</span>
                       </div>
                     )}
                   </div>
@@ -348,14 +348,31 @@ export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpen
                         <Button onClick={() => {
                           const amt = Number(launchAmount || '0');
                           if (!amt || !launchDate || !launchType) return;
-                          const op = (launchTypesQuery.data?.find((t:any)=>t.id===launchType)?.operation_type) as ('DEBIT'|'CREDIT'|undefined);
-                          const base = Number(entry?.net_amount ?? entry?.gross_amount ?? 0);
-                          const newNet = op === 'DEBIT' ? Math.max(base - amt, 0) : base + amt;
+                          
+                          const launchTypeObj = launchTypesQuery.data?.find((t:any)=>t.id===launchType);
+                          const op = (launchTypeObj?.operation_type) as ('DEBIT'|'CREDIT'|undefined);
+                          const isSettlement = launchTypeObj?.consider_settlement_movement;
+                          
+                          let newNet = Number(entry?.net_amount ?? entry?.gross_amount ?? 0);
+                          let newPaid = Number(entry?.paid_amount ?? 0);
+
+                          if (isSettlement) {
+                             if (op === 'DEBIT') {
+                                newPaid += amt;
+                             } else {
+                                newPaid = Math.max(newPaid - amt, 0);
+                             }
+                          } else {
+                             const base = newNet;
+                             newNet = op === 'DEBIT' ? Math.max(base - amt, 0) : base + amt;
+                          }
+
                           const prevMeta = (entry?.metadata || {});
                           const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
                           const newLaunch = { amount: amt, date: launchDate, typeId: launchType, operation: op || 'DEBIT', description: launchDescription || 'Lançamento' };
                           const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
-                          onAddLaunchPatch?.({ id: entry!.id, patch: { net_amount: newNet, metadata: newMeta } });
+                          
+                          onAddLaunchPatch?.({ id: entry!.id, patch: { net_amount: newNet, paid_amount: newPaid, metadata: newMeta } });
                           setLaunches((prev) => [...prev, newLaunch]);
                           setLaunchAmount(''); setLaunchDate(''); setLaunchType(''); setLaunchDescription('');
                         }}>Lançar</Button>

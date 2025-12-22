@@ -1,0 +1,27 @@
+# Asaas API
+VITE_ASAAS_API_KEY=$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwODQ5NTg6OiRhYWNoXzM1YTQ0MzhjLTVmOTktNGMxMC1hZDQ0LThiMjkzN2EyODRjYQ==
+VITE_ASAAS_ENV=production
+VITE_ASAAS_API_URL=https://api.asaas.com/v3
+
+# WebSocket
+VITE_WEBSOCKET_URL=ws://localhost:5678/ws/payment_updates
+
+# URLs da API
+VITE_API_URL=https://wyehpiutzvwplllumgdk.supabase.co/functions/v1
+
+# Supabase
+VITE_SUPABASE_URL=https://wyehpiutzvwplllumgdk.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5ZWhwaXV0enZ3cGxsbHVtZ2RrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI3MDMxNzQsImV4cCI6MjA1ODI3OTE3NH0.j2vPVxP6pP9WyGgKqaI3imNQmkfMBzFTqzBdj2CJhaY
+
+# Evolution API - Frontend (com prefixo VITE_)
+VITE_EVOLUTION_API_URL=https://evolution-backend.nexsyn.com.br
+VITE_EVOLUTION_API_KEY=d93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a
+
+# Evolution API - Edge Functions (sem prefixo VITE_)
+EVOLUTION_API_BASE_URL=https://evolution-backend.nexsyn.com.br
+EVOLUTION_API_KEY=d93ec17f36bc03867215097fe2d9045907a0ad43f91892936656144412d1fa9a
+EVOLUTION_INSTANCE=revalya-default
+
+ASSINAFY_API_KEY=q7tNOEWgg7o1ZtK8_VV28-DfeCF45pCgSVLwiXT6p2e--dSM8dE5I4Q9dUPS_9Gb
+
+VITE_SENTRY_DSN=https://f0e84664af0f1722cf01ce58a948d78d@o4510540762710016.ingest.us.sentry.io/4510540765462528

@@ -1,7 +1,7 @@
 import { supabase as defaultClient } from '@/lib/supabase';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type PayableStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+export type PayableStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED' | 'DUE_TODAY' | 'DUE_SOON';
 
 export interface PayableRow {
   id: string;
@@ -108,7 +108,9 @@ export async function updatePayable(id: string, patch: Partial<PayableInsert>, c
       net_amount: patch.net_amount,
       due_date: patch.due_date,
       issue_date: patch.issue_date,
-      status: patch.status,
+      // AIDEV-NOTE: Proteção crítica contra valor vazio que viola enum payable_status
+      // Se status vier vazio ou inválido, ignoramos para deixar o trigger do banco decidir (set_financial_payable_status)
+      ...(patch.status && ['PENDING', 'PAID', 'OVERDUE', 'CANCELLED'].includes(patch.status) ? { status: patch.status } : {}),
       payment_date: patch.payment_date,
       paid_amount: patch.paid_amount,
       payment_method: patch.payment_method,

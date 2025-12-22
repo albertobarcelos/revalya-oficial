@@ -6,7 +6,7 @@ export interface AuditLogEntry {
   id?: string;
   tenant_id: string;
   user_id: string;
-  action_type: AuditActionType;
+  action: AuditActionType; // Renamed from action_type
   entity_type: AuditEntityType;
   entity_id: string;
   old_values?: Record<string, any>;
@@ -37,7 +37,9 @@ export type AuditActionType =
   | 'CONTRACT_SIGNED'
   | 'CONTRACT_TERMINATED'
   | 'DATA_ANONYMIZED'
-  | 'DATA_MASKED';
+  | 'DATA_MASKED'
+  | 'GENERATE_REPORT'
+  | 'DELETE_REPORT';
 
 export type AuditEntityType = 
   | 'CONTRACT'
@@ -47,6 +49,7 @@ export type AuditEntityType =
   | 'USER'
   | 'FINANCIAL_CALCULATION'
   | 'REPORT'
+  | 'FINANCIAL_REPORT'
   | 'CONFIGURATION'
   | 'INTEGRATION'
   | 'WEBHOOK';
@@ -194,9 +197,29 @@ class FinancialAuditService {
         created_at: new Date().toISOString()
       };
 
+      // Mapear para o schema do banco de dados (Adapter Pattern)
+      // Remove campos que não existem na tabela e coloca no metadata
+      const dbEntry = {
+        tenant_id: auditEntry.tenant_id,
+        user_id: auditEntry.user_id,
+        action: auditEntry.action, // Correção: action em vez de action_type
+        entity_type: auditEntry.entity_type,
+        entity_id: auditEntry.entity_id,
+        old_values: auditEntry.old_values,
+        new_values: auditEntry.new_values,
+        metadata: {
+          ...auditEntry.metadata,
+          risk_level: auditEntry.risk_level,
+          compliance_flags: auditEntry.compliance_flags
+        },
+        ip_address: auditEntry.ip_address,
+        user_agent: auditEntry.user_agent,
+        created_at: auditEntry.created_at
+      };
+
       const { data, error } = await supabase
         .from('audit_logs')
-        .insert([auditEntry])
+        .insert([dbEntry])
         .select('id')
         .single();
 
@@ -225,7 +248,7 @@ class FinancialAuditService {
     start_date?: Date;
     end_date?: Date;
     user_id?: string;
-    action_type?: AuditActionType;
+    action?: AuditActionType; // Renamed
     entity_type?: AuditEntityType;
     entity_id?: string;
     risk_level?: RiskLevel;
@@ -251,8 +274,8 @@ class FinancialAuditService {
         query = query.eq('user_id', filters.user_id);
       }
 
-      if (filters.action_type) {
-        query = query.eq('action_type', filters.action_type);
+      if (filters.action) {
+        query = query.eq('action', filters.action);
       }
 
       if (filters.entity_type) {
@@ -264,7 +287,8 @@ class FinancialAuditService {
       }
 
       if (filters.risk_level) {
-        query = query.eq('risk_level', filters.risk_level);
+        // Busca dentro do JSONB metadata
+        query = query.eq('metadata->>risk_level', filters.risk_level);
       }
 
       if (filters.limit) {
@@ -282,8 +306,27 @@ class FinancialAuditService {
         throw error;
       }
 
+      const logs: AuditLogEntry[] = (data || []).map((row: any) => ({
+        id: row.id,
+        tenant_id: row.tenant_id,
+        user_id: row.user_id,
+        action: row.action as AuditActionType, // Mapeia de volta
+        entity_type: row.entity_type as AuditEntityType,
+        entity_id: row.entity_id,
+        old_values: row.old_values,
+        new_values: row.new_values,
+        metadata: row.metadata,
+        ip_address: row.ip_address,
+        user_agent: row.user_agent,
+        // Recupera do metadata
+        risk_level: (row.metadata?.risk_level as RiskLevel) || 'LOW',
+        compliance_flags: row.metadata?.compliance_flags,
+        created_at: row.created_at,
+        created_by: row.created_by
+      }));
+
       return {
-        logs: data || [],
+        logs,
         total: count || 0
       };
     } catch (error) {
@@ -401,7 +444,7 @@ class FinancialAuditService {
       await this.logAuditEntry({
         tenant_id,
         user_id,
-        action_type: 'DATA_ANONYMIZED',
+        action: 'DATA_ANONYMIZED', // Updated
         entity_type,
         entity_id,
         old_values: this.maskSensitiveData({ data: originalData }).data,
@@ -455,7 +498,7 @@ class FinancialAuditService {
       await this.logAuditEntry({
         tenant_id,
         user_id,
-        action_type: 'EXPORT',
+        action: 'EXPORT', // Updated
         entity_type: 'REPORT',
         entity_id: `audit_export_${timestamp}`,
         metadata: {
@@ -480,7 +523,7 @@ class FinancialAuditService {
     let riskScore = 0;
 
     // Ação de alto risco
-    if (this.HIGH_RISK_ACTIONS.includes(entry.action_type)) {
+    if (this.HIGH_RISK_ACTIONS.includes(entry.action)) { // Updated
       riskScore += 3;
     }
 
@@ -605,7 +648,7 @@ class FinancialAuditService {
     // Implementar notificação para administradores
     console.warn('ALERTA DE RISCO:', {
       risk_level: entry.risk_level,
-      action: entry.action_type,
+      action: entry.action, // Updated
       entity: entry.entity_type,
       user: entry.user_id,
       timestamp: entry.created_at
@@ -632,11 +675,11 @@ class FinancialAuditService {
    */
   private generateDataAccessSummary(logs: AuditLogEntry[]): DataAccessSummary {
     return {
-      total_data_access: logs.filter(log => log.action_type === 'VIEW').length,
+      total_data_access: logs.filter(log => log.action === 'VIEW').length, // Updated
       sensitive_data_access: logs.filter(log => 
-        log.action_type === 'VIEW' && this.containsSensitiveData(log)
+        log.action === 'VIEW' && this.containsSensitiveData(log) // Updated
       ).length,
-      export_operations: logs.filter(log => log.action_type === 'EXPORT').length,
+      export_operations: logs.filter(log => log.action === 'EXPORT').length, // Updated
       failed_access_attempts: logs.filter(log => 
         log.metadata?.status === 'FAILED'
       ).length,
@@ -735,7 +778,7 @@ class FinancialAuditService {
       log.id || '',
       log.created_at || '',
       log.user_id,
-      log.action_type,
+      log.action, // Updated
       log.entity_type,
       log.entity_id,
       log.risk_level,

@@ -17,8 +17,9 @@ export function PayablesTable({
   allSelected,
   toggleSelectAll,
   toggleSelectOne,
-  markAsPaid,
   onEdit,
+  onPayOff,
+  onGenerateReceipt,
   onAfterReverse,
 }: {
   payables: any[];
@@ -26,8 +27,9 @@ export function PayablesTable({
   allSelected: boolean;
   toggleSelectAll: (v: boolean) => void;
   toggleSelectOne: (id: string, v: boolean) => void;
-  markAsPaid: (id: string) => void;
-  onEdit: (entry: any) => void;
+  onEdit: (entry: any, readOnly?: boolean) => void;
+  onPayOff: (entry: any) => void;
+  onGenerateReceipt: (entry: any) => void;
   onAfterReverse?: () => void;
 }) {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -97,7 +99,7 @@ export function PayablesTable({
                   <Checkbox checked={selectedIds.includes(entry.id)} onCheckedChange={(v) => toggleSelectOne(entry.id, !!v)} />
                 </TableCell>
                 <TableCell className="w-[88px] min-w-[88px] max-w-[88px] pl-0 pr-2 py-2 align-middle"><StatusIndicator status={isReversed ? 'CANCELLED' : entry.status} /></TableCell>
-                <TableCell className="text-left pl-0">{format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                <TableCell className="text-left pl-0">{format(new Date(entry.due_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                 <TableCell className="font-medium text-left pl-0">{entry.entry_number}</TableCell>
                 <TableCell className="detalhes align-middle w-[904px] pl-0 pr-2 py-2 text-[12px] leading-[17.1429px] text-[#555]">
                   <div className="flex flex-col whitespace-nowrap overflow-hidden">
@@ -120,10 +122,15 @@ export function PayablesTable({
                         <DropdownMenuItem onClick={() => onEdit(entry, true)}>Visualizar</DropdownMenuItem>
                       ) : (
                         <>
-                          {entry.status === 'PENDING' && (
-                            <DropdownMenuItem onClick={() => markAsPaid(entry.id)}>
-                              Marcar como Pago
-                            </DropdownMenuItem>
+                          {entry.status !== 'PAID' && (
+                            <>
+                              <DropdownMenuItem onClick={() => onPayOff(entry)}>
+                                Quitar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onGenerateReceipt(entry)}>
+                                Gerar Recibo
+                              </DropdownMenuItem>
+                            </>
                           )}
                           <DropdownMenuItem onClick={() => onEdit(entry)}>Editar</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive" onClick={() => setReverseEntry(entry)}>Estornar</DropdownMenuItem>

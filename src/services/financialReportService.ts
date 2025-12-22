@@ -15,7 +15,7 @@ export interface FinancialReport {
   period_end: Date;
   generated_at: Date;
   generated_by: string;
-  data: any;
+  data: ReportData;
   format: ReportFormat;
   status: ReportStatus;
   file_url?: string;
@@ -42,7 +42,7 @@ export type ReportStatus = 'GENERATING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 export interface ReportParameters {
   include_details?: boolean;
   group_by?: string[];
-  filters?: Record<string, any>;
+  filters?: Record<string, unknown>;
   comparison_period?: {
     start: Date;
     end: Date;
@@ -52,6 +52,12 @@ export interface ReportParameters {
 }
 
 // Interfaces para Dados dos Relatórios
+export interface IncomeStatementComparison {
+  revenue_growth: number;
+  expense_growth: number;
+  profit_growth: number;
+}
+
 export interface IncomeStatementData {
   period: {
     start: Date;
@@ -73,11 +79,7 @@ export interface IncomeStatementData {
     net_profit: number;
     profit_margin: number;
   };
-  comparison?: {
-    revenue_growth: number;
-    expense_growth: number;
-    profit_growth: number;
-  };
+  comparison?: IncomeStatementComparison;
 }
 
 export interface CashFlowData {
@@ -199,6 +201,15 @@ export interface BudgetVarianceData {
   }>;
 }
 
+export type ReportData = 
+  | IncomeStatementData
+  | CashFlowData
+  | AccountsReceivableData
+  | RevenueAnalysisData
+  | ProfitabilityAnalysisData
+  | BudgetVarianceData
+  | Record<string, unknown>; // Fallback para relatórios personalizados
+
 // Interface para Configuração de Relatório
 export interface ReportConfig {
   tenant_id: string;
@@ -216,7 +227,7 @@ export interface ReportGenerationResult {
   report_id: string;
   status: ReportStatus;
   file_url?: string;
-  data?: any;
+  data?: ReportData;
   error?: string;
 }
 
@@ -261,7 +272,7 @@ class FinancialReportService {
         action: 'GENERATE_REPORT',
         entity_type: 'FINANCIAL_REPORT',
         entity_id: `${config.report_type}_${Date.now()}`,
-        details: {
+        metadata: {
           report_type: config.report_type,
           period: {
             start: config.period_start,
@@ -357,7 +368,7 @@ class FinancialReportService {
   /**
    * Gera dados específicos do relatório baseado no tipo
    */
-  private async generateReportData(config: ReportConfig): Promise<any> {
+  private async generateReportData(config: ReportConfig): Promise<ReportData> {
     switch (config.report_type) {
       case 'INCOME_STATEMENT':
         return await this.generateIncomeStatement(config);
@@ -422,7 +433,7 @@ class FinancialReportService {
     const profitMargin = netRevenue > 0 ? (netProfit / netRevenue) * 100 : 0;
 
     // Comparação com período anterior (se solicitado)
-    let comparison: any = undefined;
+    let comparison: IncomeStatementComparison | undefined = undefined;
     if (config.parameters?.comparison_period) {
       const prevPeriodConfig = {
         ...config,
@@ -1052,7 +1063,7 @@ class FinancialReportService {
         action: 'DELETE_REPORT',
         entity_type: 'FINANCIAL_REPORT',
         entity_id: reportId,
-        details: {
+        metadata: {
           report_type: report.report_type,
           title: report.title
         },
@@ -1080,7 +1091,7 @@ class FinancialReportService {
   /**
    * Gera arquivo do relatório
    */
-  private async generateReportFile(reportId: string, data: any, format: ReportFormat): Promise<string> {
+  private async generateReportFile(reportId: string, data: unknown, format: ReportFormat): Promise<string> {
     // Implementação simplificada - em produção, usar biblioteca específica
     switch (format) {
       case 'CSV':
@@ -1094,20 +1105,20 @@ class FinancialReportService {
     }
   }
 
-  private async generateCSVFile(reportId: string, data: any): Promise<string> {
+  private async generateCSVFile(reportId: string, data: unknown): Promise<string> {
     // Implementação simplificada
     const csvContent = JSON.stringify(data);
     // Em produção, usar biblioteca CSV e upload para storage
     return `https://storage.example.com/reports/${reportId}.csv`;
   }
 
-  private async generatePDFFile(reportId: string, data: any): Promise<string> {
+  private async generatePDFFile(reportId: string, data: unknown): Promise<string> {
     // Implementação simplificada
     // Em produção, usar biblioteca PDF como jsPDF ou Puppeteer
     return `https://storage.example.com/reports/${reportId}.pdf`;
   }
 
-  private async generateExcelFile(reportId: string, data: any): Promise<string> {
+  private async generateExcelFile(reportId: string, data: unknown): Promise<string> {
     // Implementação simplificada
     // Em produção, usar biblioteca Excel como ExcelJS
     return `https://storage.example.com/reports/${reportId}.xlsx`;

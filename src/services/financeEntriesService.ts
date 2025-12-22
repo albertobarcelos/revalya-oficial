@@ -2,7 +2,17 @@ import { supabase } from '@/lib/supabase';
 import { format, addDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import type { Database } from '@/types/database';
 
-type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
+type FinanceEntryRow = Database['public']['Tables']['finance_entries']['Row'];
+export type FinanceEntry = FinanceEntryRow & {
+  customer?: {
+    name: string | null;
+    company: string | null;
+    cpf_cnpj: number | string | null;
+  } | null;
+  charge?: {
+    net_value: number | null;
+  } | null;
+};
 type FinanceEntryInsert = Database['public']['Tables']['finance_entries']['Insert'];
 type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
 
@@ -134,12 +144,12 @@ class FinanceEntriesService {
 
     let query = supabase
       .from('finance_entries')
-      .select('*', { count: 'exact' })
+      .select('*, customer:customers(name, company, cpf_cnpj)', { count: 'exact' })
       .eq('tenant_id', filters.tenant_id)
       .order('due_date', { ascending: false });
 
-    // AIDEV-NOTE: Temporariamente removidos os joins com customers, contracts e charges
-    // devido a problema de política RLS. Será reativado após correção da política.
+    // AIDEV-NOTE: Joins reativados para exibir dados do cliente
+
 
     if (filters.type) {
       query = query.eq('type', filters.type);
