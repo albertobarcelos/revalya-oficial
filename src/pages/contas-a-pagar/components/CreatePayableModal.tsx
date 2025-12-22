@@ -7,12 +7,14 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { listFinancialSettings } from '@/services/financialSettingsService';
-import { listFinancialDocuments } from '@/services/financialDocumentsService';
-import { previewNextPayableEntryNumber } from '@/services/financialPayablesService';
+import { listFinancialSettings, FinancialSettingRow } from '@/services/financialSettingsService';
+import { listFinancialDocuments, FinancialDocumentRow } from '@/services/financialDocumentsService';
+import { previewNextPayableEntryNumber, PayableInsert, PayableRow } from '@/services/financialPayablesService';
 import { X } from 'lucide-react';
+
+type PayableFormPayload = Omit<PayableInsert, 'tenant_id'>;
 
 export function CreatePayableModal({
   open,
@@ -23,12 +25,12 @@ export function CreatePayableModal({
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onSave: (payload: any) => void;
-  onSaveAndAddAnother: (payload: any) => void;
+  onSave: (payload: PayableFormPayload) => void;
+  onSaveAndAddAnother: (payload: PayableFormPayload) => void;
   currentTenantId?: string;
 }) {
   const [tab, setTab] = useState<'dados' | 'lancamentos' | 'historico'>('dados');
-  const [createdEntry, setCreatedEntry] = useState<any | null>(null);
+  const [createdEntry, setCreatedEntry] = useState<Partial<PayableRow> | null>(null);
   const [amount, setAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -37,6 +39,8 @@ export function CreatePayableModal({
   const [documentId, setDocumentId] = useState('');
   const [description, setDescription] = useState('');
   const [repeat, setRepeat] = useState(false);
+  const [recurrencePeriod, setRecurrencePeriod] = useState<'WEEKLY' | 'MONTHLY' | 'SEMIANNUAL' | 'ANNUAL'>('MONTHLY');
+  const [recurrenceTimes, setRecurrenceTimes] = useState<string>('2');
   const [paidConfirmed, setPaidConfirmed] = useState(false);
   const [bankAccountId, setBankAccountId] = useState('');
 
@@ -44,6 +48,9 @@ export function CreatePayableModal({
     ['payables-categories', currentTenantId],
     async (supabase, tId) => {
       const data = await listFinancialSettings(tId, 'EXPENSE_CATEGORY', { active: true }, supabase);
+      // STRICT SECURITY VALIDATION
+      const invalidData = data?.filter(item => item.tenant_id !== tId);
+      if (invalidData?.length > 0) throw new Error('Security Violation: Tenant Data Leak Detected');
       return data;
     },
     { enabled: !!currentTenantId }
@@ -53,6 +60,9 @@ export function CreatePayableModal({
     ['payables-documents', currentTenantId],
     async (supabase, tId) => {
       const data = await listFinancialDocuments(tId, supabase);
+      // STRICT SECURITY VALIDATION
+      const invalidData = data?.filter(item => item.tenant_id !== tId);
+      if (invalidData?.length > 0) throw new Error('Security Violation: Tenant Data Leak Detected');
       return data;
     },
     { enabled: !!currentTenantId }
@@ -67,14 +77,31 @@ export function CreatePayableModal({
         .eq('tenant_id', tId)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
+      
+      // STRICT SECURITY VALIDATION
+      const invalidData = data?.filter(item => item.tenant_id !== tId);
+      if (invalidData?.length > 0) throw new Error('Security Violation: Tenant Data Leak Detected');
+
+      return (data || []).map((a: { id: string; bank: string | null; agency: string | null; count: number | null; type: string | null; tenant_id: string }) => ({ id: a.id, label: String(a.bank ?? 'Banco') }));
     },
     { enabled: !!currentTenantId }
   );
 
-  const reset = () => {
+  const reset = useCallback(() => {
     setAmount(''); setDueDate(''); setIssueDate(new Date().toISOString().slice(0,10)); setEntryNumber('');
-    setCategory(''); setDocumentId(''); setDescription(''); setRepeat(false); setPaidConfirmed(false); setCreatedEntry(null); setTab('dados');
+    setCategory(''); setDocumentId(''); setDescription(''); setRepeat(false); setRecurrencePeriod('MONTHLY'); setRecurrenceTimes('2'); setPaidConfirmed(false); setCreatedEntry(null); setTab('dados');
+    setBankAccountId('');
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      reset();
+    }
+  }, [open, reset]);
+
+  const handleClose = () => {
+    onOpenChange(false);
+    reset();
   };
 
   return (
@@ -86,7 +113,7 @@ export function CreatePayableModal({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => onOpenChange(false)}
+            onClick={handleClose}
             className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
           >
             <X className="h-4 w-4" />
@@ -103,21 +130,21 @@ export function CreatePayableModal({
                 <Button variant={tab==='dados' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('dados')}>Dados gerais <span>›</span></Button>
                 <Button variant={tab==='lancamentos' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('lancamentos')} disabled={!createdEntry}>Lançamentos <span>›</span></Button>
                 <Button variant={tab==='historico' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('historico')} disabled={!createdEntry}>Histórico de alterações <span>›</span></Button>
-                <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>Voltar à listagem</Button>
+                <Button variant="outline" className="w-full" onClick={handleClose}>Voltar à listagem</Button>
                 {createdEntry && (
                   <div className="space-y-2 mt-2 text-sm">
-                    <div className="bg-muted px-3 py-2 rounded">{(createdEntry as any).entry_number}</div>
+                    <div className="bg-muted px-3 py-2 rounded">{createdEntry.entry_number}</div>
                     <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                       <span>Vencimento</span>
-                      <span>{format(new Date((createdEntry as any).due_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                      <span>{createdEntry.due_date ? format(new Date(createdEntry.due_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</span>
                     </div>
                     <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                       <span>Valor</span>
-                      <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((createdEntry as any).gross_amount || (createdEntry as any).net_amount || 0)}</span>
+                      <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(createdEntry.gross_amount || createdEntry.net_amount || 0)}</span>
                     </div>
                     <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
                       <span>Saldo</span>
-                      <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Math.max(((createdEntry as any).net_amount || 0) - ((createdEntry as any).paid_amount || 0), 0))}</span>
+                      <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Math.max((createdEntry.net_amount || 0) - (createdEntry.paid_amount || 0), 0))}</span>
                     </div>
                   </div>
                 )}
@@ -162,7 +189,7 @@ export function CreatePayableModal({
                     <Select value={category} onValueChange={setCategory}>
                       <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-                        {categoriesQuery.data?.map((c: any) => (
+                        {categoriesQuery.data?.map((c) => (
                           <SelectItem
                             key={c.id}
                             value={c.id}
@@ -179,7 +206,7 @@ export function CreatePayableModal({
                     <Select value={documentId} onValueChange={setDocumentId}>
                       <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-                        {documentsQuery.data?.map((d: any) => (
+                        {documentsQuery.data?.map((d) => (
                           <SelectItem
                             key={d.id}
                             value={d.id}
@@ -196,7 +223,7 @@ export function CreatePayableModal({
                     <Select value={bankAccountId} onValueChange={setBankAccountId}>
                       <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-                        {bankAccountsQuery.data?.map((b: any) => (
+                        {bankAccountsQuery.data?.map((b) => (
                           <SelectItem
                             key={b.id}
                             value={b.id}
@@ -218,6 +245,35 @@ export function CreatePayableModal({
                       <Checkbox checked={repeat} onCheckedChange={(v) => setRepeat(!!v)} />
                       Esta conta a pagar irá se repetir
                     </label>
+                    
+                    {repeat && (
+                      <div className="ml-6 grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-md border">
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Período</Label>
+                          <Select value={recurrencePeriod} onValueChange={(v: any) => setRecurrencePeriod(v)}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="WEEKLY">Semanal</SelectItem>
+                              <SelectItem value="MONTHLY">Mensal</SelectItem>
+                              <SelectItem value="SEMIANNUAL">Semestral</SelectItem>
+                              <SelectItem value="ANNUAL">Anual</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs mb-1.5 block">Vezes</Label>
+                          <Input
+                            type="number"
+                            min="2"
+                            max="99"
+                            className="h-8 text-sm"
+                            value={recurrenceTimes}
+                            onChange={(e) => setRecurrenceTimes(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     <label className="flex items-center gap-2">
                       <Checkbox checked={paidConfirmed} onCheckedChange={(v) => setPaidConfirmed(!!v)} />
                       Pagamento confirmado
@@ -242,6 +298,10 @@ export function CreatePayableModal({
                         document_id: documentId || null,
                         
                         repeat,
+                        recurrence: repeat ? {
+                          period: recurrencePeriod,
+                          times: parseInt(recurrenceTimes) || 2
+                        } : undefined,
                         bank_account_id: bankAccountId || null,
                       });
                       reset();
@@ -262,6 +322,10 @@ export function CreatePayableModal({
                         document_id: documentId || null,
                         
                         repeat,
+                        recurrence: repeat ? {
+                          period: recurrencePeriod,
+                          times: parseInt(recurrenceTimes) || 2
+                        } : undefined,
                         bank_account_id: bankAccountId || null,
                       });
                       setCreatedEntry({ entry_number: entryNumber, due_date: dueDate, gross_amount: Number(amount) });
@@ -270,12 +334,12 @@ export function CreatePayableModal({
                 )}
                 {tab === 'lancamentos' && createdEntry && (
                   <div className="mt-6">
-                    <p className="text-sm text-muted-foreground">Lançamentos vinculados à conta { (createdEntry as any).entry_number } serão exibidos aqui.</p>
+                    <p className="text-sm text-muted-foreground">Lançamentos vinculados à conta { createdEntry.entry_number } serão exibidos aqui.</p>
                   </div>
                 )}
                 {tab === 'historico' && createdEntry && (
                   <div className="mt-6">
-                    <p className="text-sm text-muted-foreground">Histórico de alterações da conta { (createdEntry as any).entry_number }.</p>
+                    <p className="text-sm text-muted-foreground">Histórico de alterações da conta { createdEntry.entry_number }.</p>
                   </div>
                 )}
               </CardContent>

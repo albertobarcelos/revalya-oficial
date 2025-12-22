@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
 import { Layout } from '@/components/layout/Layout';
-import { financeEntriesService, type FinanceEntryFilters, type FinanceEntryResponse } from '@/services/financeEntriesService';
+import { financeEntriesService, type FinanceEntry, type FinanceEntryFilters, type FinanceEntryResponse } from '@/services/financeEntriesService';
 import type { Database } from '@/types/database';
 import { useTenantAccessGuard, useSecureTenantQuery, useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -24,7 +24,6 @@ import { RecebimentosFilters } from '@/components/recebimentos/RecebimentosFilte
 import { RecebimentosTable } from '@/components/recebimentos/RecebimentosTable';
 
 // AIDEV-NOTE: Tipo para entrada financeira baseado no banco de dados
-type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
 type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
 
 // AIDEV-NOTE: Interface para filtros de busca

@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, AlertTriangle, Download } from 'lucide-react';
+import { Plus, Search, AlertTriangle, Download, Filter, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DateRange } from 'react-day-picker';
 import { useToast } from '@/components/ui/use-toast';
-import type { PayableRow } from '@/services/financialPayablesService';
+import type { PayableRow, PayableInsert } from '@/services/financialPayablesService';
 import { supabase } from '@/lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
@@ -19,13 +20,15 @@ import { AdvancedFilters } from './contas-a-pagar/components/AdvancedFilters';
 import { PayablesTable } from './contas-a-pagar/components/PayablesTable';
 import { CreatePayableModal } from './contas-a-pagar/components/CreatePayableModal';
 import { EditPayableModal } from './contas-a-pagar/components/EditPayableModal';
+import { BulkPayModal } from './contas-a-pagar/components/BulkPayModal';
 import type { PayablesFilters } from './contas-a-pagar/types/filters';
 import type { PaginationData } from './contas-a-pagar/types/pagination';
 import { PaginationFooter } from '@/components/layout/PaginationFooter';
 import { Separator } from '@/components/ui/separator';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { exportPayablesCsv } from './contas-a-pagar/utils/exportCsv';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 type FinanceEntry = PayableRow;
 
@@ -34,23 +37,30 @@ const ContasAPagar: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // AIDEV-NOTE: Log de auditoria obrigatório conforme guia de segurança 5.2
+  useEffect(() => {
+    if (currentTenant) {
+      console.log(`[AUDIT] Página Contas a Pagar acessada - Tenant: ${currentTenant.name} (${currentTenant.id})`);
+    }
+  }, [currentTenant]);
+
   
 
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [filters, setFilters] = useState<PayablesFilters>(() => {
-    return { search: '', status: [], dateFrom: '', dateTo: '', page: 1 } as PayablesFilters;
+    return { search: '', status: [], dateFrom: '', dateTo: '', page: 1 };
   });
 
-  interface DateRangeValue { from?: Date; to?: Date }
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const today = new Date();
     const first = new Date(today.getFullYear(), today.getMonth(), 1);
     const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    return { from: first, to: last } as DateRangeValue;
+    return { from: first, to: last };
   });
 
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showBulkPayModal, setShowBulkPayModal] = useState(false);
   const [iconHtml, setIconHtml] = useState<string>('');
   
 
@@ -129,50 +139,60 @@ const ContasAPagar: React.FC = () => {
     });
   };
   const [editOpen, setEditOpen] = useState(false);
-  const [editEntry, setEditEntry] = useState<any | null>(null);
+  const [editEntry, setEditEntry] = useState<PayableRow | null>(null);
   const [editReadOnly, setEditReadOnly] = useState(false);
   const { updatePayableMutation, markAsPaidMutation, createPayableAddAnotherMutation, createPayableSaveInfoMutation } = usePayablesMutations(payables);
 
-  const appendLaunch = async (variables: { id: string; patch: any }) => {
+  const appendLaunch = async (variables: { id: string; patch: Partial<PayableInsert> }) => {
     await updatePayableMutation.mutateAsync(variables);
-    try {
-      const vars = variables as any;
-      if (editOpen && editEntry && vars?.id === editEntry.id) {
-        setEditEntry({ ...editEntry, ...vars.patch });
-      }
-    } catch {}
+    if (editOpen && editEntry && variables.id === editEntry.id) {
+      setEditEntry({ ...editEntry, ...variables.patch } as PayableRow);
+    }
     toast({ title: 'Salvo', description: 'Lançamento registrado' });
   };
-  const bulkMarkAsPaid = async () => {
+  const handleBulkPayConfirm = async ({ paymentDate, bankAccountId, description }: { paymentDate: string; bankAccountId: string; description: string }) => {
     for (const id of selectedIds) {
-      await markAsPaidMutation.mutateAsync({ entryId: id });
+      const entry = payables.find((p) => p.id === id);
+      if (!entry) continue;
+
+      const typeId = entry.document_id ?? '';
+      const prevMeta = (entry.metadata || {}) as Record<string, unknown>;
+      const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
+      const newLaunch = {
+        amount: Number(entry.net_amount ?? entry.gross_amount ?? 0),
+        date: paymentDate,
+        typeId: String(typeId),
+        operation: 'DEBIT',
+        description: description || 'Movimento de Quitação em Lote',
+      };
+      const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
+      
+      await updatePayableMutation.mutateAsync({ 
+        id, 
+        patch: { 
+          status: 'PAID',
+          payment_date: paymentDate,
+          bank_account_id: bankAccountId,
+          paid_amount: entry.net_amount ?? entry.gross_amount ?? 0,
+          metadata: newMeta
+        } 
+      });
     }
     setSelectedIds([]);
     toast({ title: 'Sucesso', description: 'Contas selecionadas marcadas como pagas' });
   };
+
+  const handlePayOffEntry = (entry: PayableRow) => {
+    setSelectedIds([entry.id]);
+    setShowBulkPayModal(true);
+  };
+
   const exportCsv = () => exportPayablesCsv(payables);
 
 
-  const markAsPaid = async (entryId: string) => {
-    await markAsPaidMutation.mutateAsync({ entryId });
-    const entry = payables.find((p) => p.id === entryId);
-    if (!entry) return;
-    const typeId = entry.document_id ?? '';
-    const prevMeta: any = entry.metadata || {};
-    const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
-    const newLaunch = {
-      amount: Number(entry.net_amount ?? entry.gross_amount ?? 0),
-      date: new Date().toISOString().slice(0,10),
-      typeId: String(typeId),
-      operation: 'DEBIT',
-      description: 'Movimento de Quitação',
-    };
-    const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
-    await updatePayableMutation.mutateAsync({ id: entryId, patch: { metadata: newMeta } });
+  const handleGenerateReceipt = (entry: PayableRow) => {
+    toast({ title: 'Em breve', description: 'Geração de recibos em desenvolvimento.' });
   };
-  
-
-  
 
   useEffect(() => {
     if (!currentTenant?.id) return;
@@ -182,7 +202,7 @@ const ContasAPagar: React.FC = () => {
       })
       .subscribe();
     return () => {
-      try { supabase.removeChannel(channel); } catch {}
+      supabase.removeChannel(channel);
     };
   }, [currentTenant?.id, queryClient]);
 
@@ -232,79 +252,95 @@ const ContasAPagar: React.FC = () => {
 
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <CardHeader>
-            <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end flex-1 w-full">
-                <div className="space-y-2">
-                  <Label htmlFor="search">Buscar</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search"
-                      placeholder="Busque por detalhes..."
-                      value={filters.search}
-                      onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-                      className="pl-8 w-full h-10"
-                    />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row items-end justify-between gap-4">
+                <div className="flex items-end gap-2 flex-1 w-full">
+                  <div className="space-y-2 w-full sm:w-[35%]">
+                    <Label htmlFor="search">Buscar</Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="search"
+                        placeholder="Busque por detalhes..."
+                        value={filters.search}
+                        onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+                        className="pl-8 w-full h-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="opacity-0 hidden sm:block">Filtros</Label>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={`gap-2 h-10 ${showFilters ? 'bg-secondary' : ''}`}
+                    >
+                      <Filter className="h-4 w-4" />
+                      <span className="hidden sm:inline">Filtros</span>
+                    </Button>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={(() => {
-                    const s = filters.status || [];
-                    if (s.length === 0) return 'all' as any;
-                    if (s.length === 2 && s.includes('DUE_SOON') && s.includes('DUE_TODAY')) return 'DUE' as any;
-                    return (s[0] as any);
-                  })()} onValueChange={(value) => setFilters((p) => ({
-                    ...p,
-                    status: value === 'all' ? [] : (value === 'DUE' ? ['DUE_SOON','DUE_TODAY'] : [value as any])
-                  }))}>
-                    <SelectTrigger className="w-full h-10">
-                      <SelectValue placeholder="Selecione o status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="PENDING">Pendente</SelectItem>
-                      <SelectItem value="PAID">Quitado</SelectItem>
-                      <SelectItem value="DUE">A Vencer</SelectItem>
-                      <SelectItem value="OVERDUE">Vencido</SelectItem>
-                      <SelectItem value="CANCELLED">Estornado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Período</Label>
-                  <div className="w-full">
-                    <DateRangePicker
-                      date={dateRange as any}
-                      onDateChange={(range: any) => {
-                        if (range?.from && range?.to) {
-                          setDateRange({ from: range.from, to: range.to } as any);
-                          const fromStr = range.from.toISOString().slice(0, 10);
-                          const toStr = range.to.toISOString().slice(0, 10);
-                          setFilters((prev) => ({ ...prev, dateFrom: fromStr, dateTo: toStr }));
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Totais</Label>
-                  <div className="h-10 flex items-center text-sm text-muted-foreground font-medium border rounded-md px-3 bg-muted/50 w-full">
-                    R$ {totals?.remaining?.toFixed(2).replace('.', ',')}
+                <div className="flex items-center gap-2 justify-end pt-2 sm:pt-0">
+                  <div className="space-y-2">
+                    <Label className="opacity-0 hidden sm:block">Ações</Label>
+                    <div className="flex items-center gap-2">
+                      <AnimatePresence>
+                        {selectedIds.length > 0 && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                          >
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button className="gap-2 w-full sm:w-auto h-10 bg-slate-500 hover:bg-slate-600">
+                                  Ações ({selectedIds.length} selecionadas)
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => setShowBulkPayModal(true)}>
+                                  Quitar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => toast({ title: 'Em breve', description: 'Geração de recibos em desenvolvimento.' })}>
+                                  Gerar Recibo
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <Button variant="outline" onClick={exportCsv} className="gap-2 w-full sm:w-auto h-10">
+                        <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
+                      </Button>
+                      <Button onClick={() => setShowCreateModal(true)} className="gap-2 w-full sm:w-auto h-10">
+                        <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nova</span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 justify-end pt-2 xl:pt-0">
-                <Button variant="outline" onClick={exportCsv} className="gap-2 w-full sm:w-auto h-10">
-                  <Download className="h-4 w-4" /> <span className="hidden sm:inline">CSV</span>
-                </Button>
-                <Button onClick={() => setShowCreateModal(true)} className="gap-2 w-full sm:w-auto h-10">
-                  <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nova</span>
-                </Button>
-              </div>
+
+              <AnimatePresence>
+                {showFilters && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-2">
+                      <AdvancedFilters
+                        filters={filters}
+                        setFilters={(updater) => setFilters(updater)}
+                        onApply={() => setFilters((p) => ({ ...p, page: 1 }))}
+                        onReset={resetFilters}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </CardHeader>
           <CardContent className="pt-0 p-0 flex flex-col flex-1 min-h-0">
@@ -334,8 +370,9 @@ const ContasAPagar: React.FC = () => {
                     allSelected={allSelected}
                     toggleSelectAll={toggleSelectAll}
                     toggleSelectOne={toggleSelectOne}
-                    markAsPaid={markAsPaid}
                     onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
+                    onPayOff={handlePayOffEntry}
+                    onGenerateReceipt={handleGenerateReceipt}
                     onAfterReverse={() => queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] })}
                   />
                 </div>
@@ -360,14 +397,7 @@ const ContasAPagar: React.FC = () => {
 
         
 
-        {showFilters && (
-          <AdvancedFilters
-            filters={filters}
-            setFilters={(updater) => setFilters(updater)}
-            onApply={() => setFilters((p) => ({ ...p, page: 1 }))}
-            onReset={resetFilters}
-          />
-        )}
+
 
         
 
@@ -387,6 +417,15 @@ const ContasAPagar: React.FC = () => {
           onSave={(variables) => updatePayableMutation.mutate(variables)}
           onAddLaunchPatch={(variables) => appendLaunch(variables)}
           readOnly={editReadOnly}
+        />
+
+        <BulkPayModal
+          open={showBulkPayModal}
+          onOpenChange={setShowBulkPayModal}
+          selectedIds={selectedIds}
+          payables={payables}
+          onConfirm={handleBulkPayConfirm}
+          currentTenantId={currentTenant?.id}
         />
       </motion.div>
     </Layout>

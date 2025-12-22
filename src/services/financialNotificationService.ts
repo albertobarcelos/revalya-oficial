@@ -633,10 +633,11 @@ class FinancialNotificationService {
         action: 'CREATE',
         entity_type: 'NOTIFICATION_TEMPLATE',
         entity_id: data.id,
-        details: {
+        metadata: {
           name: template.name,
           type: template.type
-        }
+        },
+        risk_level: 'LOW'
       });
 
       return data;

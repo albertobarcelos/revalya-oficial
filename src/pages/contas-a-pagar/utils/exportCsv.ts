@@ -19,7 +19,7 @@ export function exportPayablesCsv(payables: PayableRow[]) {
     const remaining = Math.max(net - paid, 0);
     return [
       statusMap[e.status] || e.status,
-      format(new Date(e.due_date), 'dd/MM/yyyy', { locale: ptBR }),
+      format(new Date(e.due_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }),
       e.entry_number ?? '',
       e.description ?? '',
       gross.toFixed(2).replace('.', ','),

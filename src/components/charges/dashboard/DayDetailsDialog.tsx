@@ -198,8 +198,6 @@ export function DayDetailsDialog({
     );
   };
 
-  if (!selectedDay) return null;
-
   const totalValue = charges.reduce((sum, charge) => sum + (charge.valor || 0), 0);
   const paidValue = charges
     .filter(charge => {
@@ -251,6 +249,8 @@ export function DayDetailsDialog({
     
     return charges;
   }, [charges, activeTab]);
+
+  if (!selectedDay) return null;
 
   return (
     <>
