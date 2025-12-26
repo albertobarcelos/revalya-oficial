@@ -183,7 +183,9 @@ export function useProductStock(params?: UseProductStockParams) {
   ];
   
   const isEnabled = hasAccess && !!currentTenant?.id;
-  console.log(`🔍 [DEBUG HOOK] useSecureTenantQuery enabled: ${isEnabled}`, { hasAccess, currentTenantId: currentTenant?.id, product_id });
+  
+  // AIDEV-NOTE: Removidos logs de debug excessivos que causavam lentidão e "piscar" do modal
+  // Os logs podem ser reativados apenas para debug específico se necessário
   
   const {
     data,
@@ -197,30 +199,13 @@ export function useProductStock(params?: UseProductStockParams) {
       enabled: isEnabled, // AIDEV-NOTE: Habilitado quando tem acesso e tenant
       staleTime: 5 * 60 * 1000, // AIDEV-NOTE: Cache de 5 minutos para evitar requisições excessivas
       refetchOnMount: false, // AIDEV-NOTE: Desabilitado para evitar múltiplas requisições ao mudar de aba
-      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar refetch quando aba muda de foco
       refetchOnReconnect: true, // AIDEV-NOTE: Refazer ao reconectar
     }
   );
   
-  console.log(`🔍 [DEBUG HOOK] useSecureTenantQuery retornou:`, { 
-    hasData: !!data, 
-    dataKeys: data ? Object.keys(data) : null,
-    dataContent: data, // AIDEV-NOTE: Ver conteúdo completo
-    isLoading, 
-    error: error ? error.message : null 
-  });
-  
-  // AIDEV-NOTE: Verificar estrutura dos dados
-  console.log('🔍 [DEBUG HOOK] data?.stock:', data?.stock);
-  console.log('🔍 [DEBUG HOOK] data?.totalCount:', data?.totalCount);
-  console.log('🔍 [DEBUG HOOK] typeof data:', typeof data);
-  console.log('🔍 [DEBUG HOOK] Array.isArray(data):', Array.isArray(data));
-  
   const stock = data?.stock || [];
   const totalCount = data?.totalCount || 0;
-  
-  console.log('🔍 [DEBUG HOOK] stock extraído:', stock);
-  console.log('🔍 [DEBUG HOOK] totalCount:', totalCount);
 
   // 🔄 Mutação segura para atualizar estoque
   const updateStockMutation = useSecureTenantMutation(

@@ -1,12 +1,15 @@
 /**
  * Seção: Imagens do Produto
+ * Performance: Memoizado para evitar re-renders desnecessários
  */
 
+import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { FormSectionProps } from '../types/product-form.types';
 
-export function ImageSection({ formData, onChange }: FormSectionProps) {
+// AIDEV-NOTE: Componente memoizado para evitar re-renders desnecessários
+export const ImageSection = React.memo(function ImageSection({ formData, onChange }: FormSectionProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -24,5 +27,11 @@ export function ImageSection({ formData, onChange }: FormSectionProps) {
       </div>
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // AIDEV-NOTE: Comparação customizada - só re-renderiza se formData.image_url mudar
+  return (
+    (prevProps.formData as any).image_url === (nextProps.formData as any).image_url &&
+    prevProps.onChange === nextProps.onChange
+  );
+});
 

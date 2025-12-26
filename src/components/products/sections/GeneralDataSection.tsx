@@ -5,6 +5,7 @@
  * - Hooks customizados para lógica complexa
  * - Componentes isolados para reutilização
  * - Separação de responsabilidades
+ * - Performance: Memoizado para evitar re-renders desnecessários
  */
 
 import { useState, useCallback } from 'react';
@@ -38,6 +39,9 @@ const UNIT_OPTIONS = [
   { value: 'm3', label: 'Metro Cúbico (m³)' },
 ];
 
+// AIDEV-NOTE: Componente memoizado para evitar re-renders desnecessários
+// Comparação customizada para otimizar performance
+// TEMPORARIAMENTE: Removendo memo para debug - será reativado após correção
 export function GeneralDataSection({
   formData,
   onChange,

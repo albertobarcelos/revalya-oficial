@@ -3,9 +3,10 @@
  * 
  * AIDEV-NOTE: Componente para gerenciar múltiplos códigos de barras por produto
  * Formato: array de objetos { unit: string, code: string }
+ * Performance: Memoizado para evitar re-renders desnecessários
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -35,7 +36,8 @@ const UNIT_OPTIONS = [
   { value: 'm3', label: 'Metro Cúbico (m³)' },
 ];
 
-export function BarcodeSection({ formData, onChange }: FormSectionProps) {
+// AIDEV-NOTE: Componente memoizado para evitar re-renders desnecessários
+export const BarcodeSection = React.memo(function BarcodeSection({ formData, onChange }: FormSectionProps) {
   // AIDEV-NOTE: Parsear barcode do formData (pode ser JSONB string ou array)
   const barcodes: BarcodeItem[] = useMemo(() => {
     const barcodeValue = (formData as any).barcode;
@@ -302,4 +304,10 @@ export function BarcodeSection({ formData, onChange }: FormSectionProps) {
       )}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // AIDEV-NOTE: Comparação customizada - só re-renderiza se formData.barcode mudar
+  return (
+    prevProps.formData === nextProps.formData &&
+    prevProps.onChange === nextProps.onChange
+  );
+});

@@ -58,13 +58,17 @@ export function useProductFormHandlers({
         const success = await handleSubmit();
 
         if (success && !isEditMode) {
+          // AIDEV-NOTE: Em modo de criação, fechar modal após salvar
           console.log(`[AUDIT] Produto criado com sucesso - Tenant: ${currentTenant.name}`);
           resetForm();
           resetFiscalData();
           onOpenChange(false);
           onSuccess?.();
         } else if (success && isEditMode) {
+          // AIDEV-NOTE: Em modo de edição, NÃO fechar modal - apenas mostrar toast
+          // O toast já é exibido pelo hook useProductForm
           console.log(`[AUDIT] Produto atualizado com sucesso - Tenant: ${currentTenant.name}`);
+          // Modal permanece aberto para permitir continuar editando
         }
       } catch (error) {
         console.error('[ERROR] Erro ao submeter formulário:', error);

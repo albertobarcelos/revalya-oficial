@@ -148,7 +148,7 @@ export function useProductFormLoading({
     } else if (activeSection === 'dados-gerais') {
       // AIDEV-NOTE: NUNCA mostrar loading em dados-gerais após primeira visita
       // Esta é a seção padrão e sempre deve estar pronta após carregamento inicial
-      isSectionDataLoading = false;
+        isSectionDataLoading = false;
     } else if (activeSection === 'estoque') {
       // AIDEV-NOTE: Só mostrar loading se nunca visitou esta seção E estoque está carregando
       isSectionDataLoading = !hasVisitedSection && isLoadingStockState;
@@ -160,7 +160,7 @@ export function useProductFormLoading({
     // AIDEV-NOTE: Usar requestAnimationFrame para evitar piscar visual
     // Isso garante que a mudança de estado acontece no próximo frame de renderização
     const rafId = requestAnimationFrame(() => {
-      setIsSectionLoading(isSectionDataLoading);
+    setIsSectionLoading(isSectionDataLoading);
     });
 
     return () => cancelAnimationFrame(rafId);

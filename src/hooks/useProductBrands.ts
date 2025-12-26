@@ -121,7 +121,8 @@ export function useProductBrands(params?: UseProductBrandsParams) {
     fetchBrandsQuery,
     {
       enabled: hasAccess,
-      staleTime: 10 * 60 * 1000, // 10 minutos (marcas mudam pouco)
+      staleTime: 15 * 60 * 1000, // AIDEV-NOTE: 15 minutos (marcas mudam muito pouco)
+      gcTime: 30 * 60 * 1000, // AIDEV-NOTE: 30 minutos em cache (performance)
       refetchOnWindowFocus: false, // AIDEV-NOTE: Não recarregar ao mudar de aba do navegador
       refetchOnMount: false, // AIDEV-NOTE: Não recarregar ao remontar se já tiver dados em cache
       refetchOnReconnect: false, // AIDEV-NOTE: Não recarregar ao reconectar

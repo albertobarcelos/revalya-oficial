@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useSecureTenantMutation } from '@/hooks/templates/useSecureTenantQuery';
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,6 +32,10 @@ interface ProductFormData {
 export function useProductForm(product: Product, onSuccess: () => void, fiscalData?: FiscalData) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // AIDEV-NOTE: Ref para rastrear se formData foi atualizado via onSuccess da mutação
+  // Isso evita que o useEffect atualize novamente e cause "piscar"
+  const isFormDataUpdatedByMutationRef = useRef(false);
 
   // 🔄 Estado do formulário inicializado com dados do produto
   const [formData, setFormData] = useState<ProductFormData>({
@@ -62,10 +66,38 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
   // AIDEV-NOTE: Atualizar formData quando o produto mudar (importante quando produto é carregado assincronamente)
   // Isso garante que quando passamos um produto dummy inicialmente e depois o produto real,
   // o formulário seja atualizado com os dados corretos
+  // AIDEV-NOTE: Incluir campos relevantes nas dependências para garantir atualização quando dados são carregados
+  // AIDEV-NOTE: Não atualizar se formData foi atualizado via mutação (evita "piscar")
   useEffect(() => {
-    // Só atualizar se o produto tiver um ID válido (não é dummy)
-    if (product.id && product.id.trim() !== '') {
-      setFormData({
+    // Se formData foi atualizado via mutação, resetar flag e não atualizar novamente
+    if (isFormDataUpdatedByMutationRef.current) {
+      isFormDataUpdatedByMutationRef.current = false;
+      return;
+    }
+    
+    // AIDEV-NOTE: Não atualizar se produto não mudou significativamente
+    // Comparar updated_at para evitar atualizações desnecessárias
+    const shouldUpdate = product.id && product.id.trim() !== '';
+    
+    if (!shouldUpdate) return;
+    
+    // AIDEV-NOTE: Atualizar formData apenas se produto realmente mudou
+    setFormData(prevFormData => {
+      // AIDEV-NOTE: Verificar se os dados realmente mudaram para evitar atualização desnecessária
+      const hasSignificantChange = 
+        prevFormData.name !== product.name ||
+        prevFormData.category_id !== (product.category_id || null) ||
+        prevFormData.brand_id !== (product.brand_id || null) ||
+        prevFormData.unit_of_measure !== (product.unit_of_measure || null) ||
+        prevFormData.unit_price !== product.unit_price;
+      
+      // Se não houve mudança significativa, retornar formData anterior
+      if (!hasSignificantChange) {
+        return prevFormData;
+      }
+      
+      // Atualizar com novos dados
+      return {
         name: product.name,
         description: product.description || null,
         code: product.code || null,
@@ -88,9 +120,29 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
         has_inventory: product.has_inventory !== undefined ? product.has_inventory : true,
         is_active: product.is_active,
         image_url: product.image_url || null,
-      });
-    }
-  }, [product.id]); // AIDEV-NOTE: Usar apenas product.id como dependência para evitar atualizações desnecessárias
+      };
+    });
+  }, [
+    product.id,
+    product.name,
+    product.description,
+    product.code,
+    product.sku,
+    product.barcode,
+    product.unit_price,
+    product.cost_price,
+    product.stock_quantity,
+    product.min_stock_quantity,
+    product.category,
+    product.category_id, // AIDEV-NOTE: Campo crítico para atualização do formulário
+    product.brand_id, // AIDEV-NOTE: Campo crítico para atualização do formulário
+    product.supplier,
+    product.unit_of_measure, // AIDEV-NOTE: Campo crítico para atualização do formulário
+    product.tax_rate,
+    product.has_inventory,
+    product.is_active,
+    product.image_url,
+  ]); // AIDEV-NOTE: Incluir todos os campos relevantes para garantir atualização quando dados são carregados assincronamente
 
   // 🔐 Mutação segura para atualizar produto
   const updateProductMutation = useSecureTenantMutation(
@@ -223,7 +275,47 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
           });
         }
         
-        // 🔄 Invalidar caches relacionados
+        // 🔄 Atualizar formData diretamente com os dados retornados para evitar "piscar"
+        // AIDEV-NOTE: Atualizar formData sem recarregar produto do servidor evita re-renders desnecessários
+        // AIDEV-NOTE: Marcar flag para evitar que useEffect atualize novamente
+        isFormDataUpdatedByMutationRef.current = true;
+        setFormData({
+          name: updatedProduct.name,
+          description: updatedProduct.description || null,
+          code: updatedProduct.code || null,
+          sku: updatedProduct.sku,
+          barcode: updatedProduct.barcode 
+            ? (typeof updatedProduct.barcode === 'string' 
+                ? updatedProduct.barcode 
+                : JSON.stringify(updatedProduct.barcode)) 
+            : null,
+          unit_price: updatedProduct.unit_price,
+          cost_price: updatedProduct.cost_price || null,
+          stock_quantity: updatedProduct.stock_quantity,
+          min_stock_quantity: updatedProduct.min_stock_quantity || 0,
+          category: updatedProduct.category || null,
+          category_id: updatedProduct.category_id || null,
+          brand_id: updatedProduct.brand_id || null,
+          supplier: updatedProduct.supplier || null,
+          unit_of_measure: updatedProduct.unit_of_measure || null,
+          tax_rate: updatedProduct.tax_rate || 0,
+          has_inventory: updatedProduct.has_inventory !== undefined ? updatedProduct.has_inventory : true,
+          is_active: updatedProduct.is_active,
+          image_url: updatedProduct.image_url || null,
+        });
+        
+        // 🔄 Atualizar cache diretamente com dados atualizados
+        // AIDEV-NOTE: Atualizar cache do produto atual imediatamente para garantir dados corretos
+        // AIDEV-NOTE: NÃO invalidar a query do produto atual - isso causaria refetch e "piscar" do modal
+        // A invalidação só deve acontecer quando o modal FECHAR, não durante a edição
+        queryClient.setQueryData(
+          ['product', updatedProduct.tenant_id, updatedProduct.id],
+          updatedProduct
+        );
+        
+        // AIDEV-NOTE: Invalidar apenas a lista de produtos para atualizar o grid
+        // NÃO invalidar a query do produto atual para evitar refetch e "piscar" do modal
+        // A query do produto será invalidada apenas quando o modal fechar (em ProductFormDialog)
         queryClient.invalidateQueries({ queryKey: ['products'] });
         queryClient.invalidateQueries({ queryKey: ['product-details', product.id] });
         
@@ -232,6 +324,8 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
           description: `${updatedProduct.name} foi atualizado com sucesso.`,
         });
         
+        // AIDEV-NOTE: onSuccess não deve fechar o modal em modo de edição
+        // O modal permanece aberto para permitir continuar editando
         onSuccess();
       },
       onError: (error) => {

@@ -443,9 +443,9 @@ export function useProductById(
     {
       // AIDEV-NOTE: Query só é executada se houver acesso válido, tenant e productId
       enabled: (options.enabled !== false) && hasAccess && !!currentTenant?.id && !!productId,
-      staleTime: 30 * 1000, // AIDEV-NOTE: Cache de 30 segundos para evitar requisições excessivas
-      refetchOnMount: 'always', // AIDEV-NOTE: Sempre refazer busca quando o componente montar
-      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops - usar apenas refetchOnMount
+      staleTime: 5 * 60 * 1000, // AIDEV-NOTE: Cache de 5 minutos - dados não mudam frequentemente
+      refetchOnMount: false, // AIDEV-NOTE: NÃO refetch automático - evita "piscar" quando cache é atualizado
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops e "piscar"
       refetchOnReconnect: true, // AIDEV-NOTE: Refazer ao reconectar
     }
   );

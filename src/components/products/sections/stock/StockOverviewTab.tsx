@@ -5,7 +5,7 @@
  * Permite edição inline do estoque mínimo
  */
 
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, memo } from 'react';
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, Info } from 'lucide-react';
-import { useProductStock, type ProductStockByLocation } from '@/hooks/useProductStock';
+import type { ProductStockByLocation } from '@/hooks/useProductStock';
 import { formatCMC } from '@/utils/stockUtils';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,11 +28,13 @@ interface StockOverviewTabProps {
   isLoading: boolean;
   error: Error | string | null | undefined;
   stock: ProductStockByLocation[];
+  updateStock: (productId: string, locationId: string, stockData: { min_stock?: number }) => Promise<any>;
 }
 
-export function StockOverviewTab({ productId, isLoading, error, stock }: StockOverviewTabProps) {
+// AIDEV-NOTE: Componente interno para evitar chamada duplicada de useProductStock
+// A função updateStock é recebida como prop do componente pai
+function StockOverviewTabComponent({ productId, isLoading, error, stock, updateStock }: StockOverviewTabProps) {
   const { toast } = useToast();
-  const { updateStock } = useProductStock(productId ? { product_id: productId } : undefined);
   
   // AIDEV-NOTE: Estado para controlar edição inline do estoque mínimo
   const [editingMinStock, setEditingMinStock] = useState<string | null>(null);
@@ -366,4 +368,23 @@ export function StockOverviewTab({ productId, isLoading, error, stock }: StockOv
     </div>
   );
 }
+
+// AIDEV-NOTE: Memoizar componente para evitar re-renders desnecessários quando a aba muda de foco
+// Comparar apenas props relevantes para otimizar performance
+// AIDEV-NOTE: Não comparar updateStock (função) pois pode mudar a cada render sem afetar a UI
+export const StockOverviewTab = memo(StockOverviewTabComponent, (prevProps, nextProps) => {
+  // AIDEV-NOTE: Só re-renderizar se as props relevantes mudarem
+  // Retornar true = props são iguais = NÃO re-renderizar
+  // Retornar false = props são diferentes = re-renderizar
+  // AIDEV-NOTE: Comparar stock por referência e comprimento para evitar re-renders desnecessários
+  const stockChanged = prevProps.stock.length !== nextProps.stock.length ||
+    prevProps.stock.some((item, index) => item.id !== nextProps.stock[index]?.id);
+  
+  return (
+    prevProps.productId === nextProps.productId &&
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.error === nextProps.error &&
+    !stockChanged
+  );
+});
 

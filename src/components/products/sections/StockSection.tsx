@@ -36,6 +36,7 @@ function StockSectionComponent({
     isLoading,
     error,
     refetch: refetchStock,
+    updateStock,
   } = useProductStock(productId ? { product_id: productId, limit: 100 } : undefined);
   
   // AIDEV-NOTE: Notificar mudanças no estado de loading para o componente pai
@@ -80,6 +81,7 @@ function StockSectionComponent({
             isLoading={isLoading}
             error={error}
             stock={stock || []}
+            updateStock={updateStock}
           />
         </TabsContent>
         

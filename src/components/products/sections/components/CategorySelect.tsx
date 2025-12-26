@@ -4,6 +4,7 @@
  * AIDEV-NOTE: Componente isolado para seleção de categoria
  */
 
+import React from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus } from 'lucide-react';
@@ -18,7 +19,7 @@ interface CategorySelectProps {
 
 export function CategorySelect({
   formData,
-  categories,
+  categories = [],
   isLoadingCategories,
   onValueChange,
   onCreateNew,
@@ -40,20 +41,36 @@ export function CategorySelect({
         disabled={isLoadingCategories}
       >
         <SelectTrigger className="mt-1">
-          <SelectValue placeholder="Selecione" />
+          <SelectValue placeholder={isLoadingCategories ? "Carregando..." : "Selecione"} />
         </SelectTrigger>
         <SelectContent>
-          {categories.map((category) => (
-            <SelectItem key={category.id} value={category.id}>
-              {category.name}
-            </SelectItem>
-          ))}
-          <SelectItem value="__create_new_category__" className="text-primary font-medium border-t">
-            <div className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              <span>Criar nova categoria</span>
-            </div>
-          </SelectItem>
+          {isLoadingCategories ? (
+            <div className="p-2 text-sm text-muted-foreground">Carregando categorias...</div>
+          ) : categories && categories.length > 0 ? (
+            <>
+              {categories.map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+              <SelectItem value="__create_new_category__" className="text-primary font-medium border-t">
+                <div className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Criar nova categoria</span>
+                </div>
+              </SelectItem>
+            </>
+          ) : (
+            <>
+              <div className="p-2 text-sm text-muted-foreground">Nenhuma categoria cadastrada</div>
+              <SelectItem value="__create_new_category__" className="text-primary font-medium border-t">
+                <div className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  <span>Criar nova categoria</span>
+                </div>
+              </SelectItem>
+            </>
+          )}
         </SelectContent>
       </Select>
     </div>

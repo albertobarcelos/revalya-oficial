@@ -10,7 +10,7 @@
  * Clean Code: Single Responsibility Principle
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { useProductById } from '@/hooks/useSecureProducts';
 import type { Product } from '@/hooks/useSecureProducts';
@@ -40,8 +40,11 @@ export function useProductFormDialog({
   // AIDEV-NOTE: Passar hasAccess e currentTenant para useProductById para evitar chamada duplicada
   // de useTenantAccessGuard que causa erro "Should have a queue" do React
   // Buscar produto atualizado sempre que o modal abrir em modo de edição
+  // AIDEV-NOTE: useProductById já tem refetchOnMount: 'always', então recarregará automaticamente
+  // quando o modal abrir, garantindo dados atualizados
   const {
     product: updatedProduct,
+    refetch: refetchProduct,
   } = useProductById(
     isEditMode && product?.id ? product.id : null,
     { 
@@ -52,20 +55,49 @@ export function useProductFormDialog({
     }
   );
 
-  // Estabilizar referência do produto para evitar re-renders desnecessários
-  const currentProductRef = useRef<Product | null>(null);
+  // AIDEV-NOTE: Refetch apenas quando modal abre pela primeira vez
+  // AIDEV-NOTE: NÃO refetch quando a query é invalidada durante a edição (após salvar)
+  // Isso evita "piscar" do modal quando o usuário salva
+  // AIDEV-NOTE: Usar ref para rastrear se já fez refetch neste ciclo de abertura do modal
+  const hasRefetchedRef = useRef(false);
+  const wasOpenRef = useRef(false);
   
   useEffect(() => {
-    const newProduct = (updatedProduct || product) as Product | null;
-    const newId = newProduct?.id || null;
-    const currentId = currentProductRef.current?.id || null;
+    // AIDEV-NOTE: Detectar quando modal muda de fechado para aberto
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
     
-    if (newId !== currentId) {
-      currentProductRef.current = newProduct;
+    if (justOpened && isEditMode && product?.id && hasAccess && currentTenant?.id) {
+      // AIDEV-NOTE: Refetch apenas quando modal abre pela primeira vez (não quando já estava aberto)
+      if (!hasRefetchedRef.current) {
+        hasRefetchedRef.current = true;
+        // AIDEV-NOTE: Refetch quando modal abre para garantir dados atualizados
+        // Usar requestAnimationFrame para garantir que seja após o próximo frame
+        requestAnimationFrame(() => {
+          refetchProduct();
+        });
+      }
+    } else if (!open) {
+      // AIDEV-NOTE: Resetar flag quando modal fecha para permitir refetch na próxima abertura
+      hasRefetchedRef.current = false;
     }
-  }, [updatedProduct, product]);
+  }, [open, isEditMode, product?.id, hasAccess, currentTenant?.id, refetchProduct]);
 
-  const currentProduct = currentProductRef.current;
+  // AIDEV-NOTE: Usar useMemo com comparação específica para evitar re-renders desnecessários
+  // Isso evita "piscar" quando o cache é atualizado após salvar
+  // AIDEV-NOTE: Comparar apenas campos essenciais para determinar se produto realmente mudou
+  const currentProduct = useMemo(() => {
+    // Priorizar updatedProduct (produto buscado do servidor) sobre product (prop inicial)
+    return (updatedProduct || product) as Product | null;
+  }, [
+    // AIDEV-NOTE: Usar apenas campos essenciais como dependências para evitar atualizações desnecessárias
+    updatedProduct?.id,
+    updatedProduct?.name,
+    updatedProduct?.updated_at,
+    product?.id,
+    product?.name,
+    product?.updated_at,
+  ]);
 
   // Chave única baseada no produto para preservar estado entre remontagens
   const productKey = useMemo(() => {

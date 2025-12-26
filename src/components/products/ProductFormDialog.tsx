@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogTitle, DialogDescription, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useProductFormState } from './hooks/useProductFormState';
@@ -65,6 +66,7 @@ export function ProductFormDialog({
   onSuccess,
 }: ProductFormDialogProps) {
   const isEditMode = !!product;
+  const queryClient = useQueryClient();
 
   // Estado de seção ativa (movido para o componente principal para evitar problemas com hooks)
   // AIDEV-NOTE: Resetar para dados-gerais quando modal abre
@@ -86,6 +88,20 @@ export function ProductFormDialog({
     productKey,
   } = useProductFormDialog({ open, product, isEditMode });
 
+  // AIDEV-NOTE: Invalidar query do produto apenas quando modal FECHAR
+  // Isso garante que na próxima abertura, os dados sejam recarregados do servidor
+  // AIDEV-NOTE: NÃO invalidar quando abre - isso causaria refetch desnecessário e "piscar"
+  // Durante a edição, o cache é atualizado diretamente via setQueryData no useProductForm
+  useEffect(() => {
+    if (!open && isEditMode && product?.id && currentTenant?.id) {
+      // AIDEV-NOTE: Invalidar cache do produto apenas quando modal fecha
+      // Isso garante dados atualizados na próxima abertura, sem causar "piscar" durante edição
+      queryClient.invalidateQueries({ 
+        queryKey: ['product', currentTenant.id, product.id] 
+      });
+    }
+  }, [open, isEditMode, product?.id, currentTenant?.id, queryClient]);
+
   // 🔍 AUDIT LOG: Acesso ao modal de produto
   useEffect(() => {
     if (open && currentTenant) {
@@ -96,6 +112,7 @@ export function ProductFormDialog({
   }, [open, currentTenant, isEditMode]);
 
   // Data fetching hooks
+  // AIDEV-NOTE: Habilitar queries apenas quando modal estiver aberto e tiver acesso
   const { categories, isLoading: isLoadingCategories } = useActiveProductCategories();
   const {
     brands,
@@ -105,6 +122,7 @@ export function ProductFormDialog({
     error: brandsError,
     refetch: refetchBrands,
   } = useActiveProductBrands();
+  
   const {
     validateCodeExists,
     nextAvailableCode,
