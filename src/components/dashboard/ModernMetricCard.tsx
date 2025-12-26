@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { SparklineChart } from './SparklineChart';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -28,8 +28,15 @@ export function ModernMetricCard({
   type,
   onClick
 }: ModernMetricCardProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  const { theme } = useTheme();
+  // AIDEV-NOTE: Converte tema do ThemeProvider para boolean isDark
+  // Se for 'system', detecta do sistema operacional
+  const isDark = useMemo(() => {
+    if (theme === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return theme === 'dark';
+  }, [theme]);
   const [isHovered, setIsHovered] = useState(false);
 
   // Gerar dados para sparkline se não fornecidos

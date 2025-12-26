@@ -85,8 +85,9 @@ export function useProducts(params?: UseProductsParams) {
       query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`);
     }
     
+    // AIDEV-NOTE: Atualizado para usar category_id (UUID) ao invés de category (TEXT)
     if (category) {
-      query = query.eq('category', category);
+      query = query.eq('category_id', category);
     }
     
     if (minPrice !== null) {

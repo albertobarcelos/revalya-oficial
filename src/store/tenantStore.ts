@@ -60,7 +60,7 @@ interface TenantState {
   setUserRole: (role: string | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  fetchPortalData: (supabase: SupabaseClient) => Promise<void>;
+  fetchPortalData: (supabase: SupabaseClient, forceRefresh?: boolean) => Promise<void>;
   switchTenant: (tenantId: string) => void;
   clearTenantData: () => void;
   loadFromCache: (userId: string) => boolean;

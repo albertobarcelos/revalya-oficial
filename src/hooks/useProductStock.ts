@@ -6,6 +6,7 @@
  */
 
 import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } from './templates/useSecureTenantQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { StorageLocation } from './useStorageLocations';
 
@@ -54,6 +55,7 @@ export function useProductStock(params?: UseProductStockParams) {
   
   // 🔐 Validação de acesso obrigatória
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+  const queryClient = useQueryClient();
 
   // 📊 Query function segura para buscar estoque por local
   const fetchStockQuery = async (supabase: SupabaseClient, tenantId: string) => {
@@ -75,12 +77,10 @@ export function useProductStock(params?: UseProductStockParams) {
     const { data: contextCheck } = await supabase.rpc('get_current_tenant_context');
     console.log('🔍 [DEBUG QUERY] Contexto de tenant verificado:', contextCheck);
     
+    // AIDEV-NOTE: Buscar estoque sem join automático (mais confiável)
     let query = supabase
       .from('product_stock_by_location')
-      .select(`
-        *,
-        storage_location:storage_locations(id, name, description, is_active)
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('tenant_id', tenantId);
     
     // Aplicar filtros
@@ -128,12 +128,47 @@ export function useProductStock(params?: UseProductStockParams) {
       throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
-    console.log(`✅ [SUCCESS] ${data?.length || 0} registros de estoque encontrados`);
-    console.log('🔍 [DEBUG HOOK] Dados retornados:', data);
+    // AIDEV-NOTE: Buscar storage_locations separadamente e fazer join manual
+    const storageLocationIds = [...new Set(data?.map(item => item.storage_location_id).filter(Boolean) || [])];
+    let storageLocationsMap: Record<string, any> = {};
+    
+    if (storageLocationIds.length > 0) {
+      const { data: storageData } = await supabase
+        .from('storage_locations')
+        .select('id, name, description, is_active')
+        .in('id', storageLocationIds)
+        .eq('tenant_id', tenantId);
+      
+      if (storageData) {
+        storageLocationsMap = storageData.reduce((acc, loc) => {
+          acc[loc.id] = loc;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+    }
+    
+    // AIDEV-NOTE: Enriquecer dados com storage_location e calcular total_cmc
+    const enrichedData = data?.map(item => {
+      const availableStock = Number(item.available_stock) || 0;
+      const unitCmc = Number(item.unit_cmc) || 0;
+      const totalCmc = item.total_cmc != null ? Number(item.total_cmc) : (availableStock * unitCmc);
+      
+      return {
+        ...item,
+        available_stock: availableStock,
+        min_stock: Number(item.min_stock) || 0,
+        unit_cmc: unitCmc,
+        total_cmc: totalCmc,
+        storage_location: item.storage_location_id ? storageLocationsMap[item.storage_location_id] : undefined,
+      };
+    }) || [];
+    
+    console.log(`✅ [SUCCESS] ${enrichedData.length} registros de estoque encontrados`);
+    console.log('🔍 [DEBUG HOOK] Dados retornados:', enrichedData);
     console.log('🔍 [DEBUG HOOK] Filtros aplicados:', { product_id, storage_location_id, tenantId });
     
     return {
-      stock: data || [],
+      stock: enrichedData,
       totalCount: count || 0
     };
   };
@@ -160,9 +195,10 @@ export function useProductStock(params?: UseProductStockParams) {
     fetchStockQuery,
     {
       enabled: isEnabled, // AIDEV-NOTE: Habilitado quando tem acesso e tenant
-      staleTime: 0, // AIDEV-NOTE: Sem cache para debug (voltar para 2 * 60 * 1000 depois)
-      gcTime: 0, // AIDEV-NOTE: Sem garbage collection para debug
-      refetchOnWindowFocus: false
+      staleTime: 5 * 60 * 1000, // AIDEV-NOTE: Cache de 5 minutos para evitar requisições excessivas
+      refetchOnMount: false, // AIDEV-NOTE: Desabilitado para evitar múltiplas requisições ao mudar de aba
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops
+      refetchOnReconnect: true, // AIDEV-NOTE: Refazer ao reconectar
     }
   );
   
@@ -191,15 +227,23 @@ export function useProductStock(params?: UseProductStockParams) {
     async (
       supabase: SupabaseClient,
       tenantId: string,
-      productId: string,
-      locationId: string,
-      stockData: UpdateProductStockDTO
+      variables: { productId: string; locationId: string; stockData: UpdateProductStockDTO }
     ) => {
+      const { productId, locationId, stockData } = variables;
       console.log(`✏️ [AUDIT] Atualizando estoque para produto ${productId} no local ${locationId}`);
       
       await supabase.rpc('set_tenant_context_simple', {
         p_tenant_id: tenantId
       });
+      
+      // AIDEV-NOTE: Buscar valores atuais para preservar campos não atualizados
+      const { data: currentStock } = await supabase
+        .from('product_stock_by_location')
+        .select('available_stock, min_stock, unit_cmc')
+        .eq('tenant_id', tenantId)
+        .eq('product_id', productId)
+        .eq('storage_location_id', locationId)
+        .single();
       
       const { data: updatedData, error: updateError } = await supabase
         .from('product_stock_by_location')
@@ -207,9 +251,10 @@ export function useProductStock(params?: UseProductStockParams) {
           tenant_id: tenantId,
           product_id: productId,
           storage_location_id: locationId,
-          available_stock: stockData.available_stock ?? 0,
-          min_stock: stockData.min_stock ?? 0,
-          unit_cmc: stockData.unit_cmc ?? 0
+          // AIDEV-NOTE: Usar valor fornecido ou manter o atual
+          available_stock: stockData.available_stock ?? currentStock?.available_stock ?? 0,
+          min_stock: stockData.min_stock ?? currentStock?.min_stock ?? 0,
+          unit_cmc: stockData.unit_cmc ?? currentStock?.unit_cmc ?? 0
         }, {
           onConflict: 'tenant_id,product_id,storage_location_id'
         })
@@ -230,6 +275,10 @@ export function useProductStock(params?: UseProductStockParams) {
       return updatedData;
     },
     {
+      onSuccess: () => {
+        // AIDEV-NOTE: Invalidar cache para atualizar a lista
+        queryClient.invalidateQueries({ queryKey: ['product_stock_by_location'] });
+      },
       invalidateQueries: ['product_stock_by_location']
     }
   );
@@ -246,7 +295,9 @@ export function useProductStock(params?: UseProductStockParams) {
     
     // 🔄 Ações
     refetch,
-    updateStock: updateStockMutation.mutate,
+    updateStock: async (productId: string, locationId: string, stockData: UpdateProductStockDTO) => {
+      return updateStockMutation.mutateAsync({ productId, locationId, stockData });
+    },
     
     // 🔄 Estados das mutações
     isUpdating: updateStockMutation.isPending,

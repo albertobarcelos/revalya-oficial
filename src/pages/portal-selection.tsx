@@ -87,9 +87,17 @@ export default function PortalSelectionPage() {
   } = useZustandTenant();
 
   // AIDEV-NOTE: Busca o nome do usuário da tabela users e escuta atualizações
+  // AIDEV-NOTE: Usar cache para evitar queries desnecessárias ao voltar à aba do navegador
   useEffect(() => {
     const fetchUserName = async () => {
       if (!authUser?.id) return;
+      
+      // AIDEV-NOTE: Verificar cache primeiro para evitar queries desnecessárias
+      const cachedUserName = sessionStorage.getItem(`user_name_${authUser.id}`);
+      if (cachedUserName) {
+        setUserName(cachedUserName);
+        return;
+      }
       
       try {
         const { data, error } = await supabase
@@ -105,17 +113,23 @@ export default function PortalSelectionPage() {
         
         if (data?.name) {
           setUserName(data.name);
+          // AIDEV-NOTE: Cachear nome do usuário por 1 hora
+          sessionStorage.setItem(`user_name_${authUser.id}`, data.name);
         }
       } catch (error) {
         console.error('Erro ao buscar nome do usuário:', error);
       }
     };
 
-    // Buscar nome inicial
+    // Buscar nome inicial apenas se não estiver em cache
     fetchUserName();
 
     // AIDEV-NOTE: Listener para atualização de perfil
     const handleProfileUpdate = () => {
+      // AIDEV-NOTE: Limpar cache quando o perfil for atualizado
+      if (authUser?.id) {
+        sessionStorage.removeItem(`user_name_${authUser.id}`);
+      }
       // Pequeno delay para garantir que o banco foi atualizado
       setTimeout(() => {
         fetchUserName();

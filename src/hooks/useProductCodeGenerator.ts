@@ -66,18 +66,28 @@ export function useProductCodeGenerator() {
         throw new Error(`Erro ao buscar códigos: ${error.message}`);
       }
 
-      // 🔢 PROCESSAR CÓDIGOS PARA ENCONTRAR O MAIOR NUMÉRICO
+      // 🔢 PROCESSAR CÓDIGOS PARA ENCONTRAR O MAIOR NUMÉRICO COM PREFIXO "PRD"
+      // AIDEV-NOTE: Busca códigos no formato PRD001, PRD002, etc.
       let maxNumericCode = 0;
       
       if (data && data.length > 0) {
         for (const product of data) {
           if (product.code) {
-            // Verificar se o código é puramente numérico
-            const numericMatch = product.code.match(/^\d+$/);
-            if (numericMatch) {
-              const numericValue = parseInt(product.code, 10);
+            // Verificar se o código começa com "PRD" seguido de números
+            const prdMatch = product.code.match(/^PRD(\d+)$/i);
+            if (prdMatch) {
+              const numericValue = parseInt(prdMatch[1], 10);
               if (numericValue > maxNumericCode) {
                 maxNumericCode = numericValue;
+              }
+            } else {
+              // Fallback: verificar se é puramente numérico (compatibilidade com códigos antigos)
+              const numericMatch = product.code.match(/^\d+$/);
+              if (numericMatch) {
+                const numericValue = parseInt(product.code, 10);
+                if (numericValue > maxNumericCode) {
+                  maxNumericCode = numericValue;
+                }
               }
             }
           }
@@ -91,10 +101,13 @@ export function useProductCodeGenerator() {
       // AIDEV-NOTE: Cache por 5 minutos para evitar consultas desnecessárias
       staleTime: 5 * 60 * 1000,
       cacheTime: 10 * 60 * 1000,
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Não recarregar ao mudar de aba do navegador
+      refetchOnMount: false, // AIDEV-NOTE: Não recarregar ao remontar se já tiver dados em cache
+      refetchOnReconnect: false, // AIDEV-NOTE: Não recarregar ao reconectar
     }
   );
 
-  // 🔄 FUNÇÃO PARA GERAR PRÓXIMO CÓDIGO
+  // 🔄 FUNÇÃO PARA GERAR PRÓXIMO CÓDIGO COM PREFIXO "PRD"
   const generateNextCode = useCallback((): string => {
     if (!hasAccess || !maxCodeData) {
       console.warn('⚠️ [GENERATOR] Não é possível gerar código: sem acesso ou dados');
@@ -102,21 +115,22 @@ export function useProductCodeGenerator() {
     }
 
     const nextCode = maxCodeData.maxCode + 1;
-    // Formatar com zeros à esquerda (mínimo 3 dígitos)
-    const formattedCode = nextCode.toString().padStart(3, '0');
+    // Formatar com zeros à esquerda (mínimo 3 dígitos) e adicionar prefixo "PRD"
+    const formattedCode = `PRD${nextCode.toString().padStart(3, '0')}`;
     console.log(`🔢 [GENERATOR] Próximo código gerado: ${formattedCode}`);
     return formattedCode;
   }, [hasAccess, maxCodeData]);
 
   // 🔍 FUNÇÃO PARA VALIDAR SE CÓDIGO JÁ EXISTE
-  const validateCodeExists = useCallback(async (code: string): Promise<boolean> => {
+  // AIDEV-NOTE: productId opcional para ignorar o próprio produto na validação (modo edição)
+  const validateCodeExists = useCallback(async (code: string, productId?: string): Promise<boolean> => {
     if (!hasAccess || !currentTenant?.id || !code.trim()) {
       return false;
     }
 
     try {
       // 🛡️ AUDIT LOG OBRIGATÓRIO
-      console.log(`[AUDIT] Validando existência do código: ${code} - Tenant: ${currentTenant.id}`);
+      console.log(`[AUDIT] Validando existência do código: ${code} - Tenant: ${currentTenant.id}${productId ? ` - Ignorando produto: ${productId}` : ''}`);
       
       // 🛡️ CONFIGURAR CONTEXTO DO TENANT
       const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
@@ -127,13 +141,19 @@ export function useProductCodeGenerator() {
         console.warn('⚠️ [CONTEXT] Aviso ao configurar contexto:', contextError);
       }
 
-      // 🔍 VERIFICAR SE CÓDIGO JÁ EXISTE
-      const { data, error } = await supabase
+      // 🔍 VERIFICAR SE CÓDIGO JÁ EXISTE (ignorando o próprio produto se fornecido)
+      let query = supabase
         .from('products')
         .select('id')
         .eq('tenant_id', currentTenant.id)
-        .eq('code', code.trim())
-        .limit(1);
+        .eq('code', code.trim());
+      
+      // AIDEV-NOTE: Se estiver editando, ignorar o próprio produto
+      if (productId) {
+        query = query.neq('id', productId);
+      }
+      
+      const { data, error } = await query.limit(1);
 
       if (error) {
         console.error('🚨 [SECURITY] Erro ao validar código:', error);
@@ -173,7 +193,8 @@ export function useProductCodeGenerator() {
     refreshMaxCode,
     
     // 📈 INFORMAÇÕES ADICIONAIS
-    nextAvailableCode: hasAccess && maxCodeData ? (maxCodeData.maxCode + 1).toString().padStart(3, '0') : '',
+    // AIDEV-NOTE: Retorna código com prefixo "PRD" (ex: PRD001, PRD002)
+    nextAvailableCode: hasAccess && maxCodeData ? `PRD${(maxCodeData.maxCode + 1).toString().padStart(3, '0')}` : '',
   };
 }
 

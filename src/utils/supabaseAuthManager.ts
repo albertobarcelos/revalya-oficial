@@ -120,19 +120,27 @@ export function setupAxiosAuthSync(): () => void {
   try {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log(`[SupabaseAuthManager] Auth state changed: ${event}`);
+        // AIDEV-NOTE: Filtrar eventos TOKEN_REFRESHED para evitar logs desnecessários
+        // TOKEN_REFRESHED acontece automaticamente quando a aba volta ao foco - não precisa logar
+        if (event !== 'TOKEN_REFRESHED' && event !== 'INITIAL_SESSION') {
+          console.log(`[SupabaseAuthManager] Auth state changed: ${event}`);
+        }
         
-        // Atualizar headers do Axios
+        // Atualizar headers do Axios (silenciosamente para TOKEN_REFRESHED)
         if (session?.access_token) {
           axios.defaults.headers.common.Authorization = `Bearer ${session.access_token}`;
-          console.log('[SupabaseAuthManager] Headers do Axios atualizados com novo token');
+          // AIDEV-NOTE: Não logar atualização de headers para TOKEN_REFRESHED
+          if (event !== 'TOKEN_REFRESHED' && event !== 'INITIAL_SESSION') {
+            console.log('[SupabaseAuthManager] Headers do Axios atualizados com novo token');
+          }
         } else {
           delete axios.defaults.headers.common.Authorization;
           console.log('[SupabaseAuthManager] Headers de autorização removidos do Axios');
         }
         
-        // Remover chaves legadas em caso de mudança de estado
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // AIDEV-NOTE: Remover chaves legadas apenas em SIGNED_IN (não em TOKEN_REFRESHED)
+        // TOKEN_REFRESHED é um evento rotineiro que não requer limpeza
+        if (event === 'SIGNED_IN') {
           removeLegacyKeys();
         }
       }

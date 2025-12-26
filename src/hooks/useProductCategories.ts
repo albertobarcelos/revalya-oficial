@@ -33,6 +33,7 @@ export interface UseProductCategoriesParams {
   is_active?: boolean;
   limit?: number;
   page?: number;
+  enabled?: boolean; // AIDEV-NOTE: Permitir desabilitar a query quando só precisamos da função de criação
 }
 
 /**
@@ -111,6 +112,9 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     ? ['product_categories', 'search', searchTerm, is_active, page, limit]
     : ['product_categories', 'list', is_active, page, limit];
   
+  // AIDEV-NOTE: Permitir desabilitar a query quando só precisamos da função de criação
+  const queryEnabled = params?.enabled !== undefined ? params.enabled : hasAccess;
+
   const {
     data,
     isLoading,
@@ -120,9 +124,11 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
     queryKey,
     fetchCategoriesQuery,
     {
-      enabled: hasAccess,
+      enabled: queryEnabled,
       staleTime: 10 * 60 * 1000, // 10 minutos (categorias mudam pouco)
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Não recarregar ao mudar de aba do navegador
+      refetchOnMount: false, // AIDEV-NOTE: Não recarregar ao remontar se já tiver dados em cache
+      refetchOnReconnect: false, // AIDEV-NOTE: Não recarregar ao reconectar
     }
   );
   

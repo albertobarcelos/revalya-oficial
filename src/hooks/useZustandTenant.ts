@@ -12,6 +12,16 @@ import { useZustandAuth } from '@/hooks/useZustandAuth';
 import { useSupabase } from '@/hooks/useSupabase';
 import { throttledAutoSelect, throttledDebug } from '@/utils/logThrottle';
 
+// AIDEV-NOTE: Refs compartilhadas em módulo para preservar estado entre remontagens do hook
+// Isso evita que as refs sejam resetadas quando o hook é remontado
+const sharedRefs = {
+  previousUrlSlug: null as string | null,
+  previousTenantSlug: null as string | null,
+  previousPathname: null as string | null,
+  debounceTimer: null as NodeJS.Timeout | null,
+  isSwitching: false as boolean,
+};
+
 /**
  * Hook principal para gerenciamento de tenant usando Zustand
  * 
@@ -99,16 +109,17 @@ export function useZustandTenant() {
   // AIDEV-NOTE: Auto-seleção de tenant baseado no slug da URL - OTIMIZADO COM DEBOUNCE
   // Usa useLocation do react-router para detectar mudanças de URL de forma reativa
   const location = useLocation();
-  const previousUrlSlugRef = useRef<string | null>(null);
-  const previousTenantSlugRef = useRef<string | null>(null);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isSwitchingRef = useRef(false);
+  
+  // AIDEV-NOTE: Usar apenas ID e slug do tenant nas dependências para evitar recriações desnecessárias
+  const currentTenantId = currentTenant?.id;
+  const currentTenantSlug = currentTenant?.slug;
   
   // AIDEV-NOTE: Função de auto-seleção com debounce para evitar múltiplas execuções
+  // AIDEV-NOTE: Usar apenas valores primitivos nas dependências para estabilizar a função
   const performAutoSelect = useCallback((urlSlug: string | null) => {
     // Limpar timer anterior se existir
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+    if (sharedRefs.debounceTimer) {
+      clearTimeout(sharedRefs.debounceTimer);
     }
     
     // Lista de rotas que NÃO são tenants (ignorar auto-seleção)
@@ -116,65 +127,80 @@ export function useZustandTenant() {
     
     // Se for uma rota não-tenant, não fazer nada
     if (urlSlug && nonTenantRoutes.includes(urlSlug)) {
-      previousUrlSlugRef.current = urlSlug;
-      previousTenantSlugRef.current = currentTenant?.slug || null;
+      sharedRefs.previousUrlSlug = urlSlug;
+      sharedRefs.previousTenantSlug = currentTenantSlug || null;
       return;
     }
     
     // Evitar re-executar se nada mudou
-    if (previousUrlSlugRef.current === urlSlug && 
-        previousTenantSlugRef.current === currentTenant?.slug) {
+    if (sharedRefs.previousUrlSlug === urlSlug && 
+        sharedRefs.previousTenantSlug === currentTenantSlug) {
       return;
     }
     
     // AIDEV-NOTE: Debounce de 200ms para evitar múltiplas execuções durante navegação rápida
-    debounceTimerRef.current = setTimeout(() => {
+    sharedRefs.debounceTimer = setTimeout(() => {
+      // AIDEV-NOTE: Verificar novamente se nada mudou antes de executar (evitar race conditions)
+      // Isso garante que mesmo se o timeout expirar, não executamos se nada mudou
+      if (sharedRefs.previousUrlSlug === urlSlug && 
+          sharedRefs.previousTenantSlug === currentTenantSlug) {
+        return;
+      }
+      
       // Verificar se ainda está em processo de switch (evitar race condition)
-      if (isSwitchingRef.current) {
+      if (sharedRefs.isSwitching) {
         throttledAutoSelect('auto_select_switching', '[AUTO-SELECT] Switch em progresso, aguardando...');
       return;
     }
     
     // Se há um slug na URL e dados carregados, mas o tenant atual não corresponde
     if (urlSlug && hasLoaded && availableTenants.length > 0) {
-        throttledAutoSelect('auto_select_check', `[AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenant?.slug}`);
+        throttledAutoSelect('auto_select_check', `[AUTO-SELECT] URL slug: ${urlSlug}, currentTenant: ${currentTenantSlug}`);
       
-      if (!currentTenant || currentTenant.slug !== urlSlug) {
+      if (!currentTenantSlug || currentTenantSlug !== urlSlug) {
           throttledAutoSelect('auto_select_switch', `[AUTO-SELECT] Tentando trocar para tenant com slug: ${urlSlug}`);
         
         const targetTenant = availableTenants.find(t => t.slug === urlSlug && t.active);
         if (targetTenant) {
             throttledAutoSelect('auto_select_success', `[AUTO-SELECT] Trocando para tenant: ${targetTenant.name} (${targetTenant.id})`);
-            isSwitchingRef.current = true;
-          previousUrlSlugRef.current = urlSlug;
-          previousTenantSlugRef.current = targetTenant.slug;
+            sharedRefs.isSwitching = true;
+          sharedRefs.previousUrlSlug = urlSlug;
+          sharedRefs.previousTenantSlug = targetTenant.slug;
             
           switchTenant(targetTenant.id);
             
             // Resetar flag após um pequeno delay
             setTimeout(() => {
-              isSwitchingRef.current = false;
+              sharedRefs.isSwitching = false;
             }, 300);
         } else {
           console.error(`🚨 [TENANT AUTO-SELECT] Tenant com slug '${urlSlug}' não encontrado ou inativo`);
-          previousUrlSlugRef.current = urlSlug;
-          previousTenantSlugRef.current = null;
+          sharedRefs.previousUrlSlug = urlSlug;
+          sharedRefs.previousTenantSlug = null;
         }
       } else {
-          throttledAutoSelect('auto_select_correct', `[AUTO-SELECT] Tenant já está correto: ${currentTenant.name} (${currentTenant.slug})`);
-        previousUrlSlugRef.current = urlSlug;
-        previousTenantSlugRef.current = currentTenant.slug;
+          throttledAutoSelect('auto_select_correct', `[AUTO-SELECT] Tenant já está correto: ${currentTenant?.name || 'N/A'} (${currentTenantSlug})`);
+        sharedRefs.previousUrlSlug = urlSlug;
+        sharedRefs.previousTenantSlug = currentTenantSlug;
       }
     } else {
       // Atualizar referências mesmo quando não há ação
-      previousUrlSlugRef.current = urlSlug;
-      previousTenantSlugRef.current = currentTenant?.slug || null;
+      sharedRefs.previousUrlSlug = urlSlug;
+      sharedRefs.previousTenantSlug = currentTenantSlug || null;
     }
     }, 200);
-  }, [hasLoaded, availableTenants, currentTenant, switchTenant]);
+  }, [hasLoaded, availableTenants.length, currentTenantId, currentTenantSlug, switchTenant]); // AIDEV-NOTE: Usar apenas valores primitivos
   
   // AIDEV-NOTE: useEffect que reage a mudanças na URL usando useLocation
+  // AIDEV-NOTE: Usar ref compartilhada do módulo para preservar estado entre remontagens
   useEffect(() => {
+    // AIDEV-NOTE: Evitar execução se o pathname não mudou
+    if (sharedRefs.previousPathname === location.pathname) {
+      return;
+    }
+    
+    sharedRefs.previousPathname = location.pathname;
+    
     // Obter slug da URL atual usando location.pathname (mais confiável que window.location)
     const slugMatch = location.pathname.match(/^\/([^\/]+)/);
     const urlSlug = slugMatch ? slugMatch[1] : null;
@@ -184,11 +210,11 @@ export function useZustandTenant() {
     
     // Cleanup: limpar timer ao desmontar ou mudar dependências
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      if (sharedRefs.debounceTimer) {
+        clearTimeout(sharedRefs.debounceTimer);
       }
     };
-  }, [location.pathname, performAutoSelect]);
+  }, [location.pathname, performAutoSelect]); // AIDEV-NOTE: performAutoSelect agora é estável devido às dependências primitivas
   
   /**
    * Troca para um tenant específico com validação aprimorada

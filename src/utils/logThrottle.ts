@@ -83,9 +83,27 @@ class LogThrottle {
 
   /**
    * Log de auto select com throttling específico
+   * AIDEV-NOTE: Throttling mais agressivo para evitar spam no console
+   * AIDEV-NOTE: Não acumula chamadas - apenas loga a primeira vez e ignora as subsequentes dentro do throttle
    */
   autoSelect(key: string, message: string, data?: any): void {
-    this.log(`autoselect_${key}`, `[AUTO SELECT] ${message}`, data);
+    // AIDEV-NOTE: Usar throttle de 60 segundos para auto-select (mais agressivo)
+    // AIDEV-NOTE: Não acumula chamadas - apenas loga a primeira vez e ignora as subsequentes
+    const now = Date.now();
+    const entry = this.logs.get(`autoselect_${key}`);
+    const throttleTime = 60000; // 60 segundos para auto-select
+    
+    if (!entry || (now - entry.lastLogged) >= throttleTime) {
+      // Se é a primeira vez ou passou o tempo de throttle, loga
+      console.log(`[AUTO SELECT] ${message}`, data);
+      
+      this.logs.set(`autoselect_${key}`, {
+        message: `[AUTO SELECT] ${message}`,
+        lastLogged: now,
+        count: 1
+      });
+    }
+    // AIDEV-NOTE: Se ainda está dentro do throttle, simplesmente ignora (não acumula)
   }
 
   /**

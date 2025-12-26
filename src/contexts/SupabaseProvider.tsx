@@ -174,7 +174,19 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     // Escutar mudanças na autenticação com sincronização de headers
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // Log apenas em casos importantes (não INITIAL_SESSION)
+        // AIDEV-NOTE: Filtrar eventos que não são relevantes para evitar logs e queries desnecessárias
+        // TOKEN_REFRESHED acontece automaticamente quando a aba volta ao foco - não é um novo login
+        if (event === 'TOKEN_REFRESHED') {
+          // AIDEV-NOTE: Apenas atualizar token nos headers, sem fazer queries desnecessárias
+          const axios = (await import('axios')).default;
+          if (session?.access_token) {
+            axios.defaults.headers.common.Authorization = `Bearer ${session.access_token}`;
+          }
+          // AIDEV-NOTE: Não atualizar user state nem fazer logs - token refresh é silencioso
+          return;
+        }
+        
+        // Log apenas em casos importantes (não INITIAL_SESSION, não TOKEN_REFRESHED)
         if (event !== 'INITIAL_SESSION') {
           console.log('[SupabaseProvider] Auth state changed:', event);
         }
@@ -183,16 +195,15 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         const axios = (await import('axios')).default;
         if (session?.access_token) {
           axios.defaults.headers.common.Authorization = `Bearer ${session.access_token}`;
-          console.log('[SupabaseProvider] Headers do Axios sincronizados com novo token');
+          if (event !== 'INITIAL_SESSION') {
+            console.log('[SupabaseProvider] Headers do Axios sincronizados com novo token');
+          }
         } else {
           delete axios.defaults.headers.common.Authorization;
           console.log('[SupabaseProvider] Headers do Axios limpos');
         }
         
-        if (event === 'TOKEN_REFRESHED') {
-          console.log('[SupabaseProvider] Token renovado automaticamente');
-          setUser(session?.user ?? null);
-        } else if (event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_OUT') {
           console.log('[SupabaseProvider] Usuário deslogado');
           setUser(null);
         } else if (event === 'SIGNED_IN') {

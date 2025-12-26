@@ -1,9 +1,12 @@
 /**
  * Provider centralizado para configuração do PrimeReact
  * Gerencia tema, localização e configurações globais
+ * 
+ * AIDEV-NOTE: Integrado com ThemeProvider para fonte única de verdade
+ * O tema é gerenciado pelo ThemeProvider, este provider apenas sincroniza
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { PrimeReactProvider as BasePrimeReactProvider, PrimeReactContext } from 'primereact/api';
 import { addLocale, locale } from 'primereact/api';
 import { 
@@ -14,6 +17,7 @@ import {
   getCurrentTheme,
   isDarkMode
 } from '@/config/primeReactTheme';
+import { useTheme } from './ThemeProvider';
 
 // Importações de CSS do PrimeReact
 import 'primereact/resources/primereact.min.css';
@@ -99,6 +103,7 @@ interface PrimeReactThemeContextType {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
   currentTheme: typeof lightTheme;
+  isDarkMode: boolean;
 }
 
 const PrimeReactThemeContext = createContext<PrimeReactThemeContextType | undefined>(undefined);
@@ -108,25 +113,25 @@ interface PrimeReactProviderProps {
 }
 
 export function PrimeReactProvider({ children }: PrimeReactProviderProps) {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // AIDEV-NOTE: Usa ThemeProvider como fonte única de verdade
+  // Sincroniza o tema do PrimeReact com o ThemeProvider
+  const { theme: themeFromProvider, setTheme: setThemeFromProvider } = useTheme();
+  
+  // Converte tema do ThemeProvider ('light' | 'dark' | 'system') para tema efetivo
+  const effectiveTheme = useMemo<'light' | 'dark'>(() => {
+    if (themeFromProvider === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return themeFromProvider;
+  }, [themeFromProvider]);
+
+  // Tema atual do PrimeReact (light ou dark)
   const [currentTheme, setCurrentTheme] = useState(lightTheme);
 
-  // Detectar tema inicial
+  // Sincronizar currentTheme com effectiveTheme
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    const initialTheme = (savedTheme as 'light' | 'dark') || systemTheme;
-    
-    setTheme(initialTheme);
-    setCurrentTheme(initialTheme === 'dark' ? darkTheme : lightTheme);
-    
-    // Aplicar classe no documento
-    if (initialTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
+    setCurrentTheme(effectiveTheme === 'dark' ? darkTheme : lightTheme);
+  }, [effectiveTheme]);
 
   // Configurar localização do PrimeReact
   useEffect(() => {
@@ -155,45 +160,27 @@ export function PrimeReactProvider({ children }: PrimeReactProviderProps) {
     };
   }, []);
 
-  // Escutar mudanças no tema do sistema
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleChange = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
-        const newTheme = e.matches ? 'dark' : 'light';
-        setTheme(newTheme);
-        setCurrentTheme(newTheme === 'dark' ? darkTheme : lightTheme);
-        
-        if (newTheme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      }
-    };
-    
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
+  // Toggle de tema sincronizado com ThemeProvider
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    setCurrentTheme(newTheme === 'dark' ? darkTheme : lightTheme);
-    localStorage.setItem('theme', newTheme);
-    
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    // Se está em modo system, alterna para dark
+    if (themeFromProvider === 'system') {
+      setThemeFromProvider('dark');
+      return;
     }
+    
+    // Alterna entre light e dark
+    const newTheme = effectiveTheme === 'light' ? 'dark' : 'light';
+    setThemeFromProvider(newTheme);
   };
 
+  // isDarkMode calculado
+  const isDark = effectiveTheme === 'dark';
+
   const contextValue: PrimeReactThemeContextType = {
-    theme,
+    theme: effectiveTheme,
     toggleTheme,
-    currentTheme
+    currentTheme,
+    isDarkMode: isDark
   };
 
   return (

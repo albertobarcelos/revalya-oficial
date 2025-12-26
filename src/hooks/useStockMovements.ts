@@ -7,6 +7,7 @@
  */
 
 import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } from './templates/useSecureTenantQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Product } from './useSecureProducts';
 import type { StorageLocation } from './useStorageLocations';
@@ -103,6 +104,7 @@ export function useStockMovements(params?: UseStockMovementsParams) {
   
   // 🔐 Validação de acesso obrigatória
   const { hasAccess, accessError, currentTenant } = useTenantAccessGuard();
+  const queryClient = useQueryClient();
 
   // 📊 Query function segura para buscar movimentações
   const fetchMovementsQuery = async (supabase: SupabaseClient, tenantId: string) => {
@@ -457,7 +459,17 @@ export function useStockMovements(params?: UseStockMovementsParams) {
       return insertedData;
     },
     {
-      invalidateQueries: ['stock_movements', 'products']
+      onSuccess: (data) => {
+        // AIDEV-NOTE: Invalidar cache de produtos e produto específico após movimentação
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+        queryClient.invalidateQueries({ queryKey: ['stock_movements'] });
+        queryClient.invalidateQueries({ queryKey: ['product_stock_by_location'] }); // AIDEV-NOTE: Invalidar estoque por local
+        if (data?.product_id) {
+          // AIDEV-NOTE: Invalidar cache do produto específico que foi movimentado
+          queryClient.invalidateQueries({ queryKey: ['product', currentTenant?.id, data.product_id] });
+        }
+      },
+      invalidateQueries: ['stock_movements', 'products', 'product', 'product_stock_by_location'] // AIDEV-NOTE: Invalidar também cache de produto específico e estoque
     }
   );
 

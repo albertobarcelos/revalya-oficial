@@ -2,6 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSecureTenantQuery, useSecureTenantMutation, useTenantAccessGuard } from './templates/useSecureTenantQuery';
 import { supabase } from '@/lib/supabase';
 
+// 📋 Interface para código de barras
+export interface BarcodeItem {
+  unit: string;
+  code: string;
+}
+
 // 📋 Interface para Product
 export interface Product {
   id: string;
@@ -9,9 +15,10 @@ export interface Product {
   description?: string;
   code?: string;
   sku: string;
-  barcode?: string;
+  barcode?: BarcodeItem[] | string | null; // AIDEV-NOTE: JSONB - array de objetos { unit, code } ou string JSON
   category?: string; // AIDEV-NOTE: Campo legado - será depreciado
   category_id?: string; // AIDEV-NOTE: Nova foreign key para product_categories
+  brand_id?: string; // AIDEV-NOTE: Foreign key para product_brands
   unit_price: number;
   cost_price?: number;
   stock_quantity: number;
@@ -22,6 +29,23 @@ export interface Product {
   tax_rate?: number;
   has_inventory?: boolean;
   image_url?: string;
+  // AIDEV-NOTE: Campos fiscais
+  ncm?: string;
+  cest?: string; // AIDEV-NOTE: CEST adicionado
+  product_type_id?: string | null;
+  cfop_id?: string | null;
+  origem?: string;
+  cst_icms?: string;
+  cst_icms_id?: string | null;
+  cst_ipi?: string;
+  cst_ipi_id?: string | null;
+  cst_pis?: string;
+  cst_pis_id?: string | null;
+  cst_cofins?: string;
+  cst_cofins_id?: string | null;
+  // AIDEV-NOTE: Alíquotas de PIS e COFINS
+  aliquota_pis?: number | null;
+  aliquota_cofins?: number | null;
   tenant_id: string;
   created_at: string;
   updated_at: string;
@@ -34,7 +58,7 @@ export interface CreateProductDTO {
   description?: string;
   code?: string;
   sku: string;
-  barcode?: string;
+  barcode?: BarcodeItem[] | string | null; // AIDEV-NOTE: JSONB - array de objetos { unit, code } ou string JSON
   category?: string; // AIDEV-NOTE: Campo legado - será depreciado
   category_id?: string; // AIDEV-NOTE: Nova foreign key para product_categories
   unit_price: number;
@@ -121,10 +145,11 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
       });
       
       // 🚀 USANDO RPC OTIMIZADA (similar aos serviços)
+      // AIDEV-NOTE: Atualizado para usar p_category_id (UUID) ao invés de p_category (TEXT)
       const { data, error } = await supabase.rpc('get_products_by_tenant', {
         p_tenant_id: tenantId,
         p_search_term: searchTerm || null,
-        p_category: category || null,
+        p_category_id: category || null, // AIDEV-NOTE: Agora espera UUID (category_id) ao invés de TEXT (category)
         p_is_active: is_active,
         p_min_price: minPrice || null,
         p_max_price: maxPrice || null,
@@ -326,6 +351,113 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
     createError: createProductMutation.error,
     updateError: updateProductMutation.error,
     deleteError: deleteProductMutation.error
+  };
+}
+
+/**
+ * 🔐 Hook para buscar um produto específico por ID (sempre atualizado)
+ * 
+ * AIDEV-NOTE: Este hook busca o produto diretamente do banco sempre que o modal abrir,
+ * garantindo que os dados estejam sempre atualizados (especialmente estoque)
+ * 
+ * AIDEV-NOTE: Aceita hasAccess e currentTenant como parâmetros opcionais para evitar
+ * chamada duplicada de useTenantAccessGuard quando já chamado no componente pai
+ */
+export function useProductById(
+  productId: string | null | undefined, 
+  options: { 
+    enabled?: boolean;
+    hasAccess?: boolean;
+    currentTenant?: { id: string; name: string } | null;
+    accessError?: string | null;
+  } = {}
+) {
+  // AIDEV-NOTE: Se hasAccess e currentTenant foram fornecidos, usar diretamente
+  // Caso contrário, chamar useTenantAccessGuard (mantém compatibilidade com código existente)
+  // Isso evita chamada duplicada que causa erro "Should have a queue" do React
+  // IMPORTANTE: Sempre chamar o hook para manter as regras dos hooks do React,
+  // mas usar os valores fornecidos quando disponíveis para evitar conflitos na queue
+  const tenantGuardResult = useTenantAccessGuard();
+  const hasAccess = options.hasAccess !== undefined ? options.hasAccess : tenantGuardResult.hasAccess;
+  const accessError = options.accessError !== undefined ? options.accessError : tenantGuardResult.accessError;
+  const currentTenant = options.currentTenant !== undefined ? options.currentTenant : tenantGuardResult.currentTenant;
+  
+  // AIDEV-NOTE: Removido throw durante renderização para evitar erro "Should have a queue" do React
+  // A validação de acesso agora é feita via enabled da query e retornada no objeto de resposta
+  
+  const {
+    data: product,
+    isLoading,
+    isFetching,
+    error,
+    refetch
+  } = useSecureTenantQuery(
+    // 🔑 QUERY KEY ESPECÍFICA PARA O PRODUTO
+    ['product', currentTenant?.id, productId],
+    async (supabase, tenantId) => {
+      if (!productId) {
+        return null;
+      }
+      
+      // 🔍 AUDIT LOG OBRIGATÓRIO
+      console.log(`[AUDIT] Buscando produto específico - Tenant: ${tenantId}, Produto: ${productId}`);
+      
+      // 🚀 USANDO RPC OTIMIZADA PARA BUSCAR PRODUTO ESPECÍFICO
+      const { data, error } = await supabase.rpc('get_products_by_tenant', {
+        p_tenant_id: tenantId,
+        p_search_term: null,
+        p_category_id: null,
+        p_is_active: null,
+        p_min_price: null,
+        p_max_price: null,
+        p_in_stock: null,
+        p_page: 1,
+        p_limit: 1000 // AIDEV-NOTE: Buscar muitos produtos para encontrar o específico
+      });
+      
+      if (error) {
+        console.error('[AUDIT] Erro ao buscar produto via RPC:', error);
+        throw error;
+      }
+      
+      // 🔒 VALIDAÇÃO DUPLA OBRIGATÓRIA
+      if (data) {
+        const invalidData = data.filter(item => item.tenant_id !== tenantId);
+        if (invalidData.length > 0) {
+          console.error('[SECURITY] Violação de segurança detectada - dados de outro tenant:', invalidData);
+          throw new Error('Violação de segurança: dados de outro tenant detectados');
+        }
+      }
+      
+      // AIDEV-NOTE: Encontrar o produto específico pelo ID
+      const foundProduct = data?.find(p => p.id === productId) || null;
+      
+      if (foundProduct) {
+        console.log(`[AUDIT] Produto encontrado: ${foundProduct.name} (${foundProduct.id})`);
+      } else {
+        console.log(`[AUDIT] Produto não encontrado: ${productId}`);
+      }
+      
+      return foundProduct;
+    },
+    {
+      // AIDEV-NOTE: Query só é executada se houver acesso válido, tenant e productId
+      enabled: (options.enabled !== false) && hasAccess && !!currentTenant?.id && !!productId,
+      staleTime: 30 * 1000, // AIDEV-NOTE: Cache de 30 segundos para evitar requisições excessivas
+      refetchOnMount: 'always', // AIDEV-NOTE: Sempre refazer busca quando o componente montar
+      refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops - usar apenas refetchOnMount
+      refetchOnReconnect: true, // AIDEV-NOTE: Refazer ao reconectar
+    }
+  );
+  
+  return {
+    product: product || null,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+    hasAccess,
+    accessError,
   };
 }
 

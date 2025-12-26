@@ -88,12 +88,44 @@ export function usePortalSelection() {
         // Inicializar array de portais disponíveis
         const availablePortals: Portal[] = [];
 
-        // Buscar informações do usuário
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('name, user_role')
-          .eq('id', user.id)
-          .single();
+        // AIDEV-NOTE: Buscar informações do usuário apenas se ainda não foram carregadas
+        // Evitar queries desnecessárias ao voltar à aba do navegador
+        let userData = null;
+        let userError = null;
+        
+        // AIDEV-NOTE: Usar cache local para evitar queries repetidas
+        const cachedUserData = sessionStorage.getItem(`user_data_${user.id}`);
+        if (cachedUserData) {
+          try {
+            userData = JSON.parse(cachedUserData);
+            logDebug('[PortalSelection] Dados do usuário carregados do cache');
+          } catch (e) {
+            // Se o cache estiver corrompido, buscar novamente
+            const result = await supabase
+              .from('users')
+              .select('name, user_role')
+              .eq('id', user.id)
+              .single();
+            userData = result.data;
+            userError = result.error;
+            if (userData) {
+              sessionStorage.setItem(`user_data_${user.id}`, JSON.stringify(userData));
+            }
+          }
+        } else {
+          // Buscar do banco apenas se não estiver em cache
+          const result = await supabase
+            .from('users')
+            .select('name, user_role')
+            .eq('id', user.id)
+            .single();
+          userData = result.data;
+          userError = result.error;
+          if (userData) {
+            // AIDEV-NOTE: Cachear dados do usuário por 1 hora
+            sessionStorage.setItem(`user_data_${user.id}`, JSON.stringify(userData));
+          }
+        }
 
         if (userError) {
           console.error('Erro ao buscar informações do usuário:', userError);

@@ -97,14 +97,17 @@ export function AppRouter() {
   // com outros componentes que usam a mesma fonte de dados
   const userRole = user?.user_metadata?.user_role || null;
   
-  // Debug log para verificar dados do usuário
-  console.log('[AppRouter] Debug - User data:', {
-    hasUser: !!user,
-    userEmail: user?.email,
-    userRole,
-    userMetadata: user?.user_metadata,
-    timestamp: new Date().toISOString()
-  });
+  // AIDEV-NOTE: Remover log de debug desnecessário que polui o console
+  // Log apenas em desenvolvimento e apenas quando realmente necessário
+  // if (import.meta.env.DEV) {
+  //   console.log('[AppRouter] Debug - User data:', {
+  //     hasUser: !!user,
+  //     userEmail: user?.email,
+  //     userRole,
+  //     userMetadata: user?.user_metadata,
+  //     timestamp: new Date().toISOString()
+  //   });
+  // }
 
   return (
     <Suspense fallback={<LoadingFallback />}>
