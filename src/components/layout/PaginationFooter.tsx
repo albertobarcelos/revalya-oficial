@@ -14,7 +14,6 @@ interface PaginationFooterProps {
   onItemsPerPageChange: (itemsPerPage: number) => void;
   isLoading?: boolean;
   className?: string;
-  totals?: { gross: number; paid: number; remaining: number };
 }
 
 // AIDEV-NOTE: Opções de itens por página disponíveis
@@ -29,8 +28,7 @@ export function PaginationFooter({
   onPageChange,
   onItemsPerPageChange,
   isLoading = false,
-  className = "",
-  totals
+  className = ""
 }: PaginationFooterProps) {
   // AIDEV-NOTE: Calcular range de itens exibidos na página atual
   const startItem = (currentPage - 1) * itemsPerPage + 1;
@@ -101,15 +99,6 @@ export function PaginationFooter({
             </SelectContent>
           </Select>
         </div>
-
-        {totals && (
-          <div className="ml-auto mr-[60px] flex items-center gap-2">
-            <span className="text-muted-foreground">Totais:</span>
-            <span className="w-[535px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.gross)}</span>
-            <span className="w-[150px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.paid)}</span>
-            <span className="w-[155px] text-right font-medium">{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(totals.remaining)}</span>
-          </div>
-        )}
       </div>
 
       {/* AIDEV-NOTE: Controles de navegação de páginas */}

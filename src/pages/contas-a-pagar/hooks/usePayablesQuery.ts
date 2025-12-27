@@ -26,7 +26,7 @@ export function usePayablesQuery(
 
   const [pagination, setPagination] = useState<PaginationData>({ total: 0, page: 1, limit, totalPages: 0 });
 
-  const { data, isLoading, error } = useSecureTenantQuery(
+  const { data, isLoading, error, refetch } = useSecureTenantQuery(
     queryKey,
     async (_supabase, tenantId) => {
       const params: PayableFilters = {
@@ -58,6 +58,6 @@ export function usePayablesQuery(
 
   const payables = (data?.data || []) as PayableRow[];
 
-  return { payables, pagination, isLoading, error };
+  return { payables, pagination, isLoading, error, refetch };
 }
 

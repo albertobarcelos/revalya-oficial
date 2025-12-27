@@ -1,4 +1,4 @@
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell, TableFooter } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Info, AlertCircle, AlertTriangle, CheckCircle, MinusCircle } from 'lucide-react';
@@ -38,7 +38,8 @@ export function PayablesTable({
 
   return (
     <>
-    <Table>
+    <div className="relative w-full">
+      <table className="w-full caption-bottom text-[13.2px]">
       <TableHeader className="sticky top-0 bg-background z-10">
         <TableRow>
           <TableHead className="checkbox-column text-[12px] font-bold leading-[17.1429px] text-[#555] align-middle text-left w-[30px] min-w-[30px] max-w-[30px] pl-2 pr-0 py-2 cursor-pointer">
@@ -72,44 +73,52 @@ export function PayablesTable({
           </TableHead>
           <TableHead className="text-left pl-0">Vencimento</TableHead>
           <TableHead className="text-left pl-0">Número</TableHead>
+          <TableHead className="text-left pl-0">Parcelas</TableHead>
+          <TableHead className="text-left pl-0">Favorecido</TableHead>
           <TableHead className="text-left pl-0">Detalhes</TableHead>
-          <TableHead className="text-right w-[160px] min-w-[160px]">Valor</TableHead>
-          <TableHead className="text-right w-[160px] min-w-[160px]">Pago</TableHead>
-          <TableHead className="text-right w-[160px] min-w-[160px]">A pagar</TableHead>
+          <TableHead className="text-left w-[160px] min-w-[160px]">Valor</TableHead>
+          <TableHead className="text-left w-[160px] min-w-[160px]">Pago</TableHead>
+          <TableHead className="text-left w-[160px] min-w-[160px]">A pagar</TableHead>
           <TableHead className="text-right w-[60px] min-w-[60px]">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {payables.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+            <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
               Nenhuma conta a pagar encontrada
             </TableCell>
           </TableRow>
         ) : (
           payables.map((entry) => {
-            const gross = entry.gross_amount ?? 0;
             const isReversed = lastReversedId === entry.id || entry.status === 'CANCELLED';
             const net = isReversed ? 0 : (entry.net_amount ?? 0);
             const paid = isReversed ? 0 : (entry.paid_amount ?? 0);
             const remaining = Math.max(net - paid, 0);
+            
+            // Valor column should show net_amount (includes fines/discounts) for active bills
+            // For cancelled bills, show gross_amount (original value) since net_amount is set to 0
+            const displayValue = isReversed ? (entry.gross_amount ?? 0) : (entry.net_amount ?? entry.gross_amount ?? 0);
+
             return (
               <TableRow key={entry.id}>
                 <TableCell className="w-[30px] min-w-[30px] max-w-[30px] pl-2 pr-0 py-2 align-middle">
                   <Checkbox checked={selectedIds.includes(entry.id)} onCheckedChange={(v) => toggleSelectOne(entry.id, !!v)} />
                 </TableCell>
                 <TableCell className="w-[88px] min-w-[88px] max-w-[88px] pl-0 pr-2 py-2 align-middle"><StatusIndicator status={isReversed ? 'CANCELLED' : entry.status} /></TableCell>
-                <TableCell className="text-left pl-0">{format(new Date(entry.due_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
-                <TableCell className="font-medium text-left pl-0">{entry.entry_number}</TableCell>
-                <TableCell className="detalhes align-middle w-[904px] pl-0 pr-2 py-2 text-[12px] leading-[17.1429px] text-[#555]">
+                <TableCell className="text-left pl-0 w-[100px] min-w-[100px]">{format(new Date(entry.due_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                <TableCell className="font-medium text-left pl-0 w-[120px] min-w-[120px]">{entry.entry_number}</TableCell>
+                <TableCell className="text-left pl-0 w-[80px] min-w-[80px]">{entry.installments || '-'}</TableCell>
+                <TableCell className="text-left pl-0 w-[150px] min-w-[150px] truncate" title={entry.customers?.name || ''}>{entry.customers?.name || '-'}</TableCell>
+                <TableCell className="detalhes align-middle w-auto pl-0 pr-2 py-2 text-[12px] leading-[17.1429px] text-[#555]">
                   <div className="flex flex-col whitespace-nowrap overflow-hidden">
                     <span className="font-semibold truncate">{entry.description || entry.supplier_name || ''}</span>
-                    <span className="truncate">{entry.supplier_name || (entry as any).reference || ''}</span>
+                    <span className="truncate">{entry.supplier_name || (entry as { reference?: string }).reference || ''}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-right w-[160px] min-w-[160px]">{formatCurrency(gross)}</TableCell>
-                <TableCell className="text-right w-[160px] min-w-[160px]">{formatCurrency(paid)}</TableCell>
-                <TableCell className="text-right w-[160px] min-w-[160px]">{formatCurrency(remaining)}</TableCell>
+                <TableCell className="text-left w-[160px] min-w-[160px]">{formatCurrency(displayValue)}</TableCell>
+                <TableCell className="text-left w-[160px] min-w-[160px]">{formatCurrency(paid)}</TableCell>
+                <TableCell className="text-left w-[160px] min-w-[160px]">{formatCurrency(remaining)}</TableCell>
                 <TableCell className="text-right w-[60px] min-w-[60px]">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -145,8 +154,9 @@ export function PayablesTable({
         )}
         
       </TableBody>
-    </Table>
-    <Dialog open={!!reverseEntry} onOpenChange={(v) => { if (!v) setReverseEntry(null); }}>
+       </table>
+     </div>
+       <Dialog open={!!reverseEntry} onOpenChange={(v) => { if (!v) setReverseEntry(null); }}>
       <DialogContent className="w-[600px] min-h-[270px] h-auto bg-white text-[#555] shadow-[0_5px_15px_rgba(0,0,0,0.5)] rounded-[4px] border-t-[5px] border-[rgb(223,75,51)] p-0">
         <div className="modal-header w-[600px] h-[65.7031px] pl-[20px] pr-[30px] pt-[30px] pb-[10px]">
           <span className="text-[18px] leading-[25.7143px] font-semibold text-[rgb(223,75,51)]">Estornar</span>
@@ -173,7 +183,16 @@ export function PayablesTable({
                 onClick={async () => {
                   if (!reverseEntry) return;
                   try {
-                    await updatePayable(reverseEntry.id, { status: 'CANCELLED', net_amount: 0, paid_amount: null, payment_date: null });
+                    const { data: authData } = await supabase.auth.getUser();
+                    const userId = authData.user?.id || null;
+                    
+                    await updatePayable(reverseEntry.id, { 
+                      status: 'CANCELLED', 
+                      net_amount: 0, 
+                      paid_amount: null, 
+                      payment_date: null,
+                      updated_by: userId
+                    });
                     setLastReversedId(reverseEntry.id);
                     setReverseEntry(null);
                     onAfterReverse?.();

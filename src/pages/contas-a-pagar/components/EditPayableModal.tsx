@@ -1,421 +1,286 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect, useState } from 'react';
-import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
-import { listFinancialSettings } from '@/services/financialSettingsService';
-import { listFinancialDocuments } from '@/services/financialDocumentsService';
-import { listFinancialLaunchs } from '@/services/financialLaunchsService';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { FileText, RefreshCw, DollarSign, History, X, ArrowLeft, Sparkles, Hash } from 'lucide-react';
 
-interface EditPayableModalProps {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  entry: any | null;
-  onSave: (variables: { id: string; patch: any }) => void;
-  currentTenantId?: string;
-  onAddLaunchPatch?: (variables: { id: string; patch: any }) => void;
-  readOnly?: boolean;
-}
+import { useEditPayableLogic } from './edit-payable-parts/useEditPayableLogic';
+import { EditPayableModalProps } from './edit-payable-parts/types';
+import { PayableGeneralTab } from './edit-payable-parts/tabs/PayableGeneralTab';
+import { PayableRecurrenceTab } from './edit-payable-parts/tabs/PayableRecurrenceTab';
+import { PayableLaunchesTab } from './edit-payable-parts/tabs/PayableLaunchesTab';
+import { PayableHistoryTab } from './edit-payable-parts/tabs/PayableHistoryTab';
 
-export const EditPayableModal: React.FC<EditPayableModalProps> = ({ open, onOpenChange, entry, onSave, onAddLaunchPatch, currentTenantId, readOnly }) => {
-  const [tab, setTab] = useState<'dados' | 'lancamentos' | 'historico'>('dados');
-  const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [issueDate, setIssueDate] = useState('');
-  const [entryNumber, setEntryNumber] = useState('');
-  const [category, setCategory] = useState('');
-  const [documentId, setDocumentId] = useState('');
-  
-  const [description, setDescription] = useState('');
-  const [repeat, setRepeat] = useState(false);
-  const [paidConfirmed, setPaidConfirmed] = useState(false);
-  const [bankAccountId, setBankAccountId] = useState('');
+import { LAUNCH_TYPES } from '@/types/financial-enums';
 
-  const [launchAmount, setLaunchAmount] = useState('');
-  const [launchDate, setLaunchDate] = useState('');
-  const [launchType, setLaunchType] = useState('');
-  const [launchDescription, setLaunchDescription] = useState('');
-  const [launches, setLaunches] = useState<Array<{ amount: number; date: string; typeId: string; description: string }>>([]);
-
-  useEffect(() => {
-    if (entry) {
-      setAmount(String(entry.net_amount ?? entry.gross_amount ?? ''));
-      setDueDate(entry.due_date ?? '');
-      setIssueDate(entry.issue_date ?? '');
-      setEntryNumber(entry.entry_number ?? '');
-      setCategory(entry.category_id ?? '');
-      setDocumentId(entry.document_id ?? '');
-      
-      setDescription(entry.description ?? '');
-      setRepeat(!!entry.repeat);
-      setPaidConfirmed(entry.status === 'PAID');
-    }
-  }, [entry]);
-
-  const categoriesQuery = useSecureTenantQuery(
-    ['payables-categories', currentTenantId],
-    async (supabase, tId) => {
-      const data = await listFinancialSettings(tId, 'EXPENSE_CATEGORY', { active: true }, supabase);
-      return data;
-    },
-    { enabled: !!currentTenantId }
-  );
-
-  const documentsQuery = useSecureTenantQuery(
-    ['payables-documents', currentTenantId],
-    async (supabase, tId) => {
-      const data = await listFinancialDocuments(tId, supabase);
-      return data;
-    },
-    { enabled: !!currentTenantId }
-  );
-  const bankAccountsQuery = useSecureTenantQuery(
-    ['bank-acounts', currentTenantId],
-    async (supabase, tId) => {
-      const { data, error } = await supabase
-        .from('bank_acounts')
-        .select('id, bank, agency, count, type, tenant_id')
-        .eq('tenant_id', tId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map((a: any) => ({ id: a.id, label: String(a.bank || '') }));
-    },
-    { enabled: !!currentTenantId }
-  );
-
-  const launchTypesQuery = useSecureTenantQuery(
-    ['payables-launch-types', currentTenantId],
-    async (supabase, tId) => {
-      const data = await listFinancialLaunchs(tId, supabase);
-      return data;
-    },
-    { enabled: !!currentTenantId }
-  );
-
-  
-
-  useEffect(() => {
-    if (open && entry) {
-      const metaLaunches = Array.isArray(entry?.metadata?.launches) ? entry.metadata.launches : [];
-      const normalized = metaLaunches.map((l: any) => ({
-        amount: Number(l.amount || 0),
-        date: String(l.date || ''),
-        typeId: String(l.typeId || ''),
-        description: String(l.description || ''),
-        operation: (l.operation === 'CREDIT' ? 'CREDIT' : 'DEBIT') as 'DEBIT' | 'CREDIT',
-      }));
-      setLaunches(normalized);
-    }
-  }, [open, entry]);
-
-  useEffect(() => {
-    if (entry) {
-      setBankAccountId(String((entry as any).bank_account_id || ''));
-    }
-  }, [entry]);
-
-  const DadosConteudo = (
-    <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div>
-          <Label>Valor</Label>
-          <Input placeholder="R$ 0,00" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!!readOnly} />
-        </div>
-        <div>
-          <Label>Data de vencimento</Label>
-          <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!!readOnly} />
-        </div>
-        <div>
-          <Label>Data de emissão</Label>
-          <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} disabled={!!readOnly} />
-        </div>
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Label>Número</Label>
-            <Input value={entryNumber} onChange={(e) => setEntryNumber(e.target.value)} disabled={!!readOnly} />
-          </div>
-        </div>
-        <div>
-          <Label>Categoria</Label>
-          <Select value={category} onValueChange={setCategory} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione ou digite para pesquisar" /></SelectTrigger>
-            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-              {categoriesQuery.data?.map((c: any) => (
-                <SelectItem
-                  key={c.id}
-                  value={c.id}
-                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
-                >
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Tipo de documento</Label>
-          <Select value={documentId} onValueChange={setDocumentId} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-              {documentsQuery.data?.map((d: any) => (
-                <SelectItem
-                  key={d.id}
-                  value={d.id}
-                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
-                >
-                  {d.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Conta bancária</Label>
-          <Select value={bankAccountId} onValueChange={setBankAccountId} disabled={!!readOnly}>
-            <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-              {bankAccountsQuery.data?.map((b: any) => (
-                <SelectItem
-                  key={b.id}
-                  value={b.id}
-                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
-                >
-                  {b.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="md:col-span-3">
-          <Label>Descrição (opcional)</Label>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} disabled={!!readOnly} />
-        </div>
-        <div className="md:col-span-3 space-y-3">
-          <label className="flex items-center gap-2">
-            <Checkbox checked={repeat} onCheckedChange={(v) => setRepeat(!!v)} disabled={!!readOnly} />
-            Esta conta a pagar irá se repetir
-          </label>
-          <label className="flex items-center gap-2">
-            <Checkbox checked={paidConfirmed} onCheckedChange={(v) => setPaidConfirmed(!!v)} disabled={!!readOnly} />
-            Pagamento confirmado
-          </label>
-        </div>
-      </div>
-      {!readOnly && (
-      <div className="mt-6 flex justify-end gap-2 sticky bottom-0 bg-white/95 backdrop-blur-sm py-3">
-        <Button onClick={() => {
-          if (!entry) return;
-          const amountNum = Number(amount || '0');
-          let patch: any = {
-            description,
-            gross_amount: amountNum,
-            net_amount: amountNum,
-            due_date: dueDate || new Date().toISOString().slice(0,10),
-            issue_date: issueDate || new Date().toISOString().slice(0,10),
-            status: paidConfirmed ? 'PAID' : 'PENDING',
-            payment_date: paidConfirmed ? new Date().toISOString().slice(0,10) : null,
-            paid_amount: paidConfirmed ? amountNum : null,
-            category_id: category || null,
-            entry_number: entryNumber || undefined,
-            document_id: documentId || null,
-            
-            repeat,
-          };
-          if (paidConfirmed) {
-            const doc = documentsQuery.data?.find((d: any) => d.id === (documentId || entry.document_id));
-            const typeId = doc?.settle_id ?? (documentId || entry.document_id) ?? '';
-            const prevMeta: any = entry.metadata || {};
-            const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
-            const newLaunch = {
-              amount: amountNum,
-              date: new Date().toISOString().slice(0,10),
-              typeId: String(typeId),
-              operation: 'DEBIT',
-              description: 'Movimento de Quitação',
-            };
-            patch.metadata = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
-          }
-          patch.bank_account_id = bankAccountId || null;
-          onSave({ id: entry.id, patch });
-        }}>Salvar alterações</Button>
-      </div>
+// AIDEV-NOTE: DialogContent customizado para remover bordas indesejadas e seguir padrão do modal de contratos
+const CustomDialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        "fixed left-[50%] top-[50%] z-50 grid w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] translate-x-[-50%] translate-y-[-50%] gap-0 border-0 bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-2xl overflow-hidden flex flex-col outline-none",
+        className
       )}
-    </>
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+      }}
+      {...props}
+    >
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        {children}
+      </div>
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+CustomDialogContent.displayName = "CustomDialogContent";
+
+export function EditPayableModal(props: EditPayableModalProps) {
+  const { open, onOpenChange, entry, readOnly } = props;
+  
+  const logic = useEditPayableLogic(props);
+  const { tab, setTab, handleSavePayable } = logic;
+
+  const calculateTotals = () => {
+    const gross = Number(logic.amount || 0);
+    let discounts = 0;
+    let additions = 0;
+    let paid = 0;
+
+    const currentLaunches = logic.launches || [];
+
+    currentLaunches.forEach(l => {
+      const typeKey = l.typeId as keyof typeof LAUNCH_TYPES;
+      const def = LAUNCH_TYPES[typeKey];
+      const isSettlement = def?.isSettlement;
+      const amount = Number(l.amount || 0);
+      const op = l.operation;
+
+      if (isSettlement) {
+         if (op === 'DEBIT') paid += amount;
+         else paid -= amount;
+      } else {
+         if (op === 'DEBIT') discounts += amount;
+         else additions += amount;
+      }
+    });
+
+    const net = gross + additions - discounts;
+    const balance = Math.max(net - paid, 0);
+
+    return { gross, discounts, additions, paid, net, balance };
+  };
+
+  const totals = calculateTotals();
+  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  const getTitle = () => {
+    switch (tab) {
+      case 'dados': return 'Dados gerais';
+      case 'repeticoes': return 'Relação de Parcelas Associadas';
+      case 'lancamentos': return 'Lançamentos';
+      case 'historico': return 'Histórico de Alterações';
+      default: return 'Detalhes';
+    }
+  };
+
+  const getNavButtonClass = (isActive: boolean) => cn(
+    "w-full justify-start font-medium transition-all h-10 rounded-md gap-2",
+    isActive 
+      ? "bg-background border-2 border-primary text-primary shadow-sm" 
+      : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[calc(100vw-30px)] !w-[calc(100vw-30px)] !h-[calc(100vh-30px)] !left-[15px] !right-[15px] !top-[15px] !bottom-[15px] !translate-x-0 !translate-y-0 p-0 flex flex-col [&>button]:hidden">
-        <div className="flex items-center justify-between h-[55px] min-h-[55px] bg-[rgb(244,245,246)] px-6">
-          <DialogTitle className="text-[18px] font-normal leading-[18.48px] text-[rgb(0,0,0)]">Contas a Pagar</DialogTitle>
-          <DialogDescription className="sr-only">Editar conta a pagar</DialogDescription>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onOpenChange(false)}
-            className="h-8 w-8 text-[rgb(91,91,91)] hover:bg-transparent"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Fechar</span>
-          </Button>
+      <CustomDialogContent className="p-0 m-0 border-0">
+        <div className={cn(
+          "relative overflow-hidden",
+          "bg-gradient-to-r from-primary via-primary/85 to-primary/60",
+          "border-b border-white/10"
+        )}>
+          {/* AIDEV-NOTE: Efeito de brilho sutil */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/3 to-white/8 animate-pulse" />
+          
+          <div className="relative flex items-center justify-between p-4 z-10 h-[66.5px]">
+            <div className="flex items-center gap-3">
+              <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-white/90 hover:text-white hover:bg-white/10 transition-all duration-200"
+                  onClick={() => onOpenChange(false)}
+              >
+                  <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <FileText className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-semibold text-white flex items-center gap-2">
+                    {readOnly ? 'Visualizar conta a pagar' : (entry ? 'Editar conta a pagar' : 'Nova conta a pagar')}
+                    {!readOnly && !entry && <Sparkles className="h-4 w-4 text-yellow-300/80" />}
+                  </h1>
+                  <p className="text-xs text-white/70 flex items-center gap-1">
+                    <Hash className="h-3 w-3" />
+                    Gerencie as informações da conta a pagar
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 pb-6 overflow-y-auto">
-          <div className="md:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Resumo</CardTitle>
+
+        <div className="flex-1 overflow-hidden p-8 grid grid-cols-12 gap-8 bg-muted/30">
+          <div className="col-span-3 space-y-6">
+            <Card className="border-0 shadow-sm bg-background/50 backdrop-blur-sm">
+              <CardHeader className="pb-4 flex flex-row items-center gap-2 space-y-0">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                    <RefreshCw className="h-5 w-5 text-primary" />
+                </div>
+                <CardTitle className="text-lg font-semibold text-foreground">Navegação</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button variant={tab==='dados' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('dados')}>Dados gerais <span>›</span></Button>
-                <Button variant={tab==='lancamentos' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('lancamentos')} disabled={!entry}>Lançamentos <span>›</span></Button>
-                <Button variant={tab==='historico' ? 'default' : 'outline'} className="w-full justify-between" onClick={() => setTab('historico')} disabled={!entry}>Histórico de alterações <span>›</span></Button>
-                {entry && (
-                  <div className="space-y-2 mt-2 text-sm">
-                    <div className="bg-muted px-3 py-2 rounded">{entryNumber}</div>
-                    <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                      <span>Vencimento</span>
-                      <span>{dueDate ? format(new Date(dueDate + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '-'}</span>
-                    </div>
-                    <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                      <span>Valor</span>
-                      <div className="flex flex-col items-end">
-                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.net_amount ?? entry?.gross_amount ?? 0))}</span>
-                        {(Number(entry?.paid_amount || 0) > 0) && (
-                          <span className="text-red-600 text-xs">-{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(entry?.paid_amount || 0))}</span>
-                        )}
-                      </div>
-                    </div>
-                    {!(paidConfirmed || entry?.status === 'PAID') && (
-                      <div className="bg-muted px-3 py-2 rounded flex items-center justify-between">
-                        <span>Saldo</span>
-                        <span>{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Math.max((Number(entry?.net_amount ?? entry?.gross_amount ?? 0) - Number(entry?.paid_amount ?? 0)), 0))}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                <Button
+                  variant="ghost"
+                  className={getNavButtonClass(tab === 'dados')}
+                  onClick={() => setTab('dados')}
+                >
+                  <FileText className="h-4 w-4" />
+                  Dados gerais
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={getNavButtonClass(tab === 'repeticoes')}
+                  onClick={() => setTab('repeticoes')}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Repetições
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={getNavButtonClass(tab === 'lancamentos')}
+                  onClick={() => setTab('lancamentos')}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Lançamentos
+                </Button>
+                <Button
+                  variant="ghost"
+                  className={getNavButtonClass(tab === 'historico')}
+                  onClick={() => setTab('historico')}
+                >
+                  <History className="h-4 w-4" />
+                  Histórico
+                </Button>
               </CardContent>
             </Card>
+
+            {entry && (
+              <Card className="border-0 shadow-sm bg-background/50 backdrop-blur-sm">
+                <CardHeader className="pb-4 flex flex-row items-center gap-2 space-y-0">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                        <DollarSign className="h-5 w-5 text-primary" />
+                    </div>
+                    <CardTitle className="text-lg font-semibold text-foreground">Resumo</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Valor Bruto</span>
+                      <span className="font-medium">{formatMoney(totals.gross)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Descontos (-)</span>
+                      <span className="text-emerald-600 font-medium">{formatMoney(totals.discounts)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Juros/Multa (+)</span>
+                      <span className="text-red-600 font-medium">{formatMoney(totals.additions)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total Pago (-)</span>
+                      <span className="text-blue-600 font-medium">{formatMoney(totals.paid)}</span>
+                    </div>
+                    <div className="border-t pt-3 flex justify-between items-center">
+                      <span className="font-semibold text-foreground">Total Líquido</span>
+                      <span className="text-lg font-bold text-primary">{formatMoney(totals.net)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="font-semibold text-foreground text-sm">Saldo Restante</span>
+                      <span className="text-base font-bold text-gray-700">{formatMoney(totals.balance)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
-          <div className="md:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Dados gerais</CardTitle>
+
+          <div className="col-span-9 h-full flex flex-col">
+            <Card className="flex-1 flex flex-col overflow-hidden border-0 shadow-sm">
+              <CardHeader className="px-8 py-6 border-b bg-background shrink-0">
+                <CardTitle className="text-lg">{getTitle()}</CardTitle>
               </CardHeader>
-              <CardContent>
-                {tab === 'dados' ? DadosConteudo : null}
-                {tab === 'lancamentos' && entry && (
-                  <div className="mt-6 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <Label>Valor</Label>
-                        <Input placeholder="R$ 0,00" value={launchAmount} onChange={(e) => setLaunchAmount(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Data</Label>
-                        <Input type="date" value={launchDate} onChange={(e) => setLaunchDate(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label>Tipo de lançamento</Label>
-                        <Select value={launchType} onValueChange={setLaunchType}>
-                          <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                          <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
-                            {launchTypesQuery.data?.map((lt: any) => (
-                              <SelectItem
-                                key={lt.id}
-                                value={lt.id}
-                                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
-                              >
-                                {lt.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="md:col-span-3">
-                        <Label>Descrição</Label>
-                        <Input value={launchDescription} onChange={(e) => setLaunchDescription(e.target.value)} />
-                      </div>
-                      <div className="md:col-span-3 flex justify-end">
-                        <Button onClick={() => {
-                          const amt = Number(launchAmount || '0');
-                          if (!amt || !launchDate || !launchType) return;
-                          
-                          const launchTypeObj = launchTypesQuery.data?.find((t:any)=>t.id===launchType);
-                          const op = (launchTypeObj?.operation_type) as ('DEBIT'|'CREDIT'|undefined);
-                          const isSettlement = launchTypeObj?.consider_settlement_movement;
-                          
-                          let newNet = Number(entry?.net_amount ?? entry?.gross_amount ?? 0);
-                          let newPaid = Number(entry?.paid_amount ?? 0);
-
-                          if (isSettlement) {
-                             if (op === 'DEBIT') {
-                                newPaid += amt;
-                             } else {
-                                newPaid = Math.max(newPaid - amt, 0);
-                             }
-                          } else {
-                             const base = newNet;
-                             newNet = op === 'DEBIT' ? Math.max(base - amt, 0) : base + amt;
-                          }
-
-                          const prevMeta = (entry?.metadata || {});
-                          const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
-                          const newLaunch = { amount: amt, date: launchDate, typeId: launchType, operation: op || 'DEBIT', description: launchDescription || 'Lançamento' };
-                          const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
-                          
-                          onAddLaunchPatch?.({ id: entry!.id, patch: { net_amount: newNet, paid_amount: newPaid, metadata: newMeta } });
-                          setLaunches((prev) => [...prev, newLaunch]);
-                          setLaunchAmount(''); setLaunchDate(''); setLaunchType(''); setLaunchDescription('');
-                        }}>Lançar</Button>
-                      </div>
-                    </div>
-
-                    <div className="rounded border p-4">
-                      <div className="font-semibold mb-3">Listagem de lançamentos</div>
-                      {launches.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Nenhum lançamento cadastrado</div>
-                      ) : (
-                        <div className="space-y-2">
-                          {launches.map((l, idx) => (
-                            <div key={idx} className="grid grid-cols-6 items-center gap-2 py-2 border-b">
-                              <div className="col-span-1">
-                                <span className="inline-block w-3 h-3 rounded-full bg-green-500" />
-                              </div>
-                              <div className="col-span-1 text-sm">{new Date(l.date).toLocaleDateString('pt-BR')}</div>
-                              <div className="col-span-2 text-sm">
-                                <div className="font-medium">{launchTypesQuery.data?.find((t:any)=>t.id===l.typeId)?.name || 'Lançamento'}</div>
-                                <div className="text-muted-foreground">{l.description}</div>
-                              </div>
-                              <div className={`col-span-1 text-sm ${l.operation==='DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>{`${l.operation==='DEBIT' ? '-' : '+'}`}{new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(l.amount)}</div>
-                              <div className="col-span-1 flex justify-end">
-                                <Button variant="ghost" size="sm" onClick={() => setLaunches((prev) => prev.filter((_,i)=>i!==idx))}>Desfazer</Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+              <CardContent className="flex-1 overflow-y-auto p-8 bg-background">
+                {tab === 'dados' && (
+                  <PayableGeneralTab 
+                    form={logic} 
+                    readOnly={readOnly} 
+                    entry={entry} 
+                  />
                 )}
-                {tab === 'historico' && entry && (
-                  <div className="mt-6">
-                    <p className="text-sm text-muted-foreground">Histórico de alterações da conta { entryNumber }.</p>
-                  </div>
+                {tab === 'repeticoes' && (
+                  <PayableRecurrenceTab
+                    form={logic}
+                    readOnly={readOnly}
+                    entry={entry}
+                    onSwitchEntry={props.onSwitchEntry}
+                  />
+                )}
+                {tab === 'lancamentos' && (
+                  <PayableLaunchesTab
+                    form={logic}
+                    isSettled={totals.balance <= 0 || entry?.status === 'PAID'}
+                  />
+                )}
+                {tab === 'historico' && (
+                  <PayableHistoryTab
+                    currentTenantId={logic.currentTenant?.id}
+                    entryId={entry?.id}
+                  />
                 )}
               </CardContent>
+              
+              {!readOnly && (
+                <div className="p-6 border-t bg-muted/10 flex justify-end gap-3 shrink-0">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleSavePayable}>
+                    Salvar alterações
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
         </div>
-      </DialogContent>
+      </CustomDialogContent>
     </Dialog>
   );
-};
+}

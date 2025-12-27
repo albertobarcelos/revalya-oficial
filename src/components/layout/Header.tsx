@@ -63,7 +63,7 @@ const Header = ({ children }: HeaderProps) => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background">
-      <div className="container flex h-14 items-center">
+      <div className="w-full flex h-14 items-center px-4 md:px-6">
         <div className="flex flex-1 items-center space-x-4">
           <Breadcrumbs />
           <div className="flex-1" />

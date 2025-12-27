@@ -362,9 +362,9 @@ export default function Sidebar() {
                 id: "produtos",
                 isSubmenu: true,
                 children: [
-                  { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
+                  { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` },
                   { icon: Receipt, label: "Recebimentos", path: `/${tenantSlug}/recebimentos` },
-                  { icon: Receipt, label: "Contas a Pagar", path: `/${tenantSlug}/contas-a-pagar` }
+                  { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` }
                 ]
               },
             ]
