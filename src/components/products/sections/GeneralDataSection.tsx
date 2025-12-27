@@ -164,10 +164,12 @@ export function GeneralDataSection({
             Unidade
           </Label>
           <Select
-            value={(formData as any).unit_of_measure || ''}
-            onValueChange={(value) => onChange({
-              target: { name: 'unit_of_measure', value }
-            } as any)}
+            value={(formData as any).unit_of_measure ?? ''}
+            onValueChange={(value) => {
+              onChange({
+                target: { name: 'unit_of_measure', value }
+              } as any);
+            }}
           >
             <SelectTrigger className="mt-1">
               <SelectValue placeholder="Selecione" />

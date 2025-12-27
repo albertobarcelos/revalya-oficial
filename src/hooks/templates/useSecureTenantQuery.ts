@@ -79,19 +79,31 @@ export function useSecureTenantQuery<T>(
       
       // AIDEV-NOTE: CORREÇÃO CRÍTICA - Configurar contexto de tenant no banco ANTES da query
       // Isso garante que as políticas RLS funcionem corretamente
+      // AIDEV-NOTE: Sempre configurar contexto antes de cada query para garantir isolamento
+      // Mesmo que o contexto já esteja configurado, é seguro chamar novamente
       const contextApplied = await securityMiddleware.applyTenantContext(currentTenant.id);
       
       if (!contextApplied) {
-        throw new Error('❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados');
+        const errorMsg = '❌ ERRO CRÍTICO: Falha ao configurar contexto de tenant no banco de dados';
+        console.error(errorMsg, { tenantId: currentTenant.id });
+        throw new Error(errorMsg);
       }
       
+      // ✅ Executar query com contexto configurado
+      // AIDEV-NOTE: NÃO limpar contexto após cada query - o contexto é por sessão
+      // Limpar apenas quando necessário (ex: logout, mudança de tenant)
+      // Isso reduz drasticamente o número de chamadas RPC desnecessárias
       try {
-        // ✅ Executar query com contexto configurado
         const result = await queryFn(supabase, currentTenant.id);
         return result;
-      } finally {
-        // AIDEV-NOTE: Limpar contexto após a operação para segurança (opcional mas boa prática)
-        await securityMiddleware.clearTenantContext();
+      } catch (queryError) {
+        // AIDEV-NOTE: Log detalhado de erro para debug
+        console.error('[useSecureTenantQuery] Erro ao executar query:', {
+          queryKey,
+          tenantId: currentTenant.id,
+          error: queryError,
+        });
+        throw queryError;
       }
     },
     
@@ -175,12 +187,11 @@ export function useSecureTenantMutation<TData, TVariables>(
 
         try {
           const result = await mutationFn(supabase, currentTenant.id, variables);
-          // Limpar contexto após sucesso
-          await securityMiddleware.clearTenantContext();
+          // AIDEV-NOTE: NÃO limpar contexto após mutação - o contexto é por sessão
+          // Limpar apenas quando necessário (ex: logout, mudança de tenant)
           return result;
         } catch (error: any) {
-          // Limpar contexto antes de decidir sobre retry
-          await securityMiddleware.clearTenantContext();
+          // AIDEV-NOTE: NÃO limpar contexto em caso de erro - manter contexto para retry
 
           if (isOrderNumberConflict(error) && attempt < MAX_ATTEMPTS) {
             // Backoff incremental 80ms, 160ms

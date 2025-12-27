@@ -4,6 +4,7 @@
  * AIDEV-NOTE: Exibe histórico de movimentações de entrada (compras) do produto
  */
 
+import { memo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -23,7 +24,8 @@ interface PurchaseHistoryTabProps {
   productId: string | null;
 }
 
-export function PurchaseHistoryTab({ productId }: PurchaseHistoryTabProps) {
+function PurchaseHistoryTabComponent({ productId }: PurchaseHistoryTabProps) {
+  
   const {
     movements,
     isLoading,
@@ -134,4 +136,9 @@ export function PurchaseHistoryTab({ productId }: PurchaseHistoryTabProps) {
     </div>
   );
 }
+
+// AIDEV-NOTE: Memoizar para evitar re-renders ao trocar de abas
+export const PurchaseHistoryTab = memo(PurchaseHistoryTabComponent, (prevProps, nextProps) => {
+  return prevProps.productId === nextProps.productId;
+});
 

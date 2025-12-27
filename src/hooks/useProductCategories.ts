@@ -53,7 +53,6 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
 
   // 📊 Query function segura para buscar categorias
   const fetchCategoriesQuery = async (supabase: SupabaseClient, tenantId: string) => {
-    console.log(`📊 [AUDIT] Buscando categorias para tenant: ${tenantId}`);
     
     // AIDEV-NOTE: Configurar contexto de tenant antes da query
     await supabase.rpc('set_tenant_context_simple', {
@@ -99,7 +98,6 @@ export function useProductCategories(params?: UseProductCategoriesParams) {
       throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
-    console.log(`✅ [SUCCESS] ${data?.length || 0} categorias encontradas`);
     
     return {
       categories: data || [],

@@ -58,7 +58,6 @@ export function useStorageLocations(params?: UseStorageLocationsParams) {
 
   // 📊 Query function segura para buscar locais de estoque
   const fetchLocationsQuery = async (supabase: SupabaseClient, tenantId: string) => {
-    console.log(`📊 [AUDIT] Buscando locais de estoque para tenant: ${tenantId}`);
     
     // AIDEV-NOTE: Configurar contexto de tenant antes da query
     await supabase.rpc('set_tenant_context_simple', {
@@ -104,7 +103,6 @@ export function useStorageLocations(params?: UseStorageLocationsParams) {
       throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
-    console.log(`✅ [SUCCESS] ${data?.length || 0} locais de estoque encontrados`);
     
     return {
       locations: data || [],

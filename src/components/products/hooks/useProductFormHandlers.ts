@@ -57,18 +57,18 @@ export function useProductFormHandlers({
       try {
         const success = await handleSubmit();
 
-        if (success && !isEditMode) {
-          // AIDEV-NOTE: Em modo de criação, fechar modal após salvar
-          console.log(`[AUDIT] Produto criado com sucesso - Tenant: ${currentTenant.name}`);
-          resetForm();
-          resetFiscalData();
+        if (success) {
+          // AIDEV-NOTE: Fechar modal após salvar com sucesso (tanto criação quanto edição)
+          console.log(`[AUDIT] Produto ${isEditMode ? 'atualizado' : 'criado'} com sucesso - Tenant: ${currentTenant.name}`);
+          
+          if (!isEditMode) {
+            // AIDEV-NOTE: Em modo de criação, resetar formulário antes de fechar
+            resetForm();
+            resetFiscalData();
+          }
+          
           onOpenChange(false);
           onSuccess?.();
-        } else if (success && isEditMode) {
-          // AIDEV-NOTE: Em modo de edição, NÃO fechar modal - apenas mostrar toast
-          // O toast já é exibido pelo hook useProductForm
-          console.log(`[AUDIT] Produto atualizado com sucesso - Tenant: ${currentTenant.name}`);
-          // Modal permanece aberto para permitir continuar editando
         }
       } catch (error) {
         console.error('[ERROR] Erro ao submeter formulário:', error);
@@ -78,12 +78,13 @@ export function useProductFormHandlers({
   );
 
   const handleCancel = useCallback(() => {
-    resetForm();
-    resetFiscalData();
+    // AIDEV-NOTE: Não resetar formulário aqui - deixar o interceptor verificar mudanças não salvas
+    // Se o usuário confirmar o fechamento, o reset será feito no ProductFormDialog
+    // AIDEV-NOTE: Chamar onOpenChange para que o interceptor verifique mudanças não salvas
     if (onOpenChange && typeof onOpenChange === 'function') {
       onOpenChange(false);
     }
-  }, [resetForm, resetFiscalData, onOpenChange]);
+  }, [onOpenChange]);
 
   const handleSaveAndAddAnother = useCallback(async () => {
     if (!currentTenant?.id) {

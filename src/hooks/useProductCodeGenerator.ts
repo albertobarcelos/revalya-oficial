@@ -35,21 +35,14 @@ export function useProductCodeGenerator() {
     isLoading: isLoadingMaxCode,
     error: maxCodeError,
     refetch: refetchMaxCode
-  } = useSecureTenantQuery(
+  } = useSecureTenantQuery<{ maxCode: number }>(
     // 🔑 QUERY KEY PADRONIZADA COM TENANT_ID
     ['product-max-code', currentTenant?.id],
     async (supabase, tenantId) => {
       // 🛡️ AUDIT LOG OBRIGATÓRIO
-      console.log(`[AUDIT] Buscando maior código de produto - Tenant: ${tenantId}`);
       
-      // 🛡️ CONFIGURAR CONTEXTO DO TENANT
-      const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: tenantId
-      });
-      
-      if (contextError) {
-        console.warn('⚠️ [CONTEXT] Aviso ao configurar contexto:', contextError);
-      }
+      // AIDEV-NOTE: useSecureTenantQuery já configura o contexto automaticamente
+      // Não é necessário chamar set_tenant_context_simple novamente
       
       // 🔍 BUSCAR MAIOR CÓDIGO NUMÉRICO
       // AIDEV-NOTE: Filtra apenas códigos que são puramente numéricos e encontra o maior
@@ -94,16 +87,12 @@ export function useProductCodeGenerator() {
         }
       }
 
-      console.log(`✅ [AUDIT] Maior código numérico encontrado: ${maxNumericCode}`);
       return { maxCode: maxNumericCode };
     },
     {
       // AIDEV-NOTE: Cache por 5 minutos para evitar consultas desnecessárias
       staleTime: 5 * 60 * 1000,
-      cacheTime: 10 * 60 * 1000,
       refetchOnWindowFocus: false, // AIDEV-NOTE: Não recarregar ao mudar de aba do navegador
-      refetchOnMount: false, // AIDEV-NOTE: Não recarregar ao remontar se já tiver dados em cache
-      refetchOnReconnect: false, // AIDEV-NOTE: Não recarregar ao reconectar
     }
   );
 
@@ -132,14 +121,8 @@ export function useProductCodeGenerator() {
       // 🛡️ AUDIT LOG OBRIGATÓRIO
       console.log(`[AUDIT] Validando existência do código: ${code} - Tenant: ${currentTenant.id}${productId ? ` - Ignorando produto: ${productId}` : ''}`);
       
-      // 🛡️ CONFIGURAR CONTEXTO DO TENANT
-      const { error: contextError } = await supabase.rpc('set_tenant_context_simple', { 
-        p_tenant_id: currentTenant.id
-      });
-      
-      if (contextError) {
-        console.warn('⚠️ [CONTEXT] Aviso ao configurar contexto:', contextError);
-      }
+      // AIDEV-NOTE: useSecureTenantQuery já configura o contexto automaticamente
+      // Não é necessário chamar set_tenant_context_simple novamente
 
       // 🔍 VERIFICAR SE CÓDIGO JÁ EXISTE (ignorando o próprio produto se fornecido)
       let query = supabase

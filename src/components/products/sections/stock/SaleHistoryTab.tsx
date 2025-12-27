@@ -4,6 +4,7 @@
  * AIDEV-NOTE: Exibe histórico de movimentações de saída (vendas) do produto
  */
 
+import { memo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -23,7 +24,8 @@ interface SaleHistoryTabProps {
   productId: string | null;
 }
 
-export function SaleHistoryTab({ productId }: SaleHistoryTabProps) {
+function SaleHistoryTabComponent({ productId }: SaleHistoryTabProps) {
+  
   const {
     movements,
     isLoading,
@@ -134,4 +136,9 @@ export function SaleHistoryTab({ productId }: SaleHistoryTabProps) {
     </div>
   );
 }
+
+// AIDEV-NOTE: Memoizar para evitar re-renders ao trocar de abas
+export const SaleHistoryTab = memo(SaleHistoryTabComponent, (prevProps, nextProps) => {
+  return prevProps.productId === nextProps.productId;
+});
 

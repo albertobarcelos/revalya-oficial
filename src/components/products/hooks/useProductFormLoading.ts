@@ -9,7 +9,7 @@
  * Clean Code: Single Responsibility Principle
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FormSection } from '../types/product-form.types';
 
 interface UseProductFormLoadingProps {
@@ -174,9 +174,10 @@ export function useProductFormLoading({
   ]);
 
   // Callback para mudanças de loading de estoque
-  const onStockLoadingChange = (isLoading: boolean) => {
+  // AIDEV-NOTE: Memoizar para evitar re-renders desnecessários no StockSection
+  const onStockLoadingChange = useCallback((isLoading: boolean) => {
     setIsLoadingStockState(isLoading);
-  };
+  }, []); // Sem dependências - apenas setState que é estável
 
   return {
     isInitialLoading: isInitialLoadingState,

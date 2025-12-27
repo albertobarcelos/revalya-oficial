@@ -22,10 +22,8 @@ export function useCFOPs({ enabled = true, category = 'saida' }: UseCFOPsProps =
   const fetchCFOPsQuery = async (supabase: SupabaseClient, tenantId: string): Promise<ValidCFOP[]> => {
     console.log(`[AUDIT] Buscando CFOPs para tenant: ${tenantId}`);
     
-    // AIDEV-NOTE: Configurar contexto de tenant antes da query
-    await supabase.rpc('set_tenant_context_simple', {
-      p_tenant_id: tenantId
-    });
+    // AIDEV-NOTE: useSecureTenantQuery já configura o contexto automaticamente
+    // Não é necessário chamar set_tenant_context_simple novamente
     
     // Buscar regime tributário do tenant
     const { data: tenantData, error: tenantError } = await supabase
@@ -77,10 +75,7 @@ export function useCFOPs({ enabled = true, category = 'saida' }: UseCFOPsProps =
     {
       enabled: hasAccess && enabled && !!currentTenant?.id,
       staleTime: 60 * 60 * 1000, // 1 hora (CFOPs mudam muito raramente)
-      gcTime: 2 * 60 * 60 * 1000, // 2 horas em cache
       refetchOnWindowFocus: false, // AIDEV-NOTE: Não recarregar ao mudar de aba do navegador
-      refetchOnMount: false, // AIDEV-NOTE: Não recarregar ao remontar se já tiver dados em cache
-      refetchOnReconnect: false, // AIDEV-NOTE: Não recarregar ao reconectar
     }
   );
 

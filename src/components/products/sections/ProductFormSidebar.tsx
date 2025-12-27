@@ -6,7 +6,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Save, Plus, Warehouse, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Save, ChevronRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FormSection, FormSectionConfig } from '../types/product-form.types';
 
@@ -16,8 +16,6 @@ interface ProductFormSidebarProps {
   onSectionChange: (section: FormSection) => void;
   isEditMode: boolean;
   isLoading: boolean;
-  onSaveAndAddAnother: () => void;
-  onSaveAndRegisterStock: () => void;
   onSave: () => void;
   onBack?: () => void;
 }
@@ -28,8 +26,6 @@ export function ProductFormSidebar({
   onSectionChange,
   isEditMode,
   isLoading,
-  onSaveAndAddAnother,
-  onSaveAndRegisterStock,
   onSave,
   onBack,
 }: ProductFormSidebarProps) {
@@ -76,34 +72,25 @@ export function ProductFormSidebar({
         </nav>
       </ScrollArea>
 
-      {/* Botões de Ação no Rodapé */}
-      <div className="p-4 border-t space-y-2">
-        <Button
-          type="button"
-          onClick={onSaveAndAddAnother}
-          className="w-full bg-green-600 hover:bg-green-700 text-white"
-          disabled={isLoading}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          {isLoading ? 'Salvando...' : 'Salvar e adicionar outro'}
-        </Button>
-        <Button
-          type="button"
-          onClick={onSaveAndRegisterStock}
-          className="w-full bg-green-600 hover:bg-green-700 text-white"
-          disabled={isLoading}
-        >
-          <Warehouse className="h-4 w-4 mr-2" />
-          {isLoading ? 'Salvando...' : 'Salvar e cadastrar estoque'}
-        </Button>
+      {/* Botão de Salvar no Rodapé */}
+      <div className="p-4 border-t">
         <Button
           type="submit"
           form="product-form"
-          className="w-full bg-green-600 hover:bg-green-700 text-white"
+          className="w-full h-11 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={isLoading}
         >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Salvando...
+            </>
+          ) : (
+            <>
           <Save className="h-4 w-4 mr-2" />
-          {isLoading ? 'Salvando...' : 'Salvar produto'}
+              Salvar Produto
+            </>
+          )}
         </Button>
       </div>
     </div>

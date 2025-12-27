@@ -36,6 +36,10 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
   // AIDEV-NOTE: Ref para rastrear se formData foi atualizado via onSuccess da mutação
   // Isso evita que o useEffect atualize novamente e cause "piscar"
   const isFormDataUpdatedByMutationRef = useRef(false);
+  
+  // AIDEV-NOTE: Ref para rastrear se o formulário foi modificado pelo usuário
+  // Isso evita que o useEffect sobrescreva mudanças do usuário com dados antigos do servidor
+  const userModifiedFieldsRef = useRef<Set<string>>(new Set());
 
   // 🔄 Estado do formulário inicializado com dados do produto
   const [formData, setFormData] = useState<ProductFormData>({
@@ -75,52 +79,98 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
       return;
     }
     
-    // AIDEV-NOTE: Não atualizar se produto não mudou significativamente
-    // Comparar updated_at para evitar atualizações desnecessárias
-    const shouldUpdate = product.id && product.id.trim() !== '';
+    // AIDEV-NOTE: Não atualizar se produto não mudou significativamente ou se é dummy (id vazio)
+    // Comparar id para evitar atualizações com produto dummy
+    const isDummyProduct = !product.id || product.id.trim() === '' || product.name.trim() === '';
+    const shouldUpdate = !isDummyProduct;
     
-    if (!shouldUpdate) return;
+    if (!shouldUpdate) {
+      // AIDEV-NOTE: Se é produto dummy, não atualizar formData
+      // Isso evita sobrescrever dados válidos com dados vazios
+      return;
+    }
     
     // AIDEV-NOTE: Atualizar formData apenas se produto realmente mudou
+    // AIDEV-NOTE: Sempre atualizar quando produto muda (não verificar se mudou significativamente)
+    // Isso garante que dados atualizados sejam sempre aplicados
     setFormData(prevFormData => {
-      // AIDEV-NOTE: Verificar se os dados realmente mudaram para evitar atualização desnecessária
-      const hasSignificantChange = 
-        prevFormData.name !== product.name ||
-        prevFormData.category_id !== (product.category_id || null) ||
-        prevFormData.brand_id !== (product.brand_id || null) ||
-        prevFormData.unit_of_measure !== (product.unit_of_measure || null) ||
-        prevFormData.unit_price !== product.unit_price;
+      // AIDEV-NOTE: Verificar se o produto realmente mudou (comparar ID)
+      // Se o ID mudou, sempre atualizar (produto diferente)
+      const currentProductId = (prevFormData as any).productId;
+      const productChanged = currentProductId !== product.id;
       
-      // Se não houve mudança significativa, retornar formData anterior
-      if (!hasSignificantChange) {
-        return prevFormData;
+      // AIDEV-NOTE: Se produto mudou OU se não temos productId armazenado (primeira inicialização)
+      // sempre atualizar completamente para garantir que todos os dados sejam carregados
+      if (productChanged || !currentProductId) {
+        // AIDEV-NOTE: Limpar campos modificados pelo usuário quando produto muda
+        userModifiedFieldsRef.current.clear();
+        
+        // Atualizar com novos dados
+        return {
+          name: product.name,
+          description: product.description || null,
+          code: product.code || null,
+          sku: product.sku,
+          barcode: product.barcode 
+            ? (typeof product.barcode === 'string' 
+                ? product.barcode 
+                : JSON.stringify(product.barcode)) 
+            : null,
+          unit_price: product.unit_price,
+          cost_price: product.cost_price || null,
+          stock_quantity: product.stock_quantity,
+          min_stock_quantity: product.min_stock_quantity || 0,
+          category: product.category || null,
+          category_id: product.category_id || null,
+          brand_id: product.brand_id || null,
+          supplier: product.supplier || null,
+          unit_of_measure: product.unit_of_measure || null,
+          tax_rate: product.tax_rate || 0,
+          has_inventory: product.has_inventory !== undefined ? product.has_inventory : true,
+          is_active: product.is_active,
+          image_url: product.image_url || null,
+          productId: product.id, // AIDEV-NOTE: Armazenar ID para comparação futura
+        } as any;
       }
       
-      // Atualizar com novos dados
-      return {
-        name: product.name,
-        description: product.description || null,
-        code: product.code || null,
-        sku: product.sku,
-        barcode: product.barcode 
-          ? (typeof product.barcode === 'string' 
-              ? product.barcode 
-              : JSON.stringify(product.barcode)) 
-          : null,
-        unit_price: product.unit_price,
-        cost_price: product.cost_price || null,
-        stock_quantity: product.stock_quantity,
-        min_stock_quantity: product.min_stock_quantity || 0,
-        category: product.category || null,
-        category_id: product.category_id || null,
-        brand_id: product.brand_id || null,
-        supplier: product.supplier || null,
-        unit_of_measure: product.unit_of_measure || null,
-        tax_rate: product.tax_rate || 0,
-        has_inventory: product.has_inventory !== undefined ? product.has_inventory : true,
-        is_active: product.is_active,
-        image_url: product.image_url || null,
-      };
+      // AIDEV-NOTE: Se produto não mudou, verificar se há mudanças significativas nos dados
+      // AIDEV-NOTE: Verificar especialmente se category_id mudou de null/undefined para um valor
+      // Isso é importante quando o produto é carregado assincronamente e category_id chega depois
+      // AIDEV-NOTE: NÃO atualizar campos que foram modificados pelo usuário
+      const categoryIdChanged = prevFormData.category_id !== (product.category_id || null);
+      const categoryIdWasEmpty = !prevFormData.category_id && product.category_id;
+      
+      const hasSignificantChange = 
+        (!userModifiedFieldsRef.current.has('name') && prevFormData.name !== product.name) ||
+        (!userModifiedFieldsRef.current.has('category_id') && categoryIdChanged) ||
+        (!userModifiedFieldsRef.current.has('brand_id') && prevFormData.brand_id !== (product.brand_id || null)) ||
+        (!userModifiedFieldsRef.current.has('unit_of_measure') && prevFormData.unit_of_measure !== (product.unit_of_measure || null)) ||
+        (!userModifiedFieldsRef.current.has('unit_price') && prevFormData.unit_price !== product.unit_price) ||
+        (!userModifiedFieldsRef.current.has('description') && prevFormData.description !== (product.description || null)) ||
+        (!userModifiedFieldsRef.current.has('code') && prevFormData.code !== (product.code || null)) ||
+        (!userModifiedFieldsRef.current.has('sku') && prevFormData.sku !== product.sku);
+      
+      // AIDEV-NOTE: Se category_id estava vazio e agora tem valor, sempre atualizar (mas só se não foi modificado pelo usuário)
+      // Isso garante que a categoria seja carregada quando o produto é buscado do servidor
+      if (categoryIdWasEmpty || hasSignificantChange) {
+        // AIDEV-NOTE: Atualizar apenas campos que não foram modificados pelo usuário
+        const updatedData: any = { ...prevFormData };
+        
+        if (!userModifiedFieldsRef.current.has('name')) updatedData.name = product.name;
+        if (!userModifiedFieldsRef.current.has('description')) updatedData.description = product.description || null;
+        if (!userModifiedFieldsRef.current.has('code')) updatedData.code = product.code || null;
+        if (!userModifiedFieldsRef.current.has('sku')) updatedData.sku = product.sku;
+        if (!userModifiedFieldsRef.current.has('category')) updatedData.category = product.category || null;
+        if (!userModifiedFieldsRef.current.has('category_id')) updatedData.category_id = product.category_id || null;
+        if (!userModifiedFieldsRef.current.has('brand_id')) updatedData.brand_id = product.brand_id || null;
+        if (!userModifiedFieldsRef.current.has('unit_of_measure')) updatedData.unit_of_measure = product.unit_of_measure || null;
+        if (!userModifiedFieldsRef.current.has('unit_price')) updatedData.unit_price = product.unit_price;
+        
+        return updatedData;
+      }
+      
+      // Se não houve mudança significativa, retornar formData anterior
+      return prevFormData;
     });
   }, [
     product.id,
@@ -217,8 +267,11 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
         // use_default_pis_cofins, cst_ibs_cbs, cclass_trib
       } : {};
 
+      // AIDEV-NOTE: Remover productId do updateData - é apenas campo auxiliar para comparação, não existe na tabela
+      const { productId: _, ...dataWithoutProductId } = dataWithoutLegacyCategory as any;
+      
       const updateData = {
-        ...dataWithoutLegacyCategory,
+        ...dataWithoutProductId,
         barcode: barcodeValue, // AIDEV-NOTE: JSONB - enviar como objeto, não string
         category_id: data.category_id || null, // AIDEV-NOTE: Garantir que category_id seja enviado
         brand_id: data.brand_id || null, // AIDEV-NOTE: Garantir que brand_id seja enviado
@@ -278,7 +331,9 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
         // 🔄 Atualizar formData diretamente com os dados retornados para evitar "piscar"
         // AIDEV-NOTE: Atualizar formData sem recarregar produto do servidor evita re-renders desnecessários
         // AIDEV-NOTE: Marcar flag para evitar que useEffect atualize novamente
+        // AIDEV-NOTE: Limpar campos modificados pelo usuário após salvar com sucesso
         isFormDataUpdatedByMutationRef.current = true;
+        userModifiedFieldsRef.current.clear();
         setFormData({
           name: updatedProduct.name,
           description: updatedProduct.description || null,
@@ -316,23 +371,56 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
         // AIDEV-NOTE: Invalidar apenas a lista de produtos para atualizar o grid
         // NÃO invalidar a query do produto atual para evitar refetch e "piscar" do modal
         // A query do produto será invalidada apenas quando o modal fechar (em ProductFormDialog)
-        queryClient.invalidateQueries({ queryKey: ['products'] });
-        queryClient.invalidateQueries({ queryKey: ['product-details', product.id] });
+        // AIDEV-NOTE: Invalidar também secure-products para garantir sincronização
+        // AIDEV-NOTE: Usar refetchType: 'none' para invalidar sem refetch automático
+        // Isso marca as queries como stale mas não as refaz imediatamente, evitando "piscar"
+        queryClient.invalidateQueries({ 
+          queryKey: ['products'],
+          refetchType: 'none' // AIDEV-NOTE: Não refetch automaticamente - apenas marca como stale
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: ['secure-products'],
+          refetchType: 'none' // AIDEV-NOTE: Não refetch automaticamente - apenas marca como stale
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: ['product-details', product.id],
+          refetchType: 'none' // AIDEV-NOTE: Não refetch automaticamente - apenas marca como stale
+        });
         
         toast({
           title: 'Produto atualizado',
           description: `${updatedProduct.name} foi atualizado com sucesso.`,
         });
         
-        // AIDEV-NOTE: onSuccess não deve fechar o modal em modo de edição
-        // O modal permanece aberto para permitir continuar editando
+        // AIDEV-NOTE: onSuccess será chamado e o modal será fechado pelo useProductFormHandlers
         onSuccess();
       },
-      onError: (error) => {
+      onError: (error: any) => {
         console.error('Erro na mutação de atualização:', error);
+        
+        // AIDEV-NOTE: Mensagens de erro mais específicas para melhor UX
+        let errorMessage = 'Ocorreu um erro inesperado ao atualizar o produto.';
+        
+        if (error?.code === '23505') {
+          // Violação de constraint única (código/SKU duplicado)
+          errorMessage = 'Este código ou SKU já está em uso por outro produto. Escolha um código único.';
+        } else if (error?.code === '23503') {
+          // Violação de foreign key (categoria/marca não existe)
+          errorMessage = 'A categoria ou marca selecionada não existe mais. Por favor, selecione outra.';
+        } else if (error?.code === 'PGRST116') {
+          // Produto não encontrado
+          errorMessage = 'Produto não encontrado. Ele pode ter sido removido por outro usuário.';
+        } else if (error?.message?.includes('tenant') || error?.message?.includes('permissão')) {
+          errorMessage = 'Erro de permissão. Verifique seu acesso ao produto.';
+        } else if (error?.message?.includes('violação de segurança')) {
+          errorMessage = 'Erro de segurança: produto não pertence ao seu tenant.';
+        } else if (error instanceof Error && error.message) {
+          errorMessage = error.message;
+        }
+        
         toast({
           title: 'Erro ao atualizar produto',
-          description: error instanceof Error ? error.message : 'Ocorreu um erro inesperado.',
+          description: errorMessage,
           variant: 'destructive',
         });
       },
@@ -346,6 +434,9 @@ export function useProductForm(product: Product, onSuccess: () => void, fiscalDa
     field: K,
     value: ProductFormData[K]
   ) => {
+    // AIDEV-NOTE: Marcar campo como modificado pelo usuário para evitar sobrescrita pelo useEffect
+    userModifiedFieldsRef.current.add(field as string);
+    
     setFormData(prev => ({
       ...prev,
       [field]: value

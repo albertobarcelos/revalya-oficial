@@ -108,7 +108,6 @@ export function useStockMovements(params?: UseStockMovementsParams) {
 
   // 📊 Query function segura para buscar movimentações
   const fetchMovementsQuery = async (supabase: SupabaseClient, tenantId: string) => {
-    console.log(`📊 [AUDIT] Buscando movimentações de estoque para tenant: ${tenantId}`);
     
     // AIDEV-NOTE: Configurar contexto de tenant antes da query
     await supabase.rpc('set_tenant_context_simple', {
@@ -262,7 +261,6 @@ export function useStockMovements(params?: UseStockMovementsParams) {
       destination_location: movement.destination_storage_location_id ? destinationLocationsMap[movement.destination_storage_location_id] : undefined
     })) || [];
     
-    console.log(`✅ [SUCCESS] ${enrichedData.length} movimentações encontradas`);
     
     return {
       movements: enrichedData,

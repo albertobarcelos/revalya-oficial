@@ -59,23 +59,8 @@ export function useProductStock(params?: UseProductStockParams) {
 
   // 📊 Query function segura para buscar estoque por local
   const fetchStockQuery = async (supabase: SupabaseClient, tenantId: string) => {
-    console.log(`📊 [AUDIT] Buscando estoque por local para tenant: ${tenantId}`);
-    console.log(`🔍 [DEBUG QUERY] Parâmetros recebidos:`, { product_id, storage_location_id, page, limit });
-    
-    // AIDEV-NOTE: Configurar contexto de tenant antes da query
-    // IMPORTANTE: O useSecureTenantQuery já configura o contexto, mas fazemos novamente aqui para garantir
-    const { error: contextError } = await supabase.rpc('set_tenant_context_simple', {
-      p_tenant_id: tenantId
-    });
-    
-    if (contextError) {
-      console.error('🚨 [ERROR] Falha ao configurar contexto de tenant:', contextError);
-      throw contextError;
-    }
-    
-    // AIDEV-NOTE: Verificar se o contexto foi configurado corretamente
-    const { data: contextCheck } = await supabase.rpc('get_current_tenant_context');
-    console.log('🔍 [DEBUG QUERY] Contexto de tenant verificado:', contextCheck);
+    // AIDEV-NOTE: useSecureTenantQuery já configura o contexto automaticamente
+    // Não é necessário chamar set_tenant_context_simple novamente aqui
     
     // AIDEV-NOTE: Buscar estoque sem join automático (mais confiável)
     let query = supabase
@@ -85,14 +70,10 @@ export function useProductStock(params?: UseProductStockParams) {
     
     // Aplicar filtros
     if (product_id) {
-      console.log(`🔍 [DEBUG QUERY] Aplicando filtro product_id: ${product_id}`);
       query = query.eq('product_id', product_id);
-    } else {
-      console.log(`🔍 [DEBUG QUERY] Sem filtro product_id - buscando todos os produtos`);
     }
     
     if (storage_location_id) {
-      console.log(`🔍 [DEBUG QUERY] Aplicando filtro storage_location_id: ${storage_location_id}`);
       query = query.eq('storage_location_id', storage_location_id);
     }
     
@@ -103,7 +84,6 @@ export function useProductStock(params?: UseProductStockParams) {
     const offset = (page - 1) * limit;
     query = query.range(offset, offset + limit - 1);
     
-    console.log(`🔍 [DEBUG QUERY] Executando query com offset: ${offset}, limit: ${limit}`);
     const { data, error, count } = await query;
     
     if (error) {
@@ -163,10 +143,6 @@ export function useProductStock(params?: UseProductStockParams) {
       };
     }) || [];
     
-    console.log(`✅ [SUCCESS] ${enrichedData.length} registros de estoque encontrados`);
-    console.log('🔍 [DEBUG HOOK] Dados retornados:', enrichedData);
-    console.log('🔍 [DEBUG HOOK] Filtros aplicados:', { product_id, storage_location_id, tenantId });
-    
     return {
       stock: enrichedData,
       totalCount: count || 0
@@ -215,7 +191,6 @@ export function useProductStock(params?: UseProductStockParams) {
       variables: { productId: string; locationId: string; stockData: UpdateProductStockDTO }
     ) => {
       const { productId, locationId, stockData } = variables;
-      console.log(`✏️ [AUDIT] Atualizando estoque para produto ${productId} no local ${locationId}`);
       
       await supabase.rpc('set_tenant_context_simple', {
         p_tenant_id: tenantId
@@ -256,7 +231,6 @@ export function useProductStock(params?: UseProductStockParams) {
         throw new Error('❌ ERRO CRÍTICO: Estoque atualizado com tenant incorreto!');
       }
       
-      console.log(`✅ [SUCCESS] Estoque atualizado com sucesso`);
       return updatedData;
     },
     {

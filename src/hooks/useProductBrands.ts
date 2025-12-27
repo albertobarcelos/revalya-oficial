@@ -52,7 +52,6 @@ export function useProductBrands(params?: UseProductBrandsParams) {
 
   // 📊 Query function segura para buscar marcas
   const fetchBrandsQuery = async (supabase: SupabaseClient, tenantId: string) => {
-    console.log(`📊 [AUDIT] Buscando marcas para tenant: ${tenantId}`);
     
     // AIDEV-NOTE: Configurar contexto de tenant antes da query
     await supabase.rpc('set_tenant_context_simple', {
@@ -98,7 +97,6 @@ export function useProductBrands(params?: UseProductBrandsParams) {
       throw new Error('❌ ERRO CRÍTICO: Dados de tenant incorreto retornados - possível vazamento de segurança!');
     }
     
-    console.log(`✅ [SUCCESS] ${data?.length || 0} marcas encontradas`);
     
     return {
       brands: data || [],

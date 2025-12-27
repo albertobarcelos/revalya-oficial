@@ -139,11 +139,6 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
       limit
     }],
     async (supabase, tenantId) => {
-      // 🔍 AUDIT LOG OBRIGATÓRIO
-      console.log(`[AUDIT] Consultando produtos via RPC - Tenant: ${tenantId}, Filtros:`, {
-        searchTerm, category, is_active, minPrice, maxPrice, inStock, page, limit
-      });
-      
       // 🚀 USANDO RPC OTIMIZADA (similar aos serviços)
       // AIDEV-NOTE: Atualizado para usar p_category_id (UUID) ao invés de p_category (TEXT)
       const { data, error } = await supabase.rpc('get_products_by_tenant', {
@@ -173,7 +168,6 @@ export function useSecureProducts(params: UseSecureProductsParams = {}, options:
       }
       
       const totalCount = data && data.length > 0 ? data[0].total_count : 0;
-      console.log(`[AUDIT] Produtos consultados via RPC com sucesso - ${data?.length || 0} registros, Total: ${totalCount}`);
       
       return {
         products: data || [],
@@ -400,7 +394,6 @@ export function useProductById(
       }
       
       // 🔍 AUDIT LOG OBRIGATÓRIO
-      console.log(`[AUDIT] Buscando produto específico - Tenant: ${tenantId}, Produto: ${productId}`);
       
       // 🚀 USANDO RPC OTIMIZADA PARA BUSCAR PRODUTO ESPECÍFICO
       const { data, error } = await supabase.rpc('get_products_by_tenant', {
@@ -432,21 +425,18 @@ export function useProductById(
       // AIDEV-NOTE: Encontrar o produto específico pelo ID
       const foundProduct = data?.find(p => p.id === productId) || null;
       
-      if (foundProduct) {
-        console.log(`[AUDIT] Produto encontrado: ${foundProduct.name} (${foundProduct.id})`);
-      } else {
-        console.log(`[AUDIT] Produto não encontrado: ${productId}`);
-      }
       
       return foundProduct;
     },
     {
       // AIDEV-NOTE: Query só é executada se houver acesso válido, tenant e productId
-      enabled: (options.enabled !== false) && hasAccess && !!currentTenant?.id && !!productId,
-      staleTime: 5 * 60 * 1000, // AIDEV-NOTE: Cache de 5 minutos - dados não mudam frequentemente
-      refetchOnMount: false, // AIDEV-NOTE: NÃO refetch automático - evita "piscar" quando cache é atualizado
+      // AIDEV-NOTE: Se options.enabled for explicitamente false, desabilitar
+      // Caso contrário, verificar hasAccess, currentTenant e productId
+      enabled: options.enabled === false ? false : (hasAccess && !!currentTenant?.id && !!productId),
+      staleTime: 5 * 60 * 1000, // AIDEV-NOTE: Cache válido por 5 minutos - evita refetches automáticos desnecessários
+      refetchOnMount: false, // AIDEV-NOTE: NÃO refetch automático - controlado manualmente via refetchProduct no useProductFormDialog
       refetchOnWindowFocus: false, // AIDEV-NOTE: Desabilitado para evitar loops e "piscar"
-      refetchOnReconnect: true, // AIDEV-NOTE: Refazer ao reconectar
+      refetchOnReconnect: false, // AIDEV-NOTE: Desabilitado para evitar refetches automáticos que causam "piscar"
     }
   );
   
@@ -486,7 +476,6 @@ export function useProductCategories() {
   return useSecureTenantQuery(
     ['product-categories', currentTenant?.id],
     async (supabase, tenantId) => {
-      console.log(`[AUDIT] Consultando categorias de produtos - Tenant: ${tenantId}`);
       
       const { data, error } = await supabase
         .from('product_categories')

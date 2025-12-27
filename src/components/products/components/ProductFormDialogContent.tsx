@@ -25,8 +25,6 @@ interface ProductFormDialogContentProps {
   isSectionLoading: boolean;
   onSectionChange: (section: FormSection) => void;
   onSave: () => Promise<void>;
-  onSaveAndAddAnother: () => Promise<void>;
-  onSaveAndRegisterStock: () => Promise<void>;
   onBack: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   children: React.ReactNode;
@@ -41,8 +39,6 @@ export function ProductFormDialogContent({
   isSectionLoading,
   onSectionChange,
   onSave,
-  onSaveAndAddAnother,
-  onSaveAndRegisterStock,
   onBack,
   onSubmit,
   children,
@@ -56,8 +52,6 @@ export function ProductFormDialogContent({
         onSectionChange={onSectionChange}
         isEditMode={isEditMode}
         isLoading={isLoading}
-        onSaveAndAddAnother={onSaveAndAddAnother}
-        onSaveAndRegisterStock={onSaveAndRegisterStock}
         onSave={onSave}
         onBack={onBack}
       />

@@ -99,6 +99,10 @@ export function useProductFormState({
   );
 
   // AIDEV-NOTE: Wrapper para unificar assinaturas diferentes dos hooks
+  // AIDEV-NOTE: Extrair handleChange de cada form para evitar dependência de todo o objeto
+  const editHandleChange = editForm.handleChange;
+  const createHandleChange = createForm.handleChange;
+  
   const unifiedHandleChange = useCallback((
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { name: string; value: any } }
   ) => {
@@ -106,12 +110,12 @@ export function useProductFormState({
       // useProductForm usa (field, value)
       const name = 'target' in e ? e.target.name : (e as any).name;
       const value = 'target' in e ? e.target.value : (e as any).value;
-      editForm.handleChange(name as any, value);
+      editHandleChange(name as any, value);
     } else {
       // useCreateProductForm usa evento
-      createForm.handleChange(e as any);
+      createHandleChange(e as any);
     }
-  }, [isEditMode, validatedProduct, editForm, createForm]);
+  }, [isEditMode, validatedProduct, editHandleChange, createHandleChange]);
 
   const handleSubmit = useCallback(async (): Promise<boolean> => {
     if (isEditMode && validatedProduct) {

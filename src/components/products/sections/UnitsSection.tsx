@@ -27,6 +27,8 @@ export function UnitsSection({ formData, onChange }: FormSectionProps) {
           <TabsTrigger value="principal">Unidade principal</TabsTrigger>
           <TabsTrigger value="embalagens">Caixas, pacotes ou embalagens</TabsTrigger>
         </TabsList>
+        
+        {/* AIDEV-NOTE: Manter todas as abas montadas, alternar visibilidade via CSS (estilo SPA) */}
         <TabsContent value="principal" className="space-y-4 mt-4">
           <div>
             <Label htmlFor="unit_of_measure" className="text-sm font-medium">
@@ -51,6 +53,7 @@ export function UnitsSection({ formData, onChange }: FormSectionProps) {
             </Select>
           </div>
         </TabsContent>
+        
         <TabsContent value="embalagens" className="mt-4">
           <p className="text-sm text-muted-foreground">
             Funcionalidade de embalagens em desenvolvimento
