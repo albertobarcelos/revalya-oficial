@@ -18,6 +18,7 @@ import { usePayablesQuery } from './contas-a-pagar/hooks/usePayablesQuery';
 import { usePayablesMutations } from './contas-a-pagar/hooks/usePayablesMutations';
 import { AdvancedFilters } from './contas-a-pagar/components/AdvancedFilters';
 import { PayablesTable } from './contas-a-pagar/components/PayablesTable';
+import { TotalsRow } from './contas-a-pagar/components/TotalsRow';
 import { CreatePayableModal } from './contas-a-pagar/components/CreatePayableModal';
 import { EditPayableModal } from './contas-a-pagar/components/EditPayableModal';
 import { BulkPayModal } from './contas-a-pagar/components/BulkPayModal';
@@ -64,7 +65,7 @@ const ContasAPagar: React.FC = () => {
   const [iconHtml, setIconHtml] = useState<string>('');
   
 
-  const { payables: payablesList, pagination, isLoading, error } = usePayablesQuery(
+  const { payables: payablesList, pagination, isLoading, error, refetch } = usePayablesQuery(
     currentTenant?.id,
     hasAccess,
     filters,
@@ -148,6 +149,9 @@ const ContasAPagar: React.FC = () => {
     if (editOpen && editEntry && variables.id === editEntry.id) {
       setEditEntry({ ...editEntry, ...variables.patch } as PayableRow);
     }
+    // AIDEV-NOTE: Force table refresh
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
     toast({ title: 'Salvo', description: 'Lançamento registrado' });
   };
   const handleBulkPayConfirm = async ({ paymentDate, bankAccountId, description }: { paymentDate: string; bankAccountId: string; description: string }) => {
@@ -161,7 +165,7 @@ const ContasAPagar: React.FC = () => {
       const newLaunch = {
         amount: Number(entry.net_amount ?? entry.gross_amount ?? 0),
         date: paymentDate,
-        typeId: String(typeId),
+        typeId: 'PAGAMENTO',
         operation: 'DEBIT',
         description: description || 'Movimento de Quitação em Lote',
       };
@@ -178,6 +182,8 @@ const ContasAPagar: React.FC = () => {
         } 
       });
     }
+    await refetch();
+    queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
     setSelectedIds([]);
     toast({ title: 'Sucesso', description: 'Contas selecionadas marcadas como pagas' });
   };
@@ -373,9 +379,13 @@ const ContasAPagar: React.FC = () => {
                     onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
                     onPayOff={handlePayOffEntry}
                     onGenerateReceipt={handleGenerateReceipt}
-                    onAfterReverse={() => queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] })}
+                    onAfterReverse={async () => {
+                      await refetch();
+                      queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+                    }}
                   />
                 </div>
+                <TotalsRow totals={totals} />
               </div>
             )}
 
@@ -389,13 +399,36 @@ const ContasAPagar: React.FC = () => {
                 itemsPerPage={pagination.limit}
                 onPageChange={(page) => handlePageChange(page)}
                 onItemsPerPageChange={(perPage) => { setItemsPerPage(perPage); setFilters((p) => ({ ...p, page: 1 })); }}
-                totals={totals}
               />
             </div>
           )}
         </Card>
 
-        
+        <EditPayableModal
+          open={editOpen}
+          onOpenChange={(v) => { 
+            setEditOpen(v); 
+            if(!v) {
+              setEditEntry(null);
+              // AIDEV-NOTE: Force refresh when modal closes to ensure table updates
+              refetch();
+              queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+            }
+          }}
+          entry={editEntry}
+          currentTenantId={currentTenant?.id}
+          readOnly={editReadOnly}
+          onSave={async (vars) => {
+            await updatePayableMutation.mutateAsync(vars);
+            setEditOpen(false);
+            setEditEntry(null);
+            // AIDEV-NOTE: Force refresh after save
+            await refetch();
+            queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+          }}
+          onSwitchEntry={(newEntry) => setEditEntry(newEntry)}
+          onAddLaunchPatch={appendLaunch}
+        />
 
 
 
@@ -404,19 +437,22 @@ const ContasAPagar: React.FC = () => {
         <CreatePayableModal
           open={showCreateModal}
           onOpenChange={setShowCreateModal}
-          onSave={(payload) => createPayableSaveInfoMutation.mutate(payload)}
-          onSaveAndAddAnother={(payload) => createPayableAddAnotherMutation.mutate(payload)}
+          onSave={async (payload) => {
+            await createPayableSaveInfoMutation.mutateAsync(payload);
+            await refetch();
+            queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+          }}
+          onSaveAndAddAnother={async (payload) => {
+            await createPayableAddAnotherMutation.mutateAsync(payload);
+            await refetch();
+            queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+          }}
+          onGenerateRecurrences={async (payload) => {
+            await createPayableSaveInfoMutation.mutateAsync(payload);
+            await refetch();
+            queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
+          }}
           currentTenantId={currentTenant?.id}
-        />
-
-        <EditPayableModal
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          entry={editEntry}
-          currentTenantId={currentTenant?.id}
-          onSave={(variables) => updatePayableMutation.mutate(variables)}
-          onAddLaunchPatch={(variables) => appendLaunch(variables)}
-          readOnly={editReadOnly}
         />
 
         <BulkPayModal

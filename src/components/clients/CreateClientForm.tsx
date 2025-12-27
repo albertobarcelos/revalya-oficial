@@ -8,12 +8,14 @@ import { useCustomers } from '@/hooks/useCustomers';
 import { usePageVisibility } from '@/hooks/usePageVisibility';
 import { CNPJStatusIndicator } from '@/components/ui/CNPJStatusIndicator';
 import { supabase } from '@/lib/supabase';
+import { User, MapPin } from 'lucide-react';
 
 interface CreateClientFormProps {
   onSuccess?: (customerId: string) => void;
+  onCancel?: () => void;
 }
 
-export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
+export function CreateClientForm({ onSuccess, onCancel }: CreateClientFormProps) {
   const [formData, setFormData] = useState<CreateCustomerDTO>({
     name: '',
     email: '',
@@ -141,52 +143,47 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full">
       <form onSubmit={handleSubmit} className="space-y-6 p-4 md:p-6">
-        {/* Seção de Informações Pessoais */}
-        <div className="space-y-4">
-          <div className="border-b pb-2 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Informações Pessoais</h3>
-              <p className="text-sm text-gray-600">Dados básicos do cliente</p>
-            </div>
+        {/* Seção de Informações Pessoais - Estilo Card */}
+        <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+          <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+            <User className="h-4 w-4 text-primary" />
+            Informações Pessoais
+          </h2>
+          <div className="space-y-4">
+            <PersonalInfoFields 
+              formData={formData} 
+              onChange={handleFieldChange}
+              onBulkChange={handleBulkChange}
+            />
             {/* AIDEV-NOTE: Indicador de status CNPJ se cliente foi criado */}
             {createdCustomerId && (
-              <CNPJStatusIndicator 
-                customerId={createdCustomerId}
-                showDetails={true}
-                className="ml-4"
-              />
+              <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border/30">
+                <CNPJStatusIndicator 
+                  customerId={createdCustomerId}
+                  showDetails={true}
+                />
+              </div>
             )}
           </div>
-          <PersonalInfoFields 
-            formData={formData} 
-            onChange={handleFieldChange}
-            onBulkChange={handleBulkChange}
-          />
         </div>
 
-        {/* Seção de Endereço */}
-        <div className="space-y-4">
-          <div className="border-b pb-2">
-            <h3 className="text-lg font-semibold text-gray-900">Endereço</h3>
-            <p className="text-sm text-gray-600">Informações de localização</p>
+        {/* Seção de Endereço - Estilo Card */}
+        <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+          <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+            <MapPin className="h-4 w-4 text-primary" />
+            Endereço
+          </h2>
+          <div className="space-y-4">
+            <AddressFields formData={formData} onChange={handleFieldChange} />
           </div>
-          <AddressFields formData={formData} onChange={handleFieldChange} />
         </div>
         
-        {/* Botão de ação */}
-        <div className="pt-4 border-t flex items-center justify-between">
-          <Button
-            type="submit"
-            className="w-full md:w-auto md:min-w-[200px] h-11 text-base font-medium"
-            disabled={isCreating}
-          >
-            {isCreating ? 'Criando...' : 'Criar Cliente'}
-          </Button>
-          
+        {/* Botão de ação - Estilo Card para ações */}
+        <div className="bg-card rounded-lg border border-border/50 p-4 shadow-sm flex items-center justify-between sticky bottom-0 z-10">
           {/* AIDEV-NOTE: Botão para limpar formulário após criação */}
-          {createdCustomerId && (
+          {createdCustomerId ? (
             <Button
               type="button"
               variant="outline"
@@ -195,42 +192,45 @@ export function CreateClientForm({ onSuccess }: CreateClientFormProps) {
                   name: '',
                   email: '',
                   phone: '',
-                  // AIDEV-NOTE: Removido mobilePhone - campo não existe na tabela customers
                   celular_whatsapp: '',
                   cpfCnpj: '',
-                  postal_code: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
+                  postal_code: '',
                   address: '',
-                  addressNumber: '',
+                  address_number: '',
                   complement: '',
-                  neighborhood: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
+                  neighborhood: '',
                   city: '',
                   state: '',
                   company: '',
                 });
                 setCreatedCustomerId(null);
               }}
-              className="ml-4"
+              className="mr-auto"
             >
               Novo Cliente
             </Button>
+          ) : (
+            <div /> // Espaçador
           )}
+          
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={isCreating}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={isCreating}
+            >
+              {isCreating ? 'Criando...' : 'Criar Cliente'}
+            </Button>
+          </div>
         </div>
       </form>
     </div>
   );
-
-  const { isVisible } = usePageVisibility();
-
-  useEffect(() => {
-    const revalidateSession = async () => {
-      if (isVisible) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          // Revalidar contexto do tenant se necessário
-          console.log('Sessão revalidada com sucesso');
-        }
-      }
-    };
-    revalidateSession();
-  }, [isVisible]);
 }

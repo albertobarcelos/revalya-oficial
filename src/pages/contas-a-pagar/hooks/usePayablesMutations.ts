@@ -3,7 +3,7 @@ import { markAsPaid as markPayableAsPaid, createPayable, updatePayable, getNextP
 import { useToast } from '@/components/ui/use-toast';
 import { financialAuditService } from '@/services/financialAuditService';
 import { supabase } from '@/lib/supabase';
-import { addWeeks, addMonths, addYears } from 'date-fns';
+import { addWeeks, addMonths, addYears, isWeekend, addDays, subDays, format } from 'date-fns';
 
 export function usePayablesMutations(payables: Array<{ id: string; tenant_id: string; net_amount?: number }>) {
   const { toast } = useToast();
@@ -26,7 +26,7 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
       tenant_id: tenantId,
       user_id: userId,
       action: action,
-      entity_type: 'PAYMENT',
+      entity_type: 'PAYABLE',
       entity_id: entityId,
       new_values: newValues || undefined,
       old_values: oldValues || undefined,
@@ -44,8 +44,12 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
       }
       const amount = entry.net_amount ?? 0;
       
+      // Obter usuário atual para auditoria
+      const { data: authData } = await _supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+
       // 2. Execução com cliente injetado (context aware)
-      const updated = await markPayableAsPaid(entryId, amount, 'MANUAL', _supabase);
+      const updated = await markPayableAsPaid(entryId, amount, 'MANUAL', userId, _supabase);
       
       // 3. Auditoria Obrigatória
       await logAudit('PAYMENT_RECEIVED', entryId, { status: 'PAID', paid_amount: amount }, { status: 'PENDING', paid_amount: 0 });
@@ -70,47 +74,69 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
     recurrence?: {
       period: 'WEEKLY' | 'MONTHLY' | 'SEMIANNUAL' | 'ANNUAL';
       times: number;
+      weekendRule?: 'KEEP' | 'ANTICIPATE' | 'POSTPONE';
+      repeatDay?: number;
     };
   };
 
   const handleCreatePayable = async (_supabase: any, tenantId: string, payload: CreatePayload) => {
+    // Obter usuário atual para auditoria
+    const { data: authData } = await _supabase.auth.getUser();
+    const userId = authData.user?.id || null;
+
     // Check if recurrence is requested
     if (payload.recurrence && payload.recurrence.times > 1) {
-      const { period, times } = payload.recurrence;
-      // Remove recurrence from payload to avoid sending it to DB if it's not in schema (though extra fields might be ignored or cause error depending on implementation)
-      // The service createPayable takes PayableInsert which doesn't have 'recurrence' object, but 'metadata'
+      const { period, times, weekendRule, repeatDay } = payload.recurrence;
       
-      const baseDueDate = new Date(payload.due_date);
-      // Ajuste de fuso horário simples para garantir que a data não volte um dia ao converter
-      // Assumindo que o input date vem como YYYY-MM-DD
       const [y, m, d] = payload.due_date.split('-').map(Number);
-      const baseDateObj = new Date(y, m - 1, d);
+      const initialDate = new Date(y, m - 1, d);
+      // Use repeatDay if provided, otherwise use the day of initial date
+      const baseDay = repeatDay || initialDate.getDate();
 
-      const baseIssueDate = payload.issue_date ? new Date(payload.issue_date) : null;
       const results = [];
 
       // Determine base entry number if not provided
       let baseEntryNumber = payload.entry_number;
       if (!baseEntryNumber) {
-        // Generate a new number to serve as base for the recurrence set
         baseEntryNumber = await getNextPayableEntryNumber(tenantId, _supabase);
       }
 
+      const recurrenceId = self.crypto.randomUUID();
+
       for (let i = 0; i < times; i++) {
-        let newDueDate = baseDateObj;
-        // let newIssueDate = baseIssueDate; // Issue date usually remains same for the invoice, but due date changes. Or maybe issue date changes too? Usually issue date is when the bill was created. Let's keep issue date same for now or maybe add months too?
-        // User requirement: "parcelas... um para o mes atual e outra para o proximo mes". This refers to due date.
+        let nextDate = new Date(initialDate);
 
         if (i > 0) {
           if (period === 'WEEKLY') {
-            newDueDate = addWeeks(baseDateObj, i);
+            nextDate = addWeeks(initialDate, i);
           } else if (period === 'MONTHLY') {
-            newDueDate = addMonths(baseDateObj, i);
+            nextDate = addMonths(initialDate, i);
+            // Adjust day for monthly recurrence
+            if (baseDay > 28) {
+                 const lastDayOfMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+                 nextDate.setDate(Math.min(baseDay, lastDayOfMonth));
+            } else {
+                 nextDate.setDate(baseDay);
+            }
           } else if (period === 'SEMIANNUAL') {
-            newDueDate = addMonths(baseDateObj, i * 6);
+            nextDate = addMonths(initialDate, i * 6);
           } else if (period === 'ANNUAL') {
-            newDueDate = addYears(baseDateObj, i);
+            nextDate = addYears(initialDate, i);
           }
+        }
+
+        // Apply weekend rule
+        let finalDate = new Date(nextDate);
+        if (weekendRule && isWeekend(finalDate)) {
+            if (weekendRule === 'ANTICIPATE') {
+                while (isWeekend(finalDate)) {
+                    finalDate = subDays(finalDate, 1);
+                }
+            } else if (weekendRule === 'POSTPONE') {
+                while (isWeekend(finalDate)) {
+                    finalDate = addDays(finalDate, 1);
+                }
+            }
         }
 
         const { recurrence, ...basePayload } = payload; // remove recurrence object
@@ -118,17 +144,22 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
         const itemPayload: PayableInsert = {
           tenant_id: tenantId,
           ...basePayload,
-          due_date: format(newDueDate, 'yyyy-MM-dd'),
-          // Handle entry_number with suffix for recurrence
-          entry_number: `${baseEntryNumber} ${i + 1}/${times}`,
+          due_date: format(finalDate, 'yyyy-MM-dd'),
+          // Handle entry_number without suffix
+          entry_number: baseEntryNumber,
+          installments: `${String(i + 1).padStart(3, '0')}/${String(times).padStart(3, '0')}`,
           metadata: {
             ...payload.metadata,
             recurrence: {
               current: i + 1,
               total: times,
-              period
+              period,
+              weekendRule,
+              repeatDay
             }
-          }
+          },
+          created_by: userId,
+          updated_by: userId
         };
 
         const created = await createPayable(itemPayload, _supabase);
@@ -144,7 +175,13 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
     } else {
       // Single creation
       const { recurrence, ...basePayload } = payload;
-      const created = await createPayable({ tenant_id: tenantId, ...basePayload }, _supabase);
+      const created = await createPayable({ 
+        tenant_id: tenantId, 
+        ...basePayload,
+        installments: '001/001',
+        created_by: userId,
+        updated_by: userId
+      }, _supabase);
       
       if (created.tenant_id !== tenantId) {
         throw new Error('Security Violation: Tenant Data Leak Detected');
@@ -181,6 +218,15 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
 
   const updatePayableMutation = useSecureTenantMutation(
     async (_supabase, tenantId, variables: { id: string; patch: Partial<PayableInsert> }) => {
+      // Obter usuário atual para auditoria
+      const { data: authData } = await _supabase.auth.getUser();
+      const userId = authData.user?.id || null;
+
+      const patchWithUser = {
+        ...variables.patch,
+        updated_by: userId,
+      };
+
       // 1. Verificação de Propriedade (Read before Write) usando cliente injetado
       const { data: oldRow, error: fetchError } = await _supabase
         .from('financial_payables')
@@ -192,7 +238,7 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
       if (fetchError) throw new Error(fetchError.message);
       
       // 2. Atualização Segura
-      const updated = await updatePayable(variables.id, variables.patch, _supabase);
+      const updated = await updatePayable(variables.id, patchWithUser, _supabase);
       
       // 3. Auditoria
       await logAudit('UPDATE', variables.id, updated as unknown as Record<string, unknown>, oldRow as unknown as Record<string, unknown>);
@@ -207,13 +253,4 @@ export function usePayablesMutations(payables: Array<{ id: string; tenant_id: st
   );
 
   return { markAsPaidMutation, createPayableAddAnotherMutation, createPayableSaveInfoMutation, updatePayableMutation, currentTenant };
-}
-
-function format(date: Date, fmt: string): string {
-  // Simple format wrapper to match yyyy-MM-dd
-  // Or import from date-fns
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 }

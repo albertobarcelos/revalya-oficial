@@ -5,7 +5,6 @@ import { Banknote, FileText, Settings, Landmark } from 'lucide-react';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { ExpenseCategoriesSection } from '@/components/finance/parts/ExpenseCategoriesSection';
 import { DocumentTypesSection } from '@/components/finance/parts/DocumentTypesSection';
-import { LaunchTypesSection } from '@/components/finance/parts/LaunchTypesSection';
 import { BankAccountsSection } from '@/components/finance/parts/BankAccountsSection';
 
 /**
@@ -72,10 +71,6 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
 
         <TabsContent value="documentos" className="space-y-4 mt-2">
           <DocumentTypesSection tenantId={effectiveTenantId} />
-        </TabsContent>
-
-        <TabsContent value="lancamentos" className="space-y-4 mt-2">
-          <LaunchTypesSection tenantId={effectiveTenantId} />
         </TabsContent>
 
         <TabsContent value="contas" className="space-y-4 mt-2">

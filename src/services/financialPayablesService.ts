@@ -19,11 +19,15 @@ export interface PayableRow {
   category_id: string | null;
   document_id: string | null;
   bank_account_id: string | null;
+  customer_id: string | null;
   repeat: boolean;
+  installments: string | null;
   metadata: Record<string, any> | null;
   created_by?: string | null;
+  updated_by?: string | null;
   created_at: string;
   updated_at: string;
+  customers?: { name: string } | null;
 }
 
 export interface PayableInsert {
@@ -41,8 +45,12 @@ export interface PayableInsert {
   category_id?: string | null;
   document_id?: string | null;
   bank_account_id?: string | null;
+  customer_id?: string | null;
   repeat?: boolean;
+  installments?: string | null;
   metadata?: Record<string, any> | null;
+  created_by?: string | null;
+  updated_by?: string | null;
 }
 
 export interface PayableFilters {
@@ -69,6 +77,16 @@ export interface PayableResponse {
 /** Cria uma conta a pagar */
 export async function createPayable(payload: PayableInsert, client?: SupabaseClient): Promise<PayableRow> {
   const supabase = client || defaultClient;
+
+  // AIDEV-NOTE: Sanitização para parcela única (001/001)
+  if (payload.installments === '001/001' || !payload.installments) {
+    if (payload.metadata && payload.metadata.recurrence) {
+      const { recurrence, ...rest } = payload.metadata;
+      payload.metadata = { ...rest, recurrence: null };
+    }
+    payload.repeat = false;
+  }
+
   const entry_number = payload.entry_number ?? await getNextPayableEntryNumber(payload.tenant_id, supabase);
   const { data, error } = await supabase
     .from('financial_payables')
@@ -87,8 +105,12 @@ export async function createPayable(payload: PayableInsert, client?: SupabaseCli
       category_id: payload.category_id ?? null,
       document_id: payload.document_id ?? null,
       bank_account_id: payload.bank_account_id ?? null,
+      customer_id: payload.customer_id ?? null,
       repeat: payload.repeat ?? false,
+      installments: payload.installments ?? '001/001',
       metadata: payload.metadata ?? {},
+      created_by: payload.created_by ?? null,
+      updated_by: payload.updated_by ?? null,
     })
     .select()
     .single();
@@ -99,6 +121,32 @@ export async function createPayable(payload: PayableInsert, client?: SupabaseCli
 /** Atualiza uma conta a pagar */
 export async function updatePayable(id: string, patch: Partial<PayableInsert>, client?: SupabaseClient): Promise<PayableRow> {
   const supabase = client || defaultClient;
+  console.log('📝 Atualizando conta a pagar:', id, patch);
+
+  // AIDEV-NOTE: Se for parcela única (001/001), garante que não há recorrência e limpa metadados
+  if (patch.installments === '001/001') {
+    patch.repeat = false;
+
+    // Se metadata não foi passado, precisamos buscar o atual para remover a recorrência sem perder o resto
+    if (patch.metadata === undefined) {
+      const { data: current } = await supabase
+        .from('financial_payables')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+      
+      if (current?.metadata) {
+        patch.metadata = current.metadata;
+      }
+    }
+
+    // Remove informações de recorrência do metadata
+    if (patch.metadata) {
+      const { recurrence, ...rest } = patch.metadata;
+      patch.metadata = { ...rest, recurrence: null };
+    }
+  }
+
   const { data, error } = await supabase
     .from('financial_payables')
     .update({
@@ -117,8 +165,12 @@ export async function updatePayable(id: string, patch: Partial<PayableInsert>, c
       category_id: patch.category_id,
       document_id: patch.document_id,
       bank_account_id: patch.bank_account_id,
+      customer_id: patch.customer_id,
       repeat: patch.repeat,
+      installments: patch.installments,
       metadata: patch.metadata,
+      updated_at: new Date().toISOString(),
+      updated_by: patch.updated_by,
     })
     .eq('id', id)
     .select()
@@ -136,7 +188,7 @@ export async function getPayablesPaginated(filters: PayableFilters, client?: Sup
 
   let query = supabase
     .from('financial_payables')
-    .select('*', { count: 'exact' })
+    .select('*, customers(name)', { count: 'exact' })
     .eq('tenant_id', filters.tenant_id)
     .order('due_date', { ascending: false });
 
@@ -170,12 +222,13 @@ export async function getPayablesPaginated(filters: PayableFilters, client?: Sup
 }
 
 /** Marca como pago */
-export async function markAsPaid(id: string, amount: number, method?: string, client?: SupabaseClient): Promise<PayableRow> {
+export async function markAsPaid(id: string, amount: number, method?: string, updatedBy?: string | null, client?: SupabaseClient): Promise<PayableRow> {
   return await updatePayable(id, {
     status: 'PAID',
     payment_date: new Date().toISOString().slice(0,10),
     paid_amount: amount,
     payment_method: method,
+    updated_by: updatedBy,
   }, client);
 }
 

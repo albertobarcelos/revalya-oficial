@@ -11,7 +11,7 @@ import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useSecureTenantMutation, useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { listFinancialDocuments, createFinancialDocument, deleteFinancialDocument, updateFinancialDocument, type CreditTitleType } from '@/services/financialDocumentsService';
-import { listFinancialLaunchs } from '@/services/financialLaunchsService';
+import { LAUNCH_TYPES } from '@/types/financial-enums';
 
 type Props = { tenantId?: string | null };
 
@@ -29,17 +29,6 @@ export function DocumentTypesSection({ tenantId }: Props) {
     ['financial-documents', tenantId],
     async (supabase, tId) => {
       const data = await listFinancialDocuments(tId, supabase);
-      const invalid = data.filter(item => item.tenant_id !== tId);
-      if (invalid.length) throw new Error('VIOLAÇÃO DE SEGURANÇA: registros de outro tenant');
-      return data;
-    },
-    { enabled: !!tenantId }
-  );
-
-  const launchsQuery = useSecureTenantQuery(
-    ['financial-launchs', tenantId],
-    async (supabase, tId) => {
-      const data = await listFinancialLaunchs(tId, supabase);
       const invalid = data.filter(item => item.tenant_id !== tId);
       if (invalid.length) throw new Error('VIOLAÇÃO DE SEGURANÇA: registros de outro tenant');
       return data;
@@ -187,9 +176,11 @@ export function DocumentTypesSection({ tenantId }: Props) {
                     <Select value={launchOpen} onValueChange={setLaunchOpen}>
                       <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
                       <SelectContent>
-                        {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
-                          <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                        ))}
+                        {Object.entries(LAUNCH_TYPES)
+                          .filter(([_, opt]) => opt.operation === 'DEBIT')
+                          .map(([key, opt]) => (
+                            <SelectItem key={key} value={key}>{opt.name}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -198,9 +189,11 @@ export function DocumentTypesSection({ tenantId }: Props) {
                     <Select value={launchSettle} onValueChange={setLaunchSettle}>
                       <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
                       <SelectContent>
-                        {launchsQuery.data?.filter(opt => opt.operation_type === 'DEBIT').map((opt) => (
-                          <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                        ))}
+                        {Object.entries(LAUNCH_TYPES)
+                          .filter(([_, opt]) => opt.operation === 'DEBIT')
+                          .map(([key, opt]) => (
+                            <SelectItem key={key} value={key}>{opt.name}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -209,9 +202,11 @@ export function DocumentTypesSection({ tenantId }: Props) {
                     <Select value={launchAddition} onValueChange={setLaunchAddition}>
                       <SelectTrigger className="mt-2"><SelectValue placeholder="(selecione)" /></SelectTrigger>
                       <SelectContent>
-                        {launchsQuery.data?.filter(opt => opt.operation_type === 'CREDIT').map((opt) => (
-                          <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                        ))}
+                        {Object.entries(LAUNCH_TYPES)
+                          .filter(([_, opt]) => opt.operation === 'CREDIT')
+                          .map(([key, opt]) => (
+                            <SelectItem key={key} value={key}>{opt.name}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>

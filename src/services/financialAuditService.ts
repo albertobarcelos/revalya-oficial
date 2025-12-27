@@ -45,6 +45,7 @@ export type AuditEntityType =
   | 'CONTRACT'
   | 'BILLING'
   | 'PAYMENT'
+  | 'PAYABLE'
   | 'CUSTOMER'
   | 'USER'
   | 'FINANCIAL_CALCULATION'
