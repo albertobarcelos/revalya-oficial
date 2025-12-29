@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, User, Hash, Tag, FileText, Landmark, AlignLeft } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -82,7 +82,14 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
           Favorecido/Fornecedor *
         </Label>
         <Select value={customerId} onValueChange={setCustomerId} disabled={!!readOnly}>
-          <SelectTrigger disabled={!!readOnly} className={cn("w-full h-10 bg-background", showErrors && !customerId ? "border-red-500 ring-red-500" : "")}>
+          <SelectTrigger 
+            disabled={!!readOnly} 
+            className={cn(
+              "w-full h-10 bg-white pl-9 relative font-medium", 
+              showErrors && !customerId ? "border-red-500 ring-red-500" : ""
+            )}
+          >
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Selecione" />
           </SelectTrigger>
           <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
@@ -90,7 +97,7 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
               <SelectItem
                 key={c.id}
                 value={c.id}
-                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
               >
                 {c.name}
               </SelectItem>
@@ -112,7 +119,7 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
           )}
         </div>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">R$</span>
           <Input 
             className="pl-9 h-10 font-medium"
             placeholder="0,00" 
@@ -130,12 +137,12 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
             <Button
               variant={"outline"}
               className={cn(
-                "w-full justify-start text-left font-normal h-10",
-                !dueDate && "text-muted-foreground"
+                "w-full justify-start text-left font-medium h-10 pl-9 relative bg-white",
+                !dueDate && "text-muted-foreground font-normal"
               )}
               disabled={!!readOnly}
             >
-              <CalendarIcon className="mr-2 h-4 w-4" />
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               {dueDate ? format(new Date(dueDate + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
             </Button>
           </PopoverTrigger>
@@ -161,12 +168,12 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
             <Button
               variant={"outline"}
               className={cn(
-                "w-full justify-start text-left font-normal h-10",
-                !issueDate && "text-muted-foreground"
+                "w-full justify-start text-left font-medium h-10 pl-9 relative bg-white",
+                !issueDate && "text-muted-foreground font-normal"
               )}
               disabled={!!readOnly}
             >
-              <CalendarIcon className="mr-2 h-4 w-4" />
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               {issueDate ? format(new Date(issueDate + 'T00:00:00'), "dd/MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
             </Button>
           </PopoverTrigger>
@@ -187,24 +194,30 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
 
       <div className="lg:col-span-1">
         <Label className="text-sm font-medium mb-2 block">Número</Label>
-        <Input 
-          className="h-10"
-          value={entryNumber} 
-          onChange={(e) => setEntryNumber(e.target.value)} 
-          disabled={!!readOnly} 
-        />
+        <div className="relative">
+          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            className="h-10 pl-9 font-medium"
+            value={entryNumber} 
+            onChange={(e) => setEntryNumber(e.target.value)} 
+            disabled={!!readOnly} 
+          />
+        </div>
       </div>
 
       <div className="lg:col-span-1">
         <Label className="text-sm font-medium mb-2 block">Categoria</Label>
         <Select value={category} onValueChange={setCategory} disabled={!!readOnly}>
-          <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <SelectTrigger disabled={!!readOnly} className="w-full h-10 pl-9 relative font-medium bg-white">
+            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
           <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
             {categoriesQuery.data?.map((c: any) => (
               <SelectItem
                 key={c.id}
                 value={c.id}
-                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
               >
                 {c.name}
               </SelectItem>
@@ -216,13 +229,16 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
       <div className="lg:col-span-1">
         <Label className="text-sm font-medium mb-2 block">Tipo de documento</Label>
         <Select value={documentId} onValueChange={setDocumentId} disabled={!!readOnly}>
-          <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <SelectTrigger disabled={!!readOnly} className="w-full h-10 pl-9 relative font-medium bg-white">
+            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
           <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
             {documentsQuery.data?.map((d: any) => (
               <SelectItem
                 key={d.id}
                 value={d.id}
-                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
               >
                 {d.name}
               </SelectItem>
@@ -234,13 +250,16 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
       <div className="lg:col-span-1">
         <Label className="text-sm font-medium mb-2 block">Conta bancária</Label>
         <Select value={bankAccountId} onValueChange={setBankAccountId} disabled={!!readOnly}>
-          <SelectTrigger disabled={!!readOnly} className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <SelectTrigger disabled={!!readOnly} className="w-full h-10 pl-9 relative font-medium bg-white">
+            <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Selecione" />
+          </SelectTrigger>
           <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
             {bankAccountsQuery.data?.map((b: any) => (
               <SelectItem
                 key={b.id}
                 value={b.id}
-                className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
               >
                 {b.label}
               </SelectItem>
@@ -251,12 +270,15 @@ export const PayableGeneralTab: React.FC<PayableGeneralTabProps> = ({ form, read
       
       <div className="md:col-span-2 lg:col-span-3">
         <Label className="text-sm font-medium mb-2 block">Descrição (opcional)</Label>
-        <Input 
-          className="h-10"
-          value={description} 
-          onChange={(e) => setDescription(e.target.value)} 
-          disabled={!!readOnly} 
-        />
+        <div className="relative">
+          <AlignLeft className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input 
+            className="h-10 pl-9 font-medium"
+            value={description} 
+            onChange={(e) => setDescription(e.target.value)} 
+            disabled={!!readOnly} 
+          />
+        </div>
       </div>
     </div>
   );

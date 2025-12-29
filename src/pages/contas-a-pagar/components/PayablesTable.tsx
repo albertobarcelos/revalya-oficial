@@ -18,8 +18,6 @@ export function PayablesTable({
   toggleSelectAll,
   toggleSelectOne,
   onEdit,
-  onPayOff,
-  onGenerateReceipt,
   onAfterReverse,
 }: {
   payables: any[];
@@ -28,8 +26,6 @@ export function PayablesTable({
   toggleSelectAll: (v: boolean) => void;
   toggleSelectOne: (id: string, v: boolean) => void;
   onEdit: (entry: any, readOnly?: boolean) => void;
-  onPayOff: (entry: any) => void;
-  onGenerateReceipt: (entry: any) => void;
   onAfterReverse?: () => void;
 }) {
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -131,16 +127,6 @@ export function PayablesTable({
                         <DropdownMenuItem onClick={() => onEdit(entry, true)}>Visualizar</DropdownMenuItem>
                       ) : (
                         <>
-                          {entry.status !== 'PAID' && (
-                            <>
-                              <DropdownMenuItem onClick={() => onPayOff(entry)}>
-                                Quitar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => onGenerateReceipt(entry)}>
-                                Gerar Recibo
-                              </DropdownMenuItem>
-                            </>
-                          )}
                           <DropdownMenuItem onClick={() => onEdit(entry)}>Editar</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive" onClick={() => setReverseEntry(entry)}>Estornar</DropdownMenuItem>
                         </>

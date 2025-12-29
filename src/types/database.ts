@@ -242,6 +242,8 @@ export type Database = {
           customer_asaas_id: string | null
           email: string
           id: string
+          is_supplier: boolean | null
+          is_carrier: boolean | null
           name: string
           neighborhood: string | null
           phone: string | null
@@ -265,6 +267,8 @@ export type Database = {
           customer_asaas_id?: string | null
           email: string
           id?: string
+          is_supplier?: boolean | null
+          is_carrier?: boolean | null
           name: string
           neighborhood?: string | null
           phone?: string | null
@@ -288,6 +292,8 @@ export type Database = {
           customer_asaas_id?: string | null
           email?: string
           id?: string
+          is_supplier?: boolean | null
+          is_carrier?: boolean | null
           name?: string
           neighborhood?: string | null
           phone?: string | null
@@ -705,6 +711,20 @@ export interface Customer {
   status?: string;
   asaas_id?: string;
   created_at: string;
+  // Address fields
+  address?: string;
+  address_number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  // Type fields
+  is_supplier?: boolean | null;
+  is_carrier?: boolean | null;
+  celular_whatsapp?: string;
+  observations?: string;
 }
 
 export interface Profile {

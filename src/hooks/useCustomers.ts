@@ -25,6 +25,8 @@ export interface Customer {
   postal_code?: string
   country?: string
   additional_info?: any
+  is_supplier?: boolean
+  is_carrier?: boolean
 }
 
 export interface CustomerFilters {
@@ -60,7 +62,7 @@ export function useCustomers(params?: UseCustomersParams) {
       
       let query = supabase
         .from('customers')
-        .select('id, name, company, cpf_cnpj, email, phone, celular_whatsapp, created_at, updated_at', { count: 'estimated' })
+        .select('id, name, company, cpf_cnpj, email, phone, celular_whatsapp, created_at, updated_at, is_supplier, is_carrier', { count: 'estimated' })
         .eq('tenant_id', tenantId)
 
       // Aplicar filtros de busca se fornecidos
@@ -162,12 +164,17 @@ export function useCustomers(params?: UseCustomersParams) {
         .from('customers')
         .insert({
           // AIDEV-NOTE: Espalhar dados do cliente, mas sobrescrever cpf_cnpj com valor sanitizado
+          // Garantir que active seja true por padrão se não fornecido
+          active: true,
           ...customerData,
           cpf_cnpj: sanitizedCpfCnpj,
           tenant_id: tenantId // 🛡️ SEMPRE INCLUIR TENANT_ID
         })
         .select()
         .single()
+
+      // 🔍 DEBUG: Log detalhado do resultado
+      console.log('🔍 [DEBUG] Create Customer Result:', { data, error });
 
       if (error) {
         // AIDEV-NOTE: Tratamento específico para erro de constraint única
@@ -178,13 +185,49 @@ export function useCustomers(params?: UseCustomersParams) {
         throw error;
       }
 
+      // 🛡️ FALLBACK: Se inseriu mas não retornou dados (possível limitação de RLS ou trigger)
+      let finalData = data;
+      
+      if (!finalData) {
+        console.warn('⚠️ [WARNING] Insert succeeded but returned no data. Attempting fallback fetch...');
+        
+        // Tentar buscar o registro recém-criado
+        let query = supabase
+          .from('customers')
+          .select()
+          .eq('tenant_id', tenantId)
+          .eq('name', customerData.name) // Nome é obrigatório
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (customerData.email) {
+          query = query.eq('email', customerData.email);
+        } else if (sanitizedCpfCnpj) {
+          query = query.eq('cpf_cnpj', sanitizedCpfCnpj);
+        }
+
+        const { data: fallbackData, error: fallbackError } = await query.single();
+        
+        if (fallbackData) {
+           console.log('✅ [INFO] Fallback fetch succeeded:', fallbackData);
+           finalData = fallbackData;
+        } else {
+           console.error('❌ [ERROR] Fallback fetch failed:', fallbackError);
+        }
+      }
+
       // 🔍 VALIDAÇÃO: Confirmar que o cliente foi criado para o tenant correto
-      if (data.tenant_id !== tenantId) {
-        console.error('🚨 [SECURITY] Cliente criado para tenant incorreto!')
+      if (finalData?.tenant_id !== tenantId) {
+        console.error('🚨 [SECURITY] Cliente criado para tenant incorreto!', { expected: tenantId, actual: finalData?.tenant_id })
+        // Se não temos dados, não podemos validar o tenant_id, mas se chegamos aqui sem erro, assumimos sucesso parcial
+        if (!finalData) {
+             throw new Error('Não foi possível confirmar a criação do cliente (sem dados retornados)');
+        }
         throw new Error('Erro de segurança na criação')
       }
 
-      return data
+      console.log('🔍 [DEBUG] Returning created customer data:', finalData);
+      return finalData
     },
     {
       onSuccess: () => {

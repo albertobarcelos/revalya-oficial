@@ -8,6 +8,8 @@ import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 
 interface CustomerFormData extends Omit<FormData, 'cpfCnpj'> {
   cpfCnpj: string;
+  is_supplier?: boolean;
+  is_carrier?: boolean;
 }
 
 export function useClientForm(customer: Customer, onSuccess?: () => void) {
@@ -43,6 +45,8 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
       postal_code: customer.postal_code || '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
       city: customer.city || '',
       state: customer.state || '',
+      is_supplier: customer.is_supplier || false,
+      is_carrier: customer.is_carrier || false,
       // AIDEV-NOTE: Removido mobilePhone - campo não existe na tabela customers
     };
   });
@@ -69,8 +73,10 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
         state: customer.state || '',
         postal_code: customer.postal_code || '',
         complement: customer.complement || '',
-        address_number: customer.address_number || '',
+        addressNumber: customer.address_number || '',
         observations: customer.observations || '',
+        is_supplier: customer.is_supplier || false,
+        is_carrier: customer.is_carrier || false,
       };
       
       // AIDEV-NOTE: Log removido para evitar spam - só para casos específicos
@@ -85,7 +91,7 @@ export function useClientForm(customer: Customer, onSuccess?: () => void) {
     }
   }, [customer]);
   
-  const handleChange = (field: keyof CustomerFormData, value: string) => {
+  const handleChange = (field: keyof CustomerFormData, value: string | boolean) => {
     // Se o campo for cpfCnpj e o valor estiver vazio, não atualize
     if (field === 'cpfCnpj' && !value && customer.cpf_cnpj) {
       return;

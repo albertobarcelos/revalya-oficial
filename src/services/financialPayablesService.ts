@@ -28,6 +28,8 @@ export interface PayableRow {
   created_at: string;
   updated_at: string;
   customers?: { name: string } | null;
+  bank_acounts?: { bank: string; agency: string; count: string } | null;
+  financial_documents?: { name: string } | null;
 }
 
 export interface PayableInsert {
@@ -188,7 +190,7 @@ export async function getPayablesPaginated(filters: PayableFilters, client?: Sup
 
   let query = supabase
     .from('financial_payables')
-    .select('*, customers(name)', { count: 'exact' })
+    .select('*, customers(name), bank_acounts(bank, agency, count), financial_documents(name)', { count: 'exact' })
     .eq('tenant_id', filters.tenant_id)
     .order('due_date', { ascending: false });
 
@@ -199,7 +201,38 @@ export async function getPayablesPaginated(filters: PayableFilters, client?: Sup
   }
 
   if (filters.search) {
-    query = query.ilike('description', `%${filters.search}%`);
+    const searchTerm = `%${filters.search}%`;
+    const orConditions = [
+      `description.ilike.${searchTerm}`,
+      `entry_number.ilike.${searchTerm}`,
+      `installments.ilike.${searchTerm}`
+    ];
+
+    // Buscar IDs de clientes que correspondem ao nome (case insensitive)
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('id')
+      .eq('tenant_id', filters.tenant_id)
+      .ilike('name', searchTerm);
+    
+    if (customers && customers.length > 0) {
+      const customerIds = customers.map(c => c.id).join(',');
+      orConditions.push(`customer_id.in.(${customerIds})`);
+    }
+
+    // Buscar IDs de documentos que correspondem ao nome (case insensitive)
+    const { data: documents } = await supabase
+      .from('financial_documents')
+      .select('id')
+      .eq('tenant_id', filters.tenant_id)
+      .ilike('name', searchTerm);
+
+    if (documents && documents.length > 0) {
+      const docIds = documents.map(d => d.id).join(',');
+      orConditions.push(`document_id.in.(${docIds})`);
+    }
+
+    query = query.or(orConditions.join(','));
   }
 
   if (filters.category_id) {

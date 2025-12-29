@@ -46,6 +46,7 @@ export function useCreatePayableLogic({
         .from('customers')
         .select('id, name, tenant_id')
         .eq('tenant_id', tId)
+        .or('is_supplier.eq.true,is_carrier.eq.true')
         .order('name');
       
       if (error) throw error;

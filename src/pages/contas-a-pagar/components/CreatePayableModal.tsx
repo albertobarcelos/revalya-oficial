@@ -9,6 +9,7 @@ import { useCreatePayableLogic } from './create-payable-parts/useCreatePayableLo
 import { CreatePayableModalProps } from './create-payable-parts/types';
 import { ModalHeader } from './create-payable-parts/ModalHeader';
 import { CreatePayableGeneralTab } from './create-payable-parts/tabs/CreatePayableGeneralTab';
+import { NavigationCard } from './create-payable-parts/NavigationCard';
 
 const CustomDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
@@ -46,8 +47,14 @@ export function CreatePayableModal(props: CreatePayableModalProps) {
       <CustomDialogContent className="p-0 m-0 border-0">
         <ModalHeader handleClose={handleClose} />
 
-        <div className="flex-1 overflow-hidden p-8 bg-muted/30">
-          <Card className="h-full flex flex-col overflow-hidden border-0 shadow-sm">
+        <div className="flex-1 overflow-hidden p-8 grid grid-cols-12 gap-8 bg-muted/30">
+          <NavigationCard 
+            tab={form.tab} 
+            setTab={form.setTab} 
+            createdEntry={form.createdEntry} 
+          />
+          
+          <Card className="col-span-9 h-full flex flex-col overflow-hidden border-0 shadow-sm">
             <CardHeader className="px-8 py-6 border-b bg-background shrink-0">
               <CardTitle className="text-lg">Dados gerais</CardTitle>
             </CardHeader>

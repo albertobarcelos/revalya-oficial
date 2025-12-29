@@ -30,9 +30,29 @@ export function BulkPayModal({ open, onOpenChange, selectedIds, payables, onConf
   const selectedPayables = payables.filter(p => selectedIds.includes(p.id));
   
   // Calculate totals
-  const totalAmount = selectedPayables.reduce((sum, p) => sum + (p.net_amount ?? p.gross_amount ?? 0), 0);
   const totalOriginal = selectedPayables.reduce((sum, p) => sum + (p.gross_amount ?? 0), 0);
-  const totalDiscountInterest = totalAmount - totalOriginal; // Simplified logic
+  const totalPaid = selectedPayables.reduce((sum, p) => sum + (p.paid_amount ?? 0), 0);
+  const totalNet = selectedPayables.reduce((sum, p) => sum + (p.net_amount ?? p.gross_amount ?? 0), 0);
+  
+  // Calculate historical additions/discounts from metadata launches if available
+  let histInterest = 0;
+  let histFine = 0;
+  let histDiscount = 0;
+
+  selectedPayables.forEach(p => {
+    const meta = p.metadata as any;
+    if (meta?.launches && Array.isArray(meta.launches)) {
+      meta.launches.forEach((l: any) => {
+        const amt = Number(l.amount || 0);
+        if (l.typeId === 'JUROS') histInterest += amt;
+        if (l.typeId === 'MULTA') histFine += amt;
+        if (l.typeId === 'DESCONTO') histDiscount += amt;
+      });
+    }
+  });
+
+  const remainingBase = Math.max(totalNet - totalPaid, 0);
+  const finalAmount = remainingBase;
 
   const bankAccountsQuery = useSecureTenantQuery(
     ['bank-acounts', currentTenantId],
@@ -92,9 +112,9 @@ export function BulkPayModal({ open, onOpenChange, selectedIds, payables, onConf
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-slate-50 p-4 rounded-lg border text-center">
-                <div className="text-sm text-muted-foreground mb-1">Total de contas selecionadas</div>
+                <div className="text-sm text-muted-foreground mb-1">Total de contas</div>
                 <div className="text-xl font-semibold text-slate-700">{selectedIds.length}</div>
               </div>
               <div className="bg-slate-50 p-4 rounded-lg border text-center">
@@ -102,12 +122,22 @@ export function BulkPayModal({ open, onOpenChange, selectedIds, payables, onConf
                 <div className="text-xl font-semibold text-slate-700">{formatCurrency(totalOriginal)}</div>
               </div>
               <div className="bg-slate-50 p-4 rounded-lg border text-center">
-                <div className="text-sm text-muted-foreground mb-1">Descontos e acréscimos</div>
-                <div className="text-xl font-semibold text-slate-700">{formatCurrency(totalDiscountInterest)}</div>
+                <div className="text-sm text-muted-foreground mb-1">Já pago</div>
+                <div className="text-xl font-semibold text-slate-700">{formatCurrency(totalPaid)}</div>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-lg border text-center">
+                <div className="text-sm text-muted-foreground mb-1">Acréscimos / Descontos (Hist.)</div>
+                <div className="text-sm font-medium text-red-600">
+                   {histInterest + histFine > 0 && `+${formatCurrency(histInterest + histFine)}`}
+                </div>
+                <div className="text-sm font-medium text-green-600">
+                   {histDiscount > 0 && `-${formatCurrency(histDiscount)}`}
+                </div>
+                {histInterest + histFine === 0 && histDiscount === 0 && <div className="text-xl font-semibold text-slate-700">R$ 0,00</div>}
               </div>
               <div className="bg-slate-50 p-4 rounded-lg border text-center bg-emerald-50 border-emerald-100">
                 <div className="text-sm text-emerald-600 mb-1 font-medium">Valor a pagar</div>
-                <div className="text-xl font-bold text-emerald-700">{formatCurrency(totalAmount)}</div>
+                <div className="text-xl font-bold text-emerald-700">{formatCurrency(finalAmount)}</div>
               </div>
             </div>
 
