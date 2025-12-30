@@ -2,16 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { asaasService } from '@/services/asaas';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useAsaasCustomers } from '@/hooks/useAsaasData';
-import { CreateClientForm } from '@/components/clients/CreateClientForm';
+import { CreateClientDialog } from '@/components/clients/CreateClientDialog';
 import { ClientSelect } from './form/ClientSelect';
 import { PaymentDetails } from './form/PaymentDetails';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
@@ -107,23 +100,14 @@ export function CreateChargeForm({ onSuccess }: CreateChargeFormProps) {
           />
         </div>
 
-        <Dialog open={isNewClientDialogOpen} onOpenChange={setIsNewClientDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Novo Cliente</DialogTitle>
-              <DialogDescription>
-                Cadastre um novo cliente para criar a cobrança
-              </DialogDescription>
-            </DialogHeader>
-            <CreateClientForm
-              onSuccess={(newCustomerId: string) => {
-                setIsNewClientDialogOpen(false);
-                setFormData(prev => ({ ...prev, customer: newCustomerId }));
-                queryClient.invalidateQueries({ queryKey: ['customers'] });
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <CreateClientDialog
+          open={isNewClientDialogOpen}
+          onOpenChange={setIsNewClientDialogOpen}
+          onClientCreated={(newCustomerId: string) => {
+            setFormData(prev => ({ ...prev, customer: newCustomerId }));
+            queryClient.invalidateQueries({ queryKey: ['customers'] });
+          }}
+        />
 
         {/* Seção de Detalhes do Pagamento */}
         <div className="space-y-4">

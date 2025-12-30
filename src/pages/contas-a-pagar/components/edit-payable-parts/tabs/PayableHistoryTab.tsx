@@ -7,7 +7,21 @@ interface PayableHistoryTabProps {
 }
 
 export const PayableHistoryTab: React.FC<PayableHistoryTabProps> = ({ currentTenantId, entryId }) => {
-  if (!currentTenantId || !entryId) return null;
+  if (!currentTenantId) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px] text-muted-foreground">
+        Erro: Identificação da organização não encontrada.
+      </div>
+    );
+  }
+
+  if (!entryId) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px] text-muted-foreground">
+        Histórico indisponível para novos registros. Salve a conta para iniciar o rastreamento.
+      </div>
+    );
+  }
 
   return (
     <div className="h-full min-h-[400px]">

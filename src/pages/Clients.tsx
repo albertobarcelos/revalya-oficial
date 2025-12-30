@@ -34,7 +34,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PaginationFooter } from "@/components/layout/PaginationFooter";
 import { usePaginationState } from "@/components/ui/pagination-controls";
 import { UserPlus, Search, Mail, Phone, RefreshCw, Building2, Pencil, RotateCw, Download } from "lucide-react";
-import { CreateClientForm } from "@/components/clients/CreateClientForm";
+import { Badge } from "@/components/ui/badge";
+import { CreateClientDialog } from "@/components/clients/CreateClientDialog";
 import { EditClientDialog } from "@/components/clients/EditClientDialog";
 import { ImportModal } from "@/components/clients/ImportModal";
 import { ImportSuccessModal } from "@/components/clients/import/ImportSuccessModal";
@@ -187,6 +188,7 @@ export default function Clients() {
                       <TableHead className="py-2 text-table font-medium">Nome</TableHead>
                       <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
                       <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Tipo</TableHead>
                       <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Email</TableHead>
                       <TableHead className="hidden md:table-cell py-2 text-table font-medium">Telefone</TableHead>
                       <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
@@ -195,7 +197,7 @@ export default function Clients() {
                   </TableHeader>
                   <TableBody>
                     {Array.from({ length: 10 }).map((_, index) => (
-                      <TableRowSkeleton key={index} columns={7} />
+                      <TableRowSkeleton key={index} columns={8} />
                     ))}
                   </TableBody>
                 </Table>
@@ -256,30 +258,17 @@ export default function Clients() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
-                    <Dialog open={isNewClientDialogOpen} onOpenChange={setIsNewClientDialogOpen}>
-                      <DialogTrigger asChild>
+                    <CreateClientDialog 
+                      trigger={
                         <Button>
                           <UserPlus className="mr-2 h-4 w-4" />
                           Novo Cliente
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-4xl max-h-[90vh]">
-                        <DialogHeader>
-                          <DialogTitle className="text-heading-1">Novo Cliente</DialogTitle>
-                          <DialogDescription className="text-body">
-                            Cadastre um novo cliente no sistema
-                          </DialogDescription>
-                        </DialogHeader>
-                        <ScrollArea className="h-[60vh] pr-6">
-                          <CreateClientForm onSuccess={(customerId) => {
-                            // AIDEV-NOTE: Garantir fechamento imediato do modal após sucesso
-                            setIsNewClientDialogOpen(false);
-                            // Invalidar queries para atualizar lista de clientes
-                            queryClient.invalidateQueries({ queryKey: ['customers'] });
-                          }} />
-                        </ScrollArea>
-                      </DialogContent>
-                    </Dialog>
+                      }
+                      onClientCreated={() => {
+                        queryClient.invalidateQueries({ queryKey: ['customers'] });
+                      }}
+                    />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -300,6 +289,7 @@ export default function Clients() {
                       <TableHead className="py-2 text-table font-medium">Nome</TableHead>
                       <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
                       <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                      <TableHead className="hidden md:table-cell py-2 text-table font-medium">Tipo</TableHead>
                       <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Contato</TableHead>
                       <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
                       <TableHead className="w-16 sm:w-20 py-2 text-table font-medium">Ações</TableHead>
@@ -307,7 +297,7 @@ export default function Clients() {
                   </TableHeader>
                   <TableBody>
                     {Array.from({ length: pagination.itemsPerPage }).map((_, index) => (
-                      <TableRowSkeleton key={index} columns={7} />
+                      <TableRowSkeleton key={index} columns={8} />
                     ))}
                   </TableBody>
                 </Table>
@@ -329,6 +319,7 @@ export default function Clients() {
                         <TableHead className="py-2 text-table font-medium">Nome</TableHead>
                         <TableHead className="hidden md:table-cell py-2 text-table font-medium">Empresa</TableHead>
                         <TableHead className="hidden lg:table-cell py-2 text-table font-medium">CPF/CNPJ</TableHead>
+                        <TableHead className="hidden md:table-cell py-2 text-table font-medium">Tipo</TableHead>
                         <TableHead className="hidden sm:table-cell py-2 text-table font-medium">Email</TableHead>
                         <TableHead className="hidden md:table-cell py-2 text-table font-medium">Telefone</TableHead>
                         <TableHead className="hidden md:table-cell py-2 text-table font-medium">Status</TableHead>
@@ -378,6 +369,23 @@ export default function Clients() {
                             <span className="text-table">
                               {customer.cpf_cnpj !== undefined ? formatCpfCnpj(customer.cpf_cnpj) : "-"}
                             </span>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell py-1">
+                            <div className="flex gap-1 flex-wrap">
+                              {customer.is_supplier && (
+                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                  Fornecedor
+                                </Badge>
+                              )}
+                              {customer.is_carrier && (
+                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100">
+                                  Transportadora
+                                </Badge>
+                              )}
+                              {!customer.is_supplier && !customer.is_carrier && (
+                                <span className="text-muted-foreground text-xs">-</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell py-1">
                             {customer.email ? (

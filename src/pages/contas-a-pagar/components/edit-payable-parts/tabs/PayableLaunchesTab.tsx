@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash, CalendarIcon } from 'lucide-react';
+import { Trash, CalendarIcon, Percent, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ export const PayableLaunchesTab: React.FC<PayableLaunchesTabProps> = ({ form, is
     launchDate, setLaunchDate,
     launchType, setLaunchType,
     launchDescription, setLaunchDescription,
+    launchValueMode, setLaunchValueMode,
     launches,
     handleAddLaunch,
     handleDeleteLaunch,
@@ -55,24 +56,14 @@ export const PayableLaunchesTab: React.FC<PayableLaunchesTabProps> = ({ form, is
       
       <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4", isSettled && "opacity-50 pointer-events-none grayscale")}>
         <div>
-          <Label className="mb-2 block">Valor</Label>
-          <Input 
-            placeholder="R$ 0,00" 
-            value={launchAmount} 
-            onChange={(e) => setLaunchAmount(e.target.value)} 
-            className="h-10"
-            disabled={isSettled}
-          />
-        </div>
-        <div>
           <Label className="mb-2 block">Data</Label>
-          <Popover open={openLaunchDatePicker} onOpenChange={setOpenLaunchDatePicker}>
+          <Popover open={openLaunchDatePicker} onOpenChange={setOpenLaunchDatePicker} modal={true}>
             <PopoverTrigger asChild>
               <Button
                 variant={"outline"}
                 disabled={isSettled}
                 className={cn(
-                  "w-full justify-start text-left font-normal h-10",
+                  "w-full justify-start text-left font-normal h-10 bg-white",
                   !launchDate && "text-muted-foreground"
                 )}
               >
@@ -97,13 +88,13 @@ export const PayableLaunchesTab: React.FC<PayableLaunchesTabProps> = ({ form, is
         <div>
           <Label className="mb-2 block">Tipo de lançamento</Label>
           <Select value={launchType} onValueChange={setLaunchType} disabled={isSettled}>
-            <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 bg-white"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
             <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {Object.entries(LAUNCH_TYPES).map(([key, value]) => (
                 <SelectItem
                   key={key}
                   value={key}
-                  className="whitespace-normal break-words py-2.5 px-3 text-sm leading-5 min-h-[36px]"
+                  className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
                 >
                   {value.name}
                 </SelectItem>
@@ -111,6 +102,59 @@ export const PayableLaunchesTab: React.FC<PayableLaunchesTabProps> = ({ form, is
             </SelectContent>
           </Select>
         </div>
+        {launchType && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Valor</Label>
+              {['JUROS', 'MULTA'].includes(launchType) && (
+                <div className="flex bg-muted p-0.3 rounded-lg h-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "h-full px-2 rounded-md hover:bg-background transition-all",
+                      launchValueMode === 'FIXED' && "bg-background shadow-sm text-primary font-medium"
+                    )}
+                    onClick={() => setLaunchValueMode('FIXED')}
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "h-full px-2 rounded-md hover:bg-background transition-all",
+                      launchValueMode === 'PERCENTAGE' && "bg-background shadow-sm text-primary font-medium"
+                    )}
+                    onClick={() => setLaunchValueMode('PERCENTAGE')}
+                  >
+                    <Percent className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <Input 
+                placeholder={launchValueMode === 'PERCENTAGE' ? "0%" : "R$ 0,00"} 
+                value={launchAmount} 
+                onChange={(e) => setLaunchAmount(e.target.value)} 
+                className="h-10 pr-8"
+                disabled={isSettled}
+                type={launchValueMode === 'PERCENTAGE' ? "number" : "text"}
+              />
+              {launchValueMode === 'PERCENTAGE' && (
+                <div className="absolute right-3 top-2.5 text-muted-foreground pointer-events-none">
+                  <Percent className="w-4 h-4" />
+                </div>
+              )}
+            </div>
+            {launchValueMode === 'PERCENTAGE' && launchAmount && (
+              <div className="text-xs text-muted-foreground mt-1 text-right">
+                Valor calculado: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(form.currentRemaining || 0) * Number(launchAmount)) / 100)}
+              </div>
+            )}
+          </div>
+        )}
         <div className="md:col-span-3">
           <Label className="mb-2 block">Descrição</Label>
           <Input 
@@ -130,29 +174,33 @@ export const PayableLaunchesTab: React.FC<PayableLaunchesTabProps> = ({ form, is
         {launches.length === 0 ? (
           <div className="text-sm text-muted-foreground">Nenhum lançamento cadastrado</div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-0">
             {launches.map((l, idx) => (
-              <div key={idx} className="grid grid-cols-6 items-center gap-2 py-2 border-b last:border-0">
-                <div className="col-span-1">
+              <div key={idx} className="grid grid-cols-12 items-center gap-2 py-2 border-b last:border-0 hover:bg-muted/30 transition-colors px-2 rounded-sm">
+                <div className="col-span-1 flex items-center justify-center">
                   <span className={cn(
-                    "inline-block w-3 h-3 rounded-full",
-                    l.operation === 'DEBIT' ? "bg-red-500" : "bg-emerald-500"
+                    "inline-block w-2.5 h-2.5 rounded-full",
+                    l.operation === 'DEBIT' ? "bg-emerald-500" : "bg-red-500"
                   )} />
                 </div>
-                <div className="col-span-1 text-sm">{new Date(l.date).toLocaleDateString('pt-BR')}</div>
-                <div className="col-span-2 text-sm">
-                  <div className="font-medium">{LAUNCH_TYPES[l.typeId as keyof typeof LAUNCH_TYPES]?.name || 'Lançamento'}</div>
-                  <div className="text-muted-foreground">{l.description}</div>
+                <div className="col-span-2 text-sm">{new Date(l.date).toLocaleDateString('pt-BR')}</div>
+                <div className="col-span-6 text-sm">
+                  <div className="font-medium flex items-center gap-2">
+                    {LAUNCH_TYPES[l.typeId as keyof typeof LAUNCH_TYPES]?.name || 'Lançamento'}
+                    {l.description && (
+                       <span className="text-muted-foreground font-normal text-xs truncate max-w-[200px]">| {l.description}</span>
+                    )}
+                  </div>
                 </div>
                 <div className={cn(
-                  "col-span-1 text-sm font-medium",
-                  l.operation === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'
+                  "col-span-2 text-sm font-medium text-right",
+                  l.operation === 'DEBIT' ? 'text-emerald-600' : 'text-red-600'
                 )}>
                   {l.operation === 'DEBIT' ? '-' : '+'}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.amount)}
                 </div>
                 <div className="col-span-1 flex justify-end">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-destructive" onClick={() => handleDeleteLaunch(idx)}>
-                    <Trash className="w-4 h-4" />
+                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive" onClick={() => handleDeleteLaunch(idx)}>
+                    <Trash className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>

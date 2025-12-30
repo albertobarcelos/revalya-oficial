@@ -9,6 +9,7 @@ import { useClientForm } from './hooks/useClientForm';
 import type { Customer } from '@/types/database';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
 import { ClientDialogHeader } from './ClientDialogHeader';
+import { ClientTypeSidebar } from './form/ClientTypeSidebar';
 import { User, MapPin } from 'lucide-react';
 
 interface EditClientDialogProps {
@@ -99,33 +100,44 @@ export function EditClientDialog({
               <p>Erro ao carregar dados do cliente. Tente novamente.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-6">
-              {/* Seção Dados Pessoais - Estilo Card */}
-              <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
-                <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
-                  <User className="h-4 w-4 text-primary" />
-                  Dados Pessoais
-                </h2>
-                <EditPersonalInfoFields 
-                  formData={formData} 
-                  onChange={(field, value) => handleChange(field as keyof typeof formData, value)} 
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="p-4 md:p-6">
+              <div className="flex flex-col lg:flex-row gap-6">
+                <div className="flex-1 space-y-6">
+                  {/* Seção Dados Pessoais - Estilo Card */}
+                  <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+                    <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+                      <User className="h-4 w-4 text-primary" />
+                      Dados Pessoais
+                    </h2>
+                    <EditPersonalInfoFields 
+                      formData={formData} 
+                      onChange={(field, value) => handleChange(field as keyof typeof formData, value)} 
+                    />
+                  </div>
 
-              {/* Seção Endereço - Estilo Card */}
-              <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
-                <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  Endereço
-                </h2>
-                <AddressFields 
-                  formData={formData} 
-                  onChange={(field, value) => handleChange(field as keyof typeof formData, value)} 
-                />
+                  {/* Seção Endereço - Estilo Card */}
+                  <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+                    <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Endereço
+                    </h2>
+                    <AddressFields 
+                      formData={formData} 
+                      onChange={(field, value) => handleChange(field as keyof typeof formData, value)} 
+                    />
+                  </div>
+                </div>
+
+                <div className="w-full lg:w-80 space-y-6">
+                  <ClientTypeSidebar 
+                    formData={formData} 
+                    onChange={(field, value) => handleChange(field as keyof typeof formData, value)} 
+                  />
+                </div>
               </div>
 
               {/* Botões de Ação */}
-              <div className="bg-card rounded-lg border border-border/50 p-4 shadow-sm flex items-center justify-end gap-3 sticky bottom-0 z-10">
+              <div className="mt-6 bg-card rounded-lg border border-border/50 p-4 shadow-sm flex items-center justify-end gap-3 sticky bottom-0 z-10">
                 <Button
                   type="button"
                   variant="outline"

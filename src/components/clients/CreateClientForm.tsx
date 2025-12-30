@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { PersonalInfoFields } from './form/PersonalInfoFields';
 import { AddressFields } from './form/AddressFields';
+import { ClientTypeSidebar } from './form/ClientTypeSidebar';
 import { useCustomers } from '@/hooks/useCustomers';
 import { usePageVisibility } from '@/hooks/usePageVisibility';
 import { CNPJStatusIndicator } from '@/components/ui/CNPJStatusIndicator';
@@ -25,12 +26,14 @@ export function CreateClientForm({ onSuccess, onCancel }: CreateClientFormProps)
     cpfCnpj: '',
     postal_code: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
     address: '',
-    address_number: '',
+    addressNumber: '',
     complement: '',
     neighborhood: '', // AIDEV-NOTE: Campo correto conforme schema da tabela customers
     city: '',
     state: '',
-    company: '' // Updated to match DTO
+    company: '', // Updated to match DTO
+    is_supplier: false,
+    is_carrier: false
   });
   
   // AIDEV-NOTE: Estado para rastrear cliente criado e mostrar status CNPJ
@@ -133,7 +136,7 @@ export function CreateClientForm({ onSuccess, onCancel }: CreateClientFormProps)
     }
   };
 
-  const handleFieldChange = (field: keyof CreateCustomerDTO, value: string) => {
+  const handleFieldChange = (field: keyof CreateCustomerDTO, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -144,44 +147,55 @@ export function CreateClientForm({ onSuccess, onCancel }: CreateClientFormProps)
 
   return (
     <div className="w-full">
-      <form onSubmit={handleSubmit} className="space-y-6 p-4 md:p-6">
-        {/* Seção de Informações Pessoais - Estilo Card */}
-        <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
-          <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
-            <User className="h-4 w-4 text-primary" />
-            Informações Pessoais
-          </h2>
-          <div className="space-y-4">
-            <PersonalInfoFields 
-              formData={formData} 
-              onChange={handleFieldChange}
-              onBulkChange={handleBulkChange}
-            />
-            {/* AIDEV-NOTE: Indicador de status CNPJ se cliente foi criado */}
-            {createdCustomerId && (
-              <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border/30">
-                <CNPJStatusIndicator 
-                  customerId={createdCustomerId}
-                  showDetails={true}
+      <form onSubmit={handleSubmit} className="p-4 md:p-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex-1 space-y-6">
+            {/* Seção de Informações Pessoais - Estilo Card */}
+            <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+              <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+                <User className="h-4 w-4 text-primary" />
+                Informações Pessoais
+              </h2>
+              <div className="space-y-4">
+                <PersonalInfoFields 
+                  formData={formData} 
+                  onChange={handleFieldChange}
+                  onBulkChange={handleBulkChange}
                 />
+                {/* AIDEV-NOTE: Indicador de status CNPJ se cliente foi criado */}
+                {createdCustomerId && (
+                  <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border/30">
+                    <CNPJStatusIndicator 
+                      customerId={createdCustomerId}
+                      showDetails={true}
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Seção de Endereço - Estilo Card */}
-        <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
-          <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
-            <MapPin className="h-4 w-4 text-primary" />
-            Endereço
-          </h2>
-          <div className="space-y-4">
-            <AddressFields formData={formData} onChange={handleFieldChange} />
+            {/* Seção de Endereço - Estilo Card */}
+            <div className="bg-card rounded-lg border border-border/50 p-6 shadow-sm">
+              <h2 className="font-medium flex items-center gap-2 mb-4 text-foreground">
+                <MapPin className="h-4 w-4 text-primary" />
+                Endereço
+              </h2>
+              <div className="space-y-4">
+                <AddressFields formData={formData} onChange={handleFieldChange} />
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full lg:w-80 space-y-6">
+            <ClientTypeSidebar 
+              formData={formData} 
+              onChange={(field, value) => handleFieldChange(field as keyof CreateCustomerDTO, value)} 
+            />
           </div>
         </div>
         
         {/* Botão de ação - Estilo Card para ações */}
-        <div className="bg-card rounded-lg border border-border/50 p-4 shadow-sm flex items-center justify-between sticky bottom-0 z-10">
+        <div className="mt-6 bg-card rounded-lg border border-border/50 p-4 shadow-sm flex items-center justify-between sticky bottom-0 z-10">
           {/* AIDEV-NOTE: Botão para limpar formulário após criação */}
           {createdCustomerId ? (
             <Button

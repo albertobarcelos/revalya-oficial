@@ -1,9 +1,9 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { FileText, RefreshCw, DollarSign, History } from 'lucide-react';
+import { FileText, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TabType, PayableFormPayload } from './types';
+import { TabType } from './types';
 import { PayableRow } from '@/services/financialPayablesService';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -11,7 +11,7 @@ import { ptBR } from 'date-fns/locale';
 interface NavigationCardProps {
   tab: TabType;
   setTab: (tab: TabType) => void;
-  createdEntry?: PayableRow;
+  createdEntry?: PayableRow | null;
 }
 
 export const NavigationCard: React.FC<NavigationCardProps> = ({ tab, setTab, createdEntry }) => {
@@ -39,32 +39,6 @@ export const NavigationCard: React.FC<NavigationCardProps> = ({ tab, setTab, cre
           >
             <FileText className="h-4 w-4" />
             Dados gerais
-          </Button>
-          <Button 
-            variant="ghost" 
-            className={getNavButtonClass(tab === 'repeticoes')}
-            onClick={() => setTab('repeticoes')}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Repetições
-          </Button>
-          <Button 
-            variant="ghost" 
-            className={getNavButtonClass(tab === 'lancamentos')}
-            onClick={() => setTab('lancamentos')}
-            disabled={!createdEntry}
-          >
-            <DollarSign className="h-4 w-4" />
-            Lançamentos
-          </Button>
-          <Button 
-            variant="ghost" 
-            className={getNavButtonClass(tab === 'historico')}
-            onClick={() => setTab('historico')}
-            disabled={!createdEntry}
-          >
-            <History className="h-4 w-4" />
-            Histórico
           </Button>
         </CardContent>
       </Card>

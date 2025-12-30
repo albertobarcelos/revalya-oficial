@@ -181,6 +181,8 @@ export interface CreateCustomerDTO {
   state?: string;
   country?: string;
   company?: string;
+  is_supplier?: boolean;
+  is_carrier?: boolean;
 }
 
 export interface AsaasCity {

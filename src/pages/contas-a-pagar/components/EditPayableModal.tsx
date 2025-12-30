@@ -100,6 +100,12 @@ export function EditPayableModal(props: EditPayableModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <CustomDialogContent className="p-0 m-0 border-0">
+        <DialogPrimitive.Title className="sr-only">
+          {readOnly ? 'Visualizar conta a pagar' : (entry ? 'Editar conta a pagar' : 'Nova conta a pagar')}
+        </DialogPrimitive.Title>
+        <DialogPrimitive.Description className="sr-only">
+          Gerencie as informações da conta a pagar
+        </DialogPrimitive.Description>
         <div className={cn(
           "relative overflow-hidden",
           "bg-gradient-to-r from-primary via-primary/85 to-primary/60",
@@ -261,7 +267,7 @@ export function EditPayableModal(props: EditPayableModalProps) {
                 )}
                 {tab === 'historico' && (
                   <PayableHistoryTab
-                    currentTenantId={logic.currentTenant?.id}
+                    currentTenantId={props.currentTenantId}
                     entryId={entry?.id}
                   />
                 )}

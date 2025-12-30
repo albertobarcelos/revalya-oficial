@@ -154,7 +154,29 @@ const ContasAPagar: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });
     toast({ title: 'Salvo', description: 'Lançamento registrado' });
   };
-  const handleBulkPayConfirm = async ({ paymentDate, bankAccountId, description }: { paymentDate: string; bankAccountId: string; description: string }) => {
+  const handleBulkPayConfirm = async ({ 
+    paymentDate, 
+    bankAccountId, 
+    description,
+    interest = 0,
+    fine = 0,
+    discount = 0
+  }: { 
+    paymentDate: string; 
+    bankAccountId: string; 
+    description: string;
+    interest?: number;
+    fine?: number;
+    discount?: number;
+  }) => {
+    const count = selectedIds.length;
+    if (count === 0) return;
+
+    // Calculate share per item (simple distribution)
+    const shareInterest = interest > 0 ? (interest / count) : 0;
+    const shareFine = fine > 0 ? (fine / count) : 0;
+    const shareDiscount = discount > 0 ? (discount / count) : 0;
+
     for (const id of selectedIds) {
       const entry = payables.find((p) => p.id === id);
       if (!entry) continue;
@@ -162,14 +184,62 @@ const ContasAPagar: React.FC = () => {
       const typeId = entry.document_id ?? '';
       const prevMeta = (entry.metadata || {}) as Record<string, unknown>;
       const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
-      const newLaunch = {
-        amount: Number(entry.net_amount ?? entry.gross_amount ?? 0),
+      
+      const newLaunches = [];
+
+      // Add Interest Launch
+      if (shareInterest > 0) {
+        newLaunches.push({
+          amount: shareInterest,
+          date: paymentDate,
+          typeId: 'JUROS',
+          operation: 'CREDIT',
+          description: description ? `${description} (Juros)` : 'Juros na Quitação',
+        });
+      }
+
+      // Add Fine Launch
+      if (shareFine > 0) {
+        newLaunches.push({
+          amount: shareFine,
+          date: paymentDate,
+          typeId: 'MULTA',
+          operation: 'CREDIT',
+          description: description ? `${description} (Multa)` : 'Multa na Quitação',
+        });
+      }
+
+      // Add Discount Launch
+      if (shareDiscount > 0) {
+        newLaunches.push({
+          amount: shareDiscount,
+          date: paymentDate,
+          typeId: 'DESCONTO',
+          operation: 'DEBIT',
+          description: description ? `${description} (Desconto)` : 'Desconto na Quitação',
+        });
+      }
+
+      // Calculate Payment Amount
+      // Base is remaining amount (net - paid)
+      const gross = entry.gross_amount ?? 0;
+      const net = entry.net_amount ?? gross;
+      const paid = entry.paid_amount ?? 0;
+      const remainingBase = Math.max(net - paid, 0);
+
+      const paymentAmount = Math.max(remainingBase + shareInterest + shareFine - shareDiscount, 0);
+      const newNet = net + shareInterest + shareFine - shareDiscount;
+
+      // Add Payment Launch
+      newLaunches.push({
+        amount: paymentAmount,
         date: paymentDate,
         typeId: 'PAGAMENTO',
         operation: 'DEBIT',
         description: description || 'Movimento de Quitação em Lote',
-      };
-      const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
+      });
+
+      const newMeta = { ...prevMeta, launches: [...prevLaunches, ...newLaunches] };
       
       await updatePayableMutation.mutateAsync({ 
         id, 
@@ -177,7 +247,8 @@ const ContasAPagar: React.FC = () => {
           status: 'PAID',
           payment_date: paymentDate,
           bank_account_id: bankAccountId,
-          paid_amount: entry.net_amount ?? entry.gross_amount ?? 0,
+          paid_amount: (paid + paymentAmount), // Accumulate paid amount
+          net_amount: newNet,
           metadata: newMeta
         } 
       });
@@ -188,17 +259,8 @@ const ContasAPagar: React.FC = () => {
     toast({ title: 'Sucesso', description: 'Contas selecionadas marcadas como pagas' });
   };
 
-  const handlePayOffEntry = (entry: PayableRow) => {
-    setSelectedIds([entry.id]);
-    setShowBulkPayModal(true);
-  };
-
   const exportCsv = () => exportPayablesCsv(payables);
 
-
-  const handleGenerateReceipt = (entry: PayableRow) => {
-    toast({ title: 'Em breve', description: 'Geração de recibos em desenvolvimento.' });
-  };
 
   useEffect(() => {
     if (!currentTenant?.id) return;
@@ -377,8 +439,6 @@ const ContasAPagar: React.FC = () => {
                     toggleSelectAll={toggleSelectAll}
                     toggleSelectOne={toggleSelectOne}
                     onEdit={(entry, readOnly) => { setEditEntry(entry); setEditReadOnly(!!readOnly); setEditOpen(true); }}
-                    onPayOff={handlePayOffEntry}
-                    onGenerateReceipt={handleGenerateReceipt}
                     onAfterReverse={async () => {
                       await refetch();
                       queryClient.invalidateQueries({ queryKey: ['contas-a-pagar'] });

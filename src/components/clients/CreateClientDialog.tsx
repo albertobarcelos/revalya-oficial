@@ -11,13 +11,21 @@ import { ClientDialogHeader } from "./ClientDialogHeader";
 interface CreateClientDialogProps {
   onClientCreated?: (clientId: string) => void;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function CreateClientDialog({ 
   onClientCreated,
-  trigger 
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange
 }: CreateClientDialogProps) {
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (controlledOnOpenChange || (() => {})) : setInternalOpen;
 
   const handleSuccess = (clientId: string) => {
     console.log('Cliente criado com sucesso, ID:', clientId);
@@ -33,9 +41,16 @@ export function CreateClientDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || <PlusCircle className="h-4 w-4 cursor-pointer text-primary hover:text-primary/80" />}
-      </DialogTrigger>
+      {trigger && (
+        <DialogTrigger asChild>
+          {trigger}
+        </DialogTrigger>
+      )}
+      {!trigger && !isControlled && (
+        <DialogTrigger asChild>
+          <PlusCircle className="h-4 w-4 cursor-pointer text-primary hover:text-primary/80" />
+        </DialogTrigger>
+      )}
       <CustomClientDialogContent>
         <ClientDialogHeader mode="create" />
         <div className="flex-1 overflow-y-auto bg-muted/30 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/40">

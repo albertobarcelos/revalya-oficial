@@ -13,6 +13,7 @@ export interface PayablesFilters {
   paymentMethod?: string;
   documentId?: string;
   storeId?: string;
+  bankAccountId?: string;
   supplier?: string;
   reversalFrom?: string;
   reversalTo?: string;

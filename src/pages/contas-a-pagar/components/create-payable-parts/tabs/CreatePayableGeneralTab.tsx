@@ -86,7 +86,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
             Favorecido/Fornecedor *
           </Label>
           <Select value={customerId} onValueChange={setCustomerId}>
-            <SelectTrigger className={cn("w-full h-10 bg-background", showErrors && !customerId ? "border-red-500 ring-red-500" : "")}>
+            <SelectTrigger className={cn("w-full h-10 bg-white", showErrors && !customerId ? "border-red-500 ring-red-500" : "")}>
               <SelectValue placeholder="Selecione o fornecedor" />
             </SelectTrigger>
             <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
@@ -114,7 +114,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
             </span>
           </div>
           <Input 
-            className="h-10 font-medium"
+            className="h-10 font-medium bg-white"
             placeholder="R$ 0,00" 
             value={amount} 
             onChange={(e) => setAmount(e.target.value)} 
@@ -128,7 +128,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
               <Button
                 variant={"outline"}
                 className={cn(
-                  "w-full justify-start text-left font-normal h-10",
+                  "w-full justify-start text-left font-normal h-10 bg-white",
                   !issueDate && "text-muted-foreground"
                 )}
               >
@@ -158,7 +158,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
               value={entryNumber} 
               onChange={(e) => setEntryNumber(e.target.value)} 
               disabled={!!createdEntry} 
-              className="h-10" 
+              className="h-10 bg-white" 
               placeholder="Ex: DES-01" 
             />
           </div>
@@ -177,7 +177,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
         <div>
           <Label className="mb-1.5 block">Categoria</Label>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 bg-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {categoriesQuery.data?.map((c: any) => (
                 <SelectItem
@@ -199,7 +199,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
               <Button
                 variant={"outline"}
                 className={cn(
-                  "w-full justify-start text-left font-normal h-10",
+                  "w-full justify-start text-left font-normal h-10 bg-white",
                   !dueDate && "text-muted-foreground"
                 )}
               >
@@ -225,7 +225,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
         <div>
           <Label className="mb-1.5 block">Tipo de documento</Label>
           <Select value={documentId} onValueChange={setDocumentId}>
-            <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione" /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 bg-white"><SelectValue placeholder="Selecione" /></SelectTrigger>
             <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {documentsQuery.data?.map((d: any) => (
                 <SelectItem
@@ -243,7 +243,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
         <div className="lg:col-span-2">
           <Label className="mb-1.5 block">Conta bancária</Label>
           <Select value={bankAccountId} onValueChange={setBankAccountId}>
-            <SelectTrigger className="w-full h-10"><SelectValue placeholder="Selecione a conta bancária" /></SelectTrigger>
+            <SelectTrigger className="w-full h-10 bg-white"><SelectValue placeholder="Selecione a conta bancária" /></SelectTrigger>
             <SelectContent className="w-[380px] max-h-[320px] overflow-auto">
               {bankAccountsQuery.data?.map((b: any) => (
                 <SelectItem
@@ -260,7 +260,7 @@ export const CreatePayableGeneralTab: React.FC<CreatePayableGeneralTabProps> = (
         
         <div className="lg:col-span-3">
           <Label className="mb-1.5 block">Descrição (opcional)</Label>
-          <Input value={description} onChange={(e) => setDescription(e.target.value)} className="h-10" placeholder="Detalhes adicionais sobre a conta" />
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} className="h-10 bg-white" placeholder="Detalhes adicionais sobre a conta" />
         </div>
       </div>
       

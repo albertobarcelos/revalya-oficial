@@ -28,6 +28,8 @@ interface CustomerFormData {
   cityName?: string;
   state?: string;
   company?: string;
+  is_supplier?: boolean;
+  is_carrier?: boolean;
   [key: string]: any; // Para outras propriedades que possam ser adicionadas
 }
 
@@ -148,6 +150,9 @@ const clientsService = {
       // Mapeamento dos campos do formulário para o banco de dados
       updateData.cpf_cnpj = cpfCnpjValue;
       updateData.address = data.address;
+      updateData.address_number = data.addressNumber;
+      updateData.complement = data.complement;
+      updateData.neighborhood = data.neighborhood;
       updateData.postal_code = data.postal_code; // AIDEV-NOTE: Campo correto conforme schema da tabela customers
       updateData.city = data.city;
       updateData.state = data.state;
@@ -156,6 +161,8 @@ const clientsService = {
       updateData.email = data.email;
       updateData.phone = data.phone;
       updateData.celular_whatsapp = data.celular_whatsapp;
+      updateData.is_supplier = data.is_supplier;
+      updateData.is_carrier = data.is_carrier;
       
       // Adiciona também no objeto que será enviado para o Asaas
       asaasData.cpfCnpj = cpfCnpjValue;

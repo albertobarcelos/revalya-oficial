@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { format, addMonths, addWeeks, addYears, isWeekend, addDays, subDays } from 'date-fns';
 import { createPayable, updatePayable, deletePayable, type PayableRow, type PayableInsert } from '@/services/financialPayablesService';
 import { listFinancialSettings } from '@/services/financialSettingsService';
 import { listFinancialDocuments } from '@/services/financialDocumentsService';
 import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
+import { useAuth } from '@/hooks/useAuth';
 // AIDEV-NOTE: launchTypesQuery removed in favor of static ENUM
 import { LAUNCH_TYPES as SHARED_LAUNCH_TYPES } from '@/types/financial-enums';
 import { EditPayableModalProps, SimulationItem, LaunchItem, RecurrencePeriod, WeekendRule, TabType } from './types';
@@ -13,6 +14,7 @@ export const LAUNCH_TYPES = SHARED_LAUNCH_TYPES;
 
 export function useEditPayableLogic(props: EditPayableModalProps) {
   const { open, entry, currentTenantId, onSave, onOpenChange, onSwitchEntry, onAddLaunchPatch } = props;
+  const { user } = useAuth();
 
   // Tabs
   const [tab, setTab] = useState<TabType>('dados');
@@ -35,6 +37,7 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
   const [launchDate, setLaunchDate] = useState('');
   const [launchType, setLaunchType] = useState('');
   const [launchDescription, setLaunchDescription] = useState('');
+  const [launchValueMode, setLaunchValueMode] = useState<'FIXED' | 'PERCENTAGE'>('FIXED');
   const [launches, setLaunches] = useState<any[]>([]);
 
   // Recurrence State
@@ -56,6 +59,13 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
       setIsDeletingRecurrences(false);
       setSelectedRecurrencesToDelete(new Set());
       setSimulationList([]); // Reset simulation list
+      
+      // Reset launch inputs
+      setLaunchAmount('');
+      setLaunchDate('');
+      setLaunchType('');
+      setLaunchDescription('');
+      setLaunchValueMode('FIXED');
     }
   }, [open]);
 
@@ -201,6 +211,7 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
         .from('customers')
         .select('id, name, tenant_id')
         .eq('tenant_id', tId)
+        .or('is_supplier.eq.true,is_carrier.eq.true')
         .order('name');
       if (error) throw error;
       const invalidData = data?.filter(item => item.tenant_id !== tId);
@@ -430,7 +441,7 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
             recurrence_id: recurrenceId
           }
         },
-        updated_by: userId
+        updated_by: user?.id
       }, supabase);
     }
 
@@ -496,8 +507,8 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
             recurrence_id: recurrenceId
           }
         },
-        created_by: userId,
-        updated_by: userId
+        created_by: user?.id,
+        updated_by: user?.id
       };
       await createPayable(payload, supabase);
     }
@@ -517,6 +528,35 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
     }
   };
 
+  // Calculate dynamic totals for UI and Logic
+  const { currentNet, currentPaid, currentRemaining } = useMemo(() => {
+    const baseAmount = Number(amount || '0');
+    let net = baseAmount;
+    let paid = 0;
+
+    launches.forEach(l => {
+      const typeKey = l.typeId as keyof typeof LAUNCH_TYPES;
+      const def = LAUNCH_TYPES[typeKey];
+      // If def is missing (legacy), try to infer or skip. 
+      // For calculation safety, if we don't know it, we might skip or assume it's not settlement.
+      if (!def) return; 
+
+      const val = Number(l.amount || 0);
+      const op = l.operation;
+
+      if (def.isSettlement) {
+         if (op === 'DEBIT') paid += val;
+         else paid -= val;
+      } else {
+         if (op === 'DEBIT') net -= val;
+         else net += val;
+      }
+    });
+
+    const remaining = Math.max(net - paid, 0);
+    return { currentNet: net, currentPaid: paid, currentRemaining: remaining };
+  }, [amount, launches]);
+
   const handleSavePayable = async () => {
     if (!entry) return;
     if (!customerId) {
@@ -525,29 +565,13 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
     }
     const amountNum = Number(amount || '0');
 
-    // AIDEV-NOTE: Recalculate totals to ensure consistency with launches
-    let calculatedNet = amountNum;
-    let calculatedPaid = 0;
+    // Use the calculated values from useMemo to ensure consistency
+    // Re-verify strictly inside save if needed, but useMemo is reliable here since it depends on same state
     
-    launches.forEach(l => {
-      const typeKey = l.typeId as keyof typeof LAUNCH_TYPES;
-      const def = LAUNCH_TYPES[typeKey];
-      const val = Number(l.amount || 0);
-      const op = l.operation;
-      
-      if (def?.isSettlement) {
-         if (op === 'DEBIT') calculatedPaid += val;
-         else calculatedPaid -= val;
-      } else {
-         if (op === 'DEBIT') calculatedNet -= val;
-         else calculatedNet += val;
-      }
-    });
-
     let patch: any = {
       description,
       gross_amount: amountNum,
-      net_amount: calculatedNet,
+      net_amount: currentNet,
       due_date: dueDate || new Date().toISOString().slice(0,10),
       issue_date: issueDate || new Date().toISOString().slice(0,10),
       // Status and paid_amount logic will be handled below
@@ -564,64 +588,49 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
           period: recurrencePeriod,
           times: parseInt(recurrenceTimes) || 0,
           weekendRule,
+          weekendRule,
           repeatDay: repeatDay ? parseInt(repeatDay) : undefined,
           total: ((parseInt(recurrenceTimes) || 0) + 1)
         } : undefined
       }
     };
 
-    patch.status = (calculatedPaid >= calculatedNet && calculatedNet > 0) ? 'PAID' : 'PENDING';
-    patch.paid_amount = calculatedPaid;
-    patch.payment_date = (calculatedPaid > 0) ? (entry.payment_date || new Date().toISOString().slice(0,10)) : null;
+    patch.status = (currentPaid >= currentNet && currentNet > 0) ? 'PAID' : 'PENDING';
+    patch.paid_amount = currentPaid;
+    patch.payment_date = (currentPaid > 0) ? (entry.payment_date || new Date().toISOString().slice(0,10)) : null;
 
     patch.bank_account_id = bankAccountId || null;
     onSave({ id: entry.id, patch });
   };
 
   const handleAddLaunch = () => {
-    const amt = Number(launchAmount || '0');
+    let amt = Number(launchAmount || '0');
     if (!amt || !launchDate || !launchType) return;
     
+    // AIDEV-NOTE: Handle percentage calculation if mode is PERCENTAGE
+    // Now using currentRemaining instead of base amount
+    if (launchValueMode === 'PERCENTAGE') {
+      amt = (currentRemaining * amt) / 100;
+    }
+
     // AIDEV-NOTE: Fixed launch types from Enum
     const typeKey = launchType as keyof typeof LAUNCH_TYPES;
     const launchDef = LAUNCH_TYPES[typeKey];
     if (!launchDef) return;
 
     const op = launchDef.operation as 'DEBIT' | 'CREDIT';
-    const isSettlement = launchDef.isSettlement;
     
-    let newNet = Number(entry?.net_amount ?? entry?.gross_amount ?? 0);
-    let newPaid = Number(entry?.paid_amount ?? 0);
-
-    if (isSettlement) {
-        if (op === 'DEBIT') {
-          newPaid += amt;
-          // Settlement debit (payment) reduces the remaining balance, 
-          // effectively contributing to the 'paid' portion.
-          // It doesn't reduce the net obligation (net_amount) unless we consider net_amount as remaining.
-          // However, the system seems to treat net_amount as (Gross + Additions - Discounts).
-          // And Remaining = Net - Paid.
-          // So for a payment, we just increase Paid.
-        } else {
-          newPaid = Math.max(newPaid - amt, 0);
-        }
-    } else {
-        const base = newNet;
-        newNet = op === 'DEBIT' ? Math.max(base - amt, 0) : base + amt;
-    }
+    // We don't need to manually calculate newNet/newPaid here anymore for logic
+    // because we just push to launches state and useMemo updates the totals.
+    // However, the original code did some legacy calc which is now replaced by the hook state management approach.
 
     const prevMeta = (entry?.metadata || {});
     const prevLaunches = Array.isArray(prevMeta.launches) ? prevMeta.launches : [];
     const newLaunch = { amount: amt, date: launchDate, typeId: launchType, operation: op || 'DEBIT', description: launchDescription || 'Lançamento' };
-    const newMeta = { ...prevMeta, launches: [...prevLaunches, newLaunch] };
     
-    const newRemaining = Math.max(newNet - newPaid, 0);
-    const newStatus = newRemaining <= 0 ? 'PAID' : 'PENDING';
-    const newPaymentDate = newStatus === 'PAID' ? (entry?.payment_date || launchDate) : null;
-
     // AIDEV-NOTE: Only update local state, do NOT save immediately
     setLaunches((prev) => [...prev, newLaunch]);
-    setLaunchAmount(''); setLaunchDate(''); setLaunchType(''); setLaunchDescription('');
+    setLaunchAmount(''); setLaunchDate(''); setLaunchType(''); setLaunchDescription(''); setLaunchValueMode('FIXED');
   };
 
   const handleDeleteLaunch = (index: number) => {
@@ -692,6 +701,7 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
     launchDate, setLaunchDate,
     launchType, setLaunchType,
     launchDescription, setLaunchDescription,
+    launchValueMode, setLaunchValueMode,
     launches, setLaunches,
 
     // Recurrence
@@ -719,5 +729,10 @@ export function useEditPayableLogic(props: EditPayableModalProps) {
     categoriesQuery,
     documentsQuery,
     bankAccountsQuery,
+
+    // Calculated
+    currentNet,
+    currentPaid,
+    currentRemaining,
   };
 }
