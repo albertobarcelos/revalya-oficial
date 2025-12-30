@@ -17,7 +17,8 @@ export function useContractFormLogic(config: ContractFormConfig) {
       'produtos',
       'departamentos',
       'observacoes',
-      'recebimentos'
+      'recebimentos',
+      'fiscal'
     ];
     
     // Retorna a primeira aba habilitada na ordem de prioridade
@@ -64,7 +65,8 @@ export function useContractFormLogic(config: ContractFormConfig) {
       { id: 'produtos', label: 'Produtos' },
       { id: 'departamentos', label: 'Depto' },
       { id: 'observacoes', label: 'Notas' },
-      { id: 'recebimentos', label: 'Historico' }
+      { id: 'recebimentos', label: 'Historico' },
+      { id: 'fiscal', label: 'Fiscal' }
     ];
     
     return tabs.filter(tab => isTabEnabled(tab.id));
@@ -116,7 +118,8 @@ export function useContractFormLogic(config: ContractFormConfig) {
       produtos: 'Produtos',
       departamentos: 'Depto',
       observacoes: 'Notas',
-      recebimentos: 'Historico'
+      recebimentos: 'Historico',
+      fiscal: 'Fiscal'
     };
     
     return defaultLabels[tabId] || tabId;

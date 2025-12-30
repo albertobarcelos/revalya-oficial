@@ -194,6 +194,15 @@ const baseContractSchema = z.object({
   // AIDEV-NOTE: Campo para controlar se o contrato deve gerar cobrança automaticamente
   generate_billing: z.boolean().default(true),
   tax_data: taxDataSchema.optional(),
+  // AIDEV-NOTE: Configurações fiscais do contrato
+  fiscal_config: z.object({
+    auto_emit_nfe: z.boolean().default(false),
+    auto_emit_nfse: z.boolean().default(false),
+    nfse_emit_moment: z.enum(['faturamento', 'recebimento']).default('recebimento'),
+    nfse_valor_mode: z.enum(['proporcional', 'total']).default('proporcional'),
+    nfse_parcelas_mode: z.enum(['por_recebimento', 'acumulado']).default('por_recebimento'),
+    auto_send_email: z.boolean().default(false),
+  }).optional(),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   tenant_id: z.string().optional(),

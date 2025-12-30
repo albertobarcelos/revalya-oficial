@@ -47,7 +47,7 @@ const Reconciliation = lazy(() => import('../../pages/Reconciliation'));
 const ContractSettings = lazy(() => import('../../pages/ContractSettings'));
 const FinanceSettings = lazy(() => import('../../pages/FinanceSettings'));
 const Tasks = lazy(() => import('../../pages/Tasks'));
-const Fiscal = lazy(() => import('../../pages/Fiscal'));
+const PortalContador = lazy(() => import('../../pages/PortalContador'));
 const NotFound = lazy(() => import('../../pages/NotFound'));
 
 /**
@@ -132,7 +132,7 @@ export function TenantAutoLoginRouter() {
         <Route path="contas-a-pagar" element={<ContasAPagar />} />
         <Route path="extrato-bancario" element={<BankStatement />} />
         <Route path="conciliacao" element={<Reconciliation />} />
-        <Route path="fiscal" element={<Fiscal />} />
+        <Route path="portal-contador" element={<PortalContador />} />
         
         {/* ========== ROTAS DE COMUNICAÇÃO ========== */}
         <Route path="messages/history" element={<MessageHistoryPage />} />

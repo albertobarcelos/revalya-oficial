@@ -108,3 +108,34 @@ export interface EmitServiceInvoiceRequest {
   tenant_id?: string;
 }
 
+/**
+ * Configurações fiscais por contrato
+ */
+export interface FiscalConfig {
+  auto_emit_nfe: boolean;
+  auto_emit_nfse: boolean;
+  nfse_emit_moment: 'faturamento' | 'recebimento';
+  nfse_valor_mode: 'proporcional' | 'total';
+  nfse_parcelas_mode: 'por_recebimento' | 'acumulado';
+  auto_send_email: boolean;
+}
+
+/**
+ * Dados do recibo (documento simples não fiscal)
+ */
+export interface ReceiptData {
+  billing_period_id: string;
+  customer_name: string;
+  customer_document?: string;
+  customer_address?: string;
+  items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+  }>;
+  total_amount: number;
+  issue_date: string;
+  receipt_number?: string;
+}
+

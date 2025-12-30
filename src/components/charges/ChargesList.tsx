@@ -43,6 +43,8 @@ import { format } from "date-fns";
 import { processMessageTags } from '@/utils/messageUtils';
 import { TableRowSkeleton } from '@/components/ui/skeleton';
 import { formatInstallmentDisplay, getInstallmentBadgeVariant } from '@/utils/installmentUtils';
+import { FiscalBadge } from '@/components/fiscal/FiscalBadge';
+import { FiscalActionsMenu } from '@/components/fiscal/FiscalActionsMenu';
 
 const formatChargeType = (type: string | null, status?: string | null): string => {
   if (status === "RECEIVED") {
@@ -440,11 +442,12 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
                   <TableHead>Parcelas</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Fiscal</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {Array.from({ length: 8 }).map((_, index) => (
-                  <TableRowSkeleton key={index} columns={10} />
+                  <TableRowSkeleton key={index} columns={11} />
                 ))}
               </TableBody>
             </Table>
@@ -500,6 +503,7 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
                 <TableHead>Parcelas</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Fiscal</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -608,6 +612,23 @@ export function ChargesList({ onCreateCharge }: ChargesListProps) {
                     </Badge>
                   </TableCell>
                   <TableCell>{getStatusBadge(charge.status || 'PENDING')}</TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {/* AIDEV-NOTE: Exibir badge e ações fiscais apenas para charges pagas */}
+                    {charge.status?.startsWith('RECEIVED') && (
+                      <div className="flex items-center gap-2">
+                        <FiscalBadge 
+                          chargeId={charge.id}
+                          className="flex-1"
+                          showLabel={false}
+                        />
+                        <FiscalActionsMenu
+                          chargeId={charge.id}
+                          hasServices={true}
+                          className="h-6 w-6"
+                        />
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
                 );
               })}

@@ -363,7 +363,16 @@ export function useContractEdit(): UseContractEditReturn {
         products: formattedProducts,
         total_amount: contract.total_amount || 0,
         total_discount: contract.total_discount || 0,
-        total_tax: contract.total_tax || 0
+        total_tax: contract.total_tax || 0,
+        // AIDEV-NOTE: Carregar configurações fiscais do contrato
+        fiscal_config: contract.fiscal_config || {
+          auto_emit_nfe: false,
+          auto_emit_nfse: false,
+          nfse_emit_moment: 'recebimento',
+          nfse_valor_mode: 'proporcional',
+          nfse_parcelas_mode: 'por_recebimento',
+          auto_send_email: false
+        }
       };
 
       // Resetar formulário com dados carregados APENAS UMA VEZ

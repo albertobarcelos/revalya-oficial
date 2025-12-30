@@ -150,6 +150,16 @@ const prepareContractData = async (data: z.infer<typeof contractFormSchema>, ten
     total_discount: data.total_discount || 0,
     total_tax: data.total_tax || 0,
     
+    // AIDEV-NOTE: Configurações fiscais do contrato
+    fiscal_config: data.fiscal_config || {
+      auto_emit_nfe: false,
+      auto_emit_nfse: false,
+      nfse_emit_moment: 'recebimento',
+      nfse_valor_mode: 'proporcional',
+      nfse_parcelas_mode: 'por_recebimento',
+      auto_send_email: false
+    },
+    
     // AIDEV-NOTE: Status preservado durante edição, DRAFT apenas para novos contratos
     status: currentStatus
   };

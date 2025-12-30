@@ -26,6 +26,10 @@ import {
 import { cn } from '@/lib/utils';
 import { getColumnAccentClasses, CARD_STYLES } from '@/utils/billing/kanbanColumnConfig';
 import type { KanbanCardProps } from '@/types/billing/kanban.types';
+import { FiscalBadge } from '@/components/fiscal/FiscalBadge';
+import { FiscalActionsMenu } from '@/components/fiscal/FiscalActionsMenu';
+import { useSecureTenantQuery } from '@/hooks/templates/useSecureTenantQuery';
+import { useTenantAccessGuard } from '@/hooks/useTenantAccessGuard';
 
 // AIDEV-NOTE: Regex para validação de UUID v4
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,6 +70,33 @@ export function KanbanCard({
 
   // AIDEV-NOTE: Validação do periodId usando useMemo para evitar recálculos
   const isValidPeriodId = useMemo(() => isValidUUID(periodId), [periodId]);
+
+  // AIDEV-NOTE: Verificar se o período tem produtos ou serviços para exibir ações fiscais
+  const { hasAccess, currentTenant } = useTenantAccessGuard();
+  const { data: hasItems } = useSecureTenantQuery<{ hasProducts: boolean; hasServices: boolean }>(
+    ['billing_period_items_check', currentTenant?.id, periodId],
+    async (supabaseClient, tenantId) => {
+      if (!periodId || !isValidPeriodId) {
+        return { hasProducts: false, hasServices: false };
+      }
+
+      const { data: items } = await supabaseClient
+        .from('billing_period_items')
+        .select('product_id, service_id')
+        .eq('billing_period_id', periodId)
+        .eq('tenant_id', tenantId)
+        .limit(100);
+
+      const hasProducts = items?.some(item => item.product_id !== null) || false;
+      const hasServices = items?.some(item => item.service_id !== null) || false;
+
+      return { hasProducts, hasServices };
+    },
+    {
+      enabled: hasAccess && !!currentTenant?.id && isValidPeriodId && isFaturados,
+      staleTime: 60 * 1000
+    }
+  );
 
   // AIDEV-NOTE: Label acessível para o botão
   const buttonAriaLabel = useMemo(() => {
@@ -194,6 +225,23 @@ export function KanbanCard({
               R$ {(contract.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
+
+          {/* AIDEV-NOTE: Badge e ações fiscais (apenas para períodos faturados) */}
+          {isFaturados && isValidPeriodId && (
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <FiscalBadge 
+                billingPeriodId={periodId} 
+                className="flex-1"
+                showLabel={false}
+              />
+              <FiscalActionsMenu
+                billingPeriodId={periodId}
+                hasProducts={hasItems?.hasProducts || false}
+                hasServices={hasItems?.hasServices || false}
+                className="h-6 w-6"
+              />
+            </div>
+          )}
 
           {/* AIDEV-NOTE: Botão de ação minimalista */}
           <Button

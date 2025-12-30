@@ -14,6 +14,7 @@ import { ContractServices } from '@/features/contracts/components/ContractServic
 import { ContractProducts } from '@/features/contracts/components/ContractProducts';
 import { ContractAttachments } from './parts/ContractAttachments';
 import { RecebimentosHistorico } from './parts/RecebimentosHistorico';
+import { ContractFiscalSettings } from './form/ContractFiscalSettings';
 import { useContractFormLogic } from './hooks/useContractFormLogic';
 import { ContractFormConfig, mergeConfig, defaultContractsConfig, defaultBillingConfig } from './types/ContractFormConfig';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -24,7 +25,8 @@ import {
   Package, 
   Building2, 
   MessageSquare,
-  CreditCard
+  CreditCard,
+  Receipt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -55,7 +57,8 @@ const tabIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   produtos: Package,
   departamentos: Building2,
   observacoes: MessageSquare,
-  recebimentos: CreditCard
+  recebimentos: CreditCard,
+  fiscal: Receipt
 };
 
 /**
@@ -188,6 +191,9 @@ function ContractFormContentInternal({
             />
           </div>
         );
+      
+      case 'fiscal':
+        return <ContractFiscalSettings />;
       
       default:
         return null;

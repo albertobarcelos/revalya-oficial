@@ -20,6 +20,8 @@ export interface EnabledTabsConfig {
   impostos?: boolean;
   /** Aba de recebimentos/histórico */
   recebimentos?: boolean;
+  /** Aba de configurações fiscais */
+  fiscal?: boolean;
 }
 
 /**
