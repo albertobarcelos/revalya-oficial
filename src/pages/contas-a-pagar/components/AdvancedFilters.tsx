@@ -4,20 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Filter, Check, ChevronsUpDown } from 'lucide-react';
+import { User } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import type { PayablesFilters } from '../types/filters';
 import { useSecureTenantQuery, useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
@@ -36,7 +23,6 @@ export function AdvancedFilters({
   onReset: () => void;
 }) {
   const [localFilters, setLocalFilters] = useState<PayablesFilters>(parentFilters);
-  const [openSupplierCombobox, setOpenSupplierCombobox] = useState(false);
 
   useEffect(() => {
     setLocalFilters(parentFilters);
@@ -219,63 +205,26 @@ export function AdvancedFilters({
 
         <div className="md:col-span-2 space-y-2 flex flex-col">
           <Label>Fornecedor ou transportadora</Label>
-          <Popover open={openSupplierCombobox} onOpenChange={setOpenSupplierCombobox}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={openSupplierCombobox}
-                className="w-full justify-between font-normal h-9"
-              >
-                {localFilters.supplier
-                  ? suppliersQuery.data?.find((s: any) => s.id === localFilters.supplier)?.name ||
-                    suppliersQuery.data?.find((s: any) => s.id === localFilters.supplier)?.company ||
-                    "Fornecedor selecionado"
-                  : "Selecione um fornecedor..."}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[400px] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Pesquisar fornecedor..." />
-                <CommandList>
-                  <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
-                  <CommandGroup>
-                    {suppliersQuery.data?.map((supplier: any) => {
-                      const name = supplier.name || supplier.company || "Sem nome";
-                      return (
-                        <CommandItem
-                          key={supplier.id}
-                          value={supplier.id}
-                          keywords={[name]}
-                          onSelect={() => {
-                            setLocalFilters((p) => ({ ...p, supplier: supplier.id }));
-                            setOpenSupplierCombobox(false);
-                          }}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                          onClick={() => {
-                            setLocalFilters((p) => ({ ...p, supplier: supplier.id }));
-                            setOpenSupplierCombobox(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              localFilters.supplier === supplier.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {name}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <Select 
+            value={localFilters.supplier || ''} 
+            onValueChange={(v) => setLocalFilters((p) => ({ ...p, supplier: v }))}
+          >
+            <SelectTrigger className="w-full h-9 pl-9 relative font-normal bg-white">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Selecione um fornecedor..." />
+            </SelectTrigger>
+            <SelectContent className="w-[380px] max-h-[320px] overflow-y-auto overflow-x-hidden">
+              {suppliersQuery.data?.map((supplier: any) => (
+                <SelectItem
+                  key={supplier.id}
+                  value={supplier.id}
+                  className="whitespace-normal break-words py-2.5 pl-8 pr-3 text-sm leading-5 min-h-[36px]"
+                >
+                  {supplier.name || supplier.company || "Sem nome"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
