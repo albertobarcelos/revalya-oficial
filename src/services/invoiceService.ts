@@ -1,5 +1,17 @@
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
+import { edgeFunctionService } from './edgeFunctionService';
+import type {
+  EmitNFeRequest,
+  EmitNFSeRequest,
+  NFePayload,
+  NFSePayload,
+  EmitInvoiceResponse,
+  ConsultStatusResponse,
+  RevalyaEmitente,
+  RevalyaCliente,
+  RevalyaServico
+} from '@/types/focusnfe';
 
 type FinanceEntry = Database['public']['Tables']['finance_entries']['Row'];
 type Charge = Database['public']['Tables']['charges']['Row'];
@@ -212,6 +224,327 @@ class OmieInvoiceProvider implements InvoiceProvider {
 }
 
 /**
+ * Provider para FocusNFe
+ * AIDEV-NOTE: Suporta emissão de NFe e NFSe via Edge Function
+ */
+class FocusNFeProvider implements InvoiceProvider {
+  name = 'focusnfe';
+  private tenantId?: string;
+  private environment: 'homologacao' | 'producao' = 'producao';
+
+  constructor(tenantId?: string, environment: 'homologacao' | 'producao' = 'producao') {
+    this.tenantId = tenantId;
+    this.environment = environment;
+  }
+
+  /**
+   * AIDEV-NOTE: Emite NFSe (Nota Fiscal de Serviços)
+   * Mapeia dados do Revalya para formato FocusNFe
+   */
+  async createInvoice(data: InvoiceData): Promise<InvoiceResponse> {
+    try {
+      // AIDEV-NOTE: Buscar dados do emitente (empresa)
+      const emitente = await this.getEmitenteData();
+      if (!emitente) {
+        throw new Error('Dados da empresa não configurados. Configure em Configurações > Dados da Empresa');
+      }
+
+      // AIDEV-NOTE: Gerar referência única
+      const referencia = `NFSE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // AIDEV-NOTE: Mapear dados para formato FocusNFe
+      const dados_nfse: NFSePayload = {
+        data_emissao: new Date().toISOString(),
+        natureza_operacao: '1', // 1=Tributação no município
+        optante_simples_nacional: emitente.fiscal?.regime_tributario === 'simples_nacional',
+        incentivador_cultural: false,
+        status: '1', // 1=Normal
+
+        prestador: {
+          cnpj: emitente.cnpj.replace(/\D/g, ''),
+          inscricao_municipal: emitente.inscricao_municipal || '',
+          codigo_municipio: this.getCodigoMunicipioIBGE(emitente.endereco.cidade, emitente.endereco.uf)
+        },
+
+        tomador: {
+          cpf: data.customer.document.length === 11 ? data.customer.document : undefined,
+          cnpj: data.customer.document.length === 14 ? data.customer.document : undefined,
+          razao_social: data.customer.name,
+          email: data.customer.email,
+          telefone: data.customer.phone,
+          endereco: {
+            logradouro: data.customer.address?.street || '',
+            numero: data.customer.address?.number || 'S/N',
+            complemento: data.customer.address?.complement,
+            bairro: data.customer.address?.neighborhood || '',
+            codigo_municipio: this.getCodigoMunicipioIBGE(
+              data.customer.address?.city || '',
+              data.customer.address?.state || ''
+            ),
+            uf: data.customer.address?.state || '',
+            cep: data.customer.address?.zipcode?.replace(/\D/g, '') || ''
+          }
+        },
+
+        servico: {
+          aliquota: data.iss_amount && data.total_amount > 0 
+            ? data.iss_amount / data.total_amount 
+            : 0.05, // Padrão 5%
+          discriminacao: this.buildDiscriminacaoServicos(data.services),
+          iss_retido: false,
+          item_lista_servico: data.services[0]?.service_code || '14.01', // Padrão
+          valor_servicos: data.total_amount,
+          codigo_municipio: emitente.endereco.cidade 
+            ? this.getCodigoMunicipioIBGE(emitente.endereco.cidade, emitente.endereco.uf)
+            : ''
+        }
+      };
+
+      // AIDEV-NOTE: Chamar Edge Function
+      const response = await edgeFunctionService.callEdgeFunction<EmitNFSeRequest, EmitInvoiceResponse>(
+        'focusnfe/nfse/emit',
+        {
+          referencia,
+          dados_nfse,
+          environment: this.environment,
+          tenant_id: this.tenantId
+        },
+        this.tenantId
+      );
+
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error || 'Erro ao emitir NFSe'
+        };
+      }
+
+      return {
+        success: true,
+        external_id: response.referencia,
+        invoice_number: response.numero,
+        verification_code: response.codigo_verificacao,
+        pdf_url: response.caminho_pdf,
+        xml_url: response.caminho_xml_nota_fiscal,
+        provider_response: response
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro ao emitir NFSe via FocusNFe'
+      };
+    }
+  }
+
+  /**
+   * AIDEV-NOTE: Emite NFe (Nota Fiscal Eletrônica) - Nova funcionalidade
+   */
+  async createNFe(
+    produtos: Array<{
+      id: string;
+      name: string;
+      ncm: string;
+      cfop: string;
+      unidade: string;
+      quantidade: number;
+      valor_unitario: number;
+      origem?: string;
+      cst_icms?: string;
+      cst_pis?: string;
+      cst_cofins?: string;
+    }>,
+    cliente: RevalyaCliente,
+    naturezaOperacao: string = 'Venda de mercadoria'
+  ): Promise<InvoiceResponse> {
+    try {
+      const emitente = await this.getEmitenteData();
+      if (!emitente) {
+        throw new Error('Dados da empresa não configurados');
+      }
+
+      const referencia = `NFE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      const dados_nfe: NFePayload = {
+        natureza_operacao: naturezaOperacao,
+        data_emissao: new Date().toISOString(),
+        tipo_documento: '1', // 1=Saída
+        finalidade_emissao: '1', // 1=Normal
+        consumidor_final: '0',
+        indicador_presenca: '1', // 1=Presencial
+
+        cnpj_emitente: emitente.cnpj.replace(/\D/g, ''),
+
+        cnpj_destinatario: cliente.cpf_cnpj.length === 14 ? cliente.cpf_cnpj : undefined,
+        cpf_destinatario: cliente.cpf_cnpj.length === 11 ? cliente.cpf_cnpj : undefined,
+        nome_destinatario: cliente.name,
+        indicador_inscricao_estadual_destinatario: '9', // 9=Não contribuinte
+        endereco_destinatario: {
+          logradouro: cliente.address || '',
+          numero: cliente.address_number || 'S/N',
+          complemento: cliente.complement,
+          bairro: cliente.neighborhood || '',
+          municipio: cliente.city || '',
+          uf: cliente.state || '',
+          cep: cliente.postal_code?.replace(/\D/g, '') || ''
+        },
+        telefone_destinatario: cliente.phone,
+        email_destinatario: cliente.email,
+
+        produtos: produtos.map(produto => ({
+          codigo: produto.id,
+          descricao: produto.name,
+          ncm: produto.ncm,
+          cfop: produto.cfop,
+          unidade: produto.unidade,
+          quantidade: produto.quantidade,
+          valor_unitario: produto.valor_unitario,
+          icms_origem: (produto.origem || '0') as any,
+          icms_situacao_tributaria: produto.cst_icms || '00',
+          pis_situacao_tributaria: produto.cst_pis || '07',
+          cofins_situacao_tributaria: produto.cst_cofins || '07'
+        })),
+
+        valor_total: produtos.reduce((sum, p) => sum + (p.valor_unitario * p.quantidade), 0),
+        modalidade_frete: '9', // 9=Sem ocorrência de transporte
+
+        formas_pagamento: [{
+          forma_pagamento: '90', // 90=Sem pagamento
+          valor_pagamento: produtos.reduce((sum, p) => sum + (p.valor_unitario * p.quantidade), 0)
+        }]
+      };
+
+      const response = await edgeFunctionService.callEdgeFunction<EmitNFeRequest, EmitInvoiceResponse>(
+        'focusnfe/nfe/emit',
+        {
+          referencia,
+          dados_nfe,
+          environment: this.environment,
+          tenant_id: this.tenantId
+        },
+        this.tenantId
+      );
+
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error || 'Erro ao emitir NFe'
+        };
+      }
+
+      return {
+        success: true,
+        external_id: response.referencia,
+        invoice_number: response.numero,
+        verification_code: response.chave_nfe,
+        pdf_url: response.caminho_danfe,
+        xml_url: response.caminho_xml_nota_fiscal,
+        provider_response: response
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro ao emitir NFe via FocusNFe'
+      };
+    }
+  }
+
+  async getInvoice(external_id: string): Promise<InvoiceResponse> {
+    try {
+      const response = await edgeFunctionService.callEdgeFunction<{ referencia: string }, ConsultStatusResponse>(
+        `focusnfe/nfse/${external_id}`,
+        { referencia: external_id },
+        this.tenantId,
+        { method: 'GET' }
+      );
+
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.error || 'Erro ao consultar nota'
+        };
+      }
+
+      return {
+        success: true,
+        external_id: response.referencia,
+        invoice_number: response.numero,
+        verification_code: response.codigo_verificacao || response.chave_nfe,
+        pdf_url: response.caminho_pdf || response.caminho_danfe,
+        xml_url: response.caminho_xml_nota_fiscal,
+        provider_response: response
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro ao consultar nota via FocusNFe'
+      };
+    }
+  }
+
+  async cancelInvoice(external_id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // TODO: Implementar cancelamento quando handler estiver pronto
+      return {
+        success: false,
+        error: 'Cancelamento ainda não implementado'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Erro ao cancelar nota via FocusNFe'
+      };
+    }
+  }
+
+  /**
+   * AIDEV-NOTE: Buscar dados do emitente (empresa) do tenant
+   */
+  private async getEmitenteData(): Promise<RevalyaEmitente | null> {
+    if (!this.tenantId) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('company_data')
+      .eq('id', this.tenantId)
+      .single();
+
+    if (error || !data?.company_data) {
+      return null;
+    }
+
+    return data.company_data as RevalyaEmitente;
+  }
+
+  /**
+   * AIDEV-NOTE: Construir discriminação dos serviços para NFSe
+   */
+  private buildDiscriminacaoServicos(services: InvoiceData['services']): string {
+    return services
+      .map(s => `${s.description} - Qtd: ${s.quantity} - Valor Unit: R$ ${s.unit_price.toFixed(2)} - Total: R$ ${s.total_price.toFixed(2)}`)
+      .join(' | ');
+  }
+
+  /**
+   * AIDEV-NOTE: Obter código IBGE do município (simplificado)
+   * Em produção, usar tabela de referência ou API
+   */
+  private getCodigoMunicipioIBGE(cidade: string, uf: string): string {
+    // TODO: Implementar busca em tabela de referência
+    // Por enquanto, retorna código padrão de São Paulo
+    if (cidade.toLowerCase().includes('são paulo') && uf === 'SP') {
+      return '3550308';
+    }
+    // Retornar código vazio se não encontrar (será validado pela FocusNFe)
+    return '';
+  }
+}
+
+/**
  * Provider para NFSe.io
  */
 class NFSeIoProvider implements InvoiceProvider {
@@ -348,12 +681,29 @@ class InvoiceService {
 
   private async initializeProviders(): Promise<void> {
     try {
+      // AIDEV-NOTE: Buscar tenant_id do contexto atual
+      const { data: { user } } = await supabase.auth.getUser();
+      let tenantId: string | undefined;
+      
+      if (user) {
+        const { data: tenantUser } = await supabase
+          .from('tenant_users')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single();
+        
+        if (tenantUser?.tenant_id) {
+          tenantId = tenantUser.tenant_id;
+        }
+      }
+
       // Buscar configurações dos provedores
       const { data: configs, error } = await supabase
         .from('payment_gateways')
         .select('*')
         .eq('is_active', true)
-        .in('provider', ['omie', 'nfse_io']);
+        .in('provider', ['omie', 'nfse_io', 'focusnfe']);
 
       if (error) {
         console.error('Erro ao buscar configurações de NFS-e:', error);
@@ -371,6 +721,13 @@ class InvoiceService {
             if (config.api_key) {
               this.providers.set('nfse_io', new NFSeIoProvider(config.api_key));
             }
+            break;
+          case 'focusnfe':
+            // AIDEV-NOTE: FocusNFe usa Edge Function, não precisa de api_key no frontend
+            const environment = (config.environment?.toLowerCase() === 'homologacao' 
+              ? 'homologacao' 
+              : 'producao') as 'homologacao' | 'producao';
+            this.providers.set('focusnfe', new FocusNFeProvider(tenantId, environment));
             break;
         }
       });
@@ -650,8 +1007,10 @@ class InvoiceService {
    * Obtém provider padrão
    */
   private getDefaultProvider(): InvoiceProvider | undefined {
-    // Prioridade: Omie > NFSe.io
-    return this.providers.get('omie') || this.providers.get('nfse_io');
+    // Prioridade: FocusNFe > Omie > NFSe.io
+    return this.providers.get('focusnfe') 
+      || this.providers.get('omie') 
+      || this.providers.get('nfse_io');
   }
 
   /**

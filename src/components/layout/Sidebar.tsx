@@ -356,6 +356,7 @@ export default function Sidebar() {
       isSubmenu: true,
       children: [
               { icon: BarChart3, label: "Painel de Cobrança", path: `/${tenantSlug}/cobrancas` },
+              { icon: Receipt, label: "Fiscal", path: `/${tenantSlug}/fiscal` },
               { 
                 icon: Activity, 
                 label: "Movimentações",
