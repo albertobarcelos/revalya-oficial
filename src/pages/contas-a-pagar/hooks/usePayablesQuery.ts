@@ -18,6 +18,16 @@ export function usePayablesQuery(
       filters.status,
       filters.dateFrom,
       filters.dateTo,
+      filters.category,
+      filters.documentId,
+      filters.bankAccountId,
+      filters.supplier,
+      filters.issueFrom,
+      filters.issueTo,
+      filters.paymentFrom,
+      filters.paymentTo,
+      filters.reversalFrom,
+      filters.reversalTo,
       filters.page,
       limit,
     ],
@@ -43,6 +53,15 @@ export function usePayablesQuery(
       
       if (filters.category) params.category_id = filters.category;
       if (filters.documentId) params.document_id = filters.documentId;
+      if (filters.bankAccountId) params.bank_account_id = filters.bankAccountId;
+      if (filters.supplier) params.customer_id = filters.supplier;
+      
+      if (filters.issueFrom) params.issue_start_date = filters.issueFrom;
+      if (filters.issueTo) params.issue_end_date = filters.issueTo;
+      if (filters.paymentFrom) params.payment_start_date = filters.paymentFrom;
+      if (filters.paymentTo) params.payment_end_date = filters.paymentTo;
+      if (filters.reversalFrom) params.reversal_start_date = filters.reversalFrom;
+      if (filters.reversalTo) params.reversal_end_date = filters.reversalTo;
 
       const response: PayableResponse = await getPayablesPaginated(params);
       return response;

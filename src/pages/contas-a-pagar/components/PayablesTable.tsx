@@ -6,10 +6,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusIndicator } from './StatusIndicator';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import React from 'react';
 import { updatePayable } from '@/services/financialPayablesService';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/lib/supabase';
 
 export function PayablesTable({
   payables,
@@ -145,7 +146,7 @@ export function PayablesTable({
        <Dialog open={!!reverseEntry} onOpenChange={(v) => { if (!v) setReverseEntry(null); }}>
       <DialogContent className="w-[600px] min-h-[270px] h-auto bg-white text-[#555] shadow-[0_5px_15px_rgba(0,0,0,0.5)] rounded-[4px] border-t-[5px] border-[rgb(223,75,51)] p-0">
         <div className="modal-header w-[600px] h-[65.7031px] pl-[20px] pr-[30px] pt-[30px] pb-[10px]">
-          <span className="text-[18px] leading-[25.7143px] font-semibold text-[rgb(223,75,51)]">Estornar</span>
+          <DialogTitle className="text-[18px] leading-[25.7143px] font-semibold text-[rgb(223,75,51)]">Estornar</DialogTitle>
         </div>
         <div className="modal-body w-[600px] h-auto pl-[20px] pr-[30px] pt-[10px] pb-[20px] text-[13px] leading-[18.5714px] text-left relative overflow-visible" style={{ fontFamily: 'Open Sans, sans-serif' }}>
           <div className="w-[540px] h-[134.141px] m-0 p-0 mx-auto text-[17px] leading-[18.5714px] text-[#555]">

@@ -304,9 +304,9 @@ export const PayableRecurrenceTab: React.FC<PayableRecurrenceTabProps> = ({ form
                   />
                 </div>
 
-                <div className="space-y-2 flex gap-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">Por (meses/vezes)</Label>
+                <div className="space-y-2">
+                  <Label className="text-xs">Por (meses/vezes)</Label>
+                  <div className="flex gap-2">
                     <Input
                       type="number"
                       min="2"
@@ -314,9 +314,10 @@ export const PayableRecurrenceTab: React.FC<PayableRecurrenceTabProps> = ({ form
                       value={recurrenceTimes}
                       onChange={(e) => setRecurrenceTimes(e.target.value)}
                       disabled={!!readOnly}
+                      className="flex-1"
                     />
+                    <Button variant="outline" className="text-green-600 border-green-600 hover:bg-green-50" onClick={handleSimulate}>Simular</Button>
                   </div>
-                  <Button variant="outline" className="text-green-600 border-green-600 hover:bg-green-50" onClick={handleSimulate}>Simular</Button>
                 </div>
               </div>
 

@@ -66,6 +66,14 @@ export interface PayableFilters {
   limit?: number;
   category_id?: string;
   document_id?: string;
+  bank_account_id?: string;
+  customer_id?: string;
+  issue_start_date?: string;
+  issue_end_date?: string;
+  payment_start_date?: string;
+  payment_end_date?: string;
+  reversal_start_date?: string;
+  reversal_end_date?: string;
 }
 
 export interface PayableResponse {
@@ -243,8 +251,34 @@ export async function getPayablesPaginated(filters: PayableFilters, client?: Sup
     query = query.eq('document_id', filters.document_id);
   }
 
+  if (filters.bank_account_id) {
+    query = query.eq('bank_account_id', filters.bank_account_id);
+  }
+
+  if (filters.customer_id) {
+    query = query.eq('customer_id', filters.customer_id);
+  }
+
   if (filters.start_date) query = query.gte('due_date', filters.start_date);
   if (filters.end_date) query = query.lte('due_date', filters.end_date);
+
+  if (filters.issue_start_date) query = query.gte('issue_date', filters.issue_start_date);
+  if (filters.issue_end_date) query = query.lte('issue_date', filters.issue_end_date);
+
+  if (filters.payment_start_date || filters.payment_end_date) {
+    // Se filtrar por data de quitação, implicitamente filtra por status PAID
+    // Isso evita mostrar contas com pagamentos parciais mas ainda em aberto/vencidas
+    query = query.eq('status', 'PAID');
+    if (filters.payment_start_date) query = query.gte('payment_date', filters.payment_start_date);
+    if (filters.payment_end_date) query = query.lte('payment_date', filters.payment_end_date);
+  }
+
+  // Filtro de data de estorno (assume status CANCELLED e usa updated_at)
+  if (filters.reversal_start_date || filters.reversal_end_date) {
+    query = query.eq('status', 'CANCELLED');
+    if (filters.reversal_start_date) query = query.gte('updated_at', filters.reversal_start_date);
+    if (filters.reversal_end_date) query = query.lte('updated_at', filters.reversal_end_date);
+  }
 
   query = query.range(offset, offset + limit - 1);
   const { data, error, count } = await query;
