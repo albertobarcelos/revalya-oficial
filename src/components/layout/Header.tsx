@@ -1,6 +1,6 @@
 import { LogOut, Settings, User, Building2 } from "lucide-react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs";
 import { NotificationSheet } from "@/components/notifications/NotificationSheet";
 import {
@@ -107,7 +107,16 @@ const Header = ({ children }: HeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-foreground hover:text-primary"
+              onClick={() => navigate(isInTenant ? `/${tenantId}/configuracoes` : "/configuracoes")}
+              title="Configurações"
+            >
+              <Settings className="h-[1.2rem] w-[1.2rem]" />
+              <span className="sr-only">Configurações</span>
+            </Button>
           </div>
         </div>
       </div>

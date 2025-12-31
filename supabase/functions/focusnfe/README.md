@@ -13,34 +13,49 @@ Edge Function para integração com a API FocusNFe, permitindo emissão de NFe (
 
 ## 🔧 Configuração
 
-### 1. Configurar Credenciais no Banco
+### 1. Configurar Chave Única nos Secrets (Padrão Único)
 
-A Edge Function busca as credenciais na tabela `payment_gateways`:
+**AIDEV-NOTE:** Esta integração usa o **padrão único** - uma chave de API compartilhada entre todos os tenants, armazenada nos secrets do Supabase.
 
-```sql
-INSERT INTO payment_gateways (
-  tenant_id,
-  provider,
-  is_active,
-  api_key,
-  environment,
-  settings
-) VALUES (
-  'uuid-do-tenant',
-  'focusnfe',
-  true,
-  'seu-token-focusnfe',
-  'homologacao', -- ou 'producao'
-  '{}'::jsonb
-);
-```
+#### Passo 1: Configurar Secret no Supabase
 
-### 2. Obter Token FocusNFe
+1. Acesse o **Supabase Dashboard** > **Edge Functions** > **Secrets**
+2. Adicione o secret:
+   - **Nome:** `FOCUSNFE_API_KEY`
+   - **Valor:** Token da API FocusNFe (obtido em https://app.focusnfe.com.br/)
+3. (Opcional) Adicione também:
+   - **Nome:** `FOCUSNFE_ENVIRONMENT`
+   - **Valor:** `producao` ou `homologacao`
+
+#### Passo 2: Obter Token FocusNFe
 
 1. Acesse o [Painel da API FocusNFe](https://app.focusnfe.com.br/)
 2. Faça login na sua conta
 3. Navegue até **Configurações** → **API**
 4. Copie o **Token de Acesso**
+5. Cole no secret `FOCUSNFE_API_KEY` do Supabase
+
+### 2. Configurar Integração por Tenant
+
+Cada tenant precisa ter uma configuração ativa em `tenant_integrations` (sem `api_key`):
+
+```sql
+INSERT INTO tenant_integrations (
+  tenant_id,
+  integration_type,
+  is_active,
+  environment,
+  config
+) VALUES (
+  'uuid-do-tenant',
+  'focusnfe',
+  true,
+  'homologacao', -- ou 'producao'
+  '{}'::jsonb
+);
+```
+
+**Importante:** Não é necessário (e não deve) salvar `api_key` por tenant. A chave está nos secrets do Supabase.
 
 ### 3. Ambientes
 
@@ -111,11 +126,21 @@ x-tenant-id: {tenant_id}
 
 ## 🔐 Segurança
 
-- ✅ Autenticação via JWT do Supabase
+- ✅ **Padrão Único**: Chave de API única nos secrets do Supabase (não exposta no banco)
+- ✅ **Autenticação Focus NFe**: HTTP Basic Auth (token como username, senha vazia)
+- ✅ Autenticação via JWT do Supabase (validação de usuário)
 - ✅ Validação de tenant_id em todas as requisições
+- ✅ Verificação de integração ativa por tenant
 - ✅ Rate limiting por tenant (100 req/min)
-- ✅ Credenciais isoladas por tenant
+- ✅ Isolamento por tenant (cada tenant precisa ter integração ativa)
 - ✅ Logs de auditoria
+
+### Autenticação Focus NFe
+
+A API Focus NFe usa **HTTP Basic Auth** conforme [documentação oficial](https://focusnfe.com.br/doc/#introducao_autenticacao):
+- Token como **username**
+- Senha **vazia**
+- Formato: `Authorization: Basic {base64(token:)}`
 
 ## 📊 Rate Limiting
 

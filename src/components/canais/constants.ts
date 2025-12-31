@@ -26,7 +26,10 @@ export const CONNECTION_STATUS_LABELS = {
   syncing: 'Sincronizando',
   paired: 'Pareado',
   timeout: 'Timeout',
-  conflict: 'Conflito Detectado'
+  conflict: 'Conflito Detectado',
+  inactive: 'Inativo',
+  DISCONNECTED: 'Desconectado',
+  INACTIVE: 'Inativo'
 } as const;
 
 // AIDEV-NOTE: Alias para compatibilidade com componentes existentes

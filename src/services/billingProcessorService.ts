@@ -128,19 +128,33 @@ class BillingProcessorService {
         throw new Error(`Contrato não encontrado: ${contractError?.message}`);
       }
 
-      // 2. Buscar gateway de pagamento
+      // 2. Buscar gateway de pagamento de tenant_integrations
       const { data: gateway, error: gatewayError } = await supabase
-        .from('payment_gateways')
+        .from('tenant_integrations')
         .select('*')
         .eq('id', billing.payment_gateway_id)
+        .eq('tenant_id', billing.tenant_id)
+        .eq('is_active', true)
         .single();
 
       if (gatewayError || !gateway) {
         throw new Error(`Gateway não encontrado: ${gatewayError?.message}`);
       }
 
+      // AIDEV-NOTE: Converter formato de tenant_integrations para compatibilidade
+      const gatewayConfig = {
+        id: gateway.id,
+        provider: gateway.integration_type,
+        api_key: (gateway.config as any)?.api_key || gateway.encrypted_api_key || '',
+        api_url: (gateway.config as any)?.api_url || '',
+        api_secret: (gateway.config as any)?.api_secret || '',
+        is_active: gateway.is_active,
+        environment: gateway.environment || 'production',
+        ...gateway
+      };
+
       // 3. Criar cobrança no gateway externo
-      const chargeData = await this.createExternalCharge(billing, contractData, gateway);
+      const chargeData = await this.createExternalCharge(billing, contractData, gatewayConfig as any);
       
       // 4. Salvar cobrança local
       const charge = await this.createLocalCharge(billing, contractData, chargeData);

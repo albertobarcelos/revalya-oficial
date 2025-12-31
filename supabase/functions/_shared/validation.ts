@@ -145,18 +145,16 @@ export async function validateRequest(
     // Cliente administrativo para validação de JWT
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Cliente com token do usuário para validação de acesso
-    const supabaseUser = createClient(supabaseUrl, supabaseServiceKey, {
-      global: {
-        headers: {
-          authorization: authHeader,
-        },
-      },
-    });
-
     // CAMADA 4: Validação do JWT Token
+    // AIDEV-NOTE: Usar supabaseAdmin.auth.getUser(token) para validar o JWT
+    // O SERVICE_ROLE_KEY permite validar qualquer token de usuário passando-o como parâmetro
     console.log(`🔐 [AUDIT-${requestId}] Validando JWT token...`);
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+    
+    // AIDEV-NOTE: Extrair o token do header Authorization
+    const token = authHeader.replace('Bearer ', '');
+    
+    // AIDEV-NOTE: Validar o token usando o cliente admin com o token como parâmetro
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
     if (authError || !user) {
       console.error(`❌ [AUDIT-${requestId}] Falha na autenticação JWT:`, {
@@ -176,13 +174,15 @@ export async function validateRequest(
     if (requireTenant && tenantId) {
       console.log(`🔍 [AUDIT-${requestId}] Validando acesso ao tenant: ${tenantId}`);
       
-      // Verificar se o usuário tem acesso ao tenant especificado
+      // AIDEV-NOTE: Verificar se o usuário tem acesso ao tenant especificado
+      // A tabela correta é tenant_users (não user_tenants)
+      // A coluna de status é 'active' (não 'is_active')
       const { data: userTenantAccess, error: tenantError } = await supabaseAdmin
-        .from('user_tenants')
-        .select('tenant_id, role, is_active')
+        .from('tenant_users')
+        .select('tenant_id, role, active')
         .eq('user_id', user.id)
         .eq('tenant_id', tenantId)
-        .eq('is_active', true)
+        .eq('active', true)
         .single();
 
       if (tenantError || !userTenantAccess) {

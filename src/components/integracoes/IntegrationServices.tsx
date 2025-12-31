@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Loader2, Settings, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from '@/lib/supabase';
 import { logService } from "@/services/logService";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { SetupAsaasWebhook } from "@/components/asaas/setup-asaas-webhook";
+import { saveFocusNFeConfig } from "@/services/focusnfeCityService";
 import {
   Dialog,
   DialogContent,
@@ -51,11 +52,13 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
   const { toast } = useToast();
   
   // Estado para os serviços
+  // AIDEV-NOTE: Inicializar todos os serviços com false para evitar uncontrolled/controlled
   const [servicosAtivos, setServicosAtivos] = useState<Record<string, boolean>>({
     asaas: false,
     cora: false,
     omie: false,
     contaazul: false,
+    focusnfe: false, // AIDEV-NOTE: Adicionado para evitar erro uncontrolled/controlled
   });
   
   const [loadingServicos, setLoadingServicos] = useState<Record<string, boolean>>({
@@ -63,6 +66,7 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
     cora: false,
     omie: false,
     contaazul: false,
+    focusnfe: false, // AIDEV-NOTE: Adicionado para evitar erro uncontrolled/controlled
   });
 
   // Estados para configuração do AsaaS
@@ -119,10 +123,12 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
       const novoEstado = { ...servicosAtivos };
       
       if (integrations && integrations.length > 0) {
-        integrations.forEach(integration => {
-          if (integration.integration_type in novoEstado) {
-            novoEstado[integration.integration_type] = integration.is_active;
-          }
+        integrations.forEach((integration: any) => {
+          // AIDEV-NOTE: Adicionar integração ao estado mesmo se não estiver no estado inicial
+          // Garante que todas as integrações sejam controladas
+          novoEstado[integration.integration_type] = Boolean(integration.is_active);
+            
+            // AIDEV-NOTE: Carregar ambiente do Focus NFe de tenant_integrations
         });
       }
       
@@ -171,7 +177,7 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
       }
 
       // Filtrar apenas a integração do AsaaS
-      const integration = integrations?.find(int => int.integration_type === 'asaas');
+      const integration = integrations?.find((int: any) => int.integration_type === 'asaas');
 
       if (integration) {
         // AIDEV-NOTE: Tentar descriptografar chave API usando função RPC
@@ -384,6 +390,59 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
   };
 
   const handleToggle = async (servico: keyof typeof servicosAtivos) => {
+    if (servico === 'focusnfe') {
+      // AIDEV-NOTE: Toggle simples - ativar/desativar diretamente
+      const novoEstado = !servicosAtivos.focusnfe;
+        setLoadingServicos(prev => ({ ...prev, [servico]: true }));
+        
+        try {
+        // AIDEV-NOTE: Verificar se o usuário está autenticado
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError || !session?.user) {
+          logService.error(MODULE_NAME, 'Usuário não autenticado ao alterar integração Focus NFe:', sessionError);
+            toast({
+              title: "Erro de autenticação",
+            description: "Você precisa estar logado para alterar integrações.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+        // AIDEV-NOTE: Salvar configuração Focus NFe (sempre em produção por padrão)
+        await saveFocusNFeConfig(tenantId, {
+          environment: 'producao', // AIDEV-NOTE: Sempre produção por padrão
+          is_active: novoEstado,
+        });
+
+        // AIDEV-NOTE: Atualizar estado local
+        setServicosAtivos(prev => ({ ...prev, [servico]: novoEstado }));
+        
+        // AIDEV-NOTE: Recarregar estado dos serviços
+        await carregarEstadoServicos();
+          
+          toast({
+          title: novoEstado ? "Focus NFe ativado" : "Focus NFe desativado",
+          description: novoEstado 
+            ? "A integração Focus NFe foi ativada com sucesso." 
+            : "A integração Focus NFe foi desativada.",
+            variant: "default",
+          });
+          
+        onToggle?.(servico, novoEstado);
+        } catch (error) {
+        logService.error(MODULE_NAME, 'Erro ao alterar integração Focus NFe:', error);
+          toast({
+            title: "Erro",
+          description: error instanceof Error ? error.message : "Não foi possível alterar a integração. Tente novamente.",
+            variant: "destructive",
+          });
+        } finally {
+          setLoadingServicos(prev => ({ ...prev, [servico]: false }));
+      }
+      return;
+    }
+    
     if (servico === 'asaas') {
       if (!servicosAtivos.asaas) {
         // Carregar configuração e abrir modal
@@ -539,7 +598,7 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
             <Switch
               checked={servicosAtivos.asaas}
               disabled={loadingServicos.asaas}
-              onCheckedChange={(checked) => {
+              onCheckedChange={() => {
                 // Previne a propagação do evento para não abrir o modal
                 handleToggle('asaas');
               }}
@@ -593,11 +652,11 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
         <div className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer">
           <Badge className="absolute top-3 right-3 bg-amber-500">Em breve</Badge>
           
-          <div className="rounded-full bg-green-100 p-3 mb-4">
+          <div className="w-16 h-16 mb-4">
             <img 
-              src="https://play-lh.googleusercontent.com/jgaOuXsZ6u_dgsWiV4FZI1TfvNl2mUUVMQx4DYtLQXW0JxFbwUvvYFbQcuE-5wXoQvk" 
+              src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT5jWN-xyktFR1XjujF-8DIqunRTARx_YGmBw&s" 
               alt="Omie" 
-              className="w-6 h-6 object-contain"
+              className="w-full h-full object-cover rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://placehold.co/64x64/green/white?text=O';
@@ -632,11 +691,11 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
         <div className="border rounded-lg p-6 flex flex-col items-center relative cursor-pointer">
           <Badge className="absolute top-3 right-3 bg-amber-500">Em breve</Badge>
           
-          <div className="rounded-full bg-cyan-100 p-3 mb-4">
+          <div className="w-16 h-16 mb-4">
             <img 
-              src="https://www.4linux.com.br/wp-content/uploads/2023/01/logo-conta-azul.png" 
+              src="https://pbs.twimg.com/profile_images/925690924080029696/91rBfTtz_400x400.jpg" 
               alt="Conta Azul" 
-              className="w-6 h-6 object-contain"
+              className="w-full h-full object-cover rounded-full"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.src = 'https://placehold.co/64x64/cyan/white?text=CA';
@@ -663,6 +722,46 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
               <span className="text-sm text-muted-foreground">
                 {servicosAtivos.contaazul ? 'Ativo' : 'Inativo'}
               </span>
+            )}
+          </div>
+        </div>
+
+        {/* Focus NFe */}
+        <div className="border rounded-lg p-6 flex flex-col items-center relative">
+          {!servicosAtivos.focusnfe && (
+            <Badge className="absolute top-3 right-3 bg-gray-500">Inativo</Badge>
+          )}
+          {servicosAtivos.focusnfe && (
+            <Badge className="absolute top-3 right-3 bg-green-500">Ativo</Badge>
+          )}
+          
+          <div className="w-[120px] h-[60px] mb-2">
+            <img 
+              src="https://app-v2.focusnfe.com.br/images/logo.svg" 
+              alt="Focus NFe" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = 'https://placehold.co/120x60/orange/white?text=FN';
+              }}
+            />
+          </div>
+          
+          <h3 className="font-semibold mb-1">Focus NFe</h3>
+          <p className="text-xs text-muted-foreground text-center mb-4">
+            Emissão fiscal
+          </p>
+          
+          <div className="mt-auto flex items-center gap-2">
+            <Switch
+              checked={Boolean(servicosAtivos.focusnfe ?? false)}
+              disabled={Boolean(loadingServicos.focusnfe ?? false)}
+              onCheckedChange={() => {
+                handleToggle('focusnfe');
+              }}
+            />
+            {loadingServicos.focusnfe && (
+              <Loader2 className="h-4 w-4 animate-spin" />
             )}
           </div>
         </div>
@@ -784,7 +883,6 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
               {servicosAtivos.asaas ? (
                 <SetupAsaasWebhook 
                   tenantId={tenantId} 
-                  environment={asaasConfig.environment} 
                 />
               ) : (
                 <div className="py-4 text-center text-muted-foreground">
@@ -805,6 +903,7 @@ export function IntegrationServices({ tenantId, tenantSlug, onToggle }: Integrat
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
     </div>
   );
 }

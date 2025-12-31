@@ -29,7 +29,21 @@ import { RetroactiveBillingAuditService } from './retroactiveBillingAuditService
 type Contract = Database['public']['Tables']['contracts']['Row'];
 type ContractService = Database['public']['Tables']['contract_services']['Row'];
 type ContractBilling = Database['public']['Tables']['contract_billings']['Row'];
-type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+// AIDEV-NOTE: Tipo removido - usar tenant_integrations
+// type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+
+// AIDEV-NOTE: Interface para compatibilidade com código existente
+interface PaymentGateway {
+  id: string;
+  provider: string;
+  api_key: string;
+  api_url: string;
+  api_secret?: string;
+  is_active: boolean;
+  environment?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface BillingGenerationResult {
   success: boolean;

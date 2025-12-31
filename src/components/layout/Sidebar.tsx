@@ -1,4 +1,4 @@
-import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt, Activity } from "lucide-react";
+import { Home, Users, DollarSign, Bell, Settings, Menu, MessageSquare, ListFilter, ArrowUpDown, LogOut, User, CheckSquare, FileText, ChevronDown, Package, FolderCog, LayoutGrid, BarChart3, Receipt, Activity, MoreHorizontal, Moon, Sun } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,55 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { logDebug, logError } from "@/lib/logger";
 import { throttledDebug } from "@/utils/logThrottle"; // AIDEV-NOTE: Import para throttling de logs
 import { useToast } from "@/components/ui/use-toast";
+import { useTheme } from "@/providers/ThemeProvider";
+
+// Componente de Toggle de Tema para a Sidebar
+function ThemeToggleButton() {
+  const { theme, setTheme } = useTheme();
+  const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('light');
+
+  // AIDEV-NOTE: Determina o tema efetivo (converte system para light/dark)
+  useEffect(() => {
+    const getEffectiveTheme = (): 'light' | 'dark' => {
+      if (theme === 'system') {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      return theme;
+    };
+
+    setEffectiveTheme(getEffectiveTheme());
+
+    // Listener para mudanças no tema do sistema quando theme === 'system'
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = () => {
+        setEffectiveTheme(mediaQuery.matches ? 'dark' : 'light');
+      };
+      
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+  }, [theme]);
+
+  // AIDEV-NOTE: Alterna apenas entre light e dark, removendo opção de system
+  const toggleTheme = () => {
+    setTheme(effectiveTheme === 'light' ? 'dark' : 'light');
+  };
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className="p-2 rounded-lg text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 ease-in-out"
+      title={effectiveTheme === 'light' ? 'Alternar para tema escuro' : 'Alternar para tema claro'}
+    >
+      {effectiveTheme === 'light' ? (
+        <Sun className="h-5 w-5" />
+      ) : (
+        <Moon className="h-5 w-5" />
+      )}
+    </button>
+  );
+}
 
 // Hook useClickOutside personalizado
 function useClickOutside(ref: React.RefObject<HTMLElement>, handler: () => void) {
@@ -356,11 +405,10 @@ export default function Sidebar() {
       isSubmenu: true,
       children: [
               { icon: BarChart3, label: "Painel de Cobrança", path: `/${tenantSlug}/cobrancas` },
-              { icon: FileText, label: "Portal do Contador", path: `/${tenantSlug}/portal-contador` },
               { 
                 icon: Activity, 
                 label: "Movimentações",
-                id: "produtos",
+                id: "movimentacoes-financeiro",
                 isSubmenu: true,
                 children: [
                   { icon: FileText, label: "Extrato Bancário", path: `/${tenantSlug}/extrato-bancario` },
@@ -371,15 +419,20 @@ export default function Sidebar() {
             ]
     },
     { icon: CheckSquare, label: "Tarefas", path: `/${tenantSlug}/tasks` },
-    { icon: MessageSquare, label: "Mensagens", path: `/${tenantSlug}/templates` },
-    { icon: Bell, label: "Notificações", path: `/${tenantSlug}/notifications` },
-    { icon: ArrowUpDown, label: "Atualizar Valores", path: `/${tenantSlug}/update-values` },
-    { icon: MessageSquare, label: "Histórico de Mensagens", path: `/${tenantSlug}/messages/history` },
+    { 
+      icon: MoreHorizontal, 
+      label: "Extras",
+      id: "extras",
+      isSubmenu: true,
+      children: [
+        { icon: ArrowUpDown, label: "Atualizar valores", path: `/${tenantSlug}/update-values` },
+        { icon: MessageSquare, label: "Histórico de Mensagens", path: `/${tenantSlug}/messages/history` },
+        { icon: Bell, label: "Notificações", path: `/${tenantSlug}/notifications` },
+        { icon: FileText, label: "Portal do Contador", path: `/${tenantSlug}/portal-contador` },
+      ]
+    },
   ];
 
-  const settingsLinks = [
-    { icon: Settings, label: "Configurações", path: `/${tenantSlug}/configuracoes` },
-  ];
 
   const handlePortalSelection = () => {
     navigate('/meus-aplicativos');
@@ -561,89 +614,66 @@ export default function Sidebar() {
                 </Link>
               )
             ))}
-            
-            {!isCollapsed && (
-              <div className="pt-4 pb-2">
-                <div className="px-3 text-xs uppercase text-gray-400">Configurações</div>
-              </div>
-            )}
-            
-            {settingsLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-300 ease-in-out",
-                  {
-                    "bg-white/10 text-white font-medium border-l-2 border-primary": location.pathname === link.path,
-                    "text-gray-400 hover:bg-white/5 hover:text-white": location.pathname !== link.path,
-                    "justify-center": isCollapsed
-                  }
-                )}
-                title={isCollapsed ? link.label : undefined}
-              >
-                <link.icon className="h-5 w-5 flex-shrink-0 transition-transform duration-300 ease-in-out" />
-                {!isCollapsed && (
-                  <span className="transition-all duration-300 ease-in-out opacity-100 whitespace-nowrap overflow-hidden">
-                    {link.label}
-                  </span>
-                )}
-              </Link>
-            ))}
           </div>
 
           <div className="mt-auto border-t border-gray-800 p-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <div 
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-400 transition-all duration-300 ease-in-out cursor-pointer hover:bg-white/5 hover:text-white",
-                    { 
-                      "justify-center": isCollapsed
-                    }
-                  )}
-                >
-                  <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg transition-all duration-300 ease-in-out">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.onerror = null;
-                          target.src = '';
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gray-700 text-white">
-                        {profile?.name?.[0] || 'A'}
+            {/* Perfil do Usuário com Toggle de Tema ao lado */}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div 
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-400 transition-all duration-300 ease-in-out cursor-pointer hover:bg-white/5 hover:text-white flex-1",
+                      { 
+                        "justify-center": isCollapsed
+                      }
+                    )}
+                  >
+                    <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg transition-all duration-300 ease-in-out">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Avatar"
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null;
+                            target.src = '';
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gray-700 text-white">
+                          {profile?.name?.[0] || 'A'}
+                        </div>
+                      )}
+                    </div>
+                    {!isCollapsed && (
+                      <div className="transition-all duration-300 ease-in-out overflow-hidden">
+                        <span className="text-sm font-medium whitespace-nowrap block transition-all duration-300 ease-in-out">
+                          {profile?.name || 'Usuário'}
+                        </span>
+                        <span className="text-xs opacity-70 whitespace-nowrap block transition-all duration-300 ease-in-out">
+                          {profile?.email || session?.user?.email || ''}
+                        </span>
                       </div>
                     )}
                   </div>
-                  {!isCollapsed && (
-                    <div className="transition-all duration-300 ease-in-out overflow-hidden">
-                      <span className="text-sm font-medium whitespace-nowrap block transition-all duration-300 ease-in-out">
-                        {profile?.name || 'Usuário'}
-                      </span>
-                      <span className="text-xs opacity-70 whitespace-nowrap block transition-all duration-300 ease-in-out">
-                        {profile?.email || session?.user?.email || ''}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate(`/${tenantSlug}/profile`)}>
-                  <User className="mr-2 h-4 w-4" />
-                  Perfil
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate(`/${tenantSlug}/profile`)}>
+                    <User className="mr-2 h-4 w-4" />
+                    Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              {/* Toggle de Tema ao lado direito */}
+              {!isCollapsed && <ThemeToggleButton />}
+            </div>
           </div>
         </div>
       </div>

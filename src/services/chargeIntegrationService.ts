@@ -5,7 +5,21 @@ import type { Database } from '@/types/database';
 import { addDays, format, isAfter, isBefore } from 'date-fns';
 
 type ContractBilling = Database['public']['Tables']['contract_billings']['Row'];
-type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+// AIDEV-NOTE: Tipo removido - usar tenant_integrations
+// type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+
+// AIDEV-NOTE: Interface para compatibilidade com código existente
+interface PaymentGateway {
+  id: string;
+  provider: string;
+  api_key: string;
+  api_url: string;
+  api_secret?: string;
+  is_active: boolean;
+  environment?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 type PaymentReconciliation = Database['public']['Tables']['payment_reconciliations']['Row'];
 
 export interface ChargeIntegrationResult {
@@ -93,12 +107,12 @@ class ChargeIntegrationService {
         };
       }
 
-      // Buscar configuração do gateway
+      // AIDEV-NOTE: Buscar configuração do gateway de tenant_integrations
       const { data: gateway, error: gatewayError } = await supabase
-        .from('payment_gateways')
+        .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', billing.tenant_id)
-        .eq('code', gateway_code.toUpperCase())
+        .eq('integration_type', gateway_code.toLowerCase())
         .eq('is_active', true)
         .single();
 
@@ -193,20 +207,14 @@ class ChargeIntegrationService {
     };
 
     try {
-      // Buscar cobranças pendentes com external_id
+      // AIDEV-NOTE: Buscar cobranças pendentes com external_id
       const { data: billings, error: billingsError } = await supabase
         .from('contract_billings')
         .select(`
           id,
           external_id,
           status,
-          payment_gateway_id,
-          payment_gateways!inner(
-            code,
-            api_url,
-            api_key,
-            sandbox_mode
-          )
+          payment_gateway_id
         `)
         .eq('tenant_id', tenant_id)
         .in('status', ['PENDING', 'PARTIALLY_PAID'])
@@ -229,7 +237,23 @@ class ChargeIntegrationService {
       // Processar cada cobrança
       for (const billing of billings) {
         try {
-          const gatewayCode = billing.payment_gateways.code.toLowerCase();
+          // AIDEV-NOTE: Buscar gateway de tenant_integrations
+          if (!billing.payment_gateway_id) {
+            continue;
+          }
+          
+          const { data: gateway } = await supabase
+            .from('tenant_integrations')
+            .select('integration_type')
+            .eq('id', billing.payment_gateway_id)
+            .eq('tenant_id', tenant_id)
+            .single();
+          
+          if (!gateway) {
+            continue;
+          }
+          
+          const gatewayCode = gateway.integration_type.toLowerCase();
           const statusResponse = await gatewayService.getChargeStatus(
             gatewayCode,
             billing.external_id!
@@ -348,7 +372,7 @@ class ChargeIntegrationService {
     };
 
     try {
-      // Buscar reconciliações que precisam de cancelamento
+      // AIDEV-NOTE: Buscar reconciliações que precisam de cancelamento
       const { data: reconciliations, error: reconciliationsError } = await supabase
         .from('payment_reconciliations')
         .select(`
@@ -357,12 +381,7 @@ class ChargeIntegrationService {
           cancellation_status,
           billing_id,
           contract_billings!inner(
-            payment_gateway_id,
-            payment_gateways!inner(
-              code,
-              api_url,
-              api_key
-            )
+            payment_gateway_id
           )
         `)
         .eq('tenant_id', tenant_id)
@@ -392,7 +411,23 @@ class ChargeIntegrationService {
             .update({ cancellation_status: 'PROCESSING' })
             .eq('id', reconciliation.id);
 
-          const gatewayCode = reconciliation.contract_billings.payment_gateways.code.toLowerCase();
+          // AIDEV-NOTE: Buscar gateway de tenant_integrations
+          if (!reconciliation.contract_billings.payment_gateway_id) {
+            continue;
+          }
+          
+          const { data: gateway } = await supabase
+            .from('tenant_integrations')
+            .select('integration_type')
+            .eq('id', reconciliation.contract_billings.payment_gateway_id)
+            .eq('tenant_id', tenant_id)
+            .single();
+          
+          if (!gateway) {
+            continue;
+          }
+          
+          const gatewayCode = gateway.integration_type.toLowerCase();
           
           // Tentar cancelar no gateway
           const cancelResponse = await gatewayService.cancelCharge(

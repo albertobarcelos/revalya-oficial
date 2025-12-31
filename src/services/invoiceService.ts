@@ -698,39 +698,43 @@ class InvoiceService {
         }
       }
 
-      // Buscar configurações dos provedores
-      const { data: configs, error } = await supabase
-        .from('payment_gateways')
-        .select('*')
-        .eq('is_active', true)
-        .in('provider', ['omie', 'nfse_io', 'focusnfe']);
+      // AIDEV-NOTE: Buscar configurações dos provedores de tenant_integrations
+      if (tenantId) {
+        const { data: integrations, error: integrationError } = await supabase
+          .from('tenant_integrations')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .in('integration_type', ['omie', 'nfse_io', 'focusnfe']);
 
-      if (error) {
-        console.error('Erro ao buscar configurações de NFS-e:', error);
-        return;
-      }
-
-      configs?.forEach(config => {
-        switch (config.provider) {
-          case 'omie':
-            if (config.api_key && config.api_secret) {
-              this.providers.set('omie', new OmieInvoiceProvider(config.api_key, config.api_secret));
+        if (integrationError) {
+          console.error('Erro ao buscar configurações de NFS-e:', integrationError);
+        } else if (integrations) {
+          integrations.forEach(integration => {
+            const config = integration.config || {};
+            
+            switch (integration.integration_type) {
+              case 'omie':
+                if (config.api_key && config.api_secret) {
+                  this.providers.set('omie', new OmieInvoiceProvider(config.api_key, config.api_secret));
+                }
+                break;
+              case 'nfse_io':
+                if (config.api_key) {
+                  this.providers.set('nfse_io', new NFSeIoProvider(config.api_key));
+                }
+                break;
+              case 'focusnfe':
+                // AIDEV-NOTE: FocusNFe usa Edge Function, não precisa de api_key no frontend
+                const environment = (integration.environment?.toLowerCase() === 'homologacao' 
+                  ? 'homologacao' 
+                  : 'producao') as 'homologacao' | 'producao';
+                this.providers.set('focusnfe', new FocusNFeProvider(tenantId, environment));
+                break;
             }
-            break;
-          case 'nfse_io':
-            if (config.api_key) {
-              this.providers.set('nfse_io', new NFSeIoProvider(config.api_key));
-            }
-            break;
-          case 'focusnfe':
-            // AIDEV-NOTE: FocusNFe usa Edge Function, não precisa de api_key no frontend
-            const environment = (config.environment?.toLowerCase() === 'homologacao' 
-              ? 'homologacao' 
-              : 'producao') as 'homologacao' | 'producao';
-            this.providers.set('focusnfe', new FocusNFeProvider(tenantId, environment));
-            break;
+          });
         }
-      });
+      }
 
     } catch (error) {
       console.error('Erro ao inicializar providers de NFS-e:', error);

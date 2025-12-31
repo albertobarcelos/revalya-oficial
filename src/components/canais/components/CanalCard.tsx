@@ -1,13 +1,12 @@
 // AIDEV-NOTE: Componente modular para exibir cards de canais
 // Responsabilidade única: renderização visual de um canal específico
 
-import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageCircle, Mail, Phone, MessageSquare } from 'lucide-react';
 import { CanalType, ConnectionStatus } from '../types';
-import { CANAL_LABELS, CANAL_DESCRIPTIONS, STATUS_LABELS } from '../constants';
+import { CANAL_LABELS, STATUS_LABELS } from '../constants';
 
 interface CanalCardProps {
   canal: CanalType;
@@ -34,7 +33,17 @@ export function CanalCard({
   const getCanalIcon = () => {
     switch (canal) {
       case 'whatsapp':
-        return <MessageCircle className="h-8 w-8 text-green-600" />;
+        return (
+          <img 
+            src="/images/Integrações/WhatsApp.svg" 
+            alt="WhatsApp" 
+            className="w-16 h-16 object-contain"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = 'https://placehold.co/64x64/25D366/white?text=WA';
+            }}
+          />
+        );
       case 'sms':
         return <MessageSquare className="h-8 w-8 text-blue-600" />;
       case 'email':
@@ -65,9 +74,9 @@ export function CanalCard({
   // AIDEV-NOTE: Determinar texto do status para exibição
   const getStatusText = () => {
     if (comingSoon) return 'Em breve'; // AIDEV-NOTE: Status especial para funcionalidades futuras
-    if (!isActive) return STATUS_LABELS.INACTIVE;
+    if (!isActive) return STATUS_LABELS.INACTIVE || 'Inativo';
     
-    return connectionStatus ? STATUS_LABELS[connectionStatus.toUpperCase() as keyof typeof STATUS_LABELS] : STATUS_LABELS.DISCONNECTED;
+    return connectionStatus ? STATUS_LABELS[connectionStatus.toLowerCase() as keyof typeof STATUS_LABELS] || STATUS_LABELS.disconnected : STATUS_LABELS.DISCONNECTED || STATUS_LABELS.disconnected;
   };
 
   // AIDEV-NOTE: Determinar texto do botão baseado no estado atual
@@ -89,7 +98,11 @@ export function CanalCard({
       <CardContent className="p-6">
         <div className="flex flex-col items-center text-center space-y-4">
           {/* AIDEV-NOTE: Ícone redondo do canal */}
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-50 border-2 border-gray-200">
+          <div className={`flex items-center justify-center w-16 h-16 rounded-full ${
+            canal === 'whatsapp' 
+              ? 'bg-[#25D366] border-2 border-[#25D366]' 
+              : 'bg-gray-50 border-2 border-gray-200'
+          }`}>
             {getCanalIcon()}
           </div>
 

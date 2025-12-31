@@ -184,12 +184,13 @@ class BillingForecastService {
 
       // Determinar gateway padrão (primeiro ativo)
       const { data: defaultGateway } = await supabase
-        .from('payment_gateways')
+        .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', contract.tenant_id)
         .eq('is_active', true)
+        .in('integration_type', ['asaas', 'cora', 'itau', 'omie']) // AIDEV-NOTE: Gateways de pagamento
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const forecast: Omit<ContractBilling, 'id' | 'created_at' | 'updated_at'> = {
         contract_id: contract.id,
@@ -263,7 +264,10 @@ class BillingForecastService {
           number,
           customer:customers(name)
         ),
-        payment_gateway:payment_gateways(name)
+        payment_gateway:tenant_integrations(
+          integration_type,
+          config
+        )
       `)
       .eq('tenant_id', params.tenant_id)
       .gte('due_date', format(params.start_date, 'yyyy-MM-dd'))
@@ -296,7 +300,8 @@ class BillingForecastService {
       net_amount: billing.net_amount,
       status: billing.status as any,
       payment_method: billing.payment_method || '',
-      gateway_name: (billing.payment_gateway as any)?.name || '',
+      gateway_name: (billing.payment_gateway as any)?.integration_type?.toUpperCase() || 
+                    ((billing.payment_gateway as any)?.config as any)?.name || '',
       billing_type: billing.billing_type
     }));
   }
@@ -382,7 +387,7 @@ class BillingForecastService {
 
         // Determinar gateway padrão
         const { data: defaultGateway } = await supabase
-          .from('payment_gateways')
+          .from('tenant_integrations')
           .select('*')
           .eq('tenant_id', contract.tenant_id)
           .eq('is_active', true)
@@ -499,12 +504,13 @@ class BillingForecastService {
 
       // Determinar gateway padrão
       const { data: defaultGateway } = await supabase
-        .from('payment_gateways')
+        .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', contract.tenant_id)
         .eq('is_active', true)
+        .in('integration_type', ['asaas', 'cora', 'itau', 'omie']) // AIDEV-NOTE: Gateways de pagamento
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const forecast: Omit<ContractBilling, 'id' | 'created_at' | 'updated_at'> = {
         contract_id: contract.id,
@@ -588,12 +594,13 @@ class BillingForecastService {
 
       // Determinar gateway padrão (primeiro ativo)
       const { data: defaultGateway } = await supabase
-        .from('payment_gateways')
+        .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', contract.tenant_id)
         .eq('is_active', true)
+        .in('integration_type', ['asaas', 'cora', 'itau', 'omie']) // AIDEV-NOTE: Gateways de pagamento
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const forecast: Omit<ContractBilling, 'id' | 'created_at' | 'updated_at'> = {
         contract_id: contract.id,

@@ -3,7 +3,21 @@ import type { Database } from '@/types/database';
 import { executeWithAuth, logAccess } from '@/utils/authUtils';
 import { logService } from '@/services/logService';
 
-type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+// AIDEV-NOTE: Tipo removido - usar tenant_integrations
+// type PaymentGateway = Database['public']['Tables']['payment_gateways']['Row'];
+
+// AIDEV-NOTE: Interface para compatibilidade com código existente
+interface PaymentGateway {
+  id: string;
+  provider: string;
+  api_key: string;
+  api_url: string;
+  api_secret?: string;
+  is_active: boolean;
+  environment?: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface CustomerData {
   id?: string;
@@ -605,13 +619,18 @@ class GatewayService {
         }
       );
 
+      // AIDEV-NOTE: Extrair api_key e api_url do config JSONB
+      const config = integration.config || {};
+      
       // Retornar no formato esperado pelo PaymentGateway
       return {
         id: integration.id,
         provider: integration.integration_type,
-        api_key: integration.api_key,
-        api_url: integration.api_url,
+        api_key: config.api_key || integration.encrypted_api_key || '',
+        api_url: config.api_url || '',
+        api_secret: config.api_secret || '',
         is_active: integration.is_active,
+        environment: integration.environment || 'production',
         created_at: integration.created_at,
         updated_at: integration.updated_at
       } as PaymentGateway;
@@ -620,24 +639,50 @@ class GatewayService {
 
   /**
    * Valida configuração de um gateway
+   * AIDEV-NOTE: Atualizado para usar tenant_integrations
    */
   async validateGatewayConfig(gateway_id: string): Promise<{ valid: boolean; error?: string }> {
     try {
-      const { data: gateway, error } = await supabase
-        .from('payment_gateways')
-        .select('*')
-        .eq('id', gateway_id)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { valid: false, error: 'Usuário não autenticado' };
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
         .single();
 
-      if (error || !gateway) {
+      if (!profile?.tenant_id) {
+        return { valid: false, error: 'Tenant não encontrado' };
+      }
+
+      // AIDEV-NOTE: Configurar contexto de tenant
+      await supabase.rpc('set_tenant_context_simple', {
+        p_tenant_id: profile.tenant_id
+      });
+
+      const { data: integration, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('id', gateway_id)
+        .eq('tenant_id', profile.tenant_id)
+        .eq('is_active', true)
+        .single();
+
+      if (error || !integration) {
         return { valid: false, error: 'Gateway não encontrado' };
       }
 
-      if (!gateway.api_key) {
+      const config = integration.config || {};
+      const apiKey = config.api_key || integration.encrypted_api_key;
+
+      if (!apiKey) {
         return { valid: false, error: 'API Key não configurada' };
       }
 
-      if (!gateway.api_url) {
+      if (!config.api_url) {
         return { valid: false, error: 'URL da API não configurada' };
       }
 
