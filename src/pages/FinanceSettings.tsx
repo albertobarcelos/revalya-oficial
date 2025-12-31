@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Banknote, FileText, Settings, Landmark } from 'lucide-react';
 import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 import { ExpenseCategoriesSection } from '@/components/finance/parts/ExpenseCategoriesSection';
+import { RevenueCategoriesSection } from '@/components/finance/parts/RevenueCategoriesSection';
 import { DocumentTypesSection } from '@/components/finance/parts/DocumentTypesSection';
 import { BankAccountsSection } from '@/components/finance/parts/BankAccountsSection';
 
@@ -35,6 +36,7 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
 
   const tabs = useMemo(() => ([
     { key: 'categorias', label: 'Categoria de Despesas' },
+    { key: 'receitas', label: 'Categoria de Receitas' },
     { key: 'documentos', label: 'Tipo de Documentos' },
     { key: 'lancamentos', label: 'Tipo de Lançamento' },
     { key: 'contas', label: 'Contas Bancárias' },
@@ -50,6 +52,10 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
           <TabsTrigger value="categorias" className="flex items-center gap-2">
             <Banknote className="h-4 w-4" />
             Categoria de Despesas
+          </TabsTrigger>
+          <TabsTrigger value="receitas" className="flex items-center gap-2">
+            <Banknote className="h-4 w-4" />
+            Categoria de Receitas
           </TabsTrigger>
           <TabsTrigger value="documentos" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -67,6 +73,10 @@ function FinanceSettingsContent(props?: FinanceSettingsProps) {
 
         <TabsContent value="categorias" className="space-y-4 mt-2">
           <ExpenseCategoriesSection tenantId={effectiveTenantId} />
+        </TabsContent>
+
+        <TabsContent value="receitas" className="space-y-4 mt-2">
+          <RevenueCategoriesSection tenantId={effectiveTenantId} />
         </TabsContent>
 
         <TabsContent value="documentos" className="space-y-4 mt-2">

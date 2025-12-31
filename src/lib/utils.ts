@@ -110,17 +110,36 @@ export function normalizeCpfCnpj(value: unknown): string {
   return stringValue.replace(/\D/g, '');
 }
 
-// AIDEV-NOTE: Corrigido problema de timezone - usar parseISO para strings de data
-export function formatDate(dateString: string, formatString: string = "dd/MM/yyyy") {
-  if (!dateString) return '-';
-  try {
-    // Usar parseISO para evitar problemas de timezone com strings no formato ISO
-    const date = parseISO(dateString);
-    return format(date, formatString, { locale: ptBR });
-  } catch (error) {
-    console.error('Erro ao formatar data:', error);
-    return dateString;
+/**
+ * Converte uma string de data (YYYY-MM-DD) para um objeto Date local
+ * Isso evita problemas de fuso horário onde o navegador converte UTC para local (ex: dia anterior)
+ */
+export function parseLocalDate(dateString: string | null | undefined): Date | undefined {
+  if (!dateString) return undefined;
+  // Pega apenas a parte da data (YYYY-MM-DD) caso venha ISO completo
+  const cleanDate = dateString.split('T')[0];
+  const [year, month, day] = cleanDate.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * Formata uma data localmente para exibição
+ */
+export function formatDate(date: string | Date | null | undefined, formatStr: string = 'dd/MM/yyyy'): string {
+  if (!date) return '-';
+  
+  let dateObj: Date | undefined;
+  
+  if (typeof date === 'string') {
+    dateObj = parseLocalDate(date);
+  } else {
+    dateObj = date;
   }
+  
+  if (!dateObj || isNaN(dateObj.getTime())) return '-';
+  
+  return format(dateObj, formatStr, { locale: ptBR });
 }
 
 // Função para sanitizar inputs de texto

@@ -7,8 +7,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { StatusBadge } from './StatusBadge';
-import { formatCpfCnpj } from '@/lib/utils';
+import { formatCpfCnpj, formatDate } from '@/lib/utils';
 import type { FinanceEntry } from '@/services/financeEntriesService';
+import { useTenantAccessGuard } from '@/hooks/templates/useSecureTenantQuery';
 
 interface RecebimentosTableProps {
   recebimentos: FinanceEntry[];
@@ -19,6 +20,7 @@ interface RecebimentosTableProps {
   bankAccountsLoading: boolean;
   onAssociateBankAccount: (entryId: string, bankAccountId: string) => void;
   onMarkAsPaid: (entryId: string) => void;
+  onEdit?: (entry: FinanceEntry) => void;
   formatCurrency: (value: number) => string;
 }
 
@@ -34,8 +36,11 @@ export function RecebimentosTable({
   bankAccountsLoading,
   onAssociateBankAccount,
   onMarkAsPaid,
+  onEdit,
   formatCurrency
 }: RecebimentosTableProps) {
+  const { currentTenant } = useTenantAccessGuard();
+
   return (
     <Table>
       <TableHeader className="sticky top-0 bg-background z-10">
@@ -44,14 +49,14 @@ export function RecebimentosTable({
           <TableHead>Empresa</TableHead>
           <TableHead>CPF/CNPJ</TableHead>
           <TableHead>Descrição</TableHead>
-          <TableHead>Valor</TableHead>
-          <TableHead>Valor Líquido</TableHead>
-          <TableHead>Taxas</TableHead>
           <TableHead>Vencimento</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Conta</TableHead>
           <TableHead>Data Pagamento</TableHead>
-          <TableHead className="text-right">Ações</TableHead>
+          <TableHead className="w-[160px] min-w-[160px]">Valor</TableHead>
+          <TableHead className="w-[160px] min-w-[160px]">Valor Líquido</TableHead>
+          <TableHead className="w-[160px] min-w-[160px]">Taxas</TableHead>
+          <TableHead className="text-right w-[60px] min-w-[60px]">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -62,11 +67,8 @@ export function RecebimentosTable({
               <TableCell>{entry.customer?.company || '-'}</TableCell>
               <TableCell>{formatCpfCnpj(entry.customer?.cpf_cnpj)}</TableCell>
               <TableCell className="font-medium">{entry.description}</TableCell>
-              <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
-              <TableCell>{formatCurrency(entry.charge?.net_value ?? entry.amount ?? 0)}</TableCell>
-              <TableCell>{formatCurrency((entry.amount ?? 0) - (entry.charge?.net_value ?? entry.amount ?? 0))}</TableCell>
               <TableCell>
-                {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+                {formatDate(entry.due_date)}
               </TableCell>
               <TableCell>
                 <StatusBadge status={entry.status} />
@@ -94,22 +96,23 @@ export function RecebimentosTable({
                 )}
               </TableCell>
               <TableCell>
-                {entry.payment_date
-                  ? format(new Date(entry.payment_date), 'dd/MM/yyyy', { locale: ptBR })
-                  : '-'}
+                {formatDate(entry.payment_date)}
               </TableCell>
+              <TableCell>{formatCurrency(entry.amount || 0)}</TableCell>
+              <TableCell>{formatCurrency(entry.charge?.net_value ?? entry.amount ?? 0)}</TableCell>
+              <TableCell>{formatCurrency((entry.amount ?? 0) - (entry.charge?.net_value ?? entry.amount ?? 0))}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   {entry.status === 'PENDING' && (
-                    <Button size="sm" variant="outline" onClick={() => onMarkAsPaid(entry.id)}>
-                      Marcar como Pago
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
+              <Button size="sm" variant="outline" onClick={() => onMarkAsPaid(entry.id)}>
+                Marcar como Pago
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => onEdit?.(entry)}>
+              <Edit className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
             </motion.tr>
           ))}
         </AnimatePresence>

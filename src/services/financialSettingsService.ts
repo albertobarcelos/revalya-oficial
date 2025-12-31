@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export interface FinancialSettingRow {
   id: string;
   tenant_id: string;
-  type: 'EXPENSE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
+  type: 'EXPENSE_CATEGORY' | 'RECEIVABLE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
   name: string;
   code?: string | null;
   dre_category?: 'NONE'|'DEFAULT'|'SALES'|'ADMIN'|'FINANCIAL'|'MARKETING'|'PERSONAL'|'SOCIAL_CHARGES'|'OTHER' | null;
@@ -19,7 +19,7 @@ export interface FinancialSettingRow {
 
 export interface FinancialSettingInsert {
   tenant_id: string;
-  type: 'EXPENSE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
+  type: 'EXPENSE_CATEGORY' | 'RECEIVABLE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
   name: string;
   code?: string | null;
   dre_category?: 'NONE'|'DEFAULT'|'SALES'|'ADMIN'|'FINANCIAL'|'MARKETING'|'PERSONAL'|'SOCIAL_CHARGES'|'OTHER' | null;
@@ -37,7 +37,7 @@ export interface FinancialSettingUpdate {
   metadata?: Record<string, any> | null;
 }
 
-export type FinancialSettingType = 'EXPENSE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
+export type FinancialSettingType = 'EXPENSE_CATEGORY' | 'RECEIVABLE_CATEGORY' | 'DOCUMENT_TYPE' | 'ENTRY_TYPE';
 
 /** Lista itens de configuração por tipo com filtros opcionais e ordenação */
 export async function listFinancialSettings(
