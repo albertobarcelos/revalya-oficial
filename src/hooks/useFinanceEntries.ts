@@ -12,7 +12,7 @@ export interface FinanceEntry {
   contract_billing_id?: string;
   charge_id?: string;
 
-  entry_number: string;
+  entry_number?: string;
   reference?: string;
   entry_type: 'RECEIVABLE' | 'PAYABLE';
   category: string;

@@ -13,8 +13,8 @@ export type FinanceEntry = FinanceEntryRow & {
     net_value: number | null;
   } | null;
 };
-type FinanceEntryInsert = Database['public']['Tables']['finance_entries']['Insert'];
-type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
+export type FinanceEntryInsert = Database['public']['Tables']['finance_entries']['Insert'];
+export type FinanceEntryUpdate = Database['public']['Tables']['finance_entries']['Update'];
 
 export interface FinanceEntryFilters {
   tenant_id: string;
@@ -82,15 +82,27 @@ class FinanceEntriesService {
    * Cria um novo lançamento financeiro
    */
   async createEntry(data: FinanceEntryInsert): Promise<FinanceEntry> {
-    // Gerar número sequencial se não fornecido
-    if (!data.entry_number) {
-      const entryNumber = await this.generateEntryNumber(data.tenant_id, data.type);
-      data.entry_number = entryNumber;
+    // AIDEV-NOTE: Sanitização de payload para compatibilidade com schema
+    // Remove campos que não existem na tabela (issue_date, gross_amount, net_amount, entry_number, paid_amount, payment_method, notes, metadata)
+    const { gross_amount, net_amount, issue_date, entry_number, paid_amount, payment_method, notes, metadata, ...rest } = data as any;
+    
+    const payload: any = { ...rest };
+    
+    // Mapeamento de campos legados para o schema atual
+    if (data.amount === undefined && (gross_amount !== undefined || net_amount !== undefined)) {
+      payload.amount = gross_amount ?? net_amount;
+    } else if (data.amount !== undefined) {
+      payload.amount = data.amount;
+    }
+
+    // AIDEV-NOTE: Garantir que payment_date seja incluído se existir
+    if (data.payment_date) {
+      payload.payment_date = data.payment_date;
     }
 
     const { data: entry, error } = await supabase
       .from('finance_entries')
-      .insert(data)
+      .insert(payload)
       .select()
       .single();
 
@@ -99,7 +111,7 @@ class FinanceEntriesService {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      console.debug('[FinanceEntries] Lançamento criado:', entry.entry_number);
+      console.debug('[FinanceEntries] Lançamento criado:', entry.id);
     }
 
     return entry;
@@ -109,10 +121,29 @@ class FinanceEntriesService {
    * Atualiza um lançamento financeiro
    */
   async updateEntry(id: string, data: FinanceEntryUpdate): Promise<FinanceEntry> {
+    // AIDEV-NOTE: Remove campos virtuais ou não existentes na tabela para evitar erros de cache do Postgrest
+    // O campo 'gross_amount' e 'net_value' não existem na tabela finance_entries
+    // Devemos usar apenas 'amount' que é o campo correto no banco
+    
+    const { gross_amount, net_amount, issue_date, paid_amount, payment_method, notes, metadata, ...rest } = data as any;
+    
+    // Se amount não estiver definido mas gross_amount estiver, usa gross_amount como amount
+    const payload: any = { ...rest };
+    if (data.amount === undefined && (gross_amount !== undefined || net_amount !== undefined)) {
+      payload.amount = gross_amount ?? net_amount;
+    } else if (data.amount !== undefined) {
+      payload.amount = data.amount;
+    }
+
+    // AIDEV-NOTE: Garantir que payment_date seja incluído se existir
+    if (data.payment_date) {
+      payload.payment_date = data.payment_date;
+    }
+
     const { data: entry, error } = await supabase
       .from('finance_entries')
       .update({
-        ...data,
+        ...payload,
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -173,6 +204,10 @@ class FinanceEntriesService {
       query = query.eq('contract_id', filters.contract_id);
     }
 
+    if (filters.bank_account_id) {
+      query = query.eq('bank_account_id', filters.bank_account_id);
+    }
+
     if (filters.payment_method) {
       query = query.eq('payment_method', filters.payment_method);
     }
@@ -182,7 +217,41 @@ class FinanceEntriesService {
     }
 
     if (filters.search) {
-      query = query.ilike('description', `%${filters.search}%`);
+      const search = filters.search;
+      const orConditions: string[] = [`description.ilike.%${search}%`];
+
+      // Busca por valor (se for número)
+      const numericSearch = Number(search.replace(',', '.'));
+      if (!isNaN(numericSearch) && search.trim() !== '') {
+         orConditions.push(`amount.eq.${numericSearch}`);
+         orConditions.push(`net_amount.eq.${numericSearch}`);
+      }
+
+      // Busca por Clientes
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('tenant_id', filters.tenant_id)
+        .or(`name.ilike.%${search}%,company.ilike.%${search}%,cpf_cnpj.ilike.%${search}%`);
+      
+      if (customers && customers.length > 0) {
+        const customerIds = customers.map(c => c.id).join(',');
+        orConditions.push(`customer_id.in.(${customerIds})`);
+      }
+
+      // Busca por Contas Bancárias
+      const { data: accounts } = await supabase
+        .from('bank_acounts')
+        .select('id')
+        .eq('tenant_id', filters.tenant_id)
+        .or(`bank.ilike.%${search}%,agency.ilike.%${search}%,count.ilike.%${search}%`);
+
+      if (accounts && accounts.length > 0) {
+        const accountIds = accounts.map(a => a.id).join(',');
+        orConditions.push(`bank_account_id.in.(${accountIds})`);
+      }
+
+      query = query.or(orConditions.join(','));
     }
 
     if (filters.start_date) {
@@ -303,7 +372,7 @@ class FinanceEntriesService {
 
     if (process.env.NODE_ENV === 'development') {
       console.debug('[FinanceEntries] Pagamento registrado:', {
-        entry_number: updatedEntry.entry_number,
+        id: updatedEntry.id,
         amount: payment.amount
       });
     }
@@ -641,31 +710,7 @@ class FinanceEntriesService {
     return await this.updateEntry(entry.id, updateData);
   }
 
-  /**
-   * Gera número sequencial para lançamento
-   */
-  private async generateEntryNumber(tenant_id: string, type: 'RECEIVABLE' | 'PAYABLE'): Promise<string> {
-    const prefix = type === 'RECEIVABLE' ? 'CR' : 'CP';
-    const year = new Date().getFullYear();
-    const month = String(new Date().getMonth() + 1).padStart(2, '0');
-    
-    // Buscar último número do mês
-    const { data, error } = await supabase
-      .rpc('generate_finance_entry_number', {
-        p_tenant_id: tenant_id,
-        p_type: type,
-        p_year: year,
-        p_month: parseInt(month)
-      });
 
-    if (error) {
-      // Fallback: gerar número baseado em timestamp
-      const timestamp = Date.now().toString().slice(-6);
-      return `${prefix}${year}${month}${timestamp}`;
-    }
-
-    return data;
-  }
 
   /**
    * Exclui um lançamento (soft delete)
